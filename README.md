@@ -1,6 +1,12 @@
 # CthuTool
 
-<img src="./assets/logo.webp" />
+<p align="center">
+  <img src="assets/logo.png" alt="angular-logo" width="120px" height="120px"/>
+  <br>
+  <em>Angular is a development platform for building mobile and desktop web applications
+    <br> using TypeScript/JavaScript and other languages.</em>
+  <br>
+</p>
 
 This is an official starter Turborepo.
 
