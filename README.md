@@ -1,7 +1,7 @@
 # CthuTool
 
 <p align="center">
-  <img src="assets/logo.png" alt="angular-logo" width="120px" height="120px"/>
+  <img src="./assets/logo.png" alt="cthutool-logo" width="240px" height="240px"/>
   <br>
   <em>Angular is a development platform for building mobile and desktop web applications
     <br> using TypeScript/JavaScript and other languages.</em>
