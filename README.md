@@ -1,4 +1,6 @@
-# Turborepo starter
+# CthuTool
+
+<img src="./assets/logo.webp" />
 
 This is an official starter Turborepo.
 

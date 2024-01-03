@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    const container = document.querySelector('#root');
+    const cvs = document.createElement('canvas');
+    const ctx = cvs.getContext('2d');
+    container.appendChild(cvs);
+
+    function _removeBg() {
+      const imageData = ctx.getImageData(0, 0, cvs.width, cvs.height);
+      console.log(imageData);
+
+      const data = imageData.data;
+      const bgColor = {
+        r: data[0],
+        g: data[1],
+        b: data[2],
+        a: data[3],
+      };
+
+      for (let i = 0; i < data.length; i += 4) {
+        if (
+          (bgColor.r > data[i] - 10) && (bgColor.r < data[i] + 10) &&
+          (bgColor.g > data[i + 1] - 10) && (bgColor.g < data[i + 1] + 10) &&
+          (bgColor.b > data[i + 2] - 10) && (bgColor.b < data[i + 2] + 10) &&
+          (bgColor.a > data[i + 3] - 10) && (bgColor.a < data[i + 3] + 10)
+        ) {
+          data[i + 3] = 0;
+        }
+      }
+console.log(imageData.data);
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    const image = new Image();
+    image.onload = () => {
+      cvs.width = image.width;
+      cvs.height = image.height;
+      ctx.drawImage(image, 0, 0);
+      _removeBg();
+    };
+    image.src = './logo.webp';
+  </script>
+</body>
+</html>
