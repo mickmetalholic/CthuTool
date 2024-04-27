@@ -1,5 +1,5 @@
 {
-  "name": "CthuTool",
+  "name": "cthutool",
   "private": true,
   "scripts": {
     "build": "turbo build",
