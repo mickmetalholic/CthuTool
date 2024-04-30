@@ -14,7 +14,7 @@
     const graph = url.searchParams.get('graph');
     const page = url.searchParams.get('page');
 
-    if (vault && file) {
+    if (graph && page) {
       location.href = `logseq://graph/${graph}?page=${page}`;
     }
   </script>
