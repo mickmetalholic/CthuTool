@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    const url = new URL(location.href);
+
+    const vault = url.searchParams.get('vault');
+    const file = url.searchParams.get('file');
+
+    if (vault && file) {
+      location.href = `obsidian://open?vault=${vault}&file=${file}`;
+    }
+
+    const head = document.querySelector('head');
+
+    const fileName = url.searchParams.get('fileName');
+    const title = document.createElement('title');
+    title.textContent = fileName;
+    head.appendChild(title);
+
+    const description = url.searchParams.get('description');
+    const meta = document.createElement('meta');
+    meta.setAttribute('name', 'description');
+    meta.setAttribute('content', fileName);
+    head.appendChild(meta);
+  </script>
+  <!-- <title>Obsidian</title>
+  <meta name="description" content="Obsidian File"/> -->
+  <link rel="icon" href="./favicon.ico" sizes="32x32">
+</head>
+<body>
+</body>
+</html>
