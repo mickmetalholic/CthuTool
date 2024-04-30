@@ -6,6 +6,10 @@
   <title>Hello</title>
 </head>
 <body>
-
+  <script>
+    const url = new URL(location.href);
+    const deeplink = url.searchParams.get('redirect_to');
+    location.href = deeplink;
+  </script>
 </body>
 </html>
