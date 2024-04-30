@@ -13,8 +13,9 @@
     const vault = url.searchParams.get('vault');
     const file = url.searchParams.get('file');
     const description = url.searchParams.get('description');
-    const meta = document.querySelector('meta');
-    meta.setAttribute('content', meta);
+    const meta = document.querySelector('meta[name="description"]');
+    console.log(meta);
+    meta.setAttribute('content', description);
     if (vault && file) {
       location.href = `obsidian://open?vault=${vault}&file=${file}`;
     }
