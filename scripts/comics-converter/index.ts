@@ -25,7 +25,7 @@ function processZipFile(file: string, series: string, book: string) {
   const newZip = new AdmZip();
 
   zip.getEntries().map(entry => {
-    if (['.jpg', '.png'].includes(extname(entry.name)) && entry.name.match(/\d/)) {
+    if (['.jpg', '.jpeg', '.png'].includes(extname(entry.name)) && entry.name.match(/\d/)) {
       // const data = entry.getData();
       // console.log(entry.getData());
       newZip.addFile(entry.name, entry.getData());
