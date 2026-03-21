@@ -1,0 +1,9 @@
+{
+  "name": "@cthutool/placeholder",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"process.exit(0)\"",
+    "check": "node -e \"process.exit(0)\""
+  }
+}
