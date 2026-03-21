@@ -42,3 +42,6 @@ Thumbs.db
 
 # Keep documented env samples
 !.env.example
+
+# Spec Kit
+.cursor
