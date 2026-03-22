@@ -43,5 +43,9 @@ Thumbs.db
 # Keep documented env samples
 !.env.example
 
-# Spec Kit
-.cursor
+# Cursor：忽略本地缓存，但保留仓库内共享的 Project Rules（.mdc）
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+!.cursor/commands/
+!.cursor/commands/**

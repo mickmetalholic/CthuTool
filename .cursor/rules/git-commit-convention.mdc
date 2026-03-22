@@ -1,0 +1,39 @@
+---
+description: 约定式提交与英文提交说明（与根目录 commitlint 配置一致）
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Git 提交说明（Conventional Commits）
+
+生成或修改 **Git commit message**（含 `git commit`、`git commit --amend`、PR 合并前的本地提交）时遵守下列规则；与仓库根目录 `commitlint.config.cjs`、`specs/002-commit-convention-workflow/contracts/commit-message.contract.md` 保持一致（**FR-006**：任一方变更须同步其余镜像）。
+
+## 格式
+
+- 首行：`type(scope): subject`（`scope` 可选；有 scope 时建议 **kebab-case**）
+- `subject`：**英文祈使**、首字母小写、句末不加句号（与 conventional 默认一致）
+- 正文：若存在，与首行之间 **空一行**；须为英文
+- 脚注：若存在（如 `BREAKING CHANGE:`），须为英文
+
+## 允许的 type
+
+`feat` | `fix` | `docs` | `style` | `refactor` | `perf` | `test` | `build` | `ci` | `chore`（勿使用合同未列类型，除非已同步更新配置与合同）
+
+## 语言
+
+- **subject、body、footer 任意非空部分不得包含 CJK**（Unicode 表意文字 U+4E00–U+9FFF）
+- 与贡献者对话可用中文；**写入 Git 的说明文本须为英文**
+
+## 破坏性变更
+
+- 使用脚注 `BREAKING CHANGE:` 描述（英文，可多行）
+
+## 豁免（由 commitlint `ignores` 处理，勿强行改成 conventional）
+
+- `Merge branch '…'` / `Merge remote-tracking branch '…'`
+- `Merge pull request #…`
+- `Revert "…"` / `Revert '…'`（`git revert` 默认说明）
+
+## 维护
+
+变更类型列表、语言规则或豁免模式时，必须同时更新：`commitlint.config.cjs`、本文件、`contracts/commit-message.contract.md`、`specs/002-commit-convention-workflow/quickstart.md`。
