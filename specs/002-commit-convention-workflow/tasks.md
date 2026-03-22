@@ -29,8 +29,8 @@ description: "Task list for Git 提交信息规范校验与辅助工作流 (002-
 
 **Purpose**：安装依赖与 npm 脚本，使本地可运行 Husky / commitlint / Commitizen。
 
-- [ ] T001 Add devDependencies `husky`, `@commitlint/cli`, `@commitlint/config-conventional`, `commitizen`, `cz-git` to `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\package.json`
-- [ ] T002 Add root `package.json` fields: `"prepare": "husky"`, commit script（`git-cz` 或 `czg`，与 cz-git 文档一致）, `config.commitizen.path` 指向 `cz-git`
+- [x] T001 Add devDependencies `husky`, `@commitlint/cli`, `@commitlint/config-conventional`, `commitizen`, `cz-git` to `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\package.json`
+- [x] T002 Add root `package.json` fields: `"prepare": "husky"`, commit script（`git-cz` 或 `czg`，与 cz-git 文档一致）, `config.commitizen.path` 指向 `cz-git`
 
 ---
 
@@ -40,8 +40,8 @@ description: "Task list for Git 提交信息规范校验与辅助工作流 (002-
 
 **⚠️ CRITICAL**：US1/US2/US3 均依赖 commitlint 配置与 `commit-msg` hook。
 
-- [ ] T003 [P] Create `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\commitlint.config.cjs` with `extends: ['@commitlint/config-conventional']`, custom CJK（如 `\u4e00-\u9fff`）全文规则、与 `contracts/commit-message.contract.md` §4 一致的 `ignores`、与 `type-enum` 对齐的 cz-git `prompt`（中文 UI）
-- [ ] T004 Create `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\.husky\commit-msg` running `pnpm exec commitlint --edit "$1"`；确保 Husky 9 目录布局与换行/可执行位符合 [plan.md](./plan.md)（Windows 下 Git Bash 传参）
+- [x] T003 [P] Create `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\commitlint.config.cjs` with `extends: ['@commitlint/config-conventional']`, custom CJK（如 `\u4e00-\u9fff`）全文规则、与 `contracts/commit-message.contract.md` §4 一致的 `ignores`、与 `type-enum` 对齐的 cz-git `prompt`（中文 UI）
+- [x] T004 Create `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\.husky\commit-msg` running `pnpm exec commitlint --edit "$1"`；确保 Husky 9 目录布局与换行/可执行位符合 [plan.md](./plan.md)（Windows 下 Git Bash 传参）
 
 **Checkpoint**：`pnpm install` 后 hook 存在；`pnpm exec commitlint --help` 可用。
 
@@ -55,7 +55,7 @@ description: "Task list for Git 提交信息规范校验与辅助工作流 (002-
 
 ### Verification（契约验收，非 Jest）
 
-- [ ] T005 [US1] Run `pnpm exec commitlint --edit <file>` against temporary message files covering `contracts/commit-message.contract.md` §5: compliant sample exit 0; CJK in subject/body/footer non-zero with language-related message; merge exempt patterns exit 0
+- [x] T005 [US1] Run `pnpm exec commitlint --edit <file>` against temporary message files covering `contracts/commit-message.contract.md` §5: compliant sample exit 0; CJK in subject/body/footer non-zero with language-related message; merge exempt patterns exit 0
 
 **Checkpoint**：User Story 1 可独立于 US2/US3 Demonstrate。
 
@@ -67,8 +67,8 @@ description: "Task list for Git 提交信息规范校验与辅助工作流 (002-
 
 **Independent Test**：不依赖 hook 演示时，至少可通过向导生成一条合规消息并经 commitlint 校验通过。
 
-- [ ] T006 [US2] End-to-end: run `pnpm run commit` from repo root per `specs/002-commit-convention-workflow/quickstart.md` and confirm generated message passes `pnpm exec commitlint --edit` on the produced commit message file
-- [ ] T007 [US2] Update `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\specs\002-commit-convention-workflow\quickstart.md` if actual script name or cz-git invocation differs from documented commands
+- [x] T006 [US2] End-to-end: run `pnpm run commit` from repo root per `specs/002-commit-convention-workflow/quickstart.md` and confirm generated message passes `pnpm exec commitlint --edit` on the produced commit message file
+- [x] T007 [US2] Update `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\specs\002-commit-convention-workflow\quickstart.md` if actual script name or cz-git invocation differs from documented commands
 
 **Checkpoint**：US1 仍有效；US2 可独立演示向导流程。
 
@@ -80,7 +80,7 @@ description: "Task list for Git 提交信息规范校验与辅助工作流 (002-
 
 **Independent Test**：按 `.mdc` 与合同生成若干条说明，`commitlint` 应判合规（可与 T005 样例复用思路）。
 
-- [ ] T008 [P] [US3] Create `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\.cursor\rules\git-commit-convention.mdc` with Conventional Commits summary: English imperative, allowed types matching `commitlint.config.cjs`, scope notes, `BREAKING CHANGE`, **no CJK in commit text**, and FR-006 note to sync with `commitlint.config.cjs` / contract / quickstart on change
+- [x] T008 [P] [US3] Create `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\.cursor\rules\git-commit-convention.mdc` with Conventional Commits summary: English imperative, allowed types matching `commitlint.config.cjs`, scope notes, `BREAKING CHANGE`, **no CJK in commit text**, and FR-006 note to sync with `commitlint.config.cjs` / contract / quickstart on change
 
 **Checkpoint**：US3 可独立对照 AI 规则与 commitlint。
 
@@ -90,11 +90,11 @@ description: "Task list for Git 提交信息规范校验与辅助工作流 (002-
 
 **Purpose**：CI 兜底、FR-007 边角、文档与规则同源、快速开始自测。
 
-- [ ] T009 Extend `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\.github\workflows\ci.yml`: on `pull_request`, set `actions/checkout` `fetch-depth: 0` as needed; add step `pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to HEAD --verbose`（或与根 `pnpm run check` 聚合，与 [plan.md](./plan.md) 一致）
-- [ ] T010 [P] If default `git revert` messages fail commitlint, add `ignores` or header handling in `commitlint.config.cjs` and sync `specs/002-commit-convention-workflow/contracts/commit-message.contract.md` §4 per research R7
-- [ ] T011 [P] FR-006 pass: reconcile `commitlint.config.cjs`, `specs/002-commit-convention-workflow/contracts/commit-message.contract.md`, `specs/002-commit-convention-workflow/quickstart.md`, `.cursor/rules/git-commit-convention.mdc` for types, language, exemptions
-- [ ] T012 Execute manual validation from `specs/002-commit-convention-workflow/quickstart.md`（install、`pnpm run commit`、本地 `commitlint --edit`、CI 预期）
-- [ ] T013 [P] Run `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\.specify\scripts\powershell\update-agent-context.ps1` if repo workflow requires refreshing `.cursor/rules/specify-rules.mdc` with implementation summary per [plan.md](./plan.md) Phase 1 table
+- [x] T009 Extend `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\.github\workflows\ci.yml`: on `pull_request`, set `actions/checkout` `fetch-depth: 0` as needed; add step `pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to HEAD --verbose`（或与根 `pnpm run check` 聚合，与 [plan.md](./plan.md) 一致）
+- [x] T010 [P] If default `git revert` messages fail commitlint, add `ignores` or header handling in `commitlint.config.cjs` and sync `specs/002-commit-convention-workflow/contracts/commit-message.contract.md` §4 per research R7
+- [x] T011 [P] FR-006 pass: reconcile `commitlint.config.cjs`, `specs/002-commit-convention-workflow/contracts/commit-message.contract.md`, `specs/002-commit-convention-workflow/quickstart.md`, `.cursor/rules/git-commit-convention.mdc` for types, language, exemptions
+- [x] T012 Execute manual validation from `specs/002-commit-convention-workflow/quickstart.md`（install、`pnpm run commit`、本地 `commitlint --edit`、CI 预期）
+- [x] T013 [P] Run `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\.specify\scripts\powershell\update-agent-context.ps1` if repo workflow requires refreshing `.cursor/rules/specify-rules.mdc` with implementation summary per [plan.md](./plan.md) Phase 1 table
 
 ---
 

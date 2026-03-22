@@ -1,0 +1,34 @@
+---
+description: Project Development Guidelines
+globs: ["**/*"]
+alwaysApply: true
+---
+# CthuTool Development Guidelines
+
+Auto-generated from all feature plans. Last updated: 2026-03-22
+
+## Active Technologies
+- N/A（无应用数据持久化；配置为仓库内文件） (002-commit-convention-workflow)
+
+- Node.js ≥ 20（仓库 `engines`） + `husky`, `@commitlint/cli`, `@commitlint/config-conventional`, `commitizen`, `cz-git`（均为根目录 `devDependencies`） (002-commit-convention-workflow)
+
+## Project Structure
+
+```text
+src/
+tests/
+```
+
+## Commands
+
+# Add commands for Node.js ≥ 20（仓库 `engines`）
+
+## Code Style
+
+Node.js ≥ 20（仓库 `engines`）: Follow standard conventions
+
+## Recent Changes
+- 002-commit-convention-workflow: Added Node.js ≥ 20（仓库 `engines`） + `husky`, `@commitlint/cli`, `@commitlint/config-conventional`, `commitizen`, `cz-git`（均为根目录 `devDependencies`）
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->

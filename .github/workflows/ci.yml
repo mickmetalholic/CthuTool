@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -23,6 +25,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Commitlint (pull_request range)
+        if: github.event_name == 'pull_request'
+        run: pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }} --to HEAD --verbose
+
+      - name: Commitlint (push last commit)
+        if: github.event_name == 'push'
+        run: pnpm exec commitlint --last --verbose
 
       - name: Check (turbo)
         run: pnpm run check

@@ -30,6 +30,7 @@ subject    = *OCTET ;   (* 须为英文祈使；不得含 CJK；具体字符集�
 
 - 以 `Merge branch '` 或 `Merge remote-tracking branch '` 开头的合并提交说明。
 - 以 `Merge pull request #` 开头的 GitHub 风格合并说明。
+- 以 `Revert "` 或 `Revert '` 开头的标准 `git revert` 生成说明（非 conventional header，由 `commitlint.config.cjs` `ignores` 放行）。
 - 经团队明文增加的其他模式（须在配置与本文档同步更新）。
 
 ## 5. 验收钩子

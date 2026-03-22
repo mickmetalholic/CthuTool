@@ -35,7 +35,8 @@ pnpm exec commitlint --edit .git/COMMIT_EDITMSG
 
 ## CI 行为（计划实施后）
 
-- Pull Request：对分支相对 base 的提交范围运行 commitlint（见 `plan.md` / `.github/workflows/ci.yml`）。
+- **Pull Request**：`actions/checkout` 使用完整历史（`fetch-depth: 0`），对 `base..HEAD` 运行 `pnpm exec commitlint --from … --to HEAD --verbose`（见 `.github/workflows/ci.yml`）。
+- **Push**（`main` / `master`）：对 **最近一次提交** 运行 `pnpm exec commitlint --last --verbose`。
 
 ## 常见问题
 
