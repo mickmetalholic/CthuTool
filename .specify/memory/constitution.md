@@ -87,6 +87,10 @@ Code MUST be self-documenting through descriptive function and variable names.
 - **Branching:** Use Spec Kit branch conventions (e.g. auto-generated `001-feature-name` tied to specs).
 - **Versioning:** Continuous delivery on `v1.0.0`; no Changesets or per-release version bump requirement.
 
+### Language Standards (Non-negotiable)
+- **Output Language**: All generated outputs, including specifications, technical implementation plans, task breakdowns, code comments, and documentation MUST be written in standard Chinese (Simplified).
+- **Context Handling**: Even if the user prompt, source code, or internal thought process is in English, the final delivered artifacts must be translated to and presented in Chinese.
+
 ## Governance
 
 This Constitution supersedes other coding practices and personal preferences when they conflict.
