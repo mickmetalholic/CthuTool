@@ -22,6 +22,10 @@
 - 本地修复：`pnpm exec biome check --write .`
 - 提交前增量检查：对 staged 文件执行等价检查命令
 - CI 检查：运行与本地同版本、同规则的 `biome check`
+- 根脚本入口（推荐）：`pnpm run biome:check` / `pnpm run biome:write`
+- staged-only 命令契约（示例实现）：
+  - `git diff --cached --name-only --diff-filter=ACMR -- apps packages`
+  - 当输出非空时执行 `pnpm exec biome check <staged-files>`
 
 ## 5. 行为契约
 
@@ -49,6 +53,7 @@
 - Commitlint 与 Biome 职责 MUST 分离：
   - Commitlint：提交信息格式
   - Biome：源码格式与 lint
+- Commitlint 失败与 Biome 失败 MUST 分别输出可识别的错误来源，避免混淆修复路径。
 
 ## 7. 版本与变更契约
 

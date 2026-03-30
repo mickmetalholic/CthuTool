@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
   pull_request:
 
 jobs:
@@ -34,7 +33,7 @@ jobs:
         if: github.event_name == 'push'
         run: pnpm exec commitlint --last --verbose
 
-      - name: Check (turbo)
+      - name: Check
         run: pnpm run check
 
       - name: Tests

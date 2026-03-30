@@ -11,10 +11,10 @@
 
 **Purpose**: 安装 Biome 并建立仓库级统一入口
 
-- [ ] T001 Add Biome dependency and root scripts in `package.json`
-- [ ] T002 Create root Biome policy file in `biome.jsonc`
-- [ ] T003 [P] Add Biome include/exclude scope for `apps/**` and `packages/**` in `biome.jsonc`
-- [ ] T004 [P] Document baseline Biome commands in `specs/003-biome-quality-gates/quickstart.md`
+- [x] T001 Add Biome dependency and root scripts in `package.json`
+- [x] T002 Create root Biome policy file in `biome.jsonc`
+- [x] T003 [P] Add Biome include/exclude scope for `apps/**` and `packages/**` in `biome.jsonc`
+- [x] T004 [P] Document baseline Biome commands in `specs/003-biome-quality-gates/quickstart.md`
 
 ---
 
@@ -24,10 +24,10 @@
 
 **⚠️ CRITICAL**: 本阶段完成前，不进入任一用户故事实现
 
-- [ ] T005 Align monorepo check pipeline to include Biome in root `package.json`
-- [ ] T006 [P] Update CI trigger strategy for all-branch push in `.github/workflows/ci.yml`
-- [ ] T007 [P] Keep Commitlint/Biome responsibility boundary documented in `specs/003-biome-quality-gates/contracts/biome-quality-gates.contract.md`
-- [ ] T008 Define staged-only gate command contract in `specs/003-biome-quality-gates/contracts/biome-quality-gates.contract.md`
+- [x] T005 Align monorepo check pipeline to include Biome in root `package.json`
+- [x] T006 [P] Update CI trigger strategy for all-branch push in `.github/workflows/ci.yml`
+- [x] T007 [P] Keep Commitlint/Biome responsibility boundary documented in `specs/003-biome-quality-gates/contracts/biome-quality-gates.contract.md`
+- [x] T008 Define staged-only gate command contract in `specs/003-biome-quality-gates/contracts/biome-quality-gates.contract.md`
 
 **Checkpoint**: 统一规则源、触发范围、职责边界全部落地，可进入用户故事阶段
 
@@ -41,10 +41,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Create repository editor defaults for Biome in `.vscode/settings.json`
-- [ ] T010 [US1] Configure onType lint and formatOnSave behavior in `.vscode/settings.json`
-- [ ] T011 [US1] Document editor onboarding and expected feedback in `README.md`
-- [ ] T012 [US1] Add editor-side validation steps in `specs/003-biome-quality-gates/quickstart.md`
+- [x] T009 [US1] Create repository editor defaults for Biome in `.vscode/settings.json`
+- [x] T010 [US1] Configure onType lint and formatOnSave behavior in `.vscode/settings.json`
+- [x] T011 [US1] Document editor onboarding and expected feedback in `README.md`
+- [x] T012 [US1] Add editor-side validation steps in `specs/003-biome-quality-gates/quickstart.md`
 
 **Checkpoint**: US1 可独立验证，不依赖 pre-commit 和 CI
 
@@ -58,11 +58,11 @@
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Create pre-commit hook entry in `.husky/pre-commit`
-- [ ] T014 [US2] Implement staged-file Biome check command in `.husky/pre-commit`
-- [ ] T015 [US2] Add actionable fix hints for hook failure in `.husky/pre-commit`
-- [ ] T016 [US2] Document local pre-commit gate workflow in `README.md`
-- [ ] T017 [US2] Add staged gate validation procedure in `specs/003-biome-quality-gates/quickstart.md`
+- [x] T013 [US2] Create pre-commit hook entry in `.husky/pre-commit`
+- [x] T014 [US2] Implement staged-file Biome check command in `.husky/pre-commit`
+- [x] T015 [US2] Add actionable fix hints for hook failure in `.husky/pre-commit`
+- [x] T016 [US2] Document local pre-commit gate workflow in `README.md`
+- [x] T017 [US2] Add staged gate validation procedure in `specs/003-biome-quality-gates/quickstart.md`
 
 **Checkpoint**: US2 可独立验证，不依赖 CI 结果
 
@@ -76,10 +76,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T018 [US3] Add Biome check step using root policy in `.github/workflows/ci.yml`
-- [ ] T019 [US3] Ensure CI Biome command parity with local docs in `specs/003-biome-quality-gates/quickstart.md`
-- [ ] T020 [US3] Scope CI checks to managed source paths via `biome.jsonc`
-- [ ] T021 [US3] Document CI quality gate behavior and failure semantics in `README.md`
+- [x] T018 [US3] Add Biome check step using root policy in `.github/workflows/ci.yml`
+- [x] T019 [US3] Ensure CI Biome command parity with local docs in `specs/003-biome-quality-gates/quickstart.md`
+- [x] T020 [US3] Scope CI checks to managed source paths via `biome.jsonc`
+- [x] T021 [US3] Document CI quality gate behavior and failure semantics in `README.md`
 
 **Checkpoint**: US3 可独立验证，形成远程最终防线
 
@@ -89,9 +89,9 @@
 
 **Purpose**: 跨故事一致性、回归验证与交付完善
 
-- [ ] T022 [P] Add incremental-baseline rollout guidance in `specs/003-biome-quality-gates/quickstart.md`
-- [ ] T023 Run end-to-end gate walkthrough and record outcomes in `specs/003-biome-quality-gates/quickstart.md`
-- [ ] T024 [P] Cross-check wording consistency across `specs/003-biome-quality-gates/spec.md` and `README.md`
+- [x] T022 [P] Add incremental-baseline rollout guidance in `specs/003-biome-quality-gates/quickstart.md`
+- [x] T023 Run end-to-end gate walkthrough and record outcomes in `specs/003-biome-quality-gates/quickstart.md`
+- [x] T024 [P] Cross-check wording consistency across `specs/003-biome-quality-gates/spec.md` and `README.md`
 
 ---
 

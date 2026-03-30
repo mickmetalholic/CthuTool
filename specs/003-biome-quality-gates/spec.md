@@ -14,6 +14,7 @@
 - Q: 本地提交前门禁的失败策略应采用哪种默认行为？ → A: 检查失败时强制阻止提交
 - Q: 历史遗留不合规项与增量门禁应采用哪种默认收敛策略？ → A: 增量强制门禁 + 历史基线分阶段收敛
 - Q: CI 中 Biome 门禁的触发范围应采用哪种默认策略？ → A: 所有分支的所有 push 均强制执行
+- Q: 三层门禁在文档中的命名是否需要统一？ → A: 统一为 Editor gate / Pre-commit gate / CI gate
 
 ## User Scenarios & Testing *(mandatory)*
 

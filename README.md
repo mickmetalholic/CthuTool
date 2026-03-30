@@ -25,7 +25,9 @@ pnpm install
 | Command           | Description                                      |
 | ----------------- | ------------------------------------------------ |
 | `pnpm run build`  | Runs `turbo run build` across workspace members. |
-| `pnpm run check`  | Runs `turbo run check` across workspace members. |
+| `pnpm run check`  | Runs Biome + `turbo run check` at repo root.      |
+| `pnpm run biome:check` | Runs Biome checks with root `biome.jsonc`. |
+| `pnpm run biome:write` | Auto-fixes Biome-fixable issues.            |
 | `pnpm run test`   | Root Jest suite (contract + integration tests).  |
 
 ## Layout
@@ -42,7 +44,32 @@ pnpm install
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs `pnpm install` and `pnpm run check` at the repo root, matching the local entrypoints above. `pnpm run test` runs in CI with `SKIP_ROOT_WORKSPACE_CHECK` set so the optional root `pnpm run check` integration test is not duplicated inside the job.
+GitHub Actions (`.github/workflows/ci.yml`) runs:
+
+- `pnpm exec turbo run check`
+- `pnpm run biome:check`
+- `pnpm run test` (with `SKIP_ROOT_WORKSPACE_CHECK=true`)
+
+The workflow triggers on all `push` branches and `pull_request`, so Biome gate behavior stays consistent between local and CI.
+
+## Biome quality gates
+
+### Editor gate (Cursor / VS Code)
+
+- Repository default settings are in `.vscode/settings.json`.
+- Diagnostics are enabled while typing (onType via Biome language service).
+- Format on save is enabled and defaults to Biome.
+
+### Pre-commit gate
+
+- `.husky/pre-commit` only checks staged files under `apps/` and `packages/`.
+- The hook blocks commit on failure and prints a direct fix command.
+
+### Commitlint boundary
+
+- Commitlint validates commit message format.
+- Biome validates source formatting and lint rules.
+- The two gates run independently to avoid responsibility overlap.
 
 ## More documentation
 
