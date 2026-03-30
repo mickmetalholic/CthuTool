@@ -5,10 +5,12 @@ alwaysApply: true
 ---
 # CthuTool Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-03-22
+Auto-generated from all feature plans. Last updated: 2026-03-30
 
 ## Active Technologies
 - N/A（无应用数据持久化；配置为仓库内文件） (002-commit-convention-workflow)
+- Node.js >= 20（仓库 `engines`），TypeScript 5.9.x + `@biomejs/biome`（新增，作为格式化+lint 统一引擎）、`husky`（已存在）、`turbo`（已存在） (003-biome-quality-gates)
+- N/A（仅仓库配置与工作流） (003-biome-quality-gates)
 
 - Node.js ≥ 20（仓库 `engines`） + `husky`, `@commitlint/cli`, `@commitlint/config-conventional`, `commitizen`, `cz-git`（均为根目录 `devDependencies`） (002-commit-convention-workflow)
 
@@ -28,6 +30,7 @@ tests/
 Node.js ≥ 20（仓库 `engines`）: Follow standard conventions
 
 ## Recent Changes
+- 003-biome-quality-gates: Added Node.js >= 20（仓库 `engines`），TypeScript 5.9.x + `@biomejs/biome`（新增，作为格式化+lint 统一引擎）、`husky`（已存在）、`turbo`（已存在）
 - 002-commit-convention-workflow: Added Node.js ≥ 20（仓库 `engines`） + `husky`, `@commitlint/cli`, `@commitlint/config-conventional`, `commitizen`, `cz-git`（均为根目录 `devDependencies`）
 
 <!-- MANUAL ADDITIONS START -->
