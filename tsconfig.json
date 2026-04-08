@@ -4,10 +4,21 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "strict": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "useDefineForClassFields": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node", "jest"]
+    "types": [
+      "node",
+      "jest"
+    ],
+    "baseUrl": "./",
+    "paths": {}
   },
-  "include": ["tests/**/*.ts", "jest.config.cjs"]
+  "include": [
+    "tests/**/*.ts",
+    "jest.config.cjs"
+  ]
 }

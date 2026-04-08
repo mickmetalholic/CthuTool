@@ -1,0 +1,62 @@
+openapi: 3.0.3
+info:
+  title: Web Subapp Baseline API
+  version: 0.1.0
+  description: 基线可用性与错误响应契约
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: 健康检查
+      operationId: getHealth
+      responses:
+        "200":
+          description: 服务可用
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service, timestamp]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  service:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+  /{path}:
+    parameters:
+      - in: path
+        name: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: 未定义路由（示例）
+      operationId: getNotFound
+      responses:
+        "404":
+          description: 统一未找到响应
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code:
+          type: string
+          example: NOT_FOUND
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string

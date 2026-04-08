@@ -1,0 +1,32 @@
+{
+  "name": "@cthutool/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "pnpm dlx @nestjs/cli@latest start web",
+    "start:dev": "pnpm dlx @nestjs/cli@latest start web --watch",
+    "build": "pnpm dlx @nestjs/cli@latest build web",
+    "test": "pnpm exec jest --config jest.config.cjs",
+    "test:cov": "pnpm exec jest --config jest.config.cjs --coverage --coverageReporters=text-summary --coverageReporters=lcov --coverageReporters=html --coverageReporters=json-summary"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "express": "^5.1.0",
+    "neverthrow": "^8.2.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "valibot": "^1.0.0"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.0.0",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^29.5.14",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.6",
+    "typescript": "5.9.2"
+  }
+}

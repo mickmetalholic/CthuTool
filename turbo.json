@@ -6,8 +6,10 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": []
     },
-    "check": {
-      "dependsOn": ["^check"]
+    "test": {
+      "dependsOn": ["^test"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": []
     }
   }
 }

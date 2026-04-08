@@ -3,10 +3,10 @@
   "private": true,
   "scripts": {
     "build": "pnpm exec turbo run build",
-    "biome:check": "pnpm exec biome check .",
-    "biome:write": "pnpm exec biome check --write .",
-    "check": "pnpm run biome:check && pnpm exec turbo run check",
-    "test": "pnpm exec jest --config jest.config.cjs",
+    "test": "pnpm exec jest --config jest.config.cjs && pnpm exec turbo run test",
+    "test:cov": "pnpm exec jest --config jest.config.cjs --coverage --coverageReporters=text-summary --coverageReporters=lcov --coverageReporters=html --coverageReporters=json-summary && pnpm --filter @cthutool/web run test:cov",
+    "check": "pnpm exec biome check .",
+    "check:write": "pnpm exec biome check --write .",
     "prepare": "husky",
     "commit": "git-cz"
   },

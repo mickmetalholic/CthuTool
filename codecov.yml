@@ -1,0 +1,32 @@
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  status:
+    project:
+      default:
+        target: 85%
+        threshold: 2%
+      root:
+        flags:
+          - root
+        informational: true
+      web:
+        flags:
+          - web
+        target: 85%
+        threshold: 2%
+    patch:
+      default:
+        target: 80%
+        threshold: 2%
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "tests/**"
+  - "**/*.spec.ts"
+  - "**/*.e2e-spec.ts"
