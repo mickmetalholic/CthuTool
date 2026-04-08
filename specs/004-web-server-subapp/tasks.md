@@ -8,7 +8,7 @@ description: "Task list for Web Server Sub-Application (004)"
 **Input**: Design documents from `C:\Users\yuans\Documents\GitHub\mickmetalholic\CthuTool\specs\004-web-server-subapp\`
 **Prerequisites**: plan.md (required), spec.md (required), research.md, data-model.md, contracts/, quickstart.md
 
-**Tests**: Per CthuTool Constitution, TDD is mandatory: failing tests before implementation for new logic. Use Jest e2e/unit under `apps/web/` per NestJS baseline (`apps/web/test/`, `jest-e2e.json`).
+**Tests**: Per CthuTool Constitution, TDD is mandatory: failing tests before implementation for new logic. Use Jest e2e/unit under `apps/web/` per NestJS baseline (`apps/web/test/`, `apps/web/jest.config.cjs`).
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -28,10 +28,10 @@ description: "Task list for Web Server Sub-Application (004)"
 
 **Purpose**: Create the NestJS `web` sub-application with CLI only; remove scaffold ESLint; align with Turborepo and Biome.
 
-- [ ] T001 Create NestJS monorepo sub-application `web` by running `pnpm dlx @nestjs/cli@latest generate app web` from repository root so `apps/web/` and root `nest-cli.json` are tool-generated (no hand-written scaffold files)
-- [ ] T002 Remove ESLint config files, ESLint-related devDependencies, and ESLint npm scripts from `apps/web/package.json` and delete any `apps/web/.eslintrc.*` or `apps/web/eslint.config.*`
-- [ ] T003 [P] Align `apps/web/package.json` scripts with root quality workflow (`pnpm run biome:check`, `turbo run check` / `build` / `test` as applicable)
-- [ ] T004 [P] Extend `turbo.json` with `build`, `check`, and `test` task definitions for `apps/web` so CI and `pnpm exec turbo` include the new package
+- [X] T001 Create NestJS monorepo sub-application `web` by running `pnpm dlx @nestjs/cli@latest generate app web` from repository root so `apps/web/` and root `nest-cli.json` are tool-generated (no hand-written scaffold files)
+- [X] T002 Remove ESLint config files, ESLint-related devDependencies, and ESLint npm scripts from `apps/web/package.json` and delete any `apps/web/.eslintrc.*` or `apps/web/eslint.config.*`
+- [X] T003 [P] Align `apps/web/package.json` scripts with root quality workflow (`pnpm run biome:check`, `turbo run check` / `build` / `test` as applicable)
+- [X] T004 [P] Extend `turbo.json` with `build`, `check`, and `test` task definitions for `apps/web` so CI and `pnpm exec turbo` include the new package
 
 ---
 
@@ -41,8 +41,8 @@ description: "Task list for Web Server Sub-Application (004)"
 
 **⚠️ CRITICAL**: No user story work should begin until this phase is complete.
 
-- [ ] T005 Add `valibot` and `neverthrow` to `apps/web/package.json` dependencies for boundary validation and service-layer `Result` patterns (per constitution and `data-model.md`)
-- [ ] T006 [P] Confirm root `biome.jsonc` includes `apps/web` sources and that no ESLint artifacts remain under `apps/web/`
+- [X] T005 Add `valibot` and `neverthrow` to `apps/web/package.json` dependencies for boundary validation and service-layer `Result` patterns (per constitution and `data-model.md`)
+- [X] T006 [P] Confirm root `biome.jsonc` includes `apps/web` sources and that no ESLint artifacts remain under `apps/web/`
 
 **Checkpoint**: Foundation ready — user story implementation can begin.
 
@@ -58,15 +58,15 @@ description: "Task list for Web Server Sub-Application (004)"
 
 > **NOTE: Write these tests FIRST; they MUST FAIL before implementation.**
 
-- [ ] T007 [P] [US1] Add failing e2e test for `GET /health` (status 200, body matches `specs/004-web-server-subapp/contracts/web-health.openapi.yaml`) in `apps/web/test/health.e2e-spec.ts`
-- [ ] T008 [P] [US1] Add failing e2e test for an undefined route returning 404 with `ErrorResponse` shape in `apps/web/test/not-found.e2e-spec.ts`
+- [X] T007 [P] [US1] Add failing e2e test for `GET /health` (status 200, body matches `specs/004-web-server-subapp/contracts/web-health.openapi.yaml`) in `apps/web/test/health.e2e-spec.ts`
+- [X] T008 [P] [US1] Add failing e2e test for an undefined route returning 404 with `ErrorResponse` shape in `apps/web/test/not-found.e2e-spec.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Generate `health` module, service, and controller via Nest CLI (`g module health`, `g service health`, `g controller health` with `--project web`) under `apps/web/src/health/`
-- [ ] T010 [US1] Implement `HealthService` and `HealthController` in `apps/web/src/health/health.service.ts` and `apps/web/src/health/health.controller.ts` to return `HealthStatus` per `data-model.md` and OpenAPI
-- [ ] T011 [US1] Register `HealthModule` in `apps/web/src/app.module.ts`
-- [ ] T012 [US1] Implement consistent not-found / error JSON mapping (e.g. exception filter or `ExceptionFilter`) in `apps/web/src/filters/http-exception.filter.ts` and register in `apps/web/src/main.ts` so undefined routes match `ErrorResponse` (`code`, `message`, `timestamp`)
+- [X] T009 [US1] Generate `health` module, service, and controller via Nest CLI (`g module health`, `g service health`, `g controller health` with `--project web`) under `apps/web/src/health/`
+- [X] T010 [US1] Implement `HealthService` and `HealthController` in `apps/web/src/health/health.service.ts` and `apps/web/src/health/health.controller.ts` to return `HealthStatus` per `data-model.md` and OpenAPI
+- [X] T011 [US1] Register `HealthModule` in `apps/web/src/app.module.ts`
+- [X] T012 [US1] Implement consistent not-found / error JSON mapping (e.g. exception filter or `ExceptionFilter`) in `apps/web/src/filters/http-exception.filter.ts` and register in `apps/web/src/main.ts` so undefined routes match `ErrorResponse` (`code`, `message`, `timestamp`)
 
 **Checkpoint**: User Story 1 is independently verifiable via e2e tests and manual curl per contract.
 
@@ -80,13 +80,13 @@ description: "Task list for Web Server Sub-Application (004)"
 
 ### Tests for User Story 2 (required — TDD) ⚠️
 
-- [ ] T013 [P] [US2] Add failing unit tests for valid vs invalid/missing `ServiceConfiguration` parsing in `apps/web/src/config/service-configuration.spec.ts`
+- [X] T013 [P] [US2] Add failing unit tests for valid vs invalid/missing `ServiceConfiguration` parsing in `apps/web/src/config/service-configuration.spec.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Implement valibot schema and parser for `ServiceConfiguration` (`port`, `nodeEnv`, optional `logLevel`) in `apps/web/src/config/service-configuration.schema.ts` aligned with `data-model.md`
-- [ ] T015 [US2] Load environment variables, parse with the schema, and abort bootstrap before listening when invalid in `apps/web/src/main.ts` (or dedicated `apps/web/src/bootstrap.ts`)
-- [ ] T016 [US2] Add structured, human-readable startup success and configuration-failure logs in `apps/web/src/main.ts` (use Nest `Logger` or a small `apps/web/src/logger/` helper); ensure no sensitive stack leakage in API responses
+- [X] T014 [US2] Implement valibot schema and parser for `ServiceConfiguration` (`port`, `nodeEnv`, optional `logLevel`) in `apps/web/src/config/service-configuration.schema.ts` aligned with `data-model.md`
+- [X] T015 [US2] Load environment variables, parse with the schema, and abort bootstrap before listening when invalid in `apps/web/src/main.ts` (or dedicated `apps/web/src/bootstrap.ts`)
+- [X] T016 [US2] Add structured, human-readable startup success and configuration-failure logs in `apps/web/src/main.ts` (use Nest `Logger` or a small `apps/web/src/logger/` helper); ensure no sensitive stack leakage in API responses
 
 **Checkpoint**: User Story 2 independently testable via unit tests and two startup scenarios.
 
@@ -100,8 +100,8 @@ description: "Task list for Web Server Sub-Application (004)"
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Update `specs/004-web-server-subapp/quickstart.md` with final env variable names, default port, Nest CLI commands, and curl examples matching implemented behavior
-- [ ] T018 [P] [US3] Add `apps/web/README.md` with prerequisites, install, start, and verification steps pointing to `specs/004-web-server-subapp/quickstart.md` and `contracts/web-health.openapi.yaml`
+- [X] T017 [US3] Update `specs/004-web-server-subapp/quickstart.md` with final env variable names, default port, Nest CLI commands, and curl examples matching implemented behavior
+- [X] T018 [P] [US3] Add `apps/web/README.md` with prerequisites, install, start, and verification steps pointing to `specs/004-web-server-subapp/quickstart.md` and `contracts/web-health.openapi.yaml`
 
 **Checkpoint**: Onboarding path validated against quickstart.
 
@@ -111,9 +111,9 @@ description: "Task list for Web Server Sub-Application (004)"
 
 **Purpose**: Quality gates and cross-cutting validation.
 
-- [ ] T019 [P] Run `pnpm run biome:check` and `pnpm exec turbo run check` from repository root; fix any `apps/web` issues in `apps/web/src/`, `apps/web/test/`, and `apps/web/package.json`
-- [ ] T020 [P] Execute verification steps in `specs/004-web-server-subapp/quickstart.md` (start, `curl` health, undefined route) and adjust docs if behavior differs
-- [ ] T021 [P] Add TSDoc (`@param` / `@returns`) to pure configuration parsing functions in `apps/web/src/config/service-configuration.schema.ts` per constitution
+- [X] T019 [P] Run `pnpm run biome:check` and `pnpm exec turbo run check` from repository root; fix any `apps/web` issues in `apps/web/src/`, `apps/web/test/`, and `apps/web/package.json`
+- [X] T020 [P] Execute verification steps in `specs/004-web-server-subapp/quickstart.md` (start, `curl` health, undefined route) and adjust docs if behavior differs
+- [X] T021 [P] Add TSDoc (`@param` / `@returns`) to pure configuration parsing functions in `apps/web/src/config/service-configuration.schema.ts` per constitution
 
 ---
 

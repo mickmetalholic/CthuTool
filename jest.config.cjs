@@ -3,6 +3,12 @@ module.exports = {
   testEnvironment: "node",
   roots: ["<rootDir>/tests"],
   testMatch: ["**/*.test.ts"],
+  collectCoverageFrom: [
+    "apps/**/src/**/*.ts",
+    "packages/**/src/**/*.ts",
+    "!**/*.d.ts",
+    "!**/?(*.)+(spec|test|e2e-spec).ts",
+  ],
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",

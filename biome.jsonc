@@ -1,19 +1,26 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.4.9/schema.json",
-	"files": {
-		"includes": [
-			"apps/**",
-			"packages/**",
-			"!**/node_modules",
-			"!**/dist",
-			"!**/build",
-			"!**/coverage"
-		]
-	},
-	"formatter": {
-		"enabled": true
-	},
-	"linter": {
-		"enabled": true
-	}
+  "$schema": "https://biomejs.dev/schemas/2.4.9/schema.json",
+  "files": {
+    "includes": [
+      "apps/**",
+      "packages/**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/build",
+      "!**/coverage"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  },
+  "linter": {
+    "enabled": true
+  }
 }

@@ -4,6 +4,7 @@
 - Node.js >= 20
 - pnpm >= 9
 - 在仓库根目录执行命令
+- 设置环境变量：`PORT`、`NODE_ENV`，可选 `LOG_LEVEL`
 
 ## 2. 使用 Nest CLI 生成子应用（仅工具生成）
 ```bash
@@ -27,7 +28,7 @@ pnpm dlx @nestjs/cli@latest g controller health --project web
 
 ## 5. 启动与验证
 ```bash
-pnpm dlx @nestjs/cli@latest start web --watch
+PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/web run start:dev
 ```
 
 健康检查：
@@ -36,8 +37,8 @@ curl http://localhost:3000/health
 ```
 
 预期：
-- 返回 200，包含服务可用状态字段（如 `status: "ok"`）。
-- 请求未定义路由时返回统一 not-found 错误结构。
+- 返回 200，JSON 包含 `status`、`service`、`timestamp`。
+- 请求未定义路由时返回 404，JSON 包含 `code`、`message`、`timestamp`，`code=NOT_FOUND`。
 
 ## 6. 测试建议（TDD）
 - 先写失败测试：
