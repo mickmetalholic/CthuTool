@@ -51,3 +51,5 @@ Thumbs.db
 !.cursor/rules/**
 !.cursor/commands/
 !.cursor/commands/**
+# Ignore platform-specific Speckit commands
+.cursor/commands/speckit*.md
