@@ -1,11 +1,9 @@
 {
   "ai": "cursor-agent",
-  "ai_commands_dir": null,
-  "ai_skills": false,
   "branch_numbering": "sequential",
   "here": true,
-  "offline": false,
+  "integration": "cursor-agent",
   "preset": null,
   "script": "ps",
-  "speckit_version": "0.3.2"
+  "speckit_version": "0.5.1.dev0"
 }
