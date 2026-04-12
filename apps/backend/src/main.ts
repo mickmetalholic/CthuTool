@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { parseServiceConfiguration } from './config/service-configuration.schema';
+import { parseServiceConfiguration } from './config/service-configuration';
 import { HttpExceptionFilter } from './filters/http-exception.filter';
 
 type BootstrapLogger = Pick<Logger, 'error' | 'log'>;

@@ -1,5 +1,5 @@
 import { err, ok } from 'neverthrow';
-import type { ServiceConfiguration } from './config/service-configuration.schema';
+import type { ServiceConfiguration } from './config/service-configuration';
 import { bootstrap } from './main';
 
 describe('bootstrap', () => {

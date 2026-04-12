@@ -84,7 +84,7 @@ description: "Task list for Web Server Sub-Application (004)"
 
 ### Implementation for User Story 2
 
-- [X] T014 [US2] Implement valibot schema and parser for `ServiceConfiguration` (`port`, `nodeEnv`, optional `logLevel`) in `apps/web/src/config/service-configuration.schema.ts` aligned with `data-model.md`
+- [X] T014 [US2] Implement valibot schema and parser for `ServiceConfiguration` (`port`, `nodeEnv`, optional `logLevel`) in `apps/web/src/config/service-configuration.ts` aligned with `data-model.md`
 - [X] T015 [US2] Load environment variables, parse with the schema, and abort bootstrap before listening when invalid in `apps/web/src/main.ts` (or dedicated `apps/web/src/bootstrap.ts`)
 - [X] T016 [US2] Add structured, human-readable startup success and configuration-failure logs in `apps/web/src/main.ts` (use Nest `Logger` or a small `apps/web/src/logger/` helper); ensure no sensitive stack leakage in API responses
 
@@ -113,7 +113,7 @@ description: "Task list for Web Server Sub-Application (004)"
 
 - [X] T019 [P] Run `pnpm run biome:check` and `pnpm exec turbo run check` from repository root; fix any `apps/web` issues in `apps/web/src/`, `apps/web/test/`, and `apps/web/package.json`
 - [X] T020 [P] Execute verification steps in `specs/004-web-server-subapp/quickstart.md` (start, `curl` health, undefined route) and adjust docs if behavior differs
-- [X] T021 [P] Add TSDoc (`@param` / `@returns`) to pure configuration parsing functions in `apps/web/src/config/service-configuration.schema.ts` per constitution
+- [X] T021 [P] Add TSDoc (`@param` / `@returns`) to pure configuration parsing functions in `apps/web/src/config/service-configuration.ts` per constitution
 
 ---
 
@@ -171,7 +171,7 @@ description: "Task list for Web Server Sub-Application (004)"
 # Task T013 → apps/web/src/config/service-configuration.spec.ts
 
 # Then schema + bootstrap:
-# Task T014 → apps/web/src/config/service-configuration.schema.ts
+# Task T014 → apps/web/src/config/service-configuration.ts
 # Task T015–T016 → apps/web/src/main.ts (and logger helper if split)
 ```
 
