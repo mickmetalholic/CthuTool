@@ -1,5 +1,5 @@
 /**
- * Shared Jest defaults for root contract tests and apps/web (Nest).
+ * Shared Jest defaults for root contract tests and packages.
  * Package-specific config stays in jest.config.cjs beside each package.
  */
 /** @type {import("jest").Config} */

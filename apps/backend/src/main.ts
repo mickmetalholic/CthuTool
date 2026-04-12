@@ -44,7 +44,7 @@ export async function bootstrap(
 
   await app.listen(config.port);
   logger.log('service started', {
-    service: 'web',
+    service: 'backend',
     nodeEnv: config.nodeEnv,
     port: config.port,
     timestamp: new Date().toISOString(),

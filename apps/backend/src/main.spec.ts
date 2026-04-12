@@ -27,7 +27,7 @@ describe('bootstrap', () => {
     expect(log).toHaveBeenCalledWith(
       'service started',
       expect.objectContaining({
-        service: 'web',
+        service: 'backend',
         nodeEnv: 'development',
         port: 3000,
       }),

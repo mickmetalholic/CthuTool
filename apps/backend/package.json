@@ -1,5 +1,5 @@
 {
-  "name": "@cthutool/web",
+  "name": "@cthutool/backend",
   "version": "0.0.0",
   "private": true,
   "scripts": {

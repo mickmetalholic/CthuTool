@@ -11,7 +11,7 @@ export class HealthService {
   getStatus(): HealthStatus {
     return {
       status: 'ok',
-      service: 'web',
+      service: 'backend',
       timestamp: new Date().toISOString(),
     };
   }

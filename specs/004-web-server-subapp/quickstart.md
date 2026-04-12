@@ -8,30 +8,30 @@
 
 ## 2. 使用 Nest CLI 生成子应用（仅工具生成）
 
-`@nestjs/cli` 由 `apps/web` 的 `devDependencies` 固定版本；在仓库根通过 workspace 调用本地 `nest`，勿使用 `pnpm dlx @nestjs/cli@latest`。
+`@nestjs/cli` 由 `apps/backend` 的 `devDependencies` 固定版本；在仓库根通过 workspace 调用本地 `nest`，勿使用 `pnpm dlx @nestjs/cli@latest`。
 
 ```bash
-pnpm --filter @cthutool/web exec nest generate app web
+pnpm --filter @cthutool/backend exec nest generate app backend
 ```
 
 > 要求：不得手工创建脚手架文件；如需新增资源（如健康检查控制器），同样使用 Nest CLI 命令生成。
 
 ## 3. 生成健康检查资源
 ```bash
-pnpm --filter @cthutool/web exec nest g module health --project web
-pnpm --filter @cthutool/web exec nest g service health --project web
-pnpm --filter @cthutool/web exec nest g controller health --project web
+pnpm --filter @cthutool/backend exec nest g module health
+pnpm --filter @cthutool/backend exec nest g service health
+pnpm --filter @cthutool/backend exec nest g controller health
 ```
 
 ## 4. 移除默认 lint 体系并切换 Biome
-1. 删除 `apps/web` 内 ESLint 配置文件（如 `.eslintrc.js`）及相关 npm script。
+1. 删除 `apps/backend` 内 ESLint 配置文件（如 `.eslintrc.js`）及相关 npm script。
 2. 确保子应用质量检查走仓库根脚本：
    - `pnpm run biome:check`
    - `pnpm run biome:write`
 
 ## 5. 启动与验证
 ```bash
-PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/web run dev
+PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/backend run dev
 ```
 
 健康检查：

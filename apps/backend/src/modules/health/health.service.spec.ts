@@ -7,7 +7,7 @@ describe('HealthService', () => {
     const result = service.getStatus();
 
     expect(result.status).toBe('ok');
-    expect(result.service).toBe('web');
+    expect(result.service).toBe('backend');
     expect(typeof result.timestamp).toBe('string');
     expect(new Date(result.timestamp).toString()).not.toBe('Invalid Date');
   });
