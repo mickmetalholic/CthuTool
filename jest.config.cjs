@@ -1,6 +1,8 @@
+const preset = require("./jest.preset.cjs");
+
 /** @type {import("jest").Config} */
 module.exports = {
-  testEnvironment: "node",
+  ...preset,
   roots: ["<rootDir>/tests"],
   testMatch: ["**/*.test.ts"],
   collectCoverageFrom: [
@@ -22,5 +24,4 @@ module.exports = {
       },
     ],
   },
-  moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
 };

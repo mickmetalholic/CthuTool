@@ -1,7 +1,7 @@
 # Phase 0 研究结论
 
 ## 决策 1：在 monorepo 中通过 Nest CLI 创建子应用
-- Decision: 使用 `nest generate app web`（或等效 `nest g app web`）在工作区生成 `apps/web`，并由 `nest-cli.json` 维护项目映射。
+- Decision: 使用 `nest generate app web`（或等效 `nest g app web`）在工作区生成 `apps/web`，并由 `nest-cli.json` 维护项目映射。CLI 包为 `apps/web` 的 `devDependencies`（`@nestjs/cli`，与 Nest 主版本对齐），在仓库根通过 `pnpm --filter @cthutool/web exec nest …` 调用，避免 `pnpm dlx @nestjs/cli@latest` 浮动版本。
 - Rationale: Context7 的 NestJS 官方文档明确推荐通过 `generate app` 将工作区扩展为 monorepo 应用，且可通过 `nest start <project>` 启动指定项目，符合“必须使用工具创建文件”的要求。
 - Alternatives considered:
   - 手动复制模板目录：违反“必须使用脚手架工具”约束，且易与官方结构漂移。

@@ -28,7 +28,7 @@ description: "Task list for Web Server Sub-Application (004)"
 
 **Purpose**: Create the NestJS `web` sub-application with CLI only; remove scaffold ESLint; align with Turborepo and Biome.
 
-- [X] T001 Create NestJS monorepo sub-application `web` by running `pnpm dlx @nestjs/cli@latest generate app web` from repository root so `apps/web/` and root `nest-cli.json` are tool-generated (no hand-written scaffold files)
+- [X] T001 Create NestJS monorepo sub-application `web` by running `pnpm --filter @cthutool/web exec nest generate app web` from repository root so `apps/web/` and root `nest-cli.json` are tool-generated (no hand-written scaffold files; `@nestjs/cli` is a devDependency of `@cthutool/web`)
 - [X] T002 Remove ESLint config files, ESLint-related devDependencies, and ESLint npm scripts from `apps/web/package.json` and delete any `apps/web/.eslintrc.*` or `apps/web/eslint.config.*`
 - [X] T003 [P] Align `apps/web/package.json` scripts with root quality workflow (`pnpm run biome:check`, `turbo run check` / `build` / `test` as applicable)
 - [X] T004 [P] Extend `turbo.json` with `build`, `check`, and `test` task definitions for `apps/web` so CI and `pnpm exec turbo` include the new package
@@ -158,7 +158,7 @@ description: "Task list for Web Server Sub-Application (004)"
 # Task T008 → apps/web/test/not-found.e2e-spec.ts
 
 # After tests exist and fail, run Nest CLI and implement:
-# Task T009 → nest g module/service/controller health --project web
+# Task T009 → nest g module/service/controller health --project web（见 quickstart §3；命令前缀为 pnpm --filter @cthutool/web exec nest）
 # Task T010–T012 → health module + app.module + exception filter
 ```
 

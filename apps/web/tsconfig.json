@@ -9,7 +9,7 @@
     "esModuleInterop": true,
     "types": ["node"],
     "declaration": false,
-    "outDir": "../../dist/apps/web"
+    "outDir": "./dist/apps/web"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test/**/*", "**/*.spec.ts"]

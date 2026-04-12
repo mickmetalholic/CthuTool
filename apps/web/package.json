@@ -3,11 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start": "pnpm dlx @nestjs/cli@latest start web",
-    "start:dev": "pnpm dlx @nestjs/cli@latest start web --watch",
-    "build": "pnpm dlx @nestjs/cli@latest build web",
-    "test": "pnpm exec jest --config jest.config.cjs",
-    "test:cov": "pnpm exec jest --config jest.config.cjs --coverage --coverageReporters=text-summary --coverageReporters=lcov --coverageReporters=html --coverageReporters=json-summary"
+    "dev": "nest start --watch",
+    "start": "nest start",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "nest start --prod",
+    "build": "nest build",
+    "test": "jest",
+    "test:cov": "jest --coverage"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -20,6 +22,7 @@
     "valibot": "^1.0.0"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",

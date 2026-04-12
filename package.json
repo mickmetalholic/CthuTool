@@ -2,11 +2,13 @@
   "name": "cthutool",
   "private": true,
   "scripts": {
-    "build": "pnpm exec turbo run build",
-    "test": "pnpm exec jest --config jest.config.cjs && pnpm exec turbo run test",
-    "test:cov": "pnpm exec jest --config jest.config.cjs --coverage --coverageReporters=text-summary --coverageReporters=lcov --coverageReporters=html --coverageReporters=json-summary && pnpm --filter @cthutool/web run test:cov",
-    "check": "pnpm exec biome check .",
-    "check:write": "pnpm exec biome check --write .",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "test": "jest && turbo run test",
+    "test:cov": "jest --coverage && turbo run test:cov",
+    "check": "biome check .",
+    "check:write": "biome check --write .",
     "prepare": "husky",
     "commit": "git-cz"
   },

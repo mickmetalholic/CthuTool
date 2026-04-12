@@ -7,17 +7,20 @@
 - 设置环境变量：`PORT`、`NODE_ENV`，可选 `LOG_LEVEL`
 
 ## 2. 使用 Nest CLI 生成子应用（仅工具生成）
+
+`@nestjs/cli` 由 `apps/web` 的 `devDependencies` 固定版本；在仓库根通过 workspace 调用本地 `nest`，勿使用 `pnpm dlx @nestjs/cli@latest`。
+
 ```bash
-pnpm dlx @nestjs/cli@latest generate app web
+pnpm --filter @cthutool/web exec nest generate app web
 ```
 
 > 要求：不得手工创建脚手架文件；如需新增资源（如健康检查控制器），同样使用 Nest CLI 命令生成。
 
 ## 3. 生成健康检查资源
 ```bash
-pnpm dlx @nestjs/cli@latest g module health --project web
-pnpm dlx @nestjs/cli@latest g service health --project web
-pnpm dlx @nestjs/cli@latest g controller health --project web
+pnpm --filter @cthutool/web exec nest g module health --project web
+pnpm --filter @cthutool/web exec nest g service health --project web
+pnpm --filter @cthutool/web exec nest g controller health --project web
 ```
 
 ## 4. 移除默认 lint 体系并切换 Biome
@@ -28,7 +31,7 @@ pnpm dlx @nestjs/cli@latest g controller health --project web
 
 ## 5. 启动与验证
 ```bash
-PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/web run start:dev
+PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/web run dev
 ```
 
 健康检查：
