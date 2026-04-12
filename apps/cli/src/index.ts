@@ -1,8 +1,6 @@
 import { defineCommand, runMain } from 'citty';
 import { greetCommand } from './command/greet.command';
 
-void 0;
-
 const main = defineCommand({
   meta: {
     name: 'cthutool-cli',
