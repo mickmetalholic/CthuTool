@@ -9,6 +9,8 @@
     "start:prod": "nest start --prod",
     "build": "nest build",
     "test": "jest",
+    "test:watch": "jest --watch",
+    "test:debug": "node --inspect-brk node_modules/jest/bin/jest.js --runInBand",
     "test:cov": "jest --coverage"
   },
   "dependencies": {
