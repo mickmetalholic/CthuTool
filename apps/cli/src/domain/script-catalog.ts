@@ -1,0 +1,58 @@
+import { err, ok, type Result } from 'neverthrow';
+import type { ScriptManifest } from './script-manifest-schema';
+
+export const ENTRY_FILE = 'index.ts' as const;
+
+export type ScriptPackage = {
+  readonly id: string;
+  readonly rootPath: string;
+  readonly manifest: ScriptManifest;
+  readonly entryRelative: typeof ENTRY_FILE;
+};
+
+export type ScriptCatalog = {
+  readonly packages: ReadonlyArray<ScriptPackage>;
+  readonly warnings: ReadonlyArray<{
+    readonly path: string;
+    readonly message: string;
+  }>;
+};
+
+export type CatalogResolveError =
+  | { readonly kind: 'not_found'; readonly id: string }
+  | { readonly kind: 'ambiguous'; readonly id: string };
+
+/**
+ * Sorted selectable rows for prompts and listings.
+ *
+ * @param catalog Discovery result
+ * @returns Stable id/title pairs for UI
+ */
+export const listSelectable = (
+  catalog: ScriptCatalog,
+): ReadonlyArray<{ readonly id: string; readonly title: string }> =>
+  [...catalog.packages]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((p) => ({ id: p.id, title: p.manifest.title }));
+
+/**
+ * Resolves a package by id from a catalog.
+ *
+ * @param catalog Discovery result
+ * @param id Script id (kebab-case)
+ * @returns Ok package or not-found / ambiguous
+ */
+export const resolvePackage = (
+  catalog: ScriptCatalog,
+  id: string,
+): Result<ScriptPackage, CatalogResolveError> => {
+  const matches = catalog.packages.filter((p) => p.id === id);
+  if (matches.length === 0) {
+    return err({ kind: 'not_found', id });
+  }
+  if (matches.length > 1) {
+    return err({ kind: 'ambiguous', id });
+  }
+  const [first] = matches;
+  return ok(first);
+};

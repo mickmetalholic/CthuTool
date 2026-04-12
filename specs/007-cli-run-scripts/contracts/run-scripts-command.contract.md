@@ -7,10 +7,14 @@
 
 ## 调用方式（逻辑契约）
 
-实现阶段将下列占位符替换为最终命令名与 flag 名（一旦确定，修改本文件与 `--help` 保持一致）：
+最终命令名与参数（与 `apps/cli/src/command/run-scripts.command.ts` 及 `--help` 一致）：
+
+- **子命令名**：`scripts`（通过 `cthutool-cli scripts …` 调用；入口 `bun run src/index.ts`）。
+- **显式指定脚本**：位置参数 `id` 和/或 `--script` / `-s <id>`（二者等价，与目录名、`manifest.id` 一致）。
+- 若 `id` 不存在：stderr 输出清晰错误，退出码非零。
 
 1. **显式指定脚本**  
-   - 用户通过**位置参数**或**选项**传入脚本 `id`（与目录名、`manifest.id` 一致）。  
+   - 用户通过**位置参数 `id`** 或**选项 `--script` / `-s`** 传入脚本 `id`。  
    - 若 `id` 不存在：stderr 输出清晰错误，退出码非零。
 
 2. **交互选择**  

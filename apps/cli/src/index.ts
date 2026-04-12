@@ -1,16 +1,15 @@
 import { defineCommand, runMain } from 'citty';
 import { greetCommand } from './command/greet.command';
+import { scriptsCommand } from './command/run-scripts.command';
 
 const main = defineCommand({
   meta: {
     name: 'cthutool-cli',
-    description: 'CLI greeting demo',
+    description: 'CthuTool monorepo CLI (greet demo and bundled scripts)',
   },
   subCommands: {
     greet: greetCommand,
-  },
-  async run() {
-    await greetCommand.run?.({} as never);
+    scripts: scriptsCommand,
   },
 });
 
