@@ -37,8 +37,8 @@ Node.js ≥ 20（仓库 `engines`）: Follow standard conventions
 
 ## Recent Changes
 - 006-commit-lint-auto-fix: Added Node.js（仓库 `engines`：`>=24.0.0 <25`，Volta 锁定 24.14.1）；包管理 pnpm 9.x + `husky`（已有）、`@biomejs/biome`（已有）、**`lint-staged`（新增）**、`@commitlint/cli`（已有）
+- 006-commit-lint-auto-fix: Added Node.js（仓库 `engines`：`>=24.0.0 <25`，Volta 锁定 24.14.1）；包管理 pnpm 9.x + `husky`（已有）、`@biomejs/biome`（已有）、**`lint-staged`（新增）**、`@commitlint/cli`（已有）
 - 005-cli-greeting-demo: Added TypeScript 5.9.x（运行时 Bun） + Bun、citty、@clack/prompts、boxen、picocolors、react、ink、ink-spinner、valibot、neverthrow
-- 004-web-server-subapp: Added TypeScript 5.9.x + Node.js >= 20 + NestJS CLI (`@nestjs/schematics` 生成)、NestJS 核心运行时、`@biomejs/biome`（仓库已配置）
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

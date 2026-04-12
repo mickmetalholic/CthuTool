@@ -29,7 +29,7 @@ description: "Task list for commit-time lint gate with lint-staged (006-commit-l
 
 **Purpose**: 引入 lint-staged 依赖，为后续钩子与配置做准备
 
-- [ ] T001 Add `lint-staged` to `devDependencies` in `package.json` and run `pnpm install` at repository root to update `pnpm-lock.yaml`
+- [x] T001 Add `lint-staged` to `devDependencies` in `package.json` and run `pnpm install` at repository root to update `pnpm-lock.yaml`
 
 ---
 
@@ -39,8 +39,8 @@ description: "Task list for commit-time lint gate with lint-staged (006-commit-l
 
 **⚠️ CRITICAL**: No user story verification should be treated as complete until this phase is complete
 
-- [ ] T002 Configure `lint-staged` in `package.json` (or add a dedicated config file at repository root if preferred) so staged files under `apps/` and `packages/` run `pnpm exec biome check --write` with no default `--unsafe`, matching `biome.jsonc` `files.includes` and `specs/006-commit-lint-auto-fix/contracts/commit-hook.contract.md`
-- [ ] T003 Replace `.husky/pre-commit` to invoke `pnpm exec lint-staged` per `specs/006-commit-lint-auto-fix/contracts/commit-hook.contract.md`, removing the legacy `git diff` + read-only `biome check` script
+- [x] T002 Configure `lint-staged` in `package.json` (or add a dedicated config file at repository root if preferred) so staged files under `apps/` and `packages/` run `pnpm exec biome check --write` with no default `--unsafe`, matching `biome.jsonc` `files.includes` and `specs/006-commit-lint-auto-fix/contracts/commit-hook.contract.md`
+- [x] T003 Replace `.husky/pre-commit` to invoke `pnpm exec lint-staged` per `specs/006-commit-lint-auto-fix/contracts/commit-hook.contract.md`, removing the legacy `git diff` + read-only `biome check` script
 
 **Checkpoint**: Foundation ready — user story manual verification can begin
 
@@ -54,7 +54,7 @@ description: "Task list for commit-time lint gate with lint-staged (006-commit-l
 
 ### Verification for User Story 1
 
-- [ ] T004 [US1] Execute manual acceptance in `specs/006-commit-lint-auto-fix/quickstart.md` §1 using a file under `apps/` or `packages/`, confirming a single successful commit contains both original intent and Biome corrections (FR-001, FR-002, FR-005a)
+- [x] T004 [US1] Execute manual acceptance in `specs/006-commit-lint-auto-fix/quickstart.md` §1 using a file under `apps/` or `packages/`, confirming a single successful commit contains both original intent and Biome corrections (FR-001, FR-002, FR-005a)
 
 **Checkpoint**: User Story 1 satisfied independently
 
@@ -68,7 +68,7 @@ description: "Task list for commit-time lint gate with lint-staged (006-commit-l
 
 ### Verification for User Story 2
 
-- [ ] T005 [US2] Execute `specs/006-commit-lint-auto-fix/quickstart.md` §2: introduce a Biome error that `--write` cannot clear, confirm commit fails with visible diagnostics, then fix only remaining issues and confirm the next commit succeeds (FR-003, FR-005b)
+- [x] T005 [US2] Execute `specs/006-commit-lint-auto-fix/quickstart.md` §2: introduce a Biome error that `--write` cannot clear, confirm commit fails with visible diagnostics, then fix only remaining issues and confirm the next commit succeeds (FR-003, FR-005b)
 
 **Checkpoint**: User Story 2 satisfied independently
 
@@ -82,8 +82,8 @@ description: "Task list for commit-time lint gate with lint-staged (006-commit-l
 
 ### Implementation / verification for User Story 3
 
-- [ ] T006 [US3] Confirm `.husky/commit-msg` still runs `pnpm exec commitlint --edit "$1"` unchanged per `specs/006-commit-lint-auto-fix/contracts/commit-hook.contract.md` (FR-004)
-- [ ] T007 [US3] Execute `specs/006-commit-lint-auto-fix/quickstart.md` §3 with valid staged code and an invalid message, confirm failure at commit-msg stage; retry with a valid conventional message and confirm success (FR-004, FR-005)
+- [x] T006 [US3] Confirm `.husky/commit-msg` still runs `pnpm exec commitlint --edit "$1"` unchanged per `specs/006-commit-lint-auto-fix/contracts/commit-hook.contract.md` (FR-004)
+- [x] T007 [US3] Execute `specs/006-commit-lint-auto-fix/quickstart.md` §3 with valid staged code and an invalid message, confirm failure at commit-msg stage; retry with a valid conventional message and confirm success (FR-004, FR-005)
 
 **Checkpoint**: User Story 3 satisfied independently
 
@@ -93,8 +93,8 @@ description: "Task list for commit-time lint gate with lint-staged (006-commit-l
 
 **Purpose**: CI 对齐、Agent 上下文与文档化收尾
 
-- [ ] T008 [P] Run `pnpm run lint` at repository root and follow `specs/006-commit-lint-auto-fix/quickstart.md` §4 for CI parity expectations
-- [ ] T009 [P] Run `.specify/scripts/powershell/update-agent-context.ps1` from repository root to refresh `.cursor/rules/specify-rules.mdc` per `specs/006-commit-lint-auto-fix/plan.md`
+- [x] T008 [P] Run `pnpm run lint` at repository root and follow `specs/006-commit-lint-auto-fix/quickstart.md` §4 for CI parity expectations
+- [x] T009 [P] Run `.specify/scripts/powershell/update-agent-context.ps1` from repository root to refresh `.cursor/rules/specify-rules.mdc` per `specs/006-commit-lint-auto-fix/plan.md`
 
 ---
 
