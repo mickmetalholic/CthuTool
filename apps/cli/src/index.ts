@@ -1,6 +1,8 @@
 import { defineCommand, runMain } from 'citty';
 import { greetCommand } from './command/greet.command';
 
+const _lintStagedUs1 = 1 + 2;
+
 const main = defineCommand({
   meta: {
     name: 'cthutool-cli',
