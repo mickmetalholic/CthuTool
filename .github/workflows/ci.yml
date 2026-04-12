@@ -44,8 +44,8 @@ jobs:
         if: github.event_name == 'push'
         run: pnpm exec commitlint --last --verbose
 
-      - name: Check
-        run: pnpm run check
+      - name: Lint
+        run: pnpm run lint
 
       - name: Tests
         run: pnpm run test

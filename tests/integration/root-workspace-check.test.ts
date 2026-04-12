@@ -10,10 +10,10 @@ const run = skip ? describe.skip : describe;
 
 run("root workspace check (integration)", () => {
   it(
-    "pnpm run check exits 0 from repo root",
+    "pnpm run lint exits 0 from repo root",
     async () => {
       const code = await new Promise<number>((resolve, reject) => {
-        const child = spawn("pnpm", ["run", "check"], {
+        const child = spawn("pnpm", ["run", "lint"], {
           cwd: root,
           stdio: "inherit",
           env: process.env,

@@ -25,9 +25,8 @@ pnpm install
 | Command           | Description                                      |
 | ----------------- | ------------------------------------------------ |
 | `pnpm run build`  | Runs `turbo run build` across workspace members. |
-| `pnpm run check`  | Runs Biome + `turbo run check` at repo root.      |
-| `pnpm run biome:check` | Runs Biome checks with root `biome.jsonc`. |
-| `pnpm run biome:write` | Auto-fixes Biome-fixable issues.            |
+| `pnpm run lint`   | Runs `biome check .` at repo root.               |
+| `pnpm run lint:fix` | Runs `biome check --write .` at repo root.   |
 | `pnpm run test`   | Root Jest suite (contract + integration tests).  |
 
 ## Layout
@@ -40,17 +39,17 @@ pnpm install
 
 - Put apps under `apps/<name>/` with a `package.json` named `@cthutool/<name>` (or your chosen suffix under the scope).
 - Put libraries under `packages/<name>/` with `name`: `@cthutool/<name>`.
-- Ensure `pnpm-workspace.yaml` globs (`apps/*`, `packages/*`) cover new folders; you do **not** need to duplicate root scripts — `pnpm run build` / `pnpm run check` already orchestrate the whole workspace via Turborepo.
+- Ensure `pnpm-workspace.yaml` globs (`apps/*`, `packages/*`) cover new folders; you do **not** need to duplicate root scripts — `pnpm run build` / `pnpm run test` already orchestrate the whole workspace via Turborepo.
 
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs:
 
-- `pnpm exec turbo run check`
-- `pnpm run biome:check`
+- Commitlint (on `pull_request` and `push`)
+- `pnpm run lint` (Biome)
 - `pnpm run test` (with `SKIP_ROOT_WORKSPACE_CHECK=true`)
 
-The workflow triggers on all `push` branches and `pull_request`, so Biome gate behavior stays consistent between local and CI.
+The workflow triggers on `push` to `main` and on `pull_request`, so Biome and commit message gates stay consistent between local and CI.
 
 ## Biome quality gates
 

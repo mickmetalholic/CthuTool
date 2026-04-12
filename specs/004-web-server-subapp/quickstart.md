@@ -26,8 +26,8 @@ pnpm --filter @cthutool/backend exec nest g controller health
 ## 4. 移除默认 lint 体系并切换 Biome
 1. 删除 `apps/backend` 内 ESLint 配置文件（如 `.eslintrc.js`）及相关 npm script。
 2. 确保子应用质量检查走仓库根脚本：
-   - `pnpm run biome:check`
-   - `pnpm run biome:write`
+   - `pnpm run lint`
+   - `pnpm run lint:fix`
 
 ## 5. 启动与验证
 ```bash

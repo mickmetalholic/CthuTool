@@ -26,14 +26,14 @@ pnpm install
 
 ```bash
 pnpm run build
-pnpm run check
+pnpm run lint
 ```
 
 直接使用 Turborepo：
 
 ```bash
 pnpm exec turbo run build
-pnpm exec turbo run check
+pnpm exec turbo run test
 ```
 
 ## 测试（根 Jest）
@@ -46,7 +46,7 @@ pnpm run test
 
 ### 集成测试门控
 
-`tests/integration/root-workspace-check.test.ts` 会在仓库根启动子进程执行 `pnpm run check`。若在受限环境（例如部分 CI 沙箱）下不稳定，可设置：
+`tests/integration/root-workspace-check.test.ts` 会在仓库根启动子进程执行 `pnpm run lint`。若在受限环境（例如部分 CI 沙箱）下不稳定，可设置：
 
 ```bash
 # Windows PowerShell
@@ -56,20 +56,20 @@ $env:SKIP_ROOT_WORKSPACE_CHECK="1"; pnpm run test
 SKIP_ROOT_WORKSPACE_CHECK=1 pnpm run test
 ```
 
-手工等价验证：在仓库根直接执行 `pnpm run check`，确认退出码为 `0`。
+手工等价验证：在仓库根直接执行 `pnpm run lint`，确认退出码为 `0`。
 
 ## 新增工作区成员（FR-002）
 
 1. 在 `apps/<name>/` 或 `packages/<name>/` 新建目录，并放入有效 `package.json`（`name` 建议使用 `@cthutool/<name>`）。
 2. 确认目录被 `pnpm-workspace.yaml` 中已有 glob（`apps/*`、`packages/*`）覆盖；**无需**复制或修改根目录 `scripts`。
-3. 在该包的 `package.json` 中提供与 `turbo.json` 一致的脚本（至少包含本仓库已注册的 `build` 与 `check`）。
-4. 在仓库根执行 `pnpm install`，再运行 `pnpm run check`，确认 Turborepo 输出包含新包且任务成功。
+3. 在该包的 `package.json` 中提供与 `turbo.json` 一致的脚本（至少包含本仓库已注册的 `build` 与 `test` 等任务）。
+4. 在仓库根执行 `pnpm install`，再运行 `pnpm run lint` 与 `pnpm run test`，确认 Turborepo 输出包含新包且任务成功。
 
 参考示范包：`packages/example-lib/`（`@cthutool/example-lib`）。
 
 ## CI 与本地入口（FR-006）
 
-`.github/workflows/ci.yml` 在仓库根执行 `pnpm install` 与 `pnpm run check`，与上文「常用命令」一致。测试步骤使用 `SKIP_ROOT_WORKSPACE_CHECK=1`，避免与工作流中的 `check` 步骤重复执行同一命令；本地完整验证仍应直接运行 `pnpm run check`。
+`.github/workflows/ci.yml` 在仓库根执行 `pnpm install` 与 `pnpm run lint`，与上文「常用命令」一致。测试步骤使用 `SKIP_ROOT_WORKSPACE_CHECK=1`，避免与工作流中的 `lint` 步骤重复执行同一命令；本地完整验证仍应直接运行 `pnpm run lint`。
 
 ## 初始化仓库（维护者一次性操作摘要）
 
@@ -85,4 +85,4 @@ SKIP_ROOT_WORKSPACE_CHECK=1 pnpm run test
 
 ## 二次运行与缓存（SC-002 / FR-004）
 
-在无代码变更时连续执行两次 `pnpm run check`，第二次应因 Turborepo 缓存明显快于第一次。若在 CI 或特殊环境下无法达到规格中的耗时比例，请在 `README.md` 或本文件中简要说明原因与预期。
+在无代码变更时连续执行两次 `pnpm run test`（或 `pnpm run build`），第二次应因 Turborepo 缓存明显快于第一次。若在 CI 或特殊环境下无法达到规格中的耗时比例，请在 `README.md` 或本文件中简要说明原因与预期。

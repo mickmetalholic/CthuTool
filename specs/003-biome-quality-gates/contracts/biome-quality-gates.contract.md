@@ -22,7 +22,7 @@
 - 本地修复：`pnpm exec biome check --write .`
 - 提交前增量检查：对 staged 文件执行等价检查命令
 - CI 检查：运行与本地同版本、同规则的 `biome check`
-- 根脚本入口（推荐）：`pnpm run biome:check` / `pnpm run biome:write`
+- 根脚本入口（推荐）：`pnpm run lint` / `pnpm run lint:fix`
 - staged-only 命令契约（示例实现）：
   - `git diff --cached --name-only --diff-filter=ACMR -- apps packages`
   - 当输出非空时执行 `pnpm exec biome check <staged-files>`

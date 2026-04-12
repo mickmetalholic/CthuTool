@@ -7,8 +7,8 @@
     "start": "turbo run start",
     "test": "jest && turbo run test",
     "test:cov": "jest --coverage && turbo run test:cov",
-    "check": "biome check .",
-    "check:write": "biome check --write .",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
     "prepare": "husky",
     "commit": "git-cz"
   },
