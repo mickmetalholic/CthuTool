@@ -15,7 +15,7 @@ pnpm install
 Use explicit runtime configuration:
 
 ```bash
-PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/web run start:dev
+PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/backend run start:dev
 ```
 
 ## Verify

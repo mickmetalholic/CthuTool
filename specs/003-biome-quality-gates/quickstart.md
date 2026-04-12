@@ -13,8 +13,8 @@
 - 自动修复（格式化 + 可修复 lint）：
   - `pnpm exec biome check --write .`
 - 根脚本（与 CI 对齐）：
-  - `pnpm run biome:check`
-  - `pnpm run biome:write`
+  - `pnpm run lint`
+  - `pnpm run lint:fix`
 
 ## 3. 编辑器（Cursor / VS Code）默认行为
 
@@ -46,7 +46,7 @@
 1. 先保证增量改动始终通过 pre-commit 和 CI。
 2. 建立历史遗留问题清单（按目录或包分批）。
 3. 以小批量提交逐步收敛历史问题，避免一次性超大修复。
-4. 每批收敛后执行 `pnpm run biome:check` 作为回归验证。
+4. 每批收敛后执行 `pnpm run lint` 作为回归验证。
 
 ## 7. 端到端门禁演练记录（2026-03-30）
 

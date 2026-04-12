@@ -13,12 +13,12 @@ describe("root package.json scripts contract", () => {
     expect(build).toMatch(/turbo(\.exe)?\s+run\s+build|exec\s+turbo(\.exe)?\s+run\s+build/);
   });
 
-  it("exposes check that runs biome check at repo root", () => {
+  it("exposes lint that runs biome check at repo root", () => {
     const pkg = JSON.parse(
       readFileSync(join(root, "package.json"), "utf8"),
-    ) as { scripts?: { check?: string } };
-    expect(pkg.scripts?.check).toBeDefined();
-    const check = pkg.scripts?.check ?? "";
-    expect(check).toMatch(/biome(\.exe)?\s+check/);
+    ) as { scripts?: { lint?: string } };
+    expect(pkg.scripts?.lint).toBeDefined();
+    const lint = pkg.scripts?.lint ?? "";
+    expect(lint).toMatch(/biome(\.exe)?\s+check/);
   });
 });

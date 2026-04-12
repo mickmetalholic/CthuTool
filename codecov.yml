@@ -11,9 +11,9 @@ coverage:
         flags:
           - root
         informational: true
-      web:
+      backend:
         flags:
-          - web
+          - backend
         target: 85%
         threshold: 2%
     patch:

@@ -1,4 +1,4 @@
-import { parseServiceConfiguration } from './service-configuration.schema';
+import { parseServiceConfiguration } from './service-configuration';
 
 describe('parseServiceConfiguration', () => {
   it('returns valid configuration', () => {

@@ -1,5 +1,5 @@
 import { err, ok } from 'neverthrow';
-import type { ServiceConfiguration } from './config/service-configuration.schema';
+import type { ServiceConfiguration } from './config/service-configuration';
 import { bootstrap } from './main';
 
 describe('bootstrap', () => {
@@ -27,7 +27,7 @@ describe('bootstrap', () => {
     expect(log).toHaveBeenCalledWith(
       'service started',
       expect.objectContaining({
-        service: 'web',
+        service: 'backend',
         nodeEnv: 'development',
         port: 3000,
       }),

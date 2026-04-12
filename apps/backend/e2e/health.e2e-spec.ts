@@ -21,7 +21,7 @@ describe('GET /health (e2e)', () => {
   it('returns contract-shaped health payload', async () => {
     const res = await request(app.getHttpServer()).get('/health').expect(200);
     expect(res.body.status).toBe('ok');
-    expect(res.body.service).toBe('web');
+    expect(res.body.service).toBe('backend');
     expect(typeof res.body.timestamp).toBe('string');
     expect(new Date(res.body.timestamp).toString()).not.toBe('Invalid Date');
   });

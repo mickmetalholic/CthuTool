@@ -7,6 +7,11 @@
     "source.fixAll.biome": "explicit",
     "source.organizeImports.biome": "explicit"
   },
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "*.ts": "${capture}.spec.ts"
+  },
   "[javascript]": {
     "editor.defaultFormatter": "biomejs.biome"
   },

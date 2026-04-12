@@ -28,7 +28,7 @@ description: "Task list for Web Server Sub-Application (004)"
 
 **Purpose**: Create the NestJS `web` sub-application with CLI only; remove scaffold ESLint; align with Turborepo and Biome.
 
-- [X] T001 Create NestJS monorepo sub-application `web` by running `pnpm dlx @nestjs/cli@latest generate app web` from repository root so `apps/web/` and root `nest-cli.json` are tool-generated (no hand-written scaffold files)
+- [X] T001 Create NestJS monorepo sub-application `web` by running `pnpm --filter @cthutool/web exec nest generate app web` from repository root so `apps/web/` and root `nest-cli.json` are tool-generated (no hand-written scaffold files; `@nestjs/cli` is a devDependency of `@cthutool/web`)
 - [X] T002 Remove ESLint config files, ESLint-related devDependencies, and ESLint npm scripts from `apps/web/package.json` and delete any `apps/web/.eslintrc.*` or `apps/web/eslint.config.*`
 - [X] T003 [P] Align `apps/web/package.json` scripts with root quality workflow (`pnpm run biome:check`, `turbo run check` / `build` / `test` as applicable)
 - [X] T004 [P] Extend `turbo.json` with `build`, `check`, and `test` task definitions for `apps/web` so CI and `pnpm exec turbo` include the new package
@@ -84,7 +84,7 @@ description: "Task list for Web Server Sub-Application (004)"
 
 ### Implementation for User Story 2
 
-- [X] T014 [US2] Implement valibot schema and parser for `ServiceConfiguration` (`port`, `nodeEnv`, optional `logLevel`) in `apps/web/src/config/service-configuration.schema.ts` aligned with `data-model.md`
+- [X] T014 [US2] Implement valibot schema and parser for `ServiceConfiguration` (`port`, `nodeEnv`, optional `logLevel`) in `apps/web/src/config/service-configuration.ts` aligned with `data-model.md`
 - [X] T015 [US2] Load environment variables, parse with the schema, and abort bootstrap before listening when invalid in `apps/web/src/main.ts` (or dedicated `apps/web/src/bootstrap.ts`)
 - [X] T016 [US2] Add structured, human-readable startup success and configuration-failure logs in `apps/web/src/main.ts` (use Nest `Logger` or a small `apps/web/src/logger/` helper); ensure no sensitive stack leakage in API responses
 
@@ -113,7 +113,7 @@ description: "Task list for Web Server Sub-Application (004)"
 
 - [X] T019 [P] Run `pnpm run biome:check` and `pnpm exec turbo run check` from repository root; fix any `apps/web` issues in `apps/web/src/`, `apps/web/test/`, and `apps/web/package.json`
 - [X] T020 [P] Execute verification steps in `specs/004-web-server-subapp/quickstart.md` (start, `curl` health, undefined route) and adjust docs if behavior differs
-- [X] T021 [P] Add TSDoc (`@param` / `@returns`) to pure configuration parsing functions in `apps/web/src/config/service-configuration.schema.ts` per constitution
+- [X] T021 [P] Add TSDoc (`@param` / `@returns`) to pure configuration parsing functions in `apps/web/src/config/service-configuration.ts` per constitution
 
 ---
 
@@ -158,7 +158,7 @@ description: "Task list for Web Server Sub-Application (004)"
 # Task T008 → apps/web/test/not-found.e2e-spec.ts
 
 # After tests exist and fail, run Nest CLI and implement:
-# Task T009 → nest g module/service/controller health --project web
+# Task T009 → nest g module/service/controller health --project web（见 quickstart §3；命令前缀为 pnpm --filter @cthutool/web exec nest）
 # Task T010–T012 → health module + app.module + exception filter
 ```
 
@@ -171,7 +171,7 @@ description: "Task list for Web Server Sub-Application (004)"
 # Task T013 → apps/web/src/config/service-configuration.spec.ts
 
 # Then schema + bootstrap:
-# Task T014 → apps/web/src/config/service-configuration.schema.ts
+# Task T014 → apps/web/src/config/service-configuration.ts
 # Task T015–T016 → apps/web/src/main.ts (and logger helper if split)
 ```
 

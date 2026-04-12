@@ -10,16 +10,16 @@
 | Script | 语义 | 实现约束 |
 |--------|------|----------|
 | `build` | 编排全工作区构建 | MUST 委托 `turbo run build`（或等价，使子包 `build` 被调用） |
-| `check` | 全工作区静态校验/测试入口（可与模板中 `lint` 合并或并存） | MUST 可被 CI 与文档同时引用；具体子任务名在实现后与 `turbo.json` 一致 |
+| `lint` | 根目录 Biome 静态校验（`biome check .`） | MUST 可被 CI 与文档同时引用；与 `lint:fix` 配对 |
 
-若 create-turbo 默认使用 `lint` 而非 `check`，实现 **MUST** 在 `README` / quickstart 中说明别名关系，或增加 `check` 作为统一入口。
+若历史文档或模板仍使用 `check` / `biome:check` 指代同一入口，实现 **MUST** 在 `README` / quickstart 中说明与 `lint` 的对应关系。
 
 ## Turbo 任务名（SHOULD）
 
 根 `turbo.json` 中 **SHOULD** 为工作区成员注册以下任务名之一组（与官方模板对齐后裁剪）：
 
 - `build`
-- `lint` 或 `check`（最终对外以 `check` 为优先）
+- `lint`（根脚本名；子包可选用与 `turbo.json` 对齐的任务名）
 
 ## 退出约定
 

@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24.14.1"
           cache: pnpm
 
       - uses: oven-sh/setup-bun@v2
@@ -44,8 +44,8 @@ jobs:
         if: github.event_name == 'push'
         run: pnpm exec commitlint --last --verbose
 
-      - name: Check
-        run: pnpm run check
+      - name: Lint
+        run: pnpm run lint
 
       - name: Tests
         run: pnpm run test
@@ -66,7 +66,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24.14.1"
           cache: pnpm
 
       - uses: oven-sh/setup-bun@v2
@@ -89,9 +89,9 @@ jobs:
             coverage/lcov.info
             coverage/coverage-summary.json
             coverage/lcov-report
-            apps/web/coverage/lcov.info
-            apps/web/coverage/coverage-summary.json
-            apps/web/coverage/lcov-report
+            apps/backend/coverage/lcov.info
+            apps/backend/coverage/coverage-summary.json
+            apps/backend/coverage/lcov-report
           if-no-files-found: error
 
       - name: Comment coverage summary on PR
@@ -101,9 +101,9 @@ jobs:
           script: |
             const fs = require('node:fs');
             const rootSummaryPath = 'coverage/coverage-summary.json';
-            const webSummaryPath = 'apps/web/coverage/coverage-summary.json';
+            const backendSummaryPath = 'apps/backend/coverage/coverage-summary.json';
             const rootTotal = JSON.parse(fs.readFileSync(rootSummaryPath, 'utf8')).total;
-            const webTotal = JSON.parse(fs.readFileSync(webSummaryPath, 'utf8')).total;
+            const backendTotal = JSON.parse(fs.readFileSync(backendSummaryPath, 'utf8')).total;
             const metric = (value) =>
               value?.pct === 'Unknown'
                 ? `Unknown (${value.covered}/${value.total})`
@@ -118,11 +118,11 @@ jobs:
               `- Functions: ${metric(rootTotal.functions)}`,
               `- Branches: ${metric(rootTotal.branches)}`,
               '',
-              '### apps/web',
-              `- Lines: ${metric(webTotal.lines)}`,
-              `- Statements: ${metric(webTotal.statements)}`,
-              `- Functions: ${metric(webTotal.functions)}`,
-              `- Branches: ${metric(webTotal.branches)}`,
+              '### apps/backend',
+              `- Lines: ${metric(backendTotal.lines)}`,
+              `- Statements: ${metric(backendTotal.statements)}`,
+              `- Functions: ${metric(backendTotal.functions)}`,
+              `- Branches: ${metric(backendTotal.branches)}`,
             ].join('\n');
 
             const marker = '<!-- repository-coverage-comment -->';
@@ -154,7 +154,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: coverage/lcov.info,apps/web/coverage/lcov.info
-          flags: root,web
+          files: coverage/lcov.info,apps/backend/coverage/lcov.info
+          flags: root,backend
           fail_ci_if_error: false
           use_oidc: true
