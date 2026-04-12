@@ -1,11 +1,11 @@
----
+﻿---
 description: Project Development Guidelines
 globs: ["**/*"]
 alwaysApply: true
 ---
 # CthuTool Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-09
+Auto-generated from all feature plans. Last updated: 2026-04-13
 
 ## Active Technologies
 - N/A（无应用数据持久化；配置为仓库内文件） (002-commit-convention-workflow)
@@ -15,6 +15,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-09
 - N/A（本特性仅服务启动与健康探测） (004-web-server-subapp)
 - TypeScript 5.9.x（运行时 Bun） + Bun、citty、@clack/prompts、boxen、picocolors、react、ink、ink-spinner、valibot、neverthrow (005-cli-greeting-demo)
 - N/A（单次 CLI 会话，无持久化） (005-cli-greeting-demo)
+- Node.js（仓库 `engines`：`>=24.0.0 <25`，Volta 锁定 24.14.1）；包管理 pnpm 9.x + `husky`（已有）、`@biomejs/biome`（已有）、**`lint-staged`（新增）**、`@commitlint/cli`（已有） (006-commit-lint-auto-fix)
+- N/A（仅 Git 暂存区与工作区文件） (006-commit-lint-auto-fix)
 
 - Node.js ≥ 20（仓库 `engines`） + `husky`, `@commitlint/cli`, `@commitlint/config-conventional`, `commitizen`, `cz-git`（均为根目录 `devDependencies`） (002-commit-convention-workflow)
 
@@ -34,9 +36,9 @@ tests/
 Node.js ≥ 20（仓库 `engines`）: Follow standard conventions
 
 ## Recent Changes
+- 006-commit-lint-auto-fix: Added Node.js（仓库 `engines`：`>=24.0.0 <25`，Volta 锁定 24.14.1）；包管理 pnpm 9.x + `husky`（已有）、`@biomejs/biome`（已有）、**`lint-staged`（新增）**、`@commitlint/cli`（已有）
+- 006-commit-lint-auto-fix: Added Node.js（仓库 `engines`：`>=24.0.0 <25`，Volta 锁定 24.14.1）；包管理 pnpm 9.x + `husky`（已有）、`@biomejs/biome`（已有）、**`lint-staged`（新增）**、`@commitlint/cli`（已有）
 - 005-cli-greeting-demo: Added TypeScript 5.9.x（运行时 Bun） + Bun、citty、@clack/prompts、boxen、picocolors、react、ink、ink-spinner、valibot、neverthrow
-- 004-web-server-subapp: Added TypeScript 5.9.x + Node.js >= 20 + NestJS CLI (`@nestjs/schematics` 生成)、NestJS 核心运行时、`@biomejs/biome`（仓库已配置）
-- 003-biome-quality-gates: Added Node.js >= 20（仓库 `engines`），TypeScript 5.9.x + `@biomejs/biome`（新增，作为格式化+lint 统一引擎）、`husky`（已存在）、`turbo`（已存在）
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
