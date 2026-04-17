@@ -175,3 +175,16 @@
 2. **ePub**: 采用提取优先 + 渲染兜底，兼顾性能与复杂内容兼容。  
 3. **架构**: 统一 `Converter` 契约 + 分层模块，确保可扩展和可测试。  
 4. **并发**: 统一并发池 + Puppeteer 单实例限流，保障稳定吞吐与资源可控。
+
+## 7) Implementation Validation Notes (2026-04-17)
+
+### Executed checks
+
+- `bun test --preload ./tests/setup.ts` in `apps/cli`: **pass** (`41 pass, 0 fail`)
+- `bun x tsc --noEmit` in `apps/cli`: **pass**
+- `bun x @biomejs/biome check src tests` in `apps/cli`: **fail** (contains pre-existing style issues outside convert-to-cbz target scope)
+
+### Scope note
+
+- New and updated `convert-to-cbz` files were formatted with `biome check --write` and pass local type-check and tests.
+- Remaining Biome failures are from previously existing files in the CLI package and were not modified by this feature implementation.

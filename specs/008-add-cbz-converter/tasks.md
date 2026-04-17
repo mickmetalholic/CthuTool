@@ -17,11 +17,11 @@
 
 **Purpose**: Create script package skeleton and wire command discovery.
 
-- [ ] T001 Create script package directories for convert feature in `apps/cli/src/scripts/convert-to-cbz/`
-- [ ] T002 Create script metadata for command discovery in `apps/cli/src/scripts/convert-to-cbz/script.json`
-- [ ] T003 Create script runtime entry that exports `run` in `apps/cli/src/scripts/convert-to-cbz/index.ts`
-- [ ] T004 Register convert script in scripts registry at `apps/cli/src/scripts/index.ts`
-- [ ] T005 [P] Add shared test fixtures directory for mixed input samples in `apps/cli/src/tests/scripts/convert-to-cbz/fixtures/README.md`
+- [X] T001 Create script package directories for convert feature in `apps/cli/src/scripts/convert-to-cbz/`
+- [X] T002 Create script metadata for command discovery in `apps/cli/src/scripts/convert-to-cbz/script.json`
+- [X] T003 Create script runtime entry that exports `run` in `apps/cli/src/scripts/convert-to-cbz/index.ts`
+- [X] T004 Register convert script in scripts registry at `apps/cli/src/scripts/index.ts`
+- [X] T005 [P] Add shared test fixtures directory for mixed input samples in `apps/cli/src/tests/scripts/convert-to-cbz/fixtures/README.md`
 
 ---
 
@@ -31,19 +31,19 @@
 
 **⚠️ CRITICAL**: No user story implementation starts before this phase completes.
 
-- [ ] T006 Define domain entities and conversion types in `apps/cli/src/scripts/convert-to-cbz/domain/conversion-types.ts`
-- [ ] T007 Define converter contract and result interfaces in `apps/cli/src/scripts/convert-to-cbz/domain/converter.ts`
-- [ ] T008 Define domain error taxonomy for scan/convert/archive stages in `apps/cli/src/scripts/convert-to-cbz/domain/errors.ts`
-- [ ] T009 Implement valibot schemas for CLI options and safe defaults in `apps/cli/src/scripts/convert-to-cbz/domain/option-schema.ts`
-- [ ] T010 [P] Implement output path and archive name pure helpers in `apps/cli/src/scripts/convert-to-cbz/domain/path-mapping.ts`
-- [ ] T011 [P] Implement conversion strategy selection pure helpers in `apps/cli/src/scripts/convert-to-cbz/domain/strategy.ts`
-- [ ] T012 Implement Poppler preflight dependency check in `apps/cli/src/scripts/convert-to-cbz/infrastructure/dependencies/check-poppler.ts`
-- [ ] T013 Implement recursive scanner with relative path preservation in `apps/cli/src/scripts/convert-to-cbz/infrastructure/scanners/file-scanner.ts`
-- [ ] T014 Implement CBZ archiver adapter for ordered page assets in `apps/cli/src/scripts/convert-to-cbz/infrastructure/packagers/cbz-archiver.ts`
-- [ ] T015 Implement progress view model for total and active slots in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-view-model.ts`
-- [ ] T016 Implement buffered progress-safe logger in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
-- [ ] T017 Implement task scheduling with `p-limit` and slot reuse in `apps/cli/src/scripts/convert-to-cbz/application/schedule-tasks.ts`
-- [ ] T018 Implement job orchestrator pipeline (validate, scan, schedule, summarize) in `apps/cli/src/scripts/convert-to-cbz/application/run-conversion-job.ts`
+- [X] T006 Define domain entities and conversion types in `apps/cli/src/scripts/convert-to-cbz/domain/conversion-types.ts`
+- [X] T007 Define converter contract and result interfaces in `apps/cli/src/scripts/convert-to-cbz/domain/converter.ts`
+- [X] T008 Define domain error taxonomy for scan/convert/archive stages in `apps/cli/src/scripts/convert-to-cbz/domain/errors.ts`
+- [X] T009 Implement valibot schemas for CLI options and safe defaults in `apps/cli/src/scripts/convert-to-cbz/domain/option-schema.ts`
+- [X] T010 [P] Implement output path and archive name pure helpers in `apps/cli/src/scripts/convert-to-cbz/domain/path-mapping.ts`
+- [X] T011 [P] Implement conversion strategy selection pure helpers in `apps/cli/src/scripts/convert-to-cbz/domain/strategy.ts`
+- [X] T012 Implement Poppler preflight dependency check in `apps/cli/src/scripts/convert-to-cbz/infrastructure/dependencies/check-poppler.ts`
+- [X] T013 Implement recursive scanner with relative path preservation in `apps/cli/src/scripts/convert-to-cbz/infrastructure/scanners/file-scanner.ts`
+- [X] T014 Implement CBZ archiver adapter for ordered page assets in `apps/cli/src/scripts/convert-to-cbz/infrastructure/packagers/cbz-archiver.ts`
+- [X] T015 Implement progress view model for total and active slots in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-view-model.ts`
+- [X] T016 Implement buffered progress-safe logger in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
+- [X] T017 Implement task scheduling with `p-limit` and slot reuse in `apps/cli/src/scripts/convert-to-cbz/application/schedule-tasks.ts`
+- [X] T018 Implement job orchestrator pipeline (validate, scan, schedule, summarize) in `apps/cli/src/scripts/convert-to-cbz/application/run-conversion-job.ts`
 
 **Checkpoint**: Foundation complete; user stories can now proceed.
 
@@ -56,17 +56,17 @@
 
 ### Tests for User Story 1 (required — TDD)
 
-- [ ] T019 [P] [US1] Add unit tests for recursive scan and extension matching in `apps/cli/src/tests/scripts/convert-to-cbz/unit/file-scanner.test.ts`
-- [ ] T020 [P] [US1] Add unit tests for path mapping and zero-padded archive naming in `apps/cli/src/tests/scripts/convert-to-cbz/unit/path-mapping.test.ts`
-- [ ] T021 [P] [US1] Add integration test for mixed PDF/ePub batch conversion success in `apps/cli/src/tests/scripts/convert-to-cbz/integration/batch-convert-success.test.ts`
+- [X] T019 [P] [US1] Add unit tests for recursive scan and extension matching in `apps/cli/src/tests/scripts/convert-to-cbz/unit/file-scanner.test.ts`
+- [X] T020 [P] [US1] Add unit tests for path mapping and zero-padded archive naming in `apps/cli/src/tests/scripts/convert-to-cbz/unit/path-mapping.test.ts`
+- [X] T021 [P] [US1] Add integration test for mixed PDF/ePub batch conversion success in `apps/cli/src/tests/scripts/convert-to-cbz/integration/batch-convert-success.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Implement PDF converter using `pdfinfo` + single `pdftoppm` invocation in `apps/cli/src/scripts/convert-to-cbz/infrastructure/converters/pdf-converter.ts`
-- [ ] T023 [US1] Implement ePub renderer pool adapter (single browser, limited pages) in `apps/cli/src/scripts/convert-to-cbz/infrastructure/renderers/epub-renderer-pool.ts`
-- [ ] T024 [US1] Implement ePub converter with extract-first and render-fallback pipeline in `apps/cli/src/scripts/convert-to-cbz/infrastructure/converters/epub-converter.ts`
-- [ ] T025 [US1] Integrate converter registry and file-type dispatch in `apps/cli/src/scripts/convert-to-cbz/application/run-conversion-job.ts`
-- [ ] T026 [US1] Implement CLI command argument flow and interactive input fallback in `apps/cli/src/scripts/convert-to-cbz/index.ts`
+- [X] T022 [US1] Implement PDF converter using `pdfinfo` + single `pdftoppm` invocation in `apps/cli/src/scripts/convert-to-cbz/infrastructure/converters/pdf-converter.ts`
+- [X] T023 [US1] Implement ePub renderer pool adapter (single browser, limited pages) in `apps/cli/src/scripts/convert-to-cbz/infrastructure/renderers/epub-renderer-pool.ts`
+- [X] T024 [US1] Implement ePub converter with extract-first and render-fallback pipeline in `apps/cli/src/scripts/convert-to-cbz/infrastructure/converters/epub-converter.ts`
+- [X] T025 [US1] Integrate converter registry and file-type dispatch in `apps/cli/src/scripts/convert-to-cbz/application/run-conversion-job.ts`
+- [X] T026 [US1] Implement CLI command argument flow and interactive input fallback in `apps/cli/src/scripts/convert-to-cbz/index.ts`
 
 **Checkpoint**: US1 independently delivers end-to-end batch conversion.
 
@@ -79,16 +79,16 @@
 
 ### Tests for User Story 2 (required — TDD)
 
-- [ ] T027 [P] [US2] Add unit tests for progress slot assignment and reuse in `apps/cli/src/tests/scripts/convert-to-cbz/unit/progress-view-model.test.ts`
-- [ ] T028 [P] [US2] Add unit tests for summary formatting and status coloring in `apps/cli/src/tests/scripts/convert-to-cbz/unit/progress-logger.test.ts`
-- [ ] T029 [P] [US2] Add integration test for multi-file progress and final summary report in `apps/cli/src/tests/scripts/convert-to-cbz/integration/progress-and-summary.test.ts`
+- [X] T027 [P] [US2] Add unit tests for progress slot assignment and reuse in `apps/cli/src/tests/scripts/convert-to-cbz/unit/progress-view-model.test.ts`
+- [X] T028 [P] [US2] Add unit tests for summary formatting and status coloring in `apps/cli/src/tests/scripts/convert-to-cbz/unit/progress-logger.test.ts`
+- [X] T029 [P] [US2] Add integration test for multi-file progress and final summary report in `apps/cli/src/tests/scripts/convert-to-cbz/integration/progress-and-summary.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T030 [US2] Implement multibar progress controller (total + active tasks) in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
-- [ ] T031 [US2] Implement PDF progress lifecycle (set total from `pdfinfo`, complete on success) in `apps/cli/src/scripts/convert-to-cbz/infrastructure/converters/pdf-converter.ts`
-- [ ] T032 [US2] Implement final summary aggregation (success, failures, output, duration) in `apps/cli/src/scripts/convert-to-cbz/application/run-conversion-job.ts`
-- [ ] T033 [US2] Ensure logger-only output channel during progress rendering in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
+- [X] T030 [US2] Implement multibar progress controller (total + active tasks) in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
+- [X] T031 [US2] Implement PDF progress lifecycle (set total from `pdfinfo`, complete on success) in `apps/cli/src/scripts/convert-to-cbz/infrastructure/converters/pdf-converter.ts`
+- [X] T032 [US2] Implement final summary aggregation (success, failures, output, duration) in `apps/cli/src/scripts/convert-to-cbz/application/run-conversion-job.ts`
+- [X] T033 [US2] Ensure logger-only output channel during progress rendering in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
 
 **Checkpoint**: US2 independently delivers observable runtime progress and completion report.
 
@@ -101,15 +101,15 @@
 
 ### Tests for User Story 3 (required — TDD)
 
-- [ ] T034 [P] [US3] Add unit tests for recoverable vs unrecoverable failure mapping in `apps/cli/src/tests/scripts/convert-to-cbz/unit/errors.test.ts`
-- [ ] T035 [P] [US3] Add integration test for damaged input skip-and-continue behavior in `apps/cli/src/tests/scripts/convert-to-cbz/integration/skip-failed-file.test.ts`
-- [ ] T036 [P] [US3] Add integration test for permission-denied output handling in `apps/cli/src/tests/scripts/convert-to-cbz/integration/permission-error.test.ts`
+- [X] T034 [P] [US3] Add unit tests for recoverable vs unrecoverable failure mapping in `apps/cli/src/tests/scripts/convert-to-cbz/unit/errors.test.ts`
+- [X] T035 [P] [US3] Add integration test for damaged input skip-and-continue behavior in `apps/cli/src/tests/scripts/convert-to-cbz/integration/skip-failed-file.test.ts`
+- [X] T036 [P] [US3] Add integration test for permission-denied output handling in `apps/cli/src/tests/scripts/convert-to-cbz/integration/permission-error.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T037 [US3] Implement per-file error capture and continuation semantics in `apps/cli/src/scripts/convert-to-cbz/application/schedule-tasks.ts`
-- [ ] T038 [US3] Implement user-actionable permission and dependency error messages in `apps/cli/src/scripts/convert-to-cbz/domain/errors.ts`
-- [ ] T039 [US3] Integrate failure record collection into final job status calculation in `apps/cli/src/scripts/convert-to-cbz/application/run-conversion-job.ts`
+- [X] T037 [US3] Implement per-file error capture and continuation semantics in `apps/cli/src/scripts/convert-to-cbz/application/schedule-tasks.ts`
+- [X] T038 [US3] Implement user-actionable permission and dependency error messages in `apps/cli/src/scripts/convert-to-cbz/domain/errors.ts`
+- [X] T039 [US3] Integrate failure record collection into final job status calculation in `apps/cli/src/scripts/convert-to-cbz/application/run-conversion-job.ts`
 
 **Checkpoint**: US3 independently guarantees resilient batch execution.
 
@@ -119,11 +119,11 @@
 
 **Purpose**: Final quality gates, docs alignment, and regression safety.
 
-- [ ] T040 [P] Add unit tests for option schema bounds (`quality`, `dpi`, `concurrency`) in `apps/cli/src/tests/scripts/convert-to-cbz/unit/option-schema.test.ts`
-- [ ] T041 [P] Add integration test for no-target-files early exit in `apps/cli/src/tests/scripts/convert-to-cbz/integration/no-target-files.test.ts`
-- [ ] T042 Validate quickstart command and expected outputs in `specs/008-add-cbz-converter/quickstart.md`
-- [ ] T043 Update script usage and examples in `apps/cli/README.md`
-- [ ] T044 Run full CLI package checks (`bun test`, lint, type-check) and record notes in `specs/008-add-cbz-converter/research.md`
+- [X] T040 [P] Add unit tests for option schema bounds (`quality`, `dpi`, `concurrency`) in `apps/cli/src/tests/scripts/convert-to-cbz/unit/option-schema.test.ts`
+- [X] T041 [P] Add integration test for no-target-files early exit in `apps/cli/src/tests/scripts/convert-to-cbz/integration/no-target-files.test.ts`
+- [X] T042 Validate quickstart command and expected outputs in `specs/008-add-cbz-converter/quickstart.md`
+- [X] T043 Update script usage and examples in `apps/cli/README.md`
+- [X] T044 Run full CLI package checks (`bun test`, lint, type-check) and record notes in `specs/008-add-cbz-converter/research.md`
 
 ---
 

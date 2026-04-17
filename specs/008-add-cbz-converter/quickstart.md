@@ -21,6 +21,12 @@ pnpm --filter @cthutool/cli run scripts -- convert-to-cbz --input ./samples --fo
 
 若省略 `--input`，命令会进入交互式路径输入。
 
+验证记录（2026-04-17）：
+
+- 已确认 `convert-to-cbz` 脚本元数据与入口可被 `scripts` 子命令发现
+- 已确认无目标文件场景会提前退出并返回 0 文件总结
+- 已确认批处理流程会输出完成总结（成功数、失败数、输出目录）
+
 ## 3. 结果验证
 
 1. 扫描后应识别所有 `.pdf/.epub`（大小写不敏感）。  
