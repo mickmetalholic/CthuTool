@@ -82,6 +82,10 @@
 - [X] T027 [P] [US2] Add unit tests for progress slot assignment and reuse in `apps/cli/src/tests/scripts/convert-to-cbz/unit/progress-view-model.test.ts`
 - [X] T028 [P] [US2] Add unit tests for summary formatting and status coloring in `apps/cli/src/tests/scripts/convert-to-cbz/unit/progress-logger.test.ts`
 - [X] T029 [P] [US2] Add integration test for multi-file progress and final summary report in `apps/cli/src/tests/scripts/convert-to-cbz/integration/progress-and-summary.test.ts`
+- [ ] T045 [P] [US2] Add unit tests for active-only file progress labels (relative path, no absolute path) in `apps/cli/src/tests/scripts/convert-to-cbz/unit/progress-view-model.test.ts`
+- [ ] T046 [P] [US2] Add unit tests for distinct color mapping between global and file progress bars in `apps/cli/src/tests/scripts/convert-to-cbz/unit/progress-logger.test.ts`
+- [ ] T047 [P] [US2] Add unit tests for english styled summary layout (sections + emoji + multi-color statuses) in `apps/cli/src/tests/scripts/convert-to-cbz/unit/progress-logger.test.ts`
+- [ ] T048 [P] [US2] Add integration test asserting progress output is not interrupted by logs (no interleaved plain lines during render) in `apps/cli/src/tests/scripts/convert-to-cbz/integration/progress-and-summary.test.ts`
 
 ### Implementation for User Story 2
 
@@ -89,6 +93,10 @@
 - [X] T031 [US2] Implement PDF progress lifecycle (set total from `pdfinfo`, complete on success) in `apps/cli/src/scripts/convert-to-cbz/infrastructure/converters/pdf-converter.ts`
 - [X] T032 [US2] Implement final summary aggregation (success, failures, output, duration) in `apps/cli/src/scripts/convert-to-cbz/application/run-conversion-job.ts`
 - [X] T033 [US2] Ensure logger-only output channel during progress rendering in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
+- [ ] T049 [US2] Ensure file progress display uses relative paths (never absolute paths) and hides completed file bars (active-only) in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-view-model.ts`
+- [ ] T050 [US2] Apply distinct colors for global progress bar vs active file progress bars in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
+- [ ] T051 [US2] Update final summary renderer to english structured layout with emoji and multi-color status sections in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
+- [ ] T052 [US2] Enforce non-interrupting log flushing behavior during progress rendering (buffer/queue only) in `apps/cli/src/scripts/convert-to-cbz/infrastructure/logging/progress-logger.ts`
 
 **Checkpoint**: US2 independently delivers observable runtime progress and completion report.
 
@@ -121,6 +129,7 @@
 
 - [X] T040 [P] Add unit tests for option schema bounds (`quality`, `dpi`, `concurrency`) in `apps/cli/src/tests/scripts/convert-to-cbz/unit/option-schema.test.ts`
 - [X] T041 [P] Add integration test for no-target-files early exit in `apps/cli/src/tests/scripts/convert-to-cbz/integration/no-target-files.test.ts`
+- [ ] T053 [P] Add integration test for summary scanability (key fields visible within <=3 screens) in `apps/cli/src/tests/scripts/convert-to-cbz/integration/progress-and-summary.test.ts`
 - [X] T042 Validate quickstart command and expected outputs in `specs/008-add-cbz-converter/quickstart.md`
 - [X] T043 Update script usage and examples in `apps/cli/README.md`
 - [X] T044 Run full CLI package checks (`bun test`, lint, type-check) and record notes in `specs/008-add-cbz-converter/research.md`
