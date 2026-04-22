@@ -3,6 +3,7 @@ import {
   assignProgressSlot,
   createProgressSlots,
   releaseProgressSlot,
+  sanitizeRelativeDisplayName,
 } from '../../../../scripts/convert-to-cbz/infrastructure/logging/progress-view-model';
 
 describe('progress-view-model', () => {
@@ -16,5 +17,17 @@ describe('progress-view-model', () => {
     const reused = assignProgressSlot(releasedA, 'c', 'C');
     const ids = reused.map((x) => x.taskId);
     expect(ids.includes('c')).toBe(true);
+  });
+
+  test('sanitizes absolute paths to non-absolute labels', () => {
+    expect(sanitizeRelativeDisplayName('nested/book.pdf')).toBe(
+      'nested/book.pdf',
+    );
+    expect(sanitizeRelativeDisplayName('C:\\Users\\me\\books\\a.pdf')).toBe(
+      'books/a.pdf',
+    );
+    expect(sanitizeRelativeDisplayName('/home/me/books/a.pdf')).toBe(
+      'books/a.pdf',
+    );
   });
 });

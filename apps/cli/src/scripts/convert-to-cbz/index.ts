@@ -1,4 +1,5 @@
 import { text } from '@clack/prompts';
+import { createColors } from 'picocolors';
 import { runConversionJob } from './application/run-conversion-job';
 import { parseConversionOptions } from './domain/option-schema';
 import { epubConverter } from './infrastructure/converters/epub-converter';
@@ -12,6 +13,29 @@ type CliArgs = {
   readonly dpi?: number;
   readonly concurrency?: number;
   readonly epubConcurrency?: number;
+};
+
+const c = createColors(true);
+
+const renderCompletionCard = (input: {
+  totalFiles: number;
+  successCount: number;
+  failureCount: number;
+  outputRoot: string;
+  durationMs: number;
+}): string => {
+  const durationSec = Math.max(0, Math.round(input.durationMs / 1000));
+  const lines = [
+    c.bold(c.green('╭─ ✅ Conversion Complete')),
+    `${c.green('│')} ${c.dim('────────────────────────────────────────')}`,
+    `${c.green('│')} ${c.cyan('📚 Total Files')}  ${c.bold(String(input.totalFiles))}`,
+    `${c.green('│')} ${c.green('✅ Success')}      ${c.bold(String(input.successCount))}`,
+    `${c.green('│')} ${input.failureCount > 0 ? c.red('❌ Failure') : c.green('❌ Failure')}      ${c.bold(String(input.failureCount))}`,
+    `${c.green('│')} ${c.blue('📂 Output')}       ${c.bold(input.outputRoot)}`,
+    `${c.green('│')} ${c.yellow('⏱ Duration')}    ${c.bold(`${durationSec}s`)}`,
+    c.bold(c.green('╰─ ready for next batch')),
+  ];
+  return lines.join('\n');
 };
 
 const resolveInput = async (args: CliArgs): Promise<string | undefined> => {
@@ -39,7 +63,5 @@ export default async function run(args: CliArgs = {}): Promise<void> {
     pdfConverter,
     epubConverter,
   ]);
-  process.stdout.write(
-    `done: total=${summary.totalFiles}, success=${summary.successCount}, failure=${summary.failureCount}\n`,
-  );
+  process.stdout.write(`${renderCompletionCard(summary)}\n`);
 }

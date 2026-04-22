@@ -15,6 +15,7 @@ describe('no-target-files', () => {
       success: (m) => logs.push(m),
       warn: (m) => logs.push(m),
       error: (m) => logs.push(m),
+      summary: () => undefined,
       incrementTotal: () => undefined,
       flush: async () => undefined,
       stop: () => undefined,

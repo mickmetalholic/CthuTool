@@ -85,9 +85,17 @@ export const runConversionJob = async (
     outputRoot,
     Date.now() - startedAt,
   );
-  logger.success(
-    `Completed: success=${summary.successCount}, failure=${summary.failureCount}, output=${summary.outputRoot}`,
-  );
+  logger.summary({
+    totalFiles: summary.totalFiles,
+    successCount: summary.successCount,
+    failureCount: summary.failureCount,
+    failures: summary.failures.map((f) => ({
+      sourcePath: f.sourcePath,
+      reason: f.reason,
+    })),
+    outputRoot: summary.outputRoot,
+    durationMs: summary.durationMs,
+  });
   await logger.flush();
   logger.stop();
   return summary;

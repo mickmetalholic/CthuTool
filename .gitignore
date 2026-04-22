@@ -54,5 +54,7 @@ Thumbs.db
 # Ignore platform-specific Speckit commands
 .cursor/commands/speckit*.md
 
+.agents/skills
+
 # References codes for agents
 .references/

@@ -28,6 +28,55 @@ const runCommand = (
     child.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
   });
 
+const runPdftoppmWithProgress = (
+  args: ReadonlyArray<string>,
+  onProgress?: (current: number, total: number) => void,
+): Promise<{
+  readonly code: number;
+  readonly stderr: string;
+}> =>
+  new Promise((resolve, reject) => {
+    const child = spawn('pdftoppm', args, {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    let stderr = '';
+    let stderrBuffer = '';
+
+    child.stderr.on('data', (d) => {
+      const chunk = String(d);
+      stderr += chunk;
+      stderrBuffer += chunk;
+      const lines = stderrBuffer.split(/\r?\n/);
+      stderrBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.length === 0) continue;
+        const match = trimmed.match(/^(\d+)\s+(\d+)\s+/);
+        if (!match) continue;
+        const current = Number(match[1]);
+        const total = Number(match[2]);
+        if (Number.isNaN(current) || Number.isNaN(total)) continue;
+        onProgress?.(current, Math.max(1, total));
+      }
+    });
+
+    child.on('error', reject);
+    child.on('close', (code) => {
+      const tail = stderrBuffer.trim();
+      if (tail.length > 0) {
+        const match = tail.match(/^(\d+)\s+(\d+)\s+/);
+        if (match) {
+          const current = Number(match[1]);
+          const total = Number(match[2]);
+          if (!Number.isNaN(current) && !Number.isNaN(total)) {
+            onProgress?.(current, Math.max(1, total));
+          }
+        }
+      }
+      resolve({ code: code ?? 1, stderr });
+    });
+  });
+
 const parsePdfPageCount = (content: string): number => {
   const line = content
     .split(/\r?\n/)
@@ -62,13 +111,23 @@ export const pdfConverter: Converter = {
     ctx.onProgress?.(file, { current: 0, total, message: 'pdfinfo ready' });
 
     const fmtArg = imageExt === 'jpg' ? '-jpeg' : `-${imageExt}`;
-    const convert = await runCommand('pdftoppm', [
-      fmtArg,
-      '-r',
-      String(ctx.options.dpi),
-      file.sourcePath,
-      prefix,
-    ]);
+    const convert = await runPdftoppmWithProgress(
+      [
+        fmtArg,
+        '-r',
+        String(ctx.options.dpi),
+        '-progress',
+        file.sourcePath,
+        prefix,
+      ],
+      (current, progressTotal) => {
+        ctx.onProgress?.(file, {
+          current,
+          total: progressTotal,
+          message: 'render',
+        });
+      },
+    );
     if (convert.code !== 0) {
       return {
         ok: false,

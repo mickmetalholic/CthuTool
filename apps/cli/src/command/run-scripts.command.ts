@@ -1,4 +1,4 @@
-import { isCancel, select } from '@clack/prompts';
+import { intro, isCancel, select } from '@clack/prompts';
 import { defineCommand } from 'citty';
 import pc from 'picocolors';
 import { listSelectable, resolvePackage } from '../domain/script-catalog';
@@ -18,6 +18,7 @@ export type RunScriptsDeps = {
 const defaultDeps: RunScriptsDeps = {
   isInteractive: () => process.stdin.isTTY === true,
   pickScriptId: async (rows) => {
+    intro(pc.cyan('▶ Script Selection'));
     const choice = await select({
       message: 'Choose a bundled script to run',
       options: rows.map((o) => ({

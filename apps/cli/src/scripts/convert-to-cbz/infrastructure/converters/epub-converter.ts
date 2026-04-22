@@ -125,6 +125,7 @@ const collectImageEntries = (
 const tryExtractAll = async (
   epubPath: string,
   root: string,
+  onProgress?: (current: number, total: number) => void,
 ): Promise<
   ReadonlyArray<{
     readonly tempPath: string;
@@ -136,13 +137,14 @@ const tryExtractAll = async (
   const rootOpfPath = parseContainerOpfPath(files);
   if (!rootOpfPath) return [];
   const imageEntries = collectImageEntries(files, rootOpfPath);
-  const pages = await Promise.all(
-    imageEntries.map(async ([imagePath, content], idx) => {
-      const outputPath = join(root, `raw-${String(idx + 1).padStart(5, '0')}`);
-      await writeFile(outputPath, content);
-      return { tempPath: outputPath, sourcePath: imagePath };
-    }),
-  );
+  const total = imageEntries.length;
+  const pages: Array<{ tempPath: string; sourcePath: string }> = [];
+  for (const [idx, [imagePath, content]] of imageEntries.entries()) {
+    const outputPath = join(root, `raw-${String(idx + 1).padStart(5, '0')}`);
+    await writeFile(outputPath, content);
+    pages.push({ tempPath: outputPath, sourcePath: imagePath });
+    onProgress?.(idx + 1, total);
+  }
   return pages;
 };
 
@@ -151,7 +153,16 @@ export const epubConverter: Converter = {
   async convert(file, ctx): Promise<ConvertResult> {
     const root = await mkdtemp(join(tmpdir(), 'cthu-epub-pages-'));
     const fallbackExt = ctx.options.imageFormat;
-    const extracted = await tryExtractAll(file.sourcePath, root);
+    const extracted = await tryExtractAll(
+      file.sourcePath,
+      root,
+      (current, total) =>
+        ctx.onProgress?.(file, {
+          current,
+          total,
+          message: 'extract',
+        }),
+    );
     if (extracted.length > 0) {
       return {
         ok: true,
