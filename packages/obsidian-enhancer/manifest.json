@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-enhancer",
+  "name": "Obsidian Enhancer",
+  "version": "0.1.0",
+  "minAppVersion": "0.15.0",
+  "description": "Enhance Obsidian in an unique way.",
+  "author": "CthuTool",
+  "authorUrl": "https://github.com/mickmetalholic/CthuTool",
+  "isDesktopOnly": true
+}
