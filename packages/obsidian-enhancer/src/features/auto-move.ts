@@ -1,5 +1,9 @@
-import { Notice, parseFrontMatterTags, type Plugin } from 'obsidian';
-import { normalizeFolderSegment, normalizeTag, toTagSegments } from '../utils/tags';
+import { Notice, type Plugin, parseFrontMatterTags } from 'obsidian';
+import {
+  normalizeFolderSegment,
+  normalizeTag,
+  toTagSegments,
+} from '../utils/tags';
 
 interface FolderMatchEntry {
   path: string;
@@ -8,7 +12,7 @@ interface FolderMatchEntry {
 
 const toCandidateFolders = (
   plugin: Plugin,
-  excludedRoots: Set<string>
+  excludedRoots: Set<string>,
 ): FolderMatchEntry[] => {
   return plugin.app.vault
     .getAllFolders()
@@ -21,12 +25,15 @@ const toCandidateFolders = (
       tagSegments: folder.path
         .split('/')
         .map(normalizeFolderSegment)
-        .filter(Boolean)
+        .filter(Boolean),
     }))
     .sort((a, b) => b.tagSegments.length - a.tagSegments.length);
 };
 
-const isPrefixMatch = (tagSegments: string[], folderSegments: string[]): boolean => {
+const isPrefixMatch = (
+  tagSegments: string[],
+  folderSegments: string[],
+): boolean => {
   if (folderSegments.length > tagSegments.length) {
     return false;
   }
@@ -40,9 +47,15 @@ const isPrefixMatch = (tagSegments: string[], folderSegments: string[]): boolean
   return true;
 };
 
+const findMatchedFolder = (
+  tagSegments: string[],
+  folders: FolderMatchEntry[],
+): FolderMatchEntry | undefined =>
+  folders.find((entry) => isPrefixMatch(tagSegments, entry.tagSegments));
+
 export const registerAutoMove = (
   plugin: Plugin,
-  getExcludedRoots: () => Set<string>
+  getExcludedRoots: () => Set<string>,
 ): void => {
   plugin.addRibbonIcon('arrow-left-right', 'Auto Move', async () => {
     const activeFile = plugin.app.workspace.getActiveFile();
@@ -60,12 +73,18 @@ export const registerAutoMove = (
       return;
     }
 
-    const folders = toCandidateFolders(plugin, getExcludedRoots());
+    const excludedRoots = getExcludedRoots();
+    const filteredFolders = toCandidateFolders(plugin, excludedRoots);
+    const allFolders =
+      excludedRoots.size > 0
+        ? toCandidateFolders(plugin, new Set<string>())
+        : filteredFolders;
+
     for (const tag of normalizedTags) {
       const tagSegments = toTagSegments(tag);
-      const targetFolder = folders.find((entry) =>
-        isPrefixMatch(tagSegments, entry.tagSegments)
-      );
+      const targetFolder =
+        findMatchedFolder(tagSegments, filteredFolders) ??
+        findMatchedFolder(tagSegments, allFolders);
 
       if (!targetFolder) {
         continue;

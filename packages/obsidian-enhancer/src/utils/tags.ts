@@ -1,8 +1,21 @@
+const normalizeComparableSegment = (segment: string): string =>
+  segment
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
 export const normalizeTag = (tag: string): string =>
-  tag.replace(/^#/, '').trim().toLowerCase();
+  tag
+    .replace(/^#/, '')
+    .split('/')
+    .map((segment) => normalizeComparableSegment(segment))
+    .filter(Boolean)
+    .join('/');
 
 export const normalizeFolderSegment = (segment: string): string =>
-  segment.replace(/^\$/, '').replace(/@.+$/, '').trim().toLowerCase();
+  normalizeComparableSegment(segment.replace(/^\$/, '').replace(/@.+$/, ''));
 
 export const toTagSegments = (tag: string): string[] =>
   normalizeTag(tag)

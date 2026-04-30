@@ -5,8 +5,8 @@
   "type": "module",
   "main": "main.js",
   "scripts": {
-    "dev": "node esbuild.config.mjs --watch",
-    "build": "tsc --noEmit && node esbuild.config.mjs --production",
+    "dev": "node --env-file=.env esbuild.config.mjs --watch",
+    "build": "tsc --noEmit && node --env-file=.env esbuild.config.mjs --production",
     "typecheck": "tsc --noEmit",
     "version": "node version-bump.mjs && git add manifest.json versions.json"
   },
