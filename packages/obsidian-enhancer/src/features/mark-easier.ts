@@ -4,7 +4,7 @@ const statusProgression: Record<string, string> = {
   again: 'Hard',
   hard: 'Good',
   good: 'Easy',
-  easy: 'Complete'
+  easy: 'Complete',
 };
 
 const normalizeStatus = (status: unknown): string => {
@@ -23,13 +23,16 @@ export const registerMarkEasier = (plugin: Plugin): void => {
     }
 
     let nextStatus = '';
-    await plugin.app.fileManager.processFrontMatter(activeFile, (frontmatter) => {
-      const current = normalizeStatus(frontmatter.status);
-      nextStatus = statusProgression[current] ?? '';
-      if (nextStatus) {
-        frontmatter.status = nextStatus;
-      }
-    });
+    await plugin.app.fileManager.processFrontMatter(
+      activeFile,
+      (frontmatter) => {
+        const current = normalizeStatus(frontmatter.status);
+        nextStatus = statusProgression[current] ?? '';
+        if (nextStatus) {
+          frontmatter.status = nextStatus;
+        }
+      },
+    );
 
     if (!nextStatus) {
       new Notice('Status is not in the easing progression.');

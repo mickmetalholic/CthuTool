@@ -9,9 +9,12 @@ export const registerMarkReviewed = (plugin: Plugin): void => {
       return;
     }
 
-    await plugin.app.fileManager.processFrontMatter(activeFile, (frontmatter) => {
-      frontmatter['last review'] = dayjs().format('YYYY-MM-DD');
-    });
+    await plugin.app.fileManager.processFrontMatter(
+      activeFile,
+      (frontmatter) => {
+        frontmatter['last review'] = dayjs().format('YYYY-MM-DD');
+      },
+    );
 
     new Notice('Reviewed.');
   });

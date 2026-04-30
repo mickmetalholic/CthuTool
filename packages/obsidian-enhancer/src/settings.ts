@@ -5,7 +5,7 @@ export interface EnhancerSettings {
 
 export const DEFAULT_SETTINGS: EnhancerSettings = {
   vocabularyTag: 'vocabulary',
-  excludedRootsCsv: 'config,Notes,attachments'
+  excludedRootsCsv: 'config,Notes,attachments',
 };
 
 export const parseExcludedRoots = (csv: string): Set<string> => {

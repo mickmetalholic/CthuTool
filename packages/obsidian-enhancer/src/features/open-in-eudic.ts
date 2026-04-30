@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process';
 import { platform } from 'node:os';
-import { Notice, parseFrontMatterTags, type Plugin } from 'obsidian';
+import { Notice, type Plugin, parseFrontMatterTags } from 'obsidian';
 import { normalizeTag } from '../utils/tags';
 
 const createOpenCommand = (deeplink: string): string => {
@@ -10,7 +10,7 @@ const createOpenCommand = (deeplink: string): string => {
 
 export const registerOpenInEudic = (
   plugin: Plugin,
-  getVocabularyTag: () => string
+  getVocabularyTag: () => string,
 ): void => {
   plugin.addRibbonIcon('book-a', 'Open in Eudic', () => {
     const activeFile = plugin.app.workspace.getActiveFile();
@@ -22,7 +22,9 @@ export const registerOpenInEudic = (
     const fileCache = plugin.app.metadataCache.getFileCache(activeFile);
     const tags = parseFrontMatterTags(fileCache?.frontmatter) ?? [];
     const vocabularyTag = normalizeTag(getVocabularyTag());
-    const hasVocabularyTag = tags.some((tag) => normalizeTag(tag) === vocabularyTag);
+    const hasVocabularyTag = tags.some(
+      (tag) => normalizeTag(tag) === vocabularyTag,
+    );
 
     if (!hasVocabularyTag) {
       new Notice(`Missing tag: #${vocabularyTag}`);

@@ -1,4 +1,4 @@
-import { PluginSettingTab, Setting, type App } from 'obsidian';
+import { type App, PluginSettingTab, Setting } from 'obsidian';
 import type ObsidianEnhancerPlugin from './main';
 
 export class ObsidianEnhancerSettingTab extends PluginSettingTab {
@@ -23,7 +23,7 @@ export class ObsidianEnhancerSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.vocabularyTag = value.trim() || 'vocabulary';
             await this.plugin.saveSettings();
-          })
+          }),
       );
 
     new Setting(containerEl)
@@ -36,7 +36,7 @@ export class ObsidianEnhancerSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.excludedRootsCsv = value;
             await this.plugin.saveSettings();
-          })
+          }),
       );
   }
 }
