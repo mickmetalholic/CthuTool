@@ -45,13 +45,19 @@ Thumbs.db
 # Keep documented env samples
 !.env.example
 
-# Cursor：忽略本地缓存，但保留仓库内共享的 Project Rules（.mdc）
+# Agent adapters: keep shared project instructions, ignore generated Speckit adapters.
+# Speckit source of truth lives in .specify/ and specs/.
+.claude/commands/speckit*.md
+.claude/skills/speckit-*/
+.codex/commands/speckit*.md
+.codex/skills/speckit-*/
+
+# Cursor: ignore local cache, but keep shared Project Rules and non-generated commands.
 .cursor/*
 !.cursor/rules/
 !.cursor/rules/**
 !.cursor/commands/
 !.cursor/commands/**
-# Ignore platform-specific Speckit commands
 .cursor/commands/speckit*.md
 
 # References codes for agents
