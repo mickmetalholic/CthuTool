@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\yuans\\Documents\\GitHub\\mickmetalholic\\CthuTool\\scratches\\xhs-collection-organizer\\.codex\\hooks\\session-start.ps1\"",
+            "timeout": 5,
+            "statusMessage": "Checking XHS organizer dev services"
+          }
+        ]
+      }
+    ]
+  }
+}

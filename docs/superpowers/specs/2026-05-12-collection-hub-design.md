@@ -2,11 +2,11 @@
 
 Date: 2026-05-12
 Status: Approved for implementation planning
-Target directory: `scratches/xhs-collection-organizer`
+Target directory: `scratches/collection-hub`
 
 ## Summary
 
-Create an isolated nested pnpm monorepo under `scratches/xhs-collection-organizer` for a browser-extension-driven collection organizer. The first version is a vertical slice prototype: a Plasmo extension extracts collection items from configurable matched pages, asks the user to assign one status to the import batch, sends the result to a NestJS API, stores the data in a JSON file, and displays it in a Next.js dashboard.
+Create an isolated nested pnpm monorepo under `scratches/collection-hub` for a browser-extension-driven collection organizer. The first version is a vertical slice prototype: a Plasmo extension extracts collection items from configurable matched pages, asks the user to assign one status to the import batch, sends the result to a NestJS API, stores the data in a JSON file, and displays it in a Next.js dashboard.
 
 The package scope for all nested workspace packages is `@collection-hub`.
 
@@ -33,7 +33,7 @@ The package scope for all nested workspace packages is `@collection-hub`.
 ## Workspace Layout
 
 ```text
-scratches/xhs-collection-organizer/
+scratches/collection-hub/
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── server/

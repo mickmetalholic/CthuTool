@@ -1,0 +1,9 @@
+packages:
+  - "server"
+  - "web"
+  - "extension"
+  - "libs"
+
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
