@@ -6,7 +6,7 @@ alwaysApply: true
 
 # Git 提交说明（Conventional Commits）
 
-生成或修改 **Git commit message**（含 `git commit`、`git commit --amend`、PR 合并前的本地提交）时遵守下列规则；与仓库根目录 `commitlint.config.cjs`、`specs/002-commit-convention-workflow/contracts/commit-message.contract.md` 保持一致（**FR-006**：任一方变更须同步其余镜像）。
+生成或修改 **Git commit message**（含 `git commit`、`git commit --amend`、PR 合并前的本地提交）时遵守下列规则；与仓库根目录 `commitlint.config.cjs` 保持一致。
 
 ## 格式
 
@@ -18,7 +18,7 @@ alwaysApply: true
 
 ## 允许的 type
 
-`feat` | `fix` | `docs` | `style` | `refactor` | `perf` | `test` | `build` | `ci` | `chore`（勿使用合同未列类型，除非已同步更新配置与合同）
+`feat` | `fix` | `docs` | `style` | `refactor` | `perf` | `test` | `build` | `ci` | `chore`（勿使用未列类型，除非已同步更新配置与本规则）
 
 ## 语言
 
@@ -37,4 +37,4 @@ alwaysApply: true
 
 ## 维护
 
-变更类型列表、语言规则、**正文/脚注行长（如 `body-max-line-length`）**或豁免模式时，必须同时更新：`commitlint.config.cjs`、本文件、`contracts/commit-message.contract.md`、`specs/002-commit-convention-workflow/quickstart.md`。
+变更类型列表、语言规则、**正文/脚注行长（如 `body-max-line-length`）**或豁免模式时，必须同时更新：`commitlint.config.cjs` 与本文件。
