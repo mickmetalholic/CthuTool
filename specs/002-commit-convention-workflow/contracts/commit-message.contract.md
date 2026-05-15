@@ -17,6 +17,7 @@ subject    = *OCTET ;   (* 须为英文祈使；不得含 CJK；具体字符集�
 ## 2. 正文与脚注
 
 - 正文非空时：与首行之间 **必须** 有一空行。
+- **正文与脚注各行长度**：遵循 `@commitlint/config-conventional` 默认 `body-max-line-length`（与实现一致，**每行不超过 100 个字符**）；超长单行会被 commitlint 拒绝。
 - 脚注非空时：位于正文之后；常见 `BREAKING CHANGE:` 多行描述须为英文。
 
 ## 3. 全文语言

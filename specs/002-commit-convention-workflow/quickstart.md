@@ -45,6 +45,7 @@ pnpm exec commitlint --edit .git/COMMIT_EDITMSG
 | Hook 不执行 | 确认 `.husky/commit-msg` 存在且可执行；重新 `pnpm install` |
 | 合并提交被拦 | 检查消息是否匹配合同中的豁免模式；必要时更新 `ignores` 与合同 |
 | 中文写进说明被拒 | 符合 FR-008：改为英文 subject/body/footer |
+| `body-max-line-length` 报错 | 正文/脚注 **每一行** 不超过 100 字符；拆行或分多次 `-m` |
 
 ## 与 AI 协作
 
