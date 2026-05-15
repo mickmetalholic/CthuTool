@@ -1,4 +1,4 @@
-# XHS Collection Organizer Design
+# Collection Hub Design
 
 Date: 2026-05-12
 Status: Approved for implementation planning
@@ -8,7 +8,7 @@ Target directory: `scratches/xhs-collection-organizer`
 
 Create an isolated nested pnpm monorepo under `scratches/xhs-collection-organizer` for a browser-extension-driven collection organizer. The first version is a vertical slice prototype: a Plasmo extension extracts collection items from configurable matched pages, asks the user to assign one status to the import batch, sends the result to a NestJS API, stores the data in a JSON file, and displays it in a Next.js dashboard.
 
-The package scope for all nested workspace packages is `@xhs-collection-organizer`.
+The package scope for all nested workspace packages is `@collection-hub`.
 
 ## Goals
 
@@ -44,10 +44,10 @@ scratches/xhs-collection-organizer/
 
 Expected package names:
 
-- `@xhs-collection-organizer/server`
-- `@xhs-collection-organizer/web`
-- `@xhs-collection-organizer/extension`
-- `@xhs-collection-organizer/libs`
+- `@collection-hub/server`
+- `@collection-hub/web`
+- `@collection-hub/extension`
+- `@collection-hub/libs`
 
 The nested `pnpm-workspace.yaml` should include only the four local packages. The root repository workspace config should not be changed for this prototype unless a later plan explicitly chooses to integrate it.
 
