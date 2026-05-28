@@ -39,6 +39,7 @@ function AvatarImage({
       data-slot="avatar-image"
       className={cn("absolute inset-0 z-10 size-full object-cover", className)}
       alt={alt}
+      referrerPolicy="no-referrer"
       src={src}
       {...props}
     />

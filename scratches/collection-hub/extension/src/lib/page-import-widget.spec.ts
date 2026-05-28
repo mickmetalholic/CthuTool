@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { createPageImportViewModel } from "./page-import-widget"
+import {
+  createPageImportThemeSource,
+  createPageImportTheme,
+  createPageImportViewModel
+} from "./page-import-widget"
 
 describe("page import widget view model", () => {
   it("shows destination collections for the extracted source", () => {
@@ -163,5 +167,25 @@ describe("page import widget view model", () => {
       message: "确认导入这条笔记到待下载？",
       title: "确认导入"
     })
+  })
+
+  it("uses distinguishable Bilibili-themed colors for Bilibili page imports", () => {
+    const theme = createPageImportTheme("bilibili")
+
+    expect(theme.accent).toBe("#00aeec")
+    expect(theme.action).toBe("#00a1d6")
+    expect(theme.action).not.toBe("#e60033")
+    expect(theme.successForeground).not.toBe(theme.errorForeground)
+    expect(theme.warningForeground).not.toBe(theme.errorForeground)
+  })
+
+  it("uses the Bilibili theme before extraction on rewritten favlist URLs", () => {
+    const document = {
+      location: {
+        href: "https://space.bilibili.com/5059047?fid=47314147"
+      }
+    }
+
+    expect(createPageImportThemeSource(document)).toBe("bilibili")
   })
 })

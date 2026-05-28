@@ -6,7 +6,8 @@ The extension SHALL include a DOM adapter for rendered Bilibili favlist pages on
 #### Scenario: Bilibili favlist page is detected
 - **WHEN** the browser is on a Bilibili space favlist URL such as `https://space.bilibili.com/5059047/favlist?fid=47314147`
 - **THEN** the Bilibili favlist adapter can handle the document
-- **AND** the adapter remains able to handle an observed rewritten Bilibili space URL when the page still exposes favlist video cards
+- **AND** the adapter remains able to handle an observed rewritten Bilibili space URL with `fid` before favlist video cards finish rendering
+- **AND** rewritten Bilibili space URLs without `fid` are handled when the page still exposes favlist video cards
 
 #### Scenario: Non-favlist page is rejected
 - **WHEN** the browser is not on a Bilibili favlist URL and does not expose rendered Bilibili favlist video cards
@@ -47,10 +48,41 @@ The extension SHALL include a DOM adapter for rendered Bilibili favlist pages on
 #### Scenario: Bilibili adapter participates in existing import flow
 - **WHEN** Bilibili favlist extraction succeeds
 - **THEN** the existing page import widget can preview the source and item count
-- **AND** the existing scrolling loader can collect lazy-loaded Bilibili cards before batch submission
 - **AND** the existing destination selection and local API import flow are reused without Bilibili-specific UI changes
 - **AND** inline per-card import controls remain limited to XHS pages
+
+#### Scenario: Bilibili page widget uses Bilibili-themed colors
+- **WHEN** the page import widget is rendered on a Bilibili favlist page
+- **THEN** the widget uses Bilibili-themed colors for its source-specific accents and primary actions
+- **AND** the colors are based on the observed Bilibili page or stable Bilibili brand colors
+- **AND** the initial launcher and pre-extraction panel use the Bilibili theme before an extracted draft is available
+- **AND** existing controls, labels, import states, and destination choices remain unchanged
+- **AND** active, disabled, success, warning, and error states remain visually distinguishable
+
+#### Scenario: Bilibili favlist pagination is traversed
+- **WHEN** the user triggers extraction on a Bilibili favlist page with additional pages available through the bottom next-page control
+- **THEN** the extension selects the Bilibili pagination path before running the generic scrolling loader
+- **AND** it advances through Bilibili favlist pages using the bottom pagination control
+- **AND** it does not scroll page, sidebar, or left-navigation containers while waiting for Bilibili pagination updates
+- **AND** it waits a Bilibili-specific pacing interval before each next-page click to reduce risk-control triggers from rapid pagination
+- **AND** it honors the page's disabled or unavailable next-page state
+- **AND** it waits for the rendered cards to update before extracting each new page
+- **AND** it merges extracted items across pages
+- **AND** it deduplicates repeated items by BV video ID
+- **AND** it stops when no enabled next-page control remains or an explicitly configured scan limit is reached
+- **AND** it does not stop at page 30 by default when additional enabled Bilibili pages remain
+
+#### Scenario: Bilibili current page cards are lazy-rendered
+- **WHEN** a Bilibili favlist page needs a short delay before current-page cards are rendered
+- **THEN** the extension waits for current-page card anchors before extraction
+- **AND** it does not use generic downward scrolling or generic scroll-container probing as the first Bilibili loading step or as the way to reach later favlist pages
 
 #### Scenario: Bilibili adapter is registered before sample fallback
 - **WHEN** the extension selects an adapter from the ordered registry
 - **THEN** the Bilibili favlist adapter is tried before the sample DOM adapter
+
+#### Scenario: Local development pages are not content-script targets
+- **WHEN** Collection Hub web development pages run on localhost or loopback addresses
+- **THEN** the extension content script is not injected into those local development pages
+- **AND** extension development hot reloads do not refresh the Collection Hub frontend
+- **AND** the content script manifest targets supported source sites instead of all URLs

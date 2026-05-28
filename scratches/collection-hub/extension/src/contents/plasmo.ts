@@ -7,11 +7,19 @@ import type {
   ExtractCollectionResponse
 } from "../lib/messages"
 import { mountPageImportWidget } from "../lib/page-import-widget"
-import { extractCollectionWhileScrolling } from "../lib/page-scroll-loader"
+import { extractCollectionFromPage } from "../lib/page-scroll-loader"
 import { getExtensionSettings } from "../lib/settings"
 
 export const config: PlasmoCSConfig = {
-  matches: ["<all_urls>"]
+  exclude_matches: [
+    "http://localhost/*",
+    "https://localhost/*",
+    "http://127.0.0.1/*",
+    "https://127.0.0.1/*",
+    "http://[::1]/*",
+    "https://[::1]/*"
+  ],
+  matches: ["https://*.xiaohongshu.com/*", "https://space.bilibili.com/*"]
 }
 
 chrome.runtime.onMessage.addListener(
@@ -52,7 +60,7 @@ async function extractCurrentPage(): Promise<ExtractCollectionResponse> {
   try {
     return {
       ok: true,
-      draft: await extractCollectionWhileScrolling({
+      draft: await extractCollectionFromPage({
         extract: () => extractWithAdapters(document)
       })
     }

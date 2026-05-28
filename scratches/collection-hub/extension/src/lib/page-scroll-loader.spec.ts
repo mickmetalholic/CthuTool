@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  extractBilibiliFavlistPages,
+  extractCollectionFromPage,
   extractCollectionWhileScrolling,
   scrollUntilLazyItemsLoaded
 } from "./page-scroll-loader"
@@ -493,3 +495,231 @@ describe("extractCollectionWhileScrolling", () => {
     expect(progressCounts).toContain(2)
   })
 })
+
+describe("extractBilibiliFavlistPages", () => {
+  it("does not run the generic downward scroll loader before Bilibili pagination", async () => {
+    const document = new FakeBilibiliDocument([
+      ["BV1CZ4y1T7gC"],
+      ["BV1oA411a72k"]
+    ])
+    document.body.scrollHeight = 2000
+    document.documentElement.scrollHeight = 2000
+    Object.assign(document.documentElement, { clientHeight: 500 })
+    const window = new FakeWindow(() => undefined)
+
+    const result = await extractCollectionFromPage({
+      document,
+      extract: () => document.extractDraft(),
+      maxScrolls: 20,
+      wait: async () => undefined,
+      window
+    })
+
+    expect(window.scrollTargets).toEqual([])
+    expect(document.nextClicks).toBe(1)
+    expect(result.items.map((item) => item.id)).toEqual([
+      "bilibili:video:BV1CZ4y1T7gC",
+      "bilibili:video:BV1oA411a72k"
+    ])
+  })
+
+  it("does not scroll the left navigation on rewritten Bilibili space pages without fid", async () => {
+    const leftNavigation = new FakeScrollableElement({
+      clientHeight: 240,
+      scrollHeight: 960
+    })
+    const document = new FakeBilibiliDocument([
+      ["BV1CZ4y1T7gC"],
+      ["BV1oA411a72k"]
+    ])
+    document.location.href = "https://space.bilibili.com/5059047"
+    document.elements = [leftNavigation]
+    const window = new FakeWindow(() => undefined)
+
+    const result = await extractCollectionFromPage({
+      document,
+      extract: () => document.extractDraft(),
+      maxScrolls: 20,
+      wait: async () => undefined,
+      window
+    })
+
+    expect(leftNavigation.scrollTargets).toEqual([])
+    expect(document.nextClicks).toBe(1)
+    expect(result.items.map((item) => item.id)).toEqual([
+      "bilibili:video:BV1CZ4y1T7gC",
+      "bilibili:video:BV1oA411a72k"
+    ])
+  })
+
+  it("clicks the bottom next-page button, waits for card updates, merges pages, and deduplicates BV IDs", async () => {
+    const document = new FakeBilibiliDocument([
+      ["BV1CZ4y1T7gC", "BV1oA411a72k"],
+      ["BV1oA411a72k", "BV1fK4y1e7Yj"]
+    ])
+    const waits: number[] = []
+
+    const result = await extractBilibiliFavlistPages({
+      document,
+      extract: () => document.extractDraft(),
+      maxPages: 5,
+      wait: async (delayMs) => {
+        waits.push(delayMs)
+      },
+      window: new FakeWindow(() => undefined)
+    })
+
+    expect(document.nextClicks).toBe(1)
+    expect(waits.length).toBeGreaterThan(0)
+    expect(result.items.map((item) => item.id)).toEqual([
+      "bilibili:video:BV1CZ4y1T7gC",
+      "bilibili:video:BV1oA411a72k",
+      "bilibili:video:BV1fK4y1e7Yj"
+    ])
+  })
+
+  it("paces Bilibili next-page clicks before polling for card updates", async () => {
+    const document = new FakeBilibiliDocument([
+      ["BV1CZ4y1T7gC"],
+      ["BV1oA411a72k"]
+    ])
+    const waits: Array<{ delayMs: number; nextClicks: number }> = []
+
+    await extractBilibiliFavlistPages({
+      document,
+      extract: () => document.extractDraft(),
+      wait: async (delayMs) => {
+        waits.push({ delayMs, nextClicks: document.nextClicks })
+      },
+      window: new FakeWindow(() => undefined)
+    })
+
+    expect(waits[0]).toEqual({
+      delayMs: expect.any(Number),
+      nextClicks: 0
+    })
+    expect(waits[0]?.delayMs).toBeGreaterThanOrEqual(2000)
+    expect(waits[1]).toEqual({
+      delayMs: 100,
+      nextClicks: 1
+    })
+  })
+
+  it("stops when the observed next-page control is disabled", async () => {
+    const document = new FakeBilibiliDocument([["BV1CZ4y1T7gC"]])
+
+    const result = await extractBilibiliFavlistPages({
+      document,
+      extract: () => document.extractDraft(),
+      maxPages: 5,
+      wait: async () => undefined,
+      window: new FakeWindow(() => undefined)
+    })
+
+    expect(document.nextClicks).toBe(0)
+    expect(result.items).toHaveLength(1)
+  })
+
+  it("honors the configured scan limit", async () => {
+    const document = new FakeBilibiliDocument([
+      ["BV1CZ4y1T7gC"],
+      ["BV1oA411a72k"],
+      ["BV1fK4y1e7Yj"]
+    ])
+
+    const result = await extractBilibiliFavlistPages({
+      document,
+      extract: () => document.extractDraft(),
+      maxPages: 2,
+      wait: async () => undefined,
+      window: new FakeWindow(() => undefined)
+    })
+
+    expect(document.nextClicks).toBe(1)
+    expect(result.items.map((item) => item.id)).toEqual([
+      "bilibili:video:BV1CZ4y1T7gC",
+      "bilibili:video:BV1oA411a72k"
+    ])
+  })
+
+  it("continues beyond 30 Bilibili pages when no scan limit is configured", async () => {
+    const pages = Array.from({ length: 31 }, (_, index) => [
+      `BV${String(index + 1).padStart(10, "0")}`
+    ])
+    const document = new FakeBilibiliDocument(pages)
+
+    const result = await extractBilibiliFavlistPages({
+      document,
+      extract: () => document.extractDraft(),
+      wait: async () => undefined,
+      window: new FakeWindow(() => undefined)
+    })
+
+    expect(document.nextClicks).toBe(30)
+    expect(result.items).toHaveLength(31)
+    expect(result.items.at(-1)?.id).toBe("bilibili:video:BV0000000031")
+  })
+})
+
+class FakeBilibiliDocument extends FakeDocument {
+  public readonly location = {
+    href: "https://space.bilibili.com/5059047?fid=47314147"
+  }
+  public nextClicks = 0
+  private pageIndex = 0
+
+  constructor(private readonly pages: string[][]) {
+    super([{ itemCount: 1, scrollHeight: 0 }], () => 0)
+  }
+
+  override querySelectorAll(selector: string) {
+    if (selector === "*") {
+      return this.elements
+    }
+    if (selector === ".items__item") {
+      return this.pages[this.pageIndex].map((bvid) => ({
+        textContent: bvid
+      }))
+    }
+    if (selector === 'a[href*="/video/BV"]') {
+      return this.pages[this.pageIndex].map((bvid) => ({
+        getAttribute: (name: string) =>
+          name === "href" ? `//www.bilibili.com/video/${bvid}` : null,
+        textContent: bvid
+      }))
+    }
+    if (selector === "button.vui_pagenation--btn-side") {
+      return [
+        {
+          click: () => {
+            this.nextClicks += 1
+            this.pageIndex = Math.min(this.pageIndex + 1, this.pages.length - 1)
+          },
+          getAttribute: (name: string) =>
+            name === "class" && this.pageIndex >= this.pages.length - 1
+              ? "vui_pagenation--btn-side vui_button--disabled"
+              : null,
+          textContent: "下一页"
+        }
+      ]
+    }
+    return super.querySelectorAll(selector)
+  }
+
+  extractDraft() {
+    return {
+      source: "bilibili",
+      collection: {
+        id: "bilibili:favlist:47314147",
+        sourceUrl: "https://space.bilibili.com/5059047/favlist?fid=47314147",
+        title: "猛 男 生 存"
+      },
+      items: this.pages[this.pageIndex].map((bvid) => ({
+        id: `bilibili:video:${bvid}`,
+        noteUrl: `https://www.bilibili.com/video/${bvid}`,
+        title: bvid,
+        mediaType: "video" as const
+      }))
+    }
+  }
+}

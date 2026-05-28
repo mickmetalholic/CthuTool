@@ -2,6 +2,7 @@ import type { CollectionExtractionDraft } from "./dom-adapter"
 
 const DEFAULT_ITEM_SELECTOR = ".note-item"
 const DEFAULT_DELAY_MS = 100
+const DEFAULT_BILIBILI_PAGE_DELAY_MS = 2500
 const DEFAULT_COLLECTION_MAX_SCROLLS = Number.POSITIVE_INFINITY
 const DEFAULT_MAX_SCROLLS = 360
 const DEFAULT_MAX_NO_GROWTH_ROUNDS = 16
@@ -15,9 +16,17 @@ type ScrollableElement = {
   scrollTop?: number
 }
 
+type ClickableElement = {
+  click?(): void
+  disabled?: boolean
+  getAttribute?(name: string): string | null
+  textContent?: string | null
+}
+
 type ScrollableDocument = {
   body?: ScrollableElement
   documentElement?: ScrollableElement
+  querySelector?(selector: string): ClickableElement | null
   querySelectorAll(selector: string): ArrayLike<unknown> | Iterable<unknown>
   scrollingElement?: ScrollableElement | null
 }
@@ -56,6 +65,11 @@ export type CollectionScrollExtractorOptions = Omit<
   "itemSelector"
 > & {
   extract: () => CollectionExtractionDraft
+}
+
+export type PageCollectionLoaderOptions = CollectionScrollExtractorOptions & {
+  bilibiliMaxPages?: number
+  bilibiliPageDelayMs?: number
 }
 
 export type CollectionScrollProgress = {
@@ -205,6 +219,129 @@ export async function extractCollectionWhileScrolling(
   }
 }
 
+export async function extractCollectionFromPage(
+  options: PageCollectionLoaderOptions
+): Promise<CollectionExtractionDraft> {
+  const rootDocument = options.document ?? document
+  if (isBilibiliFavlistDocument(rootDocument)) {
+    return extractBilibiliFavlistPages({
+      ...options,
+      document: rootDocument,
+      maxPages: options.bilibiliMaxPages
+    })
+  }
+
+  const firstDraft = await extractCollectionWhileScrolling(options)
+  if (firstDraft.source !== "bilibili") {
+    return firstDraft
+  }
+
+  return extractBilibiliFavlistPages({
+    ...options,
+    initialDraft: firstDraft,
+    maxPages: options.bilibiliMaxPages
+  })
+}
+
+export async function extractBilibiliFavlistPages(
+  options: PageCollectionLoaderOptions & {
+    initialDraft?: CollectionExtractionDraft
+    maxPages?: number
+  }
+): Promise<CollectionExtractionDraft> {
+  const rootDocument = options.document ?? document
+  const wait = options.wait ?? delay
+  const delayMs = options.delayMs ?? DEFAULT_DELAY_MS
+  const pageDelayMs = Math.max(
+    0,
+    options.bilibiliPageDelayMs ?? DEFAULT_BILIBILI_PAGE_DELAY_MS
+  )
+  const maxPages = Math.max(
+    1,
+    options.maxPages ?? options.bilibiliMaxPages ?? Number.POSITIVE_INFINITY
+  )
+  const collectedItems = new Map<
+    string,
+    CollectionExtractionDraft["items"][number]
+  >()
+  let collectedDraft: CollectionExtractionDraft | undefined
+
+  await collectDraft(options.initialDraft)
+  options.onProgress?.({ itemCount: collectedItems.size, scrolls: 0 })
+
+  for (let page = 1; page < maxPages; page += 1) {
+    const beforeSignature = readBilibiliCardSignature(rootDocument)
+    const nextButton = findBilibiliNextPageButton(rootDocument)
+    if (!nextButton) {
+      break
+    }
+
+    if (pageDelayMs > 0) {
+      await wait(pageDelayMs)
+    }
+    nextButton.click?.()
+    const changed = await waitForBilibiliCardsToChange({
+      beforeSignature,
+      delayMs,
+      document: rootDocument,
+      wait
+    })
+    if (!changed) {
+      break
+    }
+
+    await collectDraft()
+    options.onProgress?.({ itemCount: collectedItems.size, scrolls: page })
+  }
+
+  return requireCollectedDraft()
+
+  async function collectDraft(initialDraft?: CollectionExtractionDraft) {
+    const draft = initialDraft ?? (await extractBilibiliCurrentPageDraft())
+    collectedDraft = collectedDraft
+      ? {
+          ...collectedDraft,
+          collection: {
+            ...collectedDraft.collection,
+            coverUrl: collectedDraft.collection.coverUrl ?? draft.collection.coverUrl
+          }
+        }
+      : draft
+
+    for (const item of draft.items) {
+      collectedItems.set(item.id ?? item.noteUrl, item)
+    }
+  }
+
+  async function extractBilibiliCurrentPageDraft() {
+    let lastError: unknown
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      try {
+        return options.extract()
+      } catch (error) {
+        lastError = error
+        if (readBilibiliCardSignature(rootDocument)) {
+          break
+        }
+        await wait(delayMs)
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error("当前页面抽取失败")
+  }
+
+  function requireCollectedDraft(): CollectionExtractionDraft {
+    if (!collectedDraft) {
+      throw new Error("当前页面抽取失败")
+    }
+
+    return {
+      ...collectedDraft,
+      items: Array.from(collectedItems.values())
+    }
+  }
+}
+
 function readSnapshot(
   document: ScrollableDocument,
   itemSelector: string
@@ -216,6 +353,109 @@ function readSnapshot(
       document.body?.scrollHeight ?? 0
     )
   }
+}
+
+function isBilibiliFavlistDocument(document: ScrollableDocument): boolean {
+  const href = readDocumentHref(document)
+  if (!href) {
+    return false
+  }
+
+  try {
+    const url = new URL(href, "https://space.bilibili.com")
+    if (url.hostname !== "space.bilibili.com") {
+      return false
+    }
+    const hasMid = /^\/\d+(?:\/favlist)?\/?$/.test(url.pathname)
+    return (
+      hasMid &&
+      (url.pathname.includes("/favlist") ||
+        url.searchParams.has("fid") ||
+        Boolean(readBilibiliCardSignature(document)))
+    )
+  } catch {
+    return false
+  }
+}
+
+function readDocumentHref(document: ScrollableDocument): string | undefined {
+  return (document as ScrollableDocument & { location?: { href?: string } })
+    .location?.href
+}
+
+function findBilibiliNextPageButton(
+  document: ScrollableDocument
+): ClickableElement | undefined {
+  const candidates = [
+    ...queryUnknownAll(document, "button.vui_pagenation--btn-side").filter(
+      (element) => cleanText(element.textContent) === "下一页"
+    ),
+    ...queryUnknownAll(document, "li.be-pager-next"),
+    ...queryUnknownAll(document, ".be-pager-next")
+  ]
+
+  return candidates.find((element) => !isDisabledControl(element))
+}
+
+async function waitForBilibiliCardsToChange({
+  beforeSignature,
+  delayMs,
+  document,
+  wait
+}: {
+  beforeSignature: string
+  delayMs: number
+  document: ScrollableDocument
+  wait: (delayMs: number) => Promise<void>
+}): Promise<boolean> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await wait(delayMs)
+    const nextSignature = readBilibiliCardSignature(document)
+    if (nextSignature && nextSignature !== beforeSignature) {
+      return true
+    }
+  }
+  return false
+}
+
+function readBilibiliCardSignature(document: ScrollableDocument): string {
+  const bvids = queryUnknownAll(document, 'a[href*="/video/BV"]')
+    .map((link) => link.getAttribute?.("href")?.match(/BV[0-9A-Za-z]+/)?.[0])
+    .filter((bvid): bvid is string => Boolean(bvid))
+  if (bvids.length > 0) {
+    return bvids.join("|")
+  }
+
+  return queryUnknownAll(document, ".items__item")
+    .map((card) => cleanText(card.textContent) ?? "")
+    .filter(Boolean)
+    .join("|")
+}
+
+function queryUnknownAll(
+  document: ScrollableDocument,
+  selector: string
+): ClickableElement[] {
+  return Array.from(document.querySelectorAll(selector)).filter(
+    (element): element is ClickableElement => Boolean(element)
+  )
+}
+
+function isDisabledControl(element: ClickableElement): boolean {
+  const className = element.getAttribute?.("class") ?? ""
+  const disabledAttribute = element.getAttribute?.("disabled")
+  return (
+    Boolean(element.disabled) ||
+    element.getAttribute?.("aria-disabled") === "true" ||
+    (disabledAttribute !== undefined && disabledAttribute !== null) ||
+    className.includes("vui_button--disabled") ||
+    className.includes("be-pager-disabled")
+  )
+}
+
+function cleanText(value: string | null | undefined): string | undefined {
+  const text = value?.replace(/\s+/g, " ").trim()
+  return text ? text : undefined
 }
 
 function snapshotsMatch(

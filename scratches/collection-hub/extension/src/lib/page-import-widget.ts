@@ -15,13 +15,13 @@ import {
 import {
   buildDeleteItemsRequest,
   buildImportRequest,
-  submitDeleteItemsRequest,
-  submitImportRequestInBatches,
+  submitDeleteItemsRequestViaExtension,
+  submitImportRequestInBatchesViaExtension,
   type ImportBatchProgress
 } from "./import-client"
 import { isUrlAllowed } from "./match-patterns"
 import {
-  extractCollectionWhileScrolling,
+  extractCollectionFromPage,
   type CollectionScrollProgress
 } from "./page-scroll-loader"
 import { getExtensionSettings, type ExtensionSettings } from "./settings"
@@ -29,6 +29,23 @@ import { extractXhsBoardCardDraft } from "./xhs-board-dom-adapter"
 import { renderXhsInlineImportButtons } from "./xhs-inline-import-buttons"
 
 export const PAGE_IMPORT_WIDGET_ID = "collection-hub-page-widget"
+
+export type PageImportTheme = {
+  accent: string
+  action: string
+  actionHover: string
+  errorForeground: string
+  focus: string
+  line: string
+  lineStrong: string
+  shadow: string
+  shadowSoft: string
+  soft: string
+  softer: string
+  source: "bilibili" | "xhs"
+  successForeground: string
+  warningForeground: string
+}
 
 type PageImportViewModelInput = {
   busy: boolean
@@ -100,16 +117,82 @@ export function createPageImportViewModel(input: PageImportViewModelInput) {
   }
 }
 
+export function createPageImportTheme(source: string | undefined): PageImportTheme {
+  if (source === "bilibili") {
+    return {
+      accent: "#00aeec",
+      action: "#00a1d6",
+      actionHover: "#008ac5",
+      errorForeground: "#d91635",
+      focus: "rgba(0, 174, 236, 0.24)",
+      line: "#bdeffc",
+      lineStrong: "#84ddf7",
+      shadow:
+        "0 18px 48px rgba(0, 174, 236, 0.16), 0 8px 24px rgba(31, 31, 31, 0.08)",
+      shadowSoft:
+        "0 8px 20px rgba(0, 174, 236, 0.14), 0 2px 10px rgba(31, 31, 31, 0.06)",
+      soft: "#eafaff",
+      softer: "#f5fcff",
+      source: "bilibili",
+      successForeground: "#137c43",
+      warningForeground: "#946200"
+    }
+  }
+
+  return {
+    accent: "#ff2442",
+    action: "#e60033",
+    actionHover: "#c8102e",
+    errorForeground: "#d91635",
+    focus: "rgba(255, 36, 66, 0.24)",
+    line: "#f2d9de",
+    lineStrong: "#ffc2cb",
+    shadow:
+      "0 18px 48px rgba(255, 36, 66, 0.16), 0 8px 24px rgba(31, 31, 31, 0.08)",
+    shadowSoft:
+      "0 8px 20px rgba(255, 36, 66, 0.12), 0 2px 10px rgba(31, 31, 31, 0.06)",
+    soft: "#fff1f3",
+    softer: "#fff7f8",
+    source: "xhs",
+    successForeground: "#137c43",
+    warningForeground: "#946200"
+  }
+}
+
+export function createPageImportThemeSource(document: {
+  location?: { href?: string }
+}): PageImportTheme["source"] {
+  const href = document.location?.href
+  if (!href) {
+    return "xhs"
+  }
+
+  try {
+    const url = new URL(href, "https://space.bilibili.com")
+    if (
+      url.hostname === "space.bilibili.com" &&
+      /^\/\d+(?:\/favlist)?\/?$/.test(url.pathname) &&
+      (url.pathname.includes("/favlist") || url.searchParams.has("fid"))
+    ) {
+      return "bilibili"
+    }
+  } catch {
+    return "xhs"
+  }
+
+  return "xhs"
+}
+
 type PageImportWidgetDependencies = {
   canExtract?: (document: Document) => boolean
-  deleteItems?: typeof submitDeleteItemsRequest
+  deleteItems?: typeof submitDeleteItemsRequestViaExtension
   document?: Document
   extract?: (document: Document) => CollectionExtractionDraft
   extractPage?: (
     onProgress: (progress: CollectionScrollProgress) => void
   ) => Promise<CollectionExtractionDraft>
   getSettings?: () => Promise<ExtensionSettings>
-  submit?: typeof submitImportRequestInBatches
+  submit?: typeof submitImportRequestInBatchesViaExtension
   urlAllowed?: typeof isUrlAllowed
   window?: Window
 }
@@ -147,17 +230,19 @@ export async function mountPageImportWidget(
 
   const shadowRoot = host.attachShadow({ mode: "open" })
   const extract = dependencies.extract ?? extractWithAdapters
-  const deleteItems = dependencies.deleteItems ?? submitDeleteItemsRequest
+  const deleteItems =
+    dependencies.deleteItems ?? submitDeleteItemsRequestViaExtension
   const extractPage =
     dependencies.extractPage ??
     ((onProgress) =>
-      extractCollectionWhileScrolling({
+      extractCollectionFromPage({
         document: rootDocument,
         extract: () => extract(rootDocument),
         onProgress,
         window: currentWindow
       }))
-  const submitImport = dependencies.submit ?? submitImportRequestInBatches
+  const submitImport =
+    dependencies.submit ?? submitImportRequestInBatchesViaExtension
 
   let busy = false
   let deleteSummary: DeleteItemsSummary | null = null
@@ -170,6 +255,7 @@ export async function mountPageImportWidget(
   let progress: CollectionScrollProgress | null = null
   let selectedStatus: ItemStatus = "pending_download"
   let summary: ImportSummary | null = null
+  const pageThemeSource = createPageImportThemeSource(rootDocument)
   let inlineImportRenderTimer: number | null = null
   const inlineImportObserver =
     typeof MutationObserver === "function"
@@ -196,8 +282,11 @@ export async function mountPageImportWidget(
     })
     const style = rootDocument.createElement("style")
     style.textContent = widgetCss
+    const theme = createPageImportTheme(draft?.source ?? pageThemeSource)
     const container = rootDocument.createElement("section")
-    container.className = expanded ? "xco-panel" : "xco-launcher"
+    container.className = `${expanded ? "xco-panel" : "xco-launcher"} xco-source-${theme.source}`
+    container.setAttribute("data-source", theme.source)
+    applyTheme(container, theme)
 
     if (!expanded) {
       const openButton = createButton(rootDocument, "收藏导入", "primary")
@@ -541,6 +630,22 @@ function createButton(
   return button
 }
 
+function applyTheme(element: HTMLElement, theme: PageImportTheme) {
+  element.style.setProperty("--xco-red", theme.accent)
+  element.style.setProperty("--xco-red-action", theme.action)
+  element.style.setProperty("--xco-red-dark", theme.action)
+  element.style.setProperty("--xco-red-deeper", theme.actionHover)
+  element.style.setProperty("--xco-red-soft", theme.soft)
+  element.style.setProperty("--xco-red-softer", theme.softer)
+  element.style.setProperty("--xco-line", theme.line)
+  element.style.setProperty("--xco-line-strong", theme.lineStrong)
+  element.style.setProperty("--xco-success-fg", theme.successForeground)
+  element.style.setProperty("--xco-danger-fg", theme.errorForeground)
+  element.style.setProperty("--xco-shadow", theme.shadow)
+  element.style.setProperty("--xco-shadow-soft", theme.shadowSoft)
+  element.style.setProperty("--xco-focus", theme.focus)
+}
+
 const widgetCss = `
   :host {
     all: initial;
@@ -736,7 +841,7 @@ const widgetCss = `
   }
 
   .xco-button:focus-visible {
-    outline: 3px solid rgba(255, 36, 66, 0.24);
+    outline: 3px solid var(--xco-focus);
     outline-offset: 2px;
   }
 

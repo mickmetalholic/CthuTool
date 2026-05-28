@@ -1,9 +1,11 @@
 import type { CollectionExtractionDraft, DomCollectionAdapter, QueryableDocument } from "./dom-adapter"
+import { bilibiliFavlistDomAdapter } from "./bilibili-favlist-dom-adapter"
 import { sampleDomAdapter } from "./sample-dom-adapter"
 import { xhsBoardDomAdapter } from "./xhs-board-dom-adapter"
 
 export const collectionDomAdapters: DomCollectionAdapter[] = [
   xhsBoardDomAdapter,
+  bilibiliFavlistDomAdapter,
   sampleDomAdapter
 ]
 

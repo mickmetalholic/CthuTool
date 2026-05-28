@@ -93,7 +93,15 @@ export function filterItemsByStatus(
 export function createDashboardNavigation(
   dashboard: DashboardResponse,
 ): DashboardNavigationGroup[] {
-  const source = dashboardSource;
+  return getDashboardSources(dashboard).map((source) =>
+    createDashboardNavigationGroup(dashboard, source),
+  );
+}
+
+function createDashboardNavigationGroup(
+  dashboard: DashboardResponse,
+  source: string,
+): DashboardNavigationGroup {
   const entries: DashboardNavigationEntry[] = itemStatuses.map((status) => {
     const collectionId = `${source}:${status}`;
     const collection = dashboard.collections.find(
@@ -104,7 +112,7 @@ export function createDashboardNavigation(
     );
 
     return {
-      count: collection?.itemCount ?? 0,
+      count: collection?.itemCount ?? collectionItems.length,
       id: collectionId,
       label: itemStatusLabels[status],
       ratingCounts: countRatingFilters(collectionItems),
@@ -122,13 +130,25 @@ export function createDashboardNavigation(
     type: "authors",
   });
 
-  return [
-    {
-      entries,
-      label: source,
-      source,
-    },
-  ];
+  return {
+    entries,
+    label: source,
+    source,
+  };
+}
+
+function getDashboardSources(dashboard: DashboardResponse): string[] {
+  const sources = new Set<string>([dashboardSource]);
+  for (const collection of dashboard.collections) {
+    sources.add(collection.source);
+  }
+  for (const item of dashboard.items) {
+    sources.add(item.source);
+  }
+  for (const author of dashboard.authors) {
+    sources.add(author.source);
+  }
+  return [...sources];
 }
 
 export function getDashboardSelection(

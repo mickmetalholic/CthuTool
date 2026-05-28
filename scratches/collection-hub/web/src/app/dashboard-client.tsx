@@ -1102,6 +1102,7 @@ function ItemCard({
               className="app-cover-image size-full object-cover group-hover/cover:scale-[1.025] group-hover/cover:brightness-[1.04] group-hover/cover:saturate-[1.04] group-focus-within/cover:scale-[1.025] group-focus-within/cover:brightness-[1.04] group-focus-within/cover:saturate-[1.04]"
               decoding="async"
               loading="lazy"
+              referrerPolicy="no-referrer"
               src={item.coverUrl}
             />
           ) : (
@@ -1315,6 +1316,7 @@ function DeleteConfirmDialog({
                 alt={item.title}
                 className="aspect-square size-16 object-cover"
                 decoding="async"
+                referrerPolicy="no-referrer"
                 src={item.coverUrl}
               />
             ) : (

@@ -9,9 +9,11 @@ import {
   buildImportRequest,
   buildImportRequestBatches,
   buildSingleItemImportRequest,
+  submitDeleteItemsRequestViaExtension,
   submitDeleteItemsRequest,
   submitImportRequest,
-  submitImportRequestInBatches
+  submitImportRequestInBatches,
+  submitImportRequestViaExtension
 } from "./import-client"
 import { isUrlAllowed } from "./match-patterns"
 import { sampleDomAdapter } from "./sample-dom-adapter"
@@ -409,5 +411,97 @@ describe("extension organizer flow", () => {
       }
     })
     expect(summary.deletedItems).toBe(1)
+  })
+
+  it("sends local API requests through the extension runtime bridge", async () => {
+    const request = buildImportRequest(
+      {
+        source: "bilibili",
+        collection: {
+          sourceUrl: "https://space.bilibili.com/1/favlist?fid=2",
+          title: "收藏夹"
+        },
+        items: [
+          {
+            id: "bv-1",
+            title: "Video",
+            noteUrl: "https://www.bilibili.com/video/BV1"
+          }
+        ]
+      },
+      "pending_download",
+      "2026-05-12T15:30:00.000Z"
+    )
+    const messages: unknown[] = []
+    const runtime = {
+      sendMessage: (
+        message: unknown,
+        callback: (response: unknown) => void
+      ) => {
+        messages.push(message)
+        callback({
+          ok: true,
+          data: {
+            collectionId: "bilibili:pending_download",
+            createdItems: 1,
+            updatedItems: 0,
+            authors: 0,
+            updatedAt: "2026-05-12T15:30:00.000Z"
+          }
+        })
+      }
+    }
+
+    const summary = await submitImportRequestViaExtension(
+      "http://localhost:3001",
+      request,
+      {
+        runtime
+      }
+    )
+
+    expect(messages[0]).toMatchObject({
+      type: "collection-hub:submit-import",
+      apiBaseUrl: "http://localhost:3001",
+      request
+    })
+    expect(summary.createdItems).toBe(1)
+  })
+
+  it("surfaces extension runtime bridge failures", async () => {
+    const request = buildDeleteItemsRequest(
+      {
+        source: "bilibili",
+        collection: {
+          sourceUrl: "https://space.bilibili.com/1/favlist?fid=2",
+          title: "收藏夹"
+        },
+        items: [
+          {
+            id: "bv-1",
+            title: "Video",
+            noteUrl: "https://www.bilibili.com/video/BV1"
+          }
+        ]
+      },
+      "downloaded"
+    )
+    const runtime = {
+      sendMessage: (
+        _message: unknown,
+        callback: (response: unknown) => void
+      ) => {
+        callback({
+          ok: false,
+          error: "Local API unavailable"
+        })
+      }
+    }
+
+    await expect(
+      submitDeleteItemsRequestViaExtension("http://localhost:3001", request, {
+        runtime
+      })
+    ).rejects.toThrow("Local API unavailable")
   })
 })

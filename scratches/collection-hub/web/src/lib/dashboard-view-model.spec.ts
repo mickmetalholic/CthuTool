@@ -190,6 +190,88 @@ describe("dashboard view model", () => {
     ]);
   });
 
+  it("builds navigation groups for non-xhs imported sources", () => {
+    const dashboardWithBilibili: DashboardResponse = {
+      ...dashboard,
+      items: [
+        ...dashboard.items,
+        {
+          id: "bilibili:video:BV1",
+          source: "bilibili",
+          collectionId: "bilibili:pending_download",
+          collectionTitle: "bilibili / 待下载",
+          authorId: "bilibili:author:1",
+          authorName: "Uploader",
+          title: "Video",
+          noteUrl: "https://www.bilibili.com/video/BV1",
+          status: "pending_download",
+          updatedAt: "2026-05-12T15:33:00.000Z",
+        },
+      ],
+      authors: [
+        ...dashboard.authors,
+        {
+          id: "bilibili:author:1",
+          source: "bilibili",
+          name: "Uploader",
+          profileUrl: "https://space.bilibili.com/1",
+          updatedAt: "2026-05-12T15:33:00.000Z",
+        },
+      ],
+      collections: [
+        ...dashboard.collections,
+        {
+          id: "bilibili:pending_download",
+          source: "bilibili",
+          status: "pending_download",
+          sourceUrl: "https://space.bilibili.com/1/favlist?fid=2",
+          title: "bilibili / 待下载",
+          itemCount: 1,
+          statusCounts: {
+            pending_download: 1,
+            downloaded: 0,
+            not_downloaded: 0,
+          },
+          updatedAt: "2026-05-12T15:33:00.000Z",
+        },
+      ],
+    };
+
+    const bilibiliGroup = createDashboardNavigation(dashboardWithBilibili).find(
+      (group) => group.source === "bilibili",
+    );
+
+    expect(bilibiliGroup?.entries).toEqual([
+      expect.objectContaining({
+        count: 1,
+        id: "bilibili:pending_download",
+        source: "bilibili",
+        status: "pending_download",
+        type: "collection",
+      }),
+      expect.objectContaining({
+        count: 0,
+        id: "bilibili:downloaded",
+        source: "bilibili",
+        status: "downloaded",
+        type: "collection",
+      }),
+      expect.objectContaining({
+        count: 0,
+        id: "bilibili:not_downloaded",
+        source: "bilibili",
+        status: "not_downloaded",
+        type: "collection",
+      }),
+      expect.objectContaining({
+        count: 1,
+        id: "bilibili:authors",
+        source: "bilibili",
+        type: "authors",
+      }),
+    ]);
+  });
+
   it("selects the right-side item or author list from navigation", () => {
     expect(
       getDashboardSelection(dashboard, {
