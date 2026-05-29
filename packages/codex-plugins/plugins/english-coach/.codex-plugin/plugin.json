@@ -1,0 +1,17 @@
+{
+  "name": "english-coach",
+  "version": "0.1.1",
+  "description": "Adds a lightweight English coaching rule before Codex handles English user prompts.",
+  "author": {
+    "name": "Yuan"
+  },
+  "interface": {
+    "displayName": "English Coach",
+    "shortDescription": "Check English before continuing tasks.",
+    "longDescription": "English Coach injects a prompt-submission rule that asks Codex to check grammar, naturalness, tone, and idiomatic usage before continuing with the user's actual request.",
+    "developerName": "Yuan",
+    "category": "Productivity",
+    "capabilities": ["Hooks"],
+    "defaultPrompt": ["Check my English before answering."]
+  }
+}

@@ -1,9 +1,14 @@
 import { text } from '@clack/prompts';
 import { createColors } from 'picocolors';
+import type { BundledScriptContext } from '../../flow/run-bundled-script';
+import { createCliContext } from '../../runtime/cli-context';
+import { createCliError } from '../../runtime/cli-error';
+import { processOutput, writeJsonValue } from '../../runtime/output';
 import { runConversionJob } from './application/run-conversion-job';
 import { parseConversionOptions } from './domain/option-schema';
 import { epubConverter } from './infrastructure/converters/epub-converter';
 import { pdfConverter } from './infrastructure/converters/pdf-converter';
+import type { ProgressLogger } from './infrastructure/logging/progress-logger';
 
 type CliArgs = {
   readonly input?: string;
@@ -16,6 +21,21 @@ type CliArgs = {
 };
 
 const c = createColors(true);
+
+const silentProgressLogger = (): ProgressLogger => ({
+  start: () => undefined,
+  beginFile: () => undefined,
+  updateFile: () => undefined,
+  finishFile: () => undefined,
+  info: () => undefined,
+  success: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+  summary: () => undefined,
+  incrementTotal: () => undefined,
+  flush: async () => undefined,
+  stop: () => undefined,
+});
 
 const renderCompletionCard = (input: {
   totalFiles: number;
@@ -38,9 +58,22 @@ const renderCompletionCard = (input: {
   return lines.join('\n');
 };
 
-const resolveInput = async (args: CliArgs): Promise<string | undefined> => {
+const defaultContext = (): BundledScriptContext => ({
+  cli: createCliContext({}, { isTty: () => process.stdin.isTTY === true }),
+});
+
+const resolveInput = async (
+  args: CliArgs,
+  context: BundledScriptContext,
+): Promise<string | undefined> => {
   if (args.input && args.input.trim().length > 0) {
     return args.input.trim();
+  }
+  if (!context.cli.interactive) {
+    throw createCliError(
+      'missing_required_argument',
+      'input is required in non-interactive mode (use: --input <dir>)',
+    );
   }
   const answer = await text({ message: '请输入待转换目录路径' });
   if (typeof answer !== 'string') return undefined;
@@ -48,20 +81,36 @@ const resolveInput = async (args: CliArgs): Promise<string | undefined> => {
   return value.length > 0 ? value : undefined;
 };
 
-export default async function run(args: CliArgs = {}): Promise<void> {
-  const input = await resolveInput(args);
+export default async function run(
+  args: CliArgs = {},
+  context: BundledScriptContext = defaultContext(),
+): Promise<void> {
+  const input = await resolveInput(args, context);
   if (!input) {
-    throw new Error('输入路径无效：路径不存在或不是目录');
+    throw createCliError('missing_required_argument', 'input is required');
   }
 
   const optionsResult = parseConversionOptions({ ...args, input });
   if (optionsResult.isErr()) {
-    throw new Error(optionsResult.error.message);
+    throw createCliError('invalid_option', optionsResult.error.message);
   }
 
-  const summary = await runConversionJob(optionsResult.value, [
-    pdfConverter,
-    epubConverter,
-  ]);
+  const summary = await runConversionJob(
+    optionsResult.value,
+    [pdfConverter, epubConverter],
+    context.cli.json
+      ? { createProgressLogger: silentProgressLogger }
+      : undefined,
+  );
+  if (context.cli.json) {
+    writeJsonValue(processOutput, {
+      ok: true,
+      command: 'scripts',
+      script: 'convert-to-cbz',
+      summary,
+    });
+    return;
+  }
+
   process.stdout.write(`${renderCompletionCard(summary)}\n`);
 }

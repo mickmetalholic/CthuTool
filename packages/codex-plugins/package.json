@@ -1,0 +1,13 @@
+{
+  "name": "@cthutool/codex-plugins",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Personal Codex plugins maintained as workspace packages.",
+  "scripts": {
+    "install:plugins": "chc codex plugins",
+    "refresh:english-coach": "chc codex plugins --plugin english-coach --sync-cache",
+    "upgrade:english-coach": "chc codex plugins --plugin english-coach --bump-patch",
+    "validate:english-coach": "uv run --with pyyaml python C:/Users/yuans/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/english-coach"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

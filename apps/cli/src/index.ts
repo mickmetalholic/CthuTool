@@ -1,14 +1,14 @@
 import { defineCommand, runMain } from 'citty';
-import { greetCommand } from './command/greet.command';
+import { codexCommand } from './command/codex.command';
 import { scriptsCommand } from './command/run-scripts.command';
 
 const main = defineCommand({
   meta: {
-    name: 'cthutool-cli',
-    description: 'CthuTool monorepo CLI (greet demo and bundled scripts)',
+    name: 'chc',
+    description: 'CthuTool monorepo CLI',
   },
   subCommands: {
-    greet: greetCommand,
+    codex: codexCommand,
     scripts: scriptsCommand,
   },
 });

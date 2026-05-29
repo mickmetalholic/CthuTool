@@ -1,0 +1,17 @@
+{
+  "description": "English Coach hook that asks Codex to review English before continuing.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\yuans\\Documents\\GitHub\\mickmetalholic\\CthuTool\\packages\\codex-plugins\\plugins\\english-coach\\scripts\\english-coach.ps1\"",
+            "timeout": 5,
+            "statusMessage": "Preparing English coaching"
+          }
+        ]
+      }
+    ]
+  }
+}

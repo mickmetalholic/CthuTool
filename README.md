@@ -72,4 +72,4 @@ The workflow triggers on `push` to `main` and on `pull_request`, so Biome and co
 
 ## More documentation
 
-- Project notes live in `docs/` and package-level `README.md` files.
+- Project notes live in package-level `README.md` files and OpenSpec specs under `openspec/specs/`.
