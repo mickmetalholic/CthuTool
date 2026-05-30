@@ -6,18 +6,19 @@ alwaysApply: true
 
 # Git 提交说明（Conventional Commits）
 
-生成或修改 **Git commit message**（含 `git commit`、`git commit --amend`、PR 合并前的本地提交）时遵守下列规则；与仓库根目录 `commitlint.config.cjs`、`specs/002-commit-convention-workflow/contracts/commit-message.contract.md` 保持一致（**FR-006**：任一方变更须同步其余镜像）。
+生成或修改 **Git commit message**（含 `git commit`、`git commit --amend`、PR 合并前的本地提交）时遵守下列规则；与仓库根目录 `commitlint.config.cjs` 保持一致。
 
 ## 格式
 
 - 首行：`type(scope): subject`（`scope` 可选；有 scope 时建议 **kebab-case**）
 - `subject`：**英文祈使**、首字母小写、句末不加句号（与 conventional 默认一致）
 - 正文：若存在，与首行之间 **空一行**；须为英文
+- **正文与脚注的每一行**：须满足 `@commitlint/config-conventional` 默认 `body-max-line-length`（**每行不超过 100 个字符**）。多句说明请拆行或使用多次 `git commit -m`；单行过长会导致 `commit-msg` 失败。
 - 脚注：若存在（如 `BREAKING CHANGE:`），须为英文
 
 ## 允许的 type
 
-`feat` | `fix` | `docs` | `style` | `refactor` | `perf` | `test` | `build` | `ci` | `chore`（勿使用合同未列类型，除非已同步更新配置与合同）
+`feat` | `fix` | `docs` | `style` | `refactor` | `perf` | `test` | `build` | `ci` | `chore`（勿使用未列类型，除非已同步更新配置与本规则）
 
 ## 语言
 
@@ -36,4 +37,4 @@ alwaysApply: true
 
 ## 维护
 
-变更类型列表、语言规则或豁免模式时，必须同时更新：`commitlint.config.cjs`、本文件、`contracts/commit-message.contract.md`、`specs/002-commit-convention-workflow/quickstart.md`。
+变更类型列表、语言规则、**正文/脚注行长（如 `body-max-line-length`）**或豁免模式时，必须同时更新：`commitlint.config.cjs` 与本文件。

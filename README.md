@@ -72,4 +72,4 @@ The workflow triggers on `push` to `main` and on `pull_request`, so Biome and co
 
 ## More documentation
 
-- Contributor quickstart: [`specs/001-init-turborepo/quickstart.md`](specs/001-init-turborepo/quickstart.md)
+- Project notes live in package-level `README.md` files and OpenSpec specs under `openspec/specs/`.

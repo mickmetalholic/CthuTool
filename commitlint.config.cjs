@@ -1,6 +1,5 @@
 const { defineConfig } = require('cz-git');
 
-/** 与 specs/002-commit-convention-workflow/contracts/commit-message.contract.md 一致 */
 const CONTRACT_TYPES = [
   'feat',
   'fix',

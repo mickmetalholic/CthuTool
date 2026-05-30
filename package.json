@@ -1,15 +1,25 @@
 {
   "name": "cthutool",
+  "version": "0.0.0",
   "private": true,
+  "bin": {
+    "chc": "apps/cli/bin/chc.mjs"
+  },
+  "files": [
+    "apps/cli/bin/chc.mjs",
+    "apps/cli/dist/index.js",
+    "apps/cli/package.json",
+    "apps/cli/README.md"
+  ],
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "start": "turbo run start",
     "test": "jest && turbo run test",
     "test:cov": "jest --coverage && turbo run test:cov",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "prepare": "husky",
+    "prepack": "pnpm --filter @cthutool/cli build",
     "commit": "git-cz"
   },
   "config": {
@@ -18,8 +28,8 @@
     }
   },
   "lint-staged": {
-    "apps/**": "pnpm exec biome check --write",
-    "packages/**": "pnpm exec biome check --write"
+    "apps/**/*.{js,ts,mjs,cjs,jsx,tsx,json,jsonc}": "pnpm exec biome check --write",
+    "packages/**/*.{js,ts,mjs,cjs,jsx,tsx,json,jsonc}": "pnpm exec biome check --write"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.9",

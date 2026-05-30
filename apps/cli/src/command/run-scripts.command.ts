@@ -5,6 +5,13 @@ import { listSelectable, resolvePackage } from '../domain/script-catalog';
 import { runBundledScript } from '../flow/run-bundled-script';
 import { getBundledScriptsRoot } from '../infra/bundled-scripts-root';
 import { discoverScripts } from '../infra/discover-scripts';
+import { cliContractArgs, createCliContext } from '../runtime/cli-context';
+import { createCliError } from '../runtime/cli-error';
+import {
+  processOutput,
+  writeCommandError,
+  writeWarning,
+} from '../runtime/output';
 
 export type SelectableRow = { readonly id: string; readonly title: string };
 
@@ -43,6 +50,21 @@ function resolveExplicitId(args: {
   return resolved.length > 0 ? resolved : undefined;
 }
 
+function toScriptArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const skipped = new Set([
+    '_',
+    'id',
+    'script',
+    'json',
+    'quiet',
+    'noInteractive',
+    'no-interactive',
+  ]);
+  return Object.fromEntries(
+    Object.entries(args).filter(([key]) => !skipped.has(key)),
+  );
+}
+
 export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
   defineCommand({
     meta: {
@@ -51,12 +73,13 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
         'Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
         '',
         'Examples:',
-        '  cthutool-cli scripts hello-world',
-        '  cthutool-cli scripts --script hello-world',
+        '  chc scripts hello-world',
+        '  chc scripts --script hello-world',
         '  bun run apps/cli/src/scripts/hello-world/index.ts',
       ].join('\n'),
     },
     args: {
+      ...cliContractArgs,
       id: {
         type: 'positional',
         description: 'Script id (folder name under apps/cli/src/scripts/)',
@@ -70,26 +93,31 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
       },
     },
     async run({ args }) {
+      const context = createCliContext(args, { isTty: deps.isInteractive });
       const root = getBundledScriptsRoot();
       const discovered = await discoverScripts(root);
       if (discovered.isErr()) {
-        console.error(pc.red(discovered.error.message));
-        process.exitCode = 1;
+        const error = createCliError(
+          'discovery_failed',
+          discovered.error.message,
+        );
+        writeCommandError(context, processOutput, error);
+        process.exitCode = error.exitCode;
         return;
       }
 
       const catalog = discovered.value;
       for (const w of catalog.warnings) {
-        console.error(pc.yellow(`${w.path}: ${w.message}`));
+        writeWarning(processOutput, pc.yellow(`${w.path}: ${w.message}`));
       }
 
       if (catalog.packages.length === 0) {
-        console.error(
-          pc.red(
-            'no valid bundled script packages found (see apps/cli/src/scripts/)',
-          ),
+        const error = createCliError(
+          'discovery_failed',
+          'no valid bundled script packages found (see apps/cli/src/scripts/)',
         );
-        process.exitCode = 1;
+        writeCommandError(context, processOutput, error);
+        process.exitCode = error.exitCode;
         return;
       }
 
@@ -97,13 +125,13 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
       let targetId = explicitId;
 
       if (!targetId) {
-        if (!deps.isInteractive()) {
-          console.error(
-            pc.red(
-              'script id is required in non-interactive mode (use: cthutool-cli scripts <id> or --script <id>)',
-            ),
+        if (!context.interactive) {
+          const error = createCliError(
+            'missing_required_argument',
+            'script id is required in non-interactive mode (use: chc scripts <id> or --script <id>)',
           );
-          process.exitCode = 1;
+          writeCommandError(context, processOutput, error);
+          process.exitCode = error.exitCode;
           return;
         }
 
@@ -114,8 +142,12 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
         } else {
           const choice = await deps.pickScriptId(options);
           if (choice === undefined) {
-            console.error(pc.red('selection cancelled'));
-            process.exitCode = 1;
+            const error = createCliError(
+              'invalid_option',
+              'selection cancelled',
+            );
+            writeCommandError(context, processOutput, error);
+            process.exitCode = error.exitCode;
             return;
           }
           targetId = choice;
@@ -124,24 +156,39 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
 
       const resolved = resolvePackage(catalog, targetId);
       if (resolved.isErr()) {
-        if (resolved.error.kind === 'not_found') {
-          console.error(pc.red(`unknown script id: ${resolved.error.id}`));
-        } else {
-          console.error(pc.red(`ambiguous script id: ${resolved.error.id}`));
-        }
-        process.exitCode = 1;
+        const error =
+          resolved.error.kind === 'not_found'
+            ? createCliError(
+                'unknown_selection',
+                `unknown script id: ${resolved.error.id}`,
+              )
+            : createCliError(
+                'ambiguous_selection',
+                `ambiguous script id: ${resolved.error.id}`,
+              );
+        writeCommandError(context, processOutput, error);
+        process.exitCode = error.exitCode;
         return;
       }
 
-      const executed = await runBundledScript(resolved.value);
+      const executed = await runBundledScript(
+        resolved.value,
+        toScriptArgs(args),
+        {
+          cli: context,
+        },
+      );
       if (executed.isErr()) {
         const e = executed.error;
-        const msg =
-          e.kind === 'no_default_export'
-            ? e.message
-            : `${e.kind}: ${e.message}`;
-        console.error(pc.red(msg));
-        process.exitCode = 1;
+        const error =
+          e.kind === 'load'
+            ? createCliError('script_load_failed', e.message)
+            : e.kind === 'no_default_export'
+              ? createCliError('script_load_failed', e.message)
+              : (e.cliError ??
+                createCliError('script_execution_failed', e.message));
+        writeCommandError(context, processOutput, error);
+        process.exitCode = error.exitCode;
         return;
       }
 

@@ -1,0 +1,19 @@
+{
+  "name": "@collection-hub/workspace",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "check": "pnpm run typecheck && pnpm run test && pnpm run build",
+    "typecheck": "pnpm --filter @collection-hub/libs build && pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "dev:server": "pnpm --filter @collection-hub/server dev",
+    "dev:web": "pnpm --filter @collection-hub/web dev",
+    "dev:extension": "pnpm --filter @collection-hub/extension dev"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  }
+}

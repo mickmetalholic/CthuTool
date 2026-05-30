@@ -57,11 +57,6 @@ export const runConversionJob = async (
   const outputRoot = options.output ?? join(options.input, '.output');
   const logger = createProgressLoggerImpl();
 
-  const dep = await checkPopplerImpl();
-  if (dep.isErr()) {
-    throw new Error(dep.error.message);
-  }
-
   const files = await scanTargetFilesImpl(options);
   if (files.length === 0) {
     logger.info('No convertible files found.');
@@ -74,6 +69,11 @@ export const runConversionJob = async (
       outputRoot,
       durationMs: Date.now() - startedAt,
     };
+  }
+
+  const dep = await checkPopplerImpl();
+  if (dep.isErr()) {
+    throw new Error(dep.error.message);
   }
 
   logger.info(`Discovered ${files.length} target files.`);

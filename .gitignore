@@ -45,16 +45,14 @@ Thumbs.db
 # Keep documented env samples
 !.env.example
 
-# Cursor：忽略本地缓存，但保留仓库内共享的 Project Rules（.mdc）
+# Cursor: ignore local cache, but keep shared Project Rules and non-generated commands.
 .cursor/*
 !.cursor/rules/
 !.cursor/rules/**
 !.cursor/commands/
 !.cursor/commands/**
-# Ignore platform-specific Speckit commands
-.cursor/commands/speckit*.md
-
-.agents/skills
 
 # References codes for agents
 .references/
+
+.superpowers
