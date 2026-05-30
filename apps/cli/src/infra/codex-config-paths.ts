@@ -1,6 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 export type CodexConfigPaths = {
   readonly repoRoot: string;
@@ -30,7 +30,7 @@ export function createCodexConfigPaths(
 
   return {
     repoRoot,
-    repoCodexRoot: resolve(repoRoot, '.codex'),
+    repoCodexRoot: resolve(repoRoot, 'codex'),
     homeRoot,
     localCodexRoot,
     marketplacePath: resolve(
@@ -38,8 +38,7 @@ export function createCodexConfigPaths(
         join(homeRoot, '.agents', 'plugins', 'marketplace.json'),
     ),
     pluginsRoot: resolve(
-      options.pluginsRoot ??
-        join(repoRoot, 'packages', 'codex-plugins', 'plugins'),
+      options.pluginsRoot ?? join(repoRoot, 'codex', 'plugins'),
     ),
     cacheRoot: resolve(
       options.cacheRoot ??
@@ -59,11 +58,33 @@ export function assertPathInside(parent: string, child: string): void {
 }
 
 function getDefaultRepoRoot(): string {
-  return resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    '..',
-    '..',
-    '..',
-  );
+  const start = resolve(process.cwd());
+  let current = start;
+
+  while (true) {
+    if (isWorkspaceRoot(current)) {
+      return current;
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      return start;
+    }
+    current = parent;
+  }
+}
+
+function isWorkspaceRoot(path: string): boolean {
+  if (existsSync(join(path, 'pnpm-workspace.yaml'))) {
+    return true;
+  }
+
+  try {
+    const pkg = JSON.parse(readFileSync(join(path, 'package.json'), 'utf8')) as {
+      name?: unknown;
+    };
+    return pkg.name === 'cthutool';
+  } catch {
+    return false;
+  }
 }

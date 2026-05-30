@@ -1,6 +1,0 @@
-{
-  "name": "@codex-plugins/english-coach",
-  "private": true,
-  "version": "0.1.1",
-  "description": "Codex plugin that checks English before continuing user tasks."
-}

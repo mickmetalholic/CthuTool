@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "name": "banner-design",
+      "source": "external",
+      "path": "skill:banner-design",
+      "enabled": true
+    },
+    {
+      "name": "brand",
+      "source": "external",
+      "path": "skill:brand",
+      "enabled": true
+    },
+    {
+      "name": "commit-changes",
+      "source": "external",
+      "path": "skill:commit-changes",
+      "enabled": true
+    },
+    {
+      "name": "design",
+      "source": "external",
+      "path": "skill:design",
+      "enabled": true
+    },
+    {
+      "name": "design-system",
+      "source": "external",
+      "path": "skill:design-system",
+      "enabled": true
+    },
+    {
+      "name": "hatch-pet",
+      "source": "external",
+      "path": "skill:hatch-pet",
+      "enabled": true
+    },
+    {
+      "name": "ui-styling",
+      "source": "external",
+      "path": "skill:ui-styling",
+      "enabled": true
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "source": "external",
+      "path": "skill:ui-ux-pro-max",
+      "enabled": true
+    }
+  ]
+}

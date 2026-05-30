@@ -1,33 +1,4 @@
-## Purpose
-Define apps/cli Codex personal plugin discovery, status reporting, installation, cache synchronization, and prompt behavior through the official `chc codex plugins` command surface.
-
-## Requirements
-
-### Requirement: Plugin Status JSON
-The `chc codex plugins` command SHALL support JSON status output that lists discovered plugins without human prose in stdout.
-
-#### Scenario: Status JSON
-- **WHEN** the user runs `chc codex plugins --json`
-- **THEN** stdout contains one parseable JSON object with `ok: true`, `command: "codex plugins"`, `plugins`, and `results`
-
-#### Scenario: Plugin row fields
-- **WHEN** plugin status is rendered as JSON
-- **THEN** each plugin row includes at least `name`, `displayName`, `status`, and `targetPath`
-
-#### Scenario: No plugin selection in JSON mode
-- **WHEN** no plugin is selected and `--json` is set
-- **THEN** the JSON response includes plugin status and an empty `results` array
-
-### Requirement: Non-Interactive Plugin Status
-The `chc codex plugins` command SHALL list plugin status and exit zero when no plugin is selected in non-interactive mode.
-
-#### Scenario: Non-interactive status
-- **WHEN** the user runs `chc codex plugins --no-interactive`
-- **THEN** the command does not prompt, lists status, and exits zero if discovery succeeds
-
-#### Scenario: Non-interactive JSON status
-- **WHEN** the user runs `chc codex plugins --json --no-interactive`
-- **THEN** the command does not prompt and stdout contains one status JSON object
+## ADDED Requirements
 
 ### Requirement: Repository plugin discovery root
 The `chc codex plugins` command SHALL discover repository-owned plugins from `repoRoot/codex/plugins` by default.
@@ -83,6 +54,8 @@ The `language-coach` hook SHALL run as a Node script and preserve the current co
 - **THEN** it writes `{}`
 - **AND** it exits successfully
 
+## MODIFIED Requirements
+
 ### Requirement: Explicit Plugin Operations
 The `chc codex plugins` command SHALL install or update plugins only when explicitly selected by `--plugin` or `--all`, or selected through the interactive prompt.
 
@@ -111,14 +84,3 @@ The `chc codex plugins` command SHALL include cache sync and version bump outcom
 - **THEN** the JSON result includes the plugin name and bumped patch version
 - **AND** the patch version is updated in `.codex-plugin/plugin.json`
 - **AND** no plugin-level `package.json` is required
-
-### Requirement: Interactive Plugin Prompt
-The `chc codex plugins` command SHALL preserve the existing multiselect prompt when no plugin is selected and the shared context is interactive.
-
-#### Scenario: Interactive plugin selection
-- **WHEN** no plugin is selected and the context is interactive
-- **THEN** the command shows the multiselect prompt
-
-#### Scenario: Cancelled plugin selection
-- **WHEN** the interactive plugin selection is cancelled
-- **THEN** the command fails with a non-zero exit code and no install operation runs

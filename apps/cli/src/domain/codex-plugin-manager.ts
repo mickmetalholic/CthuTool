@@ -40,6 +40,7 @@ export type CodexPluginRow = {
 
 export type InstallCodexPluginsOptions = {
   readonly homeRoot: string;
+  readonly configPath: string;
   readonly marketplacePath: string;
   readonly plugins: ReadonlyArray<CodexPlugin>;
   readonly selectedNames: ReadonlyArray<string>;
@@ -182,7 +183,40 @@ export async function installCodexPlugins(
     `${JSON.stringify(marketplace, null, 2)}\n`,
     'utf8',
   );
+  await enableCodexPlugins(
+    options.configPath,
+    results.map((result) => `${result.name}@personal`),
+  );
   return results;
+}
+
+export async function readEnabledCodexPluginIds(
+  configPath: string,
+): Promise<Set<string>> {
+  let raw: string;
+  try {
+    raw = await readFile(configPath, 'utf8');
+  } catch {
+    return new Set();
+  }
+
+  const enabled = new Set<string>();
+  let currentPlugin: string | undefined;
+  for (const line of raw.split(/\r?\n/)) {
+    const section = /^\s*\[plugins\."([^"]+)"\]\s*$/.exec(line);
+    if (section) {
+      currentPlugin = section[1];
+      continue;
+    }
+    if (/^\s*\[/.test(line)) {
+      currentPlugin = undefined;
+      continue;
+    }
+    if (currentPlugin && /^\s*enabled\s*=\s*true\s*$/.test(line)) {
+      enabled.add(currentPlugin);
+    }
+  }
+  return enabled;
 }
 
 export function withMarketplacePaths(
@@ -215,6 +249,7 @@ export async function syncCodexPluginCache(
     recursive: true,
     force: true,
   });
+  await normalizePluginHookCommands(versionCacheRoot, options.plugin.root);
 
   return {
     name: options.plugin.name,
@@ -304,6 +339,89 @@ async function readPluginVersion(pluginRoot: string): Promise<string> {
 
 async function writeJsonFile(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+async function enableCodexPlugins(
+  configPath: string,
+  pluginIds: ReadonlyArray<string>,
+): Promise<void> {
+  if (pluginIds.length === 0) {
+    return;
+  }
+
+  let raw: string;
+  try {
+    raw = await readFile(configPath, 'utf8');
+  } catch {
+    raw = '';
+  }
+
+  let lines = raw.length > 0 ? raw.split(/\r?\n/) : [];
+  if (lines.length > 0 && lines.at(-1) === '') {
+    lines = lines.slice(0, -1);
+  }
+
+  for (const pluginId of pluginIds) {
+    lines = upsertEnabledPluginSection(lines, pluginId);
+  }
+
+  await mkdir(dirname(configPath), { recursive: true });
+  await writeFile(configPath, `${lines.join('\n')}\n`, 'utf8');
+}
+
+function upsertEnabledPluginSection(
+  lines: string[],
+  pluginId: string,
+): string[] {
+  const heading = `[plugins."${escapeTomlString(pluginId)}"]`;
+  const start = lines.findIndex((line) => line.trim() === heading);
+  if (start === -1) {
+    return [...lines, ...(lines.length > 0 ? [''] : []), heading, 'enabled = true'];
+  }
+
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\s*\[/.test(lines[index] ?? '')) {
+      end = index;
+      break;
+    }
+  }
+
+  const enabledIndex = lines.findIndex(
+    (line, index) =>
+      index > start && index < end && /^\s*enabled\s*=/.test(line),
+  );
+  const next = [...lines];
+  if (enabledIndex === -1) {
+    next.splice(start + 1, 0, 'enabled = true');
+  } else {
+    next[enabledIndex] = 'enabled = true';
+  }
+  return next;
+}
+
+function escapeTomlString(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+}
+
+async function normalizePluginHookCommands(
+  runtimePluginRoot: string,
+  sourcePluginRoot: string,
+): Promise<void> {
+  const hooksPath = resolve(runtimePluginRoot, 'hooks', 'hooks.json');
+  let raw: string;
+  try {
+    raw = await readFile(hooksPath, 'utf8');
+  } catch {
+    return;
+  }
+
+  const normalizedRoot = resolve(sourcePluginRoot).replaceAll('\\', '/');
+  await writeFile(
+    hooksPath,
+    raw.replaceAll('<PLUGIN_ROOT>', normalizedRoot),
+    'utf8',
+  );
 }
 
 function assertPathInside(parent: string, child: string): void {

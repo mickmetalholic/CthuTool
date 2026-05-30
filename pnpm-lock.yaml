@@ -146,8 +146,6 @@ importers:
         specifier: ^1.3.11
         version: 1.3.11
 
-  packages/codex-plugins: {}
-
   packages/obsidian-enhancer:
     dependencies:
       dayjs:

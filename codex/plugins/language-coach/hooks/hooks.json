@@ -1,0 +1,17 @@
+{
+  "description": "Language Coach hook that asks Codex to review English before continuing.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"<PLUGIN_ROOT>/scripts/language-coach.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Preparing language coaching"
+          }
+        ]
+      }
+    ]
+  }
+}

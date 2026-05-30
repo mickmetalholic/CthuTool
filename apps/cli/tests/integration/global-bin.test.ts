@@ -1,11 +1,16 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const repoRoot = join(cliRoot, '../..');
+const ESC = String.fromCharCode(27);
+
+function stripAnsi(value: string): string {
+  return value.replace(/\u001B\[[0-9;]*m/g, '');
+}
 
 async function run(
   command: string,
@@ -26,20 +31,6 @@ async function run(
   if (silent) {
     expect({ err, out }).toMatchObject({ err: '', out: '' });
   }
-}
-
-async function writeCodexPlugin(root: string, name: string) {
-  const pluginRoot = join(root, name);
-  await mkdir(join(pluginRoot, '.codex-plugin'), { recursive: true });
-  await writeFile(
-    join(pluginRoot, '.codex-plugin', 'plugin.json'),
-    JSON.stringify({
-      name,
-      version: '0.1.0',
-      interface: { displayName: name },
-    }),
-    'utf8',
-  );
 }
 
 describe('global bin', () => {
@@ -82,32 +73,16 @@ describe('global bin', () => {
 
   test('bin shim forwards arguments to the CLI', async () => {
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-bin-home-'));
-    const pluginsRoot = join(
-      homeRoot,
-      'repo',
-      'packages',
-      'codex-plugins',
-      'plugins',
-    );
-    const marketplacePath = join(
-      homeRoot,
-      '.agents',
-      'plugins',
-      'marketplace.json',
-    );
-    await mkdir(pluginsRoot, { recursive: true });
-    await writeCodexPlugin(pluginsRoot, 'english-coach');
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-bin-repo-'));
 
     const proc = Bun.spawn(
       [
         'node',
         'bin/chc.mjs',
         'codex',
-        'plugins',
-        '--plugins-root',
-        pluginsRoot,
-        '--marketplace',
-        marketplacePath,
+        'status',
+        '--repo-root',
+        repoRoot,
         '--home',
         homeRoot,
         '--json',
@@ -128,8 +103,92 @@ describe('global bin', () => {
     expect(err).toBe('');
     expect(JSON.parse(out)).toMatchObject({
       ok: true,
-      command: 'codex plugins',
-      plugins: [{ name: 'english-coach' }],
+      command: 'codex status',
     });
+  });
+
+  test('bin shim discovers bundled scripts from the source scripts directory', async () => {
+    const proc = Bun.spawn(['node', 'bin/chc.mjs', 'scripts', '--json'], {
+      cwd: cliRoot,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      stdin: 'ignore',
+    });
+
+    const out = await new Response(proc.stdout).text();
+    const err = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+
+    expect(code).not.toBe(0);
+    expect(err).toBe('');
+    expect(JSON.parse(out)).toEqual({
+      ok: false,
+      error: {
+        code: 'missing_required_argument',
+        message:
+          'script id is required in non-interactive mode (use: chc scripts <id> or --script <id>)',
+      },
+    });
+  });
+
+  test('omitted command groups print native help without an error', async () => {
+    for (const [args, explicitHelpArgs] of [
+      [[], ['--help']],
+      [['codex'], ['codex', '--help']],
+    ] as const) {
+      const proc = Bun.spawn(['node', 'bin/chc.mjs', ...args], {
+        cwd: cliRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      });
+
+      const out = await new Response(proc.stdout).text();
+      const err = await new Response(proc.stderr).text();
+      const code = await proc.exited;
+      const explicit = Bun.spawn(['node', 'bin/chc.mjs', ...explicitHelpArgs], {
+        cwd: cliRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      });
+      const explicitOut = await new Response(explicit.stdout).text();
+      const explicitErr = await new Response(explicit.stderr).text();
+      const explicitCode = await explicit.exited;
+
+      expect(code).toBe(0);
+      expect(explicitCode).toBe(0);
+      expect(err).toBe('');
+      expect(explicitErr).toBe('');
+      expect(out).toBe(explicitOut);
+      expect(out).toContain('USAGE');
+      expect(out).toContain('COMMANDS');
+      const plain = stripAnsi(out);
+      if (args.length === 0) {
+        expect(plain).toContain(
+          '\n  codex    Manage reproducible Codex configuration.',
+        );
+        expect(plain).toContain(
+          '\n  scripts  Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
+        );
+        expect(plain).not.toContain('\n    codex');
+        expect(out).toContain(`${ESC}[36mcodex`);
+        expect(out).toContain(`${ESC}[36mscripts`);
+      } else {
+        expect(plain).toContain(
+          '\n  status   Summarize local-versus-repository Codex config state.',
+        );
+        expect(plain).toContain(
+          '\n  apply    Restore repository Codex config locally.',
+        );
+        expect(plain).toContain(
+          '\n  install  Install repository-owned Codex skills and plugins locally.',
+        );
+        expect(plain).not.toContain('\n   apply');
+        expect(out).toContain(`${ESC}[36mstatus`);
+        expect(out).toContain(`${ESC}[36mapply`);
+        expect(out).toContain(`${ESC}[36minstall`);
+      }
+    }
   });
 });

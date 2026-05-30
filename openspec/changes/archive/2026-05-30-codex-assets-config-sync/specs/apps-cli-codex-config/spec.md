@@ -1,13 +1,16 @@
-## Purpose
-Define apps/cli behavior for reproducible Codex configuration maintenance, safe repository-managed Codex state, and machine-readable output.
-## Requirements
-### Requirement: Codex command group
-The CLI SHALL expose a `codex` command group for Codex maintenance commands.
+## ADDED Requirements
 
-#### Scenario: Codex group is registered
-- **WHEN** a user runs the CLI help for top-level commands
-- **THEN** the command list includes `codex`
-- **AND** the `codex` command lists `status`, `export`, `apply`, and `install` subcommands
+### Requirement: Repository-managed Codex root
+The CLI SHALL use `repoRoot/codex` as the repository-managed root for Codex config sync commands.
+
+#### Scenario: Managed root is codex directory
+- **WHEN** a user runs `chc codex status`, `export`, `apply`, or `install`
+- **THEN** the command treats `repoRoot/codex` as the repository-managed Codex root
+- **AND** it does not treat `repoRoot/.codex` as part of the config sync feature
+
+#### Scenario: Project codex directory is ignored
+- **WHEN** repository `.codex` contains project-local agent instructions, skills, or command adapters
+- **THEN** `chc codex status`, `export`, `apply`, and `install` leave that content unread and unwritten for config sync purposes
 
 #### Scenario: Plugin maintenance command is not exposed
 - **WHEN** a user runs `chc codex plugins`
@@ -29,12 +32,8 @@ The CLI SHALL expose a `codex` command group for Codex maintenance commands.
 - **THEN** the CLI prints the top-level help with available commands
 - **AND** it exits successfully
 - **AND** it does not print a `No command specified` error
-#### Scenario: Codex help is shown when no subcommand is provided
-- **WHEN** a user runs `chc codex` without a nested command
-- **THEN** the CLI prints help for the `codex` command group
-- **AND** the help lists `status`, `export`, `apply`, and `install`
-- **AND** it exits successfully
-- **AND** it does not print a `No command specified` error
+
+## MODIFIED Requirements
 
 ### Requirement: Read-only codex status
 The CLI SHALL provide `chc codex status` to summarize differences between repository-managed Codex configuration under `repoRoot/codex` and the local Codex home without writing files.
@@ -243,49 +242,3 @@ The CLI SHALL resolve repository and local Codex paths to absolute paths and ref
 #### Scenario: Local Codex write outside root is refused
 - **WHEN** an apply operation resolves a target outside the local Codex home
 - **THEN** the operation fails without writing the target
-
-### Requirement: Machine-readable output support
-The Codex config commands SHALL honor the existing CLI JSON output contract.
-
-#### Scenario: JSON status output is valid
-- **WHEN** a user runs `chc codex status --json`
-- **THEN** the command writes one machine-readable JSON value to stdout
-- **AND** the JSON identifies the command and includes comparison results
-
-#### Scenario: JSON unsafe repository state is valid
-- **WHEN** a user runs `chc codex status --json` and unsafe repository content exists
-- **THEN** the command writes one machine-readable JSON value describing the unsafe paths
-- **AND** it exits non-zero
-
-### Requirement: Repository-managed Codex root
-The CLI SHALL use `repoRoot/codex` as the repository-managed root for Codex config sync commands.
-
-#### Scenario: Managed root is codex directory
-- **WHEN** a user runs `chc codex status`, `export`, `apply`, or `install`
-- **THEN** the command treats `repoRoot/codex` as the repository-managed Codex root
-- **AND** it does not treat `repoRoot/.codex` as part of the config sync feature
-
-#### Scenario: Project codex directory is ignored
-- **WHEN** repository `.codex` contains project-local agent instructions, skills, or command adapters
-- **THEN** `chc codex status`, `export`, `apply`, and `install` leave that content unread and unwritten for config sync purposes
-
-#### Scenario: Plugin maintenance command is not exposed
-- **WHEN** a user runs `chc codex plugins`
-- **THEN** the CLI rejects the command as unknown
-- **AND** users install repository plugin intent through `chc codex install`
-
-#### Scenario: Diff command is not exposed
-- **WHEN** a user runs `chc codex diff`
-- **THEN** the CLI rejects the command as unknown
-- **AND** users request detailed comparison output through `chc codex status`
-
-#### Scenario: Doctor command is not exposed
-- **WHEN** a user runs `chc codex doctor`
-- **THEN** the CLI rejects the command as unknown
-- **AND** users check repository safety through `chc codex status`
-
-#### Scenario: Top-level help is shown when no command is provided
-- **WHEN** a user runs `chc` without arguments
-- **THEN** the CLI prints the top-level help with available commands
-- **AND** it exits successfully
-- **AND** it does not print a `No command specified` error

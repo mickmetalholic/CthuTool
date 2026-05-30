@@ -8,8 +8,7 @@ export function getCodexPluginsRoot(): string {
     '..',
     '..',
     '..',
-    'packages',
-    'codex-plugins',
+    'codex',
     'plugins',
   );
 }
