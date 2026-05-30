@@ -80,7 +80,9 @@ function isWorkspaceRoot(path: string): boolean {
   }
 
   try {
-    const pkg = JSON.parse(readFileSync(join(path, 'package.json'), 'utf8')) as {
+    const pkg = JSON.parse(
+      readFileSync(join(path, 'package.json'), 'utf8'),
+    ) as {
       name?: unknown;
     };
     return pkg.name === 'cthutool';

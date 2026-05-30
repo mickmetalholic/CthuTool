@@ -797,9 +797,7 @@ async function installOfficialSkill(
     const tempRoot = resolve(
       paths.localCodexRoot,
       '.cthutool-install',
-      `${requestedName}-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}`,
+      `${requestedName}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     const targetRoot = resolve(paths.localCodexRoot, 'skills', skill.name);
     assertPathInside(paths.localCodexRoot, tempRoot);
@@ -906,7 +904,9 @@ async function fetchGitHubContentEntries(input: {
   }
   const value = (await response.json()) as unknown;
   if (!Array.isArray(value)) {
-    throw new Error(`GitHub content path is not a directory: ${input.sourcePath}`);
+    throw new Error(
+      `GitHub content path is not a directory: ${input.sourcePath}`,
+    );
   }
   return value as GitHubContentEntry[];
 }

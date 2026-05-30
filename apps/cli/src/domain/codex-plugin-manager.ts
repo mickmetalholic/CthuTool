@@ -376,7 +376,12 @@ function upsertEnabledPluginSection(
   const heading = `[plugins."${escapeTomlString(pluginId)}"]`;
   const start = lines.findIndex((line) => line.trim() === heading);
   if (start === -1) {
-    return [...lines, ...(lines.length > 0 ? [''] : []), heading, 'enabled = true'];
+    return [
+      ...lines,
+      ...(lines.length > 0 ? [''] : []),
+      heading,
+      'enabled = true',
+    ];
   }
 
   let end = lines.length;

@@ -7,9 +7,10 @@ import { fileURLToPath } from 'node:url';
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const repoRoot = join(cliRoot, '../..');
 const ESC = String.fromCharCode(27);
+const ansiPattern = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
 
 function stripAnsi(value: string): string {
-  return value.replace(/\u001B\[[0-9;]*m/g, '');
+  return value.replace(ansiPattern, '');
 }
 
 async function run(

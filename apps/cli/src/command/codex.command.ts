@@ -148,9 +148,7 @@ function writeDetailedStatusHuman(
   }
 }
 
-async function runComparison(
-  args: ConfigCommandArgs,
-) {
+async function runComparison(args: ConfigCommandArgs) {
   const paths = createPaths(args);
   const comparison = await compareCodexConfig(paths);
   const ok = comparison.unsafeRepoPaths.length === 0;
@@ -409,7 +407,10 @@ async function confirmApplyOverwrite(
     initialValue: false,
   });
   if (isCancel(answer) || answer !== true) {
-    const cancelError = createCliError('invalid_option', 'codex apply cancelled.');
+    const cancelError = createCliError(
+      'invalid_option',
+      'codex apply cancelled.',
+    );
     writeCommandError(context, processOutput, cancelError);
     process.exitCode = cancelError.exitCode;
     return false;
@@ -502,7 +503,8 @@ export const codexCommand = defineCommand({
     install: defineCommand({
       meta: {
         name: 'install',
-        description: 'Install repository-owned Codex skills and plugins locally.',
+        description:
+          'Install repository-owned Codex skills and plugins locally.',
       },
       args: configArgs,
       async run({ args }) {
