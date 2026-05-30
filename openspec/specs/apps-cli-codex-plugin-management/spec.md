@@ -1,45 +1,36 @@
 ## Purpose
-Define apps/cli Codex personal plugin discovery, status reporting, installation, cache synchronization, and prompt behavior through the official `chc codex plugins` command surface.
+Define apps/cli repository-owned Codex plugin discovery, status reporting, local installation, cache synchronization, and language-coach hook behavior through the current `chc codex status` and `chc codex install` command surface.
 
 ## Requirements
 
-### Requirement: Plugin Status JSON
-The `chc codex plugins` command SHALL support JSON status output that lists discovered plugins without human prose in stdout.
+### Requirement: Repository plugin status reporting
+The `chc codex status` command SHALL report repository-owned Codex plugin state without exposing a separate `chc codex plugins` command.
 
-#### Scenario: Status JSON
-- **WHEN** the user runs `chc codex plugins --json`
-- **THEN** stdout contains one parseable JSON object with `ok: true`, `command: "codex plugins"`, `plugins`, and `results`
+#### Scenario: Status JSON includes repository plugin state
+- **WHEN** the user runs `chc codex status --json`
+- **THEN** stdout contains one parseable JSON object with `ok`, `command: "codex status"`, and `comparison`
+- **AND** `comparison.repoPlugins` includes discovered repository plugin rows
 
-#### Scenario: Plugin row fields
-- **WHEN** plugin status is rendered as JSON
-- **THEN** each plugin row includes at least `name`, `displayName`, `status`, and `targetPath`
+#### Scenario: Human status includes repository plugin state
+- **WHEN** the user runs `chc codex status`
+- **THEN** human stdout includes a `Repository plugins` section when repository plugins are discovered
+- **AND** each listed plugin is marked `applied`, `not_applied`, or `disabled`
 
-#### Scenario: No plugin selection in JSON mode
-- **WHEN** no plugin is selected and `--json` is set
-- **THEN** the JSON response includes plugin status and an empty `results` array
-
-### Requirement: Non-Interactive Plugin Status
-The `chc codex plugins` command SHALL list plugin status and exit zero when no plugin is selected in non-interactive mode.
-
-#### Scenario: Non-interactive status
-- **WHEN** the user runs `chc codex plugins --no-interactive`
-- **THEN** the command does not prompt, lists status, and exits zero if discovery succeeds
-
-#### Scenario: Non-interactive JSON status
-- **WHEN** the user runs `chc codex plugins --json --no-interactive`
-- **THEN** the command does not prompt and stdout contains one status JSON object
+#### Scenario: Plugin-only command is not exposed
+- **WHEN** the user runs `chc codex plugins`
+- **THEN** the command fails as an unknown command
 
 ### Requirement: Repository plugin discovery root
-The `chc codex plugins` command SHALL discover repository-owned plugins from `repoRoot/codex/plugins` by default.
+Codex config commands SHALL discover repository-owned plugins from `repoRoot/codex/plugins` by default.
 
 #### Scenario: Default plugin root is codex plugins
-- **WHEN** the user runs `chc codex plugins` without `--plugins-root`
+- **WHEN** the user runs a `chc codex` config command without `--plugins-root`
 - **THEN** the command discovers plugins under `repoRoot/codex/plugins`
 - **AND** it does not use `packages/codex-plugins/plugins` as the built-in default root
 
 #### Scenario: Explicit plugin root remains supported
-- **WHEN** the user runs `chc codex plugins --plugins-root <path>`
-- **THEN** the command discovers plugins from the explicit path
+- **WHEN** the user runs a `chc codex` config command with `--plugins-root <path>`
+- **THEN** the command discovers repository-owned plugins from the explicit path
 
 ### Requirement: Language coach plugin source
 The repository-owned language coaching plugin SHALL be represented as a plain plugin directory named `language-coach`.
@@ -49,10 +40,10 @@ The repository-owned language coaching plugin SHALL be represented as a plain pl
 - **THEN** plugin discovery includes a plugin named `language-coach`
 - **AND** the plugin target path points at `codex/plugins/language-coach`
 
-#### Scenario: Old English coach name is unsupported
-- **WHEN** the user selects `english-coach`
-- **THEN** the command fails with an `unknown_selection` command error
-- **AND** no install or cache sync operation runs for `english-coach`
+#### Scenario: Disabled plugin is reported but not installed
+- **WHEN** the repository plugin manifest disables `language-coach`
+- **THEN** `chc codex status` reports the plugin as `disabled`
+- **AND** `chc codex install` does not install or sync that plugin
 
 ### Requirement: Portable plugin hook commands
 The plugin manager SHALL support portable hook command templates in repository plugin sources and write concrete runtime commands during install or cache sync.
@@ -83,42 +74,33 @@ The `language-coach` hook SHALL run as a Node script and preserve the current co
 - **THEN** it writes `{}`
 - **AND** it exits successfully
 
-### Requirement: Explicit Plugin Operations
-The `chc codex plugins` command SHALL install or update plugins only when explicitly selected by `--plugin` or `--all`, or selected through the interactive prompt.
+### Requirement: Repository plugin install
+The `chc codex install` command SHALL install enabled repository-owned plugins and synchronize their Codex plugin cache entries.
 
-#### Scenario: Explicit plugin selection
-- **WHEN** the user runs `chc codex plugins --plugin language-coach --json`
-- **THEN** the command installs or updates `language-coach` and includes the operation result in JSON
+#### Scenario: Install enabled repository plugins
+- **WHEN** the user runs `chc codex install --json`
+- **THEN** stdout contains one parseable JSON object with `ok: true`, `command: "codex install"`, and `result`
+- **AND** `result.installedPlugins` includes enabled repository plugins that were installed locally
 
-#### Scenario: All plugin selection
-- **WHEN** the user runs `chc codex plugins --all --no-interactive`
-- **THEN** the command installs or updates all discovered plugins without prompting
+#### Scenario: Sync plugin cache during install
+- **WHEN** an enabled repository plugin is installed by `chc codex install`
+- **THEN** the command also synchronizes the plugin cache
+- **AND** `result.syncedPluginCaches` includes the synchronized plugin name and version
 
-#### Scenario: Unknown plugin selection
-- **WHEN** the user requests a plugin name that is not discovered
-- **THEN** the command fails with an `unknown_selection` command error and exits non-zero
+#### Scenario: Unknown selection flags are not part of install
+- **WHEN** the user needs to install repository-owned plugins
+- **THEN** the supported command is `chc codex install`
+- **AND** plugin selection flags such as `--plugin`, `--all`, `--sync-cache`, and `--bump-patch` are not required command-line options
 
-### Requirement: Plugin Cache Operation Results
-The `chc codex plugins` command SHALL include cache sync and version bump outcomes in command results when `--sync-cache` or `--bump-patch` is used.
+### Requirement: Repository plugin asset boundaries
+Repository-owned plugins SHALL flow from repository sources to local Codex state during install, while export and apply preserve their ownership boundaries.
 
-#### Scenario: Sync cache result
-- **WHEN** `language-coach` is installed with `--sync-cache --json`
-- **THEN** the JSON result includes the plugin name and synced cache version
-- **AND** the synced cache path is under `language-coach/<version>`
+#### Scenario: Export records plugin intent without copying plugin files
+- **WHEN** the user runs `chc codex export`
+- **THEN** repository-owned plugin directories under `codex/plugins` are not overwritten by local plugin cache contents
+- **AND** generated manifests may record plugin intent separately from plugin source files
 
-#### Scenario: Bump patch result
-- **WHEN** `language-coach` is installed with `--bump-patch --json`
-- **THEN** the JSON result includes the plugin name and bumped patch version
-- **AND** the patch version is updated in `.codex-plugin/plugin.json`
-- **AND** no plugin-level `package.json` is required
-
-### Requirement: Interactive Plugin Prompt
-The `chc codex plugins` command SHALL preserve the existing multiselect prompt when no plugin is selected and the shared context is interactive.
-
-#### Scenario: Interactive plugin selection
-- **WHEN** no plugin is selected and the context is interactive
-- **THEN** the command shows the multiselect prompt
-
-#### Scenario: Cancelled plugin selection
-- **WHEN** the interactive plugin selection is cancelled
-- **THEN** the command fails with a non-zero exit code and no install operation runs
+#### Scenario: Apply does not install repository plugins
+- **WHEN** the user runs `chc codex apply`
+- **THEN** prompts and rules are restored locally
+- **AND** repository-owned plugin installation is left to `chc codex install`

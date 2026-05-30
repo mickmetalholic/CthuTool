@@ -1,24 +1,7 @@
-import {
-  type ArgsDef,
-  type CommandDef,
-  defineCommand,
-  renderUsage,
-  runMain,
-} from 'citty';
+import { type ArgsDef, type CommandDef, renderUsage, runMain } from 'citty';
 import pc from 'picocolors';
 import { codexCommand } from './command/codex.command';
-import { scriptsCommand } from './command/run-scripts.command';
-
-const main = defineCommand({
-  meta: {
-    name: 'chc',
-    description: 'CthuTool monorepo CLI',
-  },
-  subCommands: {
-    codex: codexCommand,
-    scripts: scriptsCommand,
-  },
-});
+import { rootCommand } from './command/root.command';
 
 function formatUsageForStdout(value: string): string {
   return normalizeCommandRows(
@@ -44,8 +27,13 @@ function normalizeCommandRows(value: string): string {
     if (pendingRows.length === 0) {
       return;
     }
-    const width = Math.max(...pendingRows.map((row) => row.name.length));
-    for (const row of pendingRows) {
+    const visibleRows = pendingRows.filter((row) => row.name !== '__complete');
+    if (visibleRows.length === 0) {
+      pendingRows = [];
+      return;
+    }
+    const width = Math.max(...visibleRows.map((row) => row.name.length));
+    for (const row of visibleRows) {
       normalized.push(
         `  ${pc.bold(pc.cyan(row.name.padEnd(width + 2)))}${row.description}`,
       );
@@ -95,13 +83,13 @@ async function showNativeUsage<T extends ArgsDef = ArgsDef>(
 
 const rawArgs = process.argv.slice(2);
 if (rawArgs.length === 0) {
-  await showNativeUsage(main);
+  await showNativeUsage(rootCommand);
   process.exitCode = 0;
 } else if (rawArgs.length === 1 && rawArgs[0] === 'codex') {
-  await showNativeUsage(codexCommand, main);
+  await showNativeUsage(codexCommand, rootCommand);
   process.exitCode = 0;
 } else {
-  runMain(main, { showUsage: showNativeUsage }).catch(() => {
+  runMain(rootCommand, { showUsage: showNativeUsage }).catch(() => {
     process.exitCode = 1;
   });
 }

@@ -51,7 +51,7 @@ Completion SHALL derive command and flag candidates from the shared CLI command 
 
 #### Scenario: Codex subcommand candidates
 - **WHEN** a shell adapter requests completion after `chc codex`
-- **THEN** candidates include `status`, `export`, and `apply`
+- **THEN** candidates include `status`, `export`, `apply`, and `install`
 
 #### Scenario: Completion shell candidates
 - **WHEN** a shell adapter requests completion after `chc completion`
@@ -63,7 +63,11 @@ Completion SHALL derive command and flag candidates from the shared CLI command 
 
 #### Scenario: Command-specific flag candidates
 - **WHEN** a shell adapter requests flag completion for `chc codex status --`
-- **THEN** candidates include command-specific flags such as `--details`
+- **THEN** candidates include command-specific flags such as `--repo-root`, `--codex-home`, and `--plugins-root`
+
+#### Scenario: Already used flags are not repeated
+- **WHEN** a shell adapter requests flag completion after `chc codex status --json --`
+- **THEN** `--json` is not returned again
 
 ### Requirement: Bundled script id candidates
 Completion SHALL provide bundled script ids for the `scripts` command using the existing bundled script discovery behavior.

@@ -42,6 +42,26 @@ Commands that support the agent contract accept these common flags:
 
 In JSON mode, stdout is reserved for the JSON response. Human warnings and diagnostics are written to stderr.
 
+## Shell Completion
+
+Install or link `chc` first so the command is available on your shell `PATH`.
+
+Load PowerShell completion in the current session:
+
+```powershell
+chc completion powershell | Invoke-Expression
+```
+
+To load it for every PowerShell session, add the same line to your PowerShell profile.
+
+Load zsh completion in the current session:
+
+```zsh
+source <(chc completion zsh)
+```
+
+To load it for every zsh session, add the same line to `.zshrc`.
+
 ## Bundled Scripts
 
 Run bundled scripts through the `scripts` subcommand:
