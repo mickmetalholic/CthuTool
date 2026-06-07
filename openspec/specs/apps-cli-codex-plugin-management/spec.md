@@ -1,5 +1,5 @@
 ## Purpose
-Define apps/cli repository-owned Codex plugin discovery, status reporting, local installation, cache synchronization, and language-coach hook behavior through the current `chc codex status` and `chc codex install` command surface.
+Define apps/cli repository-owned Codex plugin discovery, status reporting, local installation, cache synchronization, and CthuCodex language-coach hook behavior through the current `chc codex status` and `chc codex install` command surface.
 
 ## Requirements
 
@@ -32,16 +32,16 @@ Codex config commands SHALL discover repository-owned plugins from `repoRoot/cod
 - **WHEN** the user runs a `chc codex` config command with `--plugins-root <path>`
 - **THEN** the command discovers repository-owned plugins from the explicit path
 
-### Requirement: Language coach plugin source
-The repository-owned language coaching plugin SHALL be represented as a plain plugin directory named `language-coach`.
+### Requirement: CthuCodex plugin source
+The repository-owned personal Codex toolkit plugin SHALL be represented as a plain plugin directory named `cthu-codex`.
 
-#### Scenario: Language coach plugin is discovered
-- **WHEN** `codex/plugins/language-coach/.codex-plugin/plugin.json` declares `name` as `language-coach`
-- **THEN** plugin discovery includes a plugin named `language-coach`
-- **AND** the plugin target path points at `codex/plugins/language-coach`
+#### Scenario: CthuCodex plugin is discovered
+- **WHEN** `codex/plugins/cthu-codex/.codex-plugin/plugin.json` declares `name` as `cthu-codex`
+- **THEN** plugin discovery includes a plugin named `cthu-codex`
+- **AND** the plugin target path points at `codex/plugins/cthu-codex`
 
 #### Scenario: Disabled plugin is reported but not installed
-- **WHEN** the repository plugin manifest disables `language-coach`
+- **WHEN** the repository plugin manifest disables `cthu-codex`
 - **THEN** `chc codex status` reports the plugin as `disabled`
 - **AND** `chc codex install` does not install or sync that plugin
 
@@ -53,7 +53,7 @@ The plugin manager SHALL support portable hook command templates in repository p
 - **THEN** install or cache sync replaces the placeholder with the resolved plugin root before writing runtime hook files
 
 #### Scenario: Runtime hook command is cross-platform
-- **WHEN** the `language-coach` plugin is installed or synced to cache
+- **WHEN** the `cthu-codex` plugin is installed or synced to cache
 - **THEN** the runtime hook command invokes `node` with `scripts/language-coach.mjs`
 - **AND** the runtime hook command does not contain `pwsh.exe`, `packages/codex-plugins`, or `C:\\Users`
 
@@ -62,7 +62,7 @@ The plugin manager SHALL support portable hook command templates in repository p
 - **THEN** the install or cache sync operation fails before writing broken runtime hook files
 
 ### Requirement: Node language coach hook
-The `language-coach` hook SHALL run as a Node script and preserve the current conservative prompt behavior.
+The CthuCodex language-coach hook SHALL run as a Node script and preserve the current conservative prompt behavior.
 
 #### Scenario: English prose injects language coaching
 - **WHEN** the Node hook receives hook input whose `user_prompt`, `prompt`, or `message` contains English prose

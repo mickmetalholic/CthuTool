@@ -1,0 +1,17 @@
+{
+  "name": "cthu-codex",
+  "version": "0.1.1",
+  "description": "Provides a personal Codex toolkit for CthuTool workflows and reusable assistant utilities.",
+  "author": {
+    "name": "mickmetalholic"
+  },
+  "interface": {
+    "displayName": "CthuCodex",
+    "shortDescription": "Personal Codex toolkit for CthuTool workflows.",
+    "longDescription": "CthuCodex provides reusable Codex utilities for CthuTool workflows, starting with a prompt-submission language coaching hook that checks English grammar, naturalness, tone, and idiomatic usage before continuing with the user's actual request.",
+    "developerName": "mickmetalholic",
+    "category": "Productivity",
+    "capabilities": ["Hooks"],
+    "defaultPrompt": ["Use the CthuCodex toolkit when a matching utility applies."]
+  }
+}

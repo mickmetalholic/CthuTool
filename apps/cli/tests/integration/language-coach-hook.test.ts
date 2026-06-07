@@ -7,7 +7,7 @@ const hookPath = join(
   repoRoot,
   'codex',
   'plugins',
-  'language-coach',
+  'cthu-codex',
   'scripts',
   'language-coach.mjs',
 );
@@ -44,7 +44,7 @@ describe('language coach hook', () => {
       'UserPromptSubmit',
     );
     expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
-      'Language Coach',
+      'CthuCodex language coach',
     );
   });
 
@@ -57,7 +57,7 @@ describe('language coach hook', () => {
     expect(result.code).toBe(0);
     expect(result.err).toBe('');
     expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
-      'Language Coach',
+      'CthuCodex language coach',
     );
   });
 

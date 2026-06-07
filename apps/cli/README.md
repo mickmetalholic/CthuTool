@@ -129,10 +129,10 @@ prompts
 
 Repository-owned assets not installed locally
 skills: commit-changes
-plugins: language-coach
+plugins: cthu-codex
 
 Repository plugins
-language-coach: not applied
+cthu-codex: not applied
 
 Next
 Next: run `chc codex install` to install repository-owned assets locally.

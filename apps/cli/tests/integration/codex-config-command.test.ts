@@ -87,14 +87,14 @@ describe('codex config command', () => {
     );
     const cacheRoot = join(homeRoot, '.codex', 'plugins', 'cache', 'personal');
     await mkdir(pluginsRoot, { recursive: true });
-    await writePlugin(pluginsRoot, 'language-coach');
+    await writePlugin(pluginsRoot, 'cthu-codex');
     await writeJson(join(repoRoot, 'codex', 'plugins.manifest.json'), {
       version: 1,
       plugins: [
         {
-          name: 'language-coach',
+          name: 'cthu-codex',
           source: 'repo',
-          path: 'codex/plugins/language-coach',
+          path: 'codex/plugins/cthu-codex',
           enabled: true,
         },
       ],
@@ -118,14 +118,14 @@ describe('codex config command', () => {
     const parsed = JSON.parse(result.out);
     expect(parsed.command).toBe('codex install');
     expect(parsed.result.installedPlugins).toEqual([
-      { name: 'language-coach', action: 'installed' },
+      { name: 'cthu-codex', action: 'installed' },
     ]);
     expect(parsed.result.syncedPluginCaches).toEqual([
-      { name: 'language-coach', action: 'synced', version: '0.1.0' },
+      { name: 'cthu-codex', action: 'synced', version: '0.1.0' },
     ]);
     expect(
       await readFile(
-        join(cacheRoot, 'language-coach', '0.1.0', 'hooks', 'hooks.json'),
+        join(cacheRoot, 'cthu-codex', '0.1.0', 'hooks', 'hooks.json'),
         'utf8',
       ),
     ).not.toContain('<PLUGIN_ROOT>');
@@ -250,7 +250,7 @@ describe('codex config command', () => {
   test('prints repository plugin status before export generates a manifest', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
-    await writePlugin(join(repoRoot, 'codex', 'plugins'), 'language-coach');
+    await writePlugin(join(repoRoot, 'codex', 'plugins'), 'cthu-codex');
 
     const result = await runCli([
       'codex',
@@ -264,9 +264,9 @@ describe('codex config command', () => {
 
     expect(result.code).toBe(0);
     expect(out).toContain('Repository-owned assets not installed locally');
-    expect(out).toContain('plugins: language-coach');
+    expect(out).toContain('plugins: cthu-codex');
     expect(out).toContain('Repository plugins');
-    expect(out).toContain('language-coach: not applied');
+    expect(out).toContain('cthu-codex: not applied');
     expect(out).toContain('Next: run `chc codex install`');
   });
 

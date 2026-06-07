@@ -76,13 +76,13 @@ async function writeCodexPlugin(
 describe('codex plugin manager', () => {
   test('discovers plain plugin directories from a plugins directory', async () => {
     const pluginsRoot = await mkdtemp(join(tmpdir(), 'cthutool-plugins-'));
-    await writeCodexPlugin(pluginsRoot, 'language-coach', 'Language Coach');
+    await writeCodexPlugin(pluginsRoot, 'cthu-codex', 'CthuCodex');
     await mkdir(join(pluginsRoot, 'not-a-plugin'), { recursive: true });
 
     const plugins = await discoverCodexPlugins(pluginsRoot);
 
-    expect(plugins.map((p) => p.name)).toEqual(['language-coach']);
-    expect(plugins[0]?.displayName).toBe('Language Coach');
+    expect(plugins.map((p) => p.name)).toEqual(['cthu-codex']);
+    expect(plugins[0]?.displayName).toBe('CthuCodex');
   });
 
   test('reports stale install paths and updates selected plugins', async () => {
@@ -97,7 +97,7 @@ describe('codex plugin manager', () => {
       'plugins',
     );
     await mkdir(pluginsRoot, { recursive: true });
-    await writeCodexPlugin(pluginsRoot, 'language-coach', 'Language Coach');
+    await writeCodexPlugin(pluginsRoot, 'cthu-codex', 'CthuCodex');
     const marketplacePath = join(
       homeRoot,
       '.agents',
@@ -112,8 +112,8 @@ describe('codex plugin manager', () => {
         interface: { displayName: 'Personal' },
         plugins: [
           {
-            name: 'language-coach',
-            source: { source: 'local', path: './plugins/language-coach' },
+            name: 'cthu-codex',
+            source: { source: 'local', path: './plugins/cthu-codex' },
             policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' },
             category: 'Productivity',
           },
@@ -133,17 +133,17 @@ describe('codex plugin manager', () => {
       configPath: join(homeRoot, '.codex', 'config.toml'),
       marketplacePath,
       plugins,
-      selectedNames: ['language-coach'],
+      selectedNames: ['cthu-codex'],
     });
 
-    expect(results).toEqual([{ name: 'language-coach', action: 'updated' }]);
+    expect(results).toEqual([{ name: 'cthu-codex', action: 'updated' }]);
     const written = JSON.parse(await readFile(marketplacePath, 'utf8'));
     expect(written.plugins[0].source.path).toBe(
-      './Documents/GitHub/mickmetalholic/CthuTool/codex/plugins/language-coach',
+      './Documents/GitHub/mickmetalholic/CthuTool/codex/plugins/cthu-codex',
     );
     expect(
       await readFile(join(homeRoot, '.codex', 'config.toml'), 'utf8'),
-    ).toContain('[plugins."language-coach@personal"]\nenabled = true');
+    ).toContain('[plugins."cthu-codex@personal"]\nenabled = true');
   });
 
   test('bumps manifest patch version and refreshes normalized Codex plugin cache', async () => {
@@ -152,8 +152,8 @@ describe('codex plugin manager', () => {
     await mkdir(pluginsRoot, { recursive: true });
     const pluginRoot = await writeCodexPlugin(
       pluginsRoot,
-      'language-coach',
-      'Language Coach',
+      'cthu-codex',
+      'CthuCodex',
     );
     const staleCache = join(
       homeRoot,
@@ -161,7 +161,7 @@ describe('codex plugin manager', () => {
       'plugins',
       'cache',
       'personal',
-      'language-coach',
+      'cthu-codex',
       '0.0.9',
     );
     await mkdir(staleCache, { recursive: true });
@@ -170,16 +170,16 @@ describe('codex plugin manager', () => {
     const result = await syncCodexPluginCache({
       cacheRoot: join(homeRoot, '.codex', 'plugins', 'cache', 'personal'),
       plugin: {
-        name: 'language-coach',
-        displayName: 'Language Coach',
+        name: 'cthu-codex',
+        displayName: 'CthuCodex',
         root: pluginRoot,
-        marketplacePath: './repo/codex/plugins/language-coach',
+        marketplacePath: './repo/codex/plugins/cthu-codex',
       },
       bumpPatch: true,
     });
 
     expect(result).toEqual({
-      name: 'language-coach',
+      name: 'cthu-codex',
       version: '0.1.1',
       action: 'synced',
     });
@@ -195,7 +195,7 @@ describe('codex plugin manager', () => {
         'plugins',
         'cache',
         'personal',
-        'language-coach',
+        'cthu-codex',
         '0.1.1',
         'hooks',
         'hooks.json',

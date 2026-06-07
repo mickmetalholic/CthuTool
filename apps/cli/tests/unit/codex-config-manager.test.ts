@@ -299,16 +299,16 @@ describe('codex config manager', () => {
     await mkdir(join(paths.repoCodexRoot, 'skills', 'repo-skill'), {
       recursive: true,
     });
-    await writePlugin(join(paths.repoCodexRoot, 'plugins'), 'language-coach');
+    await writePlugin(join(paths.repoCodexRoot, 'plugins'), 'cthu-codex');
 
     const comparison = await compareCodexConfig(paths);
 
     expect(comparison.missingRepoSkills).toEqual(['repo-skill']);
-    expect(comparison.missingRepoPlugins).toEqual(['language-coach']);
+    expect(comparison.missingRepoPlugins).toEqual(['cthu-codex']);
     expect(comparison.repoPlugins).toEqual([
       {
-        name: 'language-coach',
-        path: 'codex/plugins/language-coach',
+        name: 'cthu-codex',
+        path: 'codex/plugins/cthu-codex',
         status: 'not_applied',
       },
     ]);
@@ -327,13 +327,13 @@ describe('codex config manager', () => {
       'skill',
       'utf8',
     );
-    await writePlugin(join(paths.repoCodexRoot, 'plugins'), 'language-coach');
+    await writePlugin(join(paths.repoCodexRoot, 'plugins'), 'cthu-codex');
 
     const result = await installCodexAssets(paths);
 
     expect(result.installedSkills).toEqual(['repo-skill']);
     expect(result.installedPlugins).toEqual([
-      { name: 'language-coach', action: 'installed' },
+      { name: 'cthu-codex', action: 'installed' },
     ]);
     expect(
       await readFile(
@@ -343,7 +343,7 @@ describe('codex config manager', () => {
     ).toBe('skill');
     expect(
       await readFile(join(paths.localCodexRoot, 'config.toml'), 'utf8'),
-    ).toContain('[plugins."language-coach@personal"]\nenabled = true');
+    ).toContain('[plugins."cthu-codex@personal"]\nenabled = true');
   });
 
   test('exports safe prompts rules and versioned manifests only', async () => {
@@ -383,7 +383,7 @@ describe('codex config manager', () => {
       'utf8',
     );
     await writeFile(join(paths.localCodexRoot, 'auth.json'), '{}', 'utf8');
-    await writePlugin(join(paths.repoCodexRoot, 'plugins'), 'language-coach');
+    await writePlugin(join(paths.repoCodexRoot, 'plugins'), 'cthu-codex');
     await writeJson(paths.marketplacePath, {
       plugins: [{ name: 'personal-plugin' }],
     });
@@ -498,7 +498,7 @@ describe('codex config manager', () => {
       encoding: 'utf8',
       flag: 'w',
     });
-    await writePlugin(join(paths.repoCodexRoot, 'plugins'), 'language-coach');
+    await writePlugin(join(paths.repoCodexRoot, 'plugins'), 'cthu-codex');
     await writeJson(join(paths.repoCodexRoot, 'skills.manifest.json'), {
       version: 1,
       skills: [
@@ -521,9 +521,9 @@ describe('codex config manager', () => {
       version: 1,
       plugins: [
         {
-          name: 'language-coach',
+          name: 'cthu-codex',
           source: 'repo',
-          path: 'codex/plugins/language-coach',
+          path: 'codex/plugins/cthu-codex',
           enabled: true,
         },
         {

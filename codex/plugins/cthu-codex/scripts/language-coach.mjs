@@ -68,7 +68,7 @@ try {
   writeJson({
     hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit',
-      additionalContext: `Language Coach is active for the user's latest message.
+      additionalContext: `CthuCodex language coach is active for the user's latest message.
 
 Before doing any requested task, first review the user's English prose if the latest message is written entirely in English, or is mostly English with a few non-English placeholder words. Check grammar, naturalness, tone, and idiomatic usage. The best version should be a natural native-like rewrite of the user's intended meaning, not a minimal grammar correction. If the original sentence sounds Chinglish or structurally unnatural, rewrite it freely and do not preserve the original structure.
 
@@ -86,6 +86,6 @@ Do not correct source code, commands, logs, file paths, config keys, quoted text
   });
 } catch (error) {
   writeJson({
-    systemMessage: `Language Coach hook failed: ${error instanceof Error ? error.message : String(error)}`,
+    systemMessage: `CthuCodex language coach hook failed: ${error instanceof Error ? error.message : String(error)}`,
   });
 }
