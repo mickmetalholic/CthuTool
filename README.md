@@ -1,5 +1,9 @@
 # CthuTool
 
+<p align="center">
+  <img src="docs/assets/cthutool-logo.png" alt="CthuTool logo" width="560" />
+</p>
+
 Turborepo monorepo for CthuTool. Workspace layout follows the official `create-turbo` baseline, trimmed to empty `apps/*` and `packages/*` skeletons plus shared `@cthutool/*` packages.
 
 ## Prerequisites
@@ -73,3 +77,4 @@ The workflow triggers on `push` to `main` and on `pull_request`, so Biome and co
 ## More documentation
 
 - Project notes live in package-level `README.md` files and OpenSpec specs under `openspec/specs/`.
+- CthuCodex plugin details live in `codex/plugins/cthu-codex/README.md`.
