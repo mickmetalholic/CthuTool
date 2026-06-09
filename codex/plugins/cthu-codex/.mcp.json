@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "anki": {
+      "command": "node",
+      "args": ["./scripts/anki-mcp-server.mjs"],
+      "env": {
+        "CTHU_ANKI_CONNECT_URL": "http://127.0.0.1:8765"
+      },
+      "startup_timeout_sec": 10,
+      "tool_timeout_sec": 60
+    }
+  }
+}

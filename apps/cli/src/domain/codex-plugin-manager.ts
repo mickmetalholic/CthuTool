@@ -250,6 +250,7 @@ export async function syncCodexPluginCache(
     force: true,
   });
   await normalizePluginHookCommands(versionCacheRoot, options.plugin.root);
+  await normalizePluginMcpServers(versionCacheRoot);
 
   return {
     name: options.plugin.name,
@@ -427,6 +428,51 @@ async function normalizePluginHookCommands(
     raw.replaceAll('<PLUGIN_ROOT>', normalizedRoot),
     'utf8',
   );
+}
+
+async function normalizePluginMcpServers(
+  runtimePluginRoot: string,
+): Promise<void> {
+  const mcpPath = resolve(runtimePluginRoot, '.mcp.json');
+  let raw: string;
+  try {
+    raw = await readFile(mcpPath, 'utf8');
+  } catch {
+    return;
+  }
+
+  const parsed = JSON.parse(raw) as {
+    mcpServers?: Record<string, unknown>;
+  };
+  if (!parsed.mcpServers || typeof parsed.mcpServers !== 'object') {
+    return;
+  }
+
+  const normalizedRoot = resolve(runtimePluginRoot).replaceAll('\\', '/');
+  let changed = false;
+  for (const [name, server] of Object.entries(parsed.mcpServers)) {
+    if (!server || typeof server !== 'object' || Array.isArray(server)) {
+      continue;
+    }
+
+    const normalizedServer = server as Record<string, unknown>;
+    if (typeof normalizedServer.cwd !== 'string') {
+      normalizedServer.cwd = normalizedRoot;
+      changed = true;
+    } else if (normalizedServer.cwd.includes('<PLUGIN_ROOT>')) {
+      normalizedServer.cwd = normalizedServer.cwd.replaceAll(
+        '<PLUGIN_ROOT>',
+        normalizedRoot,
+      );
+      changed = true;
+    }
+
+    parsed.mcpServers[name] = normalizedServer;
+  }
+
+  if (changed) {
+    await writeJsonFile(mcpPath, parsed);
+  }
 }
 
 function assertPathInside(parent: string, child: string): void {

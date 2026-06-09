@@ -8,13 +8,14 @@
   "interface": {
     "displayName": "CthuCodex",
     "shortDescription": "Personal Codex toolkit for CthuTool workflows.",
-    "longDescription": "CthuCodex provides reusable Codex utilities for CthuTool workflows, starting with a prompt-submission language coaching hook that checks English grammar, naturalness, tone, and idiomatic usage before continuing with the user's actual request.",
+    "longDescription": "CthuCodex provides reusable Codex utilities for CthuTool workflows, including a prompt-submission language coaching hook and an Anki MCP server for reading local Anki collection context, validating notes, creating cards, and opening created notes for review.",
     "developerName": "mickmetalholic",
     "category": "Productivity",
     "brandColor": "#6D5DFD",
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png",
-    "capabilities": ["Hooks"],
+    "capabilities": ["Hooks", "MCP"],
     "defaultPrompt": ["Use the CthuCodex toolkit when a matching utility applies."]
-  }
+  },
+  "mcpServers": "./.mcp.json"
 }

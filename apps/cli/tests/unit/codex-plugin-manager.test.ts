@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   buildPluginRows,
   discoverCodexPlugins,
@@ -14,7 +14,11 @@ async function writeCodexPlugin(
   root: string,
   name: string,
   displayName: string,
-  options: { packageJson?: boolean; hookCommand?: string } = {},
+  options: {
+    packageJson?: boolean;
+    hookCommand?: string;
+    mcpServers?: Record<string, unknown>;
+  } = {},
 ) {
   const pluginRoot = join(root, name);
   await mkdir(join(pluginRoot, '.codex-plugin'), { recursive: true });
@@ -34,9 +38,17 @@ async function writeCodexPlugin(
         capabilities: ['Hooks'],
         defaultPrompt: ['Test prompt'],
       },
+      ...(options.mcpServers ? { mcpServers: './.mcp.json' } : {}),
     }),
     'utf8',
   );
+  if (options.mcpServers) {
+    await writeFile(
+      join(pluginRoot, '.mcp.json'),
+      JSON.stringify({ mcpServers: options.mcpServers }),
+      'utf8',
+    );
+  }
   if (options.packageJson === true) {
     await writeFile(
       join(pluginRoot, 'package.json'),
@@ -208,5 +220,115 @@ describe('codex plugin manager', () => {
     expect(syncedHooks).not.toContain('<PLUGIN_ROOT>');
     expect(syncedHooks).not.toContain('pwsh.exe');
     expect(syncedHooks).not.toContain('packages/codex-plugins');
+  });
+
+  test('preserves bundled MCP server metadata during install and cache sync', async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const pluginsRoot = join(homeRoot, 'repo', 'codex', 'plugins');
+    await mkdir(pluginsRoot, { recursive: true });
+    const pluginRoot = await writeCodexPlugin(
+      pluginsRoot,
+      'cthu-codex',
+      'CthuCodex',
+      {
+        mcpServers: {
+          anki: {
+            command: 'node',
+            args: ['./scripts/anki-mcp-server.mjs'],
+          },
+        },
+      },
+    );
+    const marketplacePath = join(
+      homeRoot,
+      '.agents',
+      'plugins',
+      'marketplace.json',
+    );
+
+    await installCodexPlugins({
+      homeRoot,
+      configPath: join(homeRoot, '.codex', 'config.toml'),
+      marketplacePath,
+      plugins: [
+        {
+          name: 'cthu-codex',
+          displayName: 'CthuCodex',
+          root: pluginRoot,
+          marketplacePath: './repo/codex/plugins/cthu-codex',
+        },
+      ],
+      selectedNames: ['cthu-codex'],
+    });
+
+    const marketplace = JSON.parse(await readFile(marketplacePath, 'utf8'));
+    expect(marketplace.plugins[0].source.path).toBe(
+      './repo/codex/plugins/cthu-codex',
+    );
+    const sourceManifest = JSON.parse(
+      await readFile(join(pluginRoot, '.codex-plugin', 'plugin.json'), 'utf8'),
+    );
+    expect(sourceManifest.mcpServers).toBe('./.mcp.json');
+    const sourceMcpConfig = JSON.parse(
+      await readFile(join(pluginRoot, '.mcp.json'), 'utf8'),
+    );
+    expect(sourceMcpConfig.mcpServers.anki.command).toBe('node');
+
+    await syncCodexPluginCache({
+      cacheRoot: join(homeRoot, '.codex', 'plugins', 'cache', 'personal'),
+      plugin: {
+        name: 'cthu-codex',
+        displayName: 'CthuCodex',
+        root: pluginRoot,
+        marketplacePath: './repo/codex/plugins/cthu-codex',
+      },
+    });
+
+    const cachedManifest = JSON.parse(
+      await readFile(
+        join(
+          homeRoot,
+          '.codex',
+          'plugins',
+          'cache',
+          'personal',
+          'cthu-codex',
+          '0.1.0',
+          '.codex-plugin',
+          'plugin.json',
+        ),
+        'utf8',
+      ),
+    );
+    expect(cachedManifest.mcpServers).toBe('./.mcp.json');
+    const cachedMcpConfig = JSON.parse(
+      await readFile(
+        join(
+          homeRoot,
+          '.codex',
+          'plugins',
+          'cache',
+          'personal',
+          'cthu-codex',
+          '0.1.0',
+          '.mcp.json',
+        ),
+        'utf8',
+      ),
+    );
+    const cachedPluginRoot = join(
+      homeRoot,
+      '.codex',
+      'plugins',
+      'cache',
+      'personal',
+      'cthu-codex',
+      '0.1.0',
+    );
+    expect(cachedMcpConfig.mcpServers.anki).toEqual({
+      command: 'node',
+      args: ['./scripts/anki-mcp-server.mjs'],
+      cwd: resolve(cachedPluginRoot).replaceAll('\\', '/'),
+    });
   });
 });
