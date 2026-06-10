@@ -21,14 +21,71 @@ function countMatches(prompt, pattern) {
   return [...prompt.matchAll(pattern)].length;
 }
 
-function isEnglishDominantPrompt(prompt) {
-  const englishWords = prompt.match(/\b[A-Za-z][A-Za-z'-]*\b/g) ?? [];
-  if (englishWords.length === 0) {
+function cleanPrompt(prompt) {
+  return prompt
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`\n]+`/g, ' ')
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*[!/]/.test(line))
+    .join('\n')
+    .trim();
+}
+
+function extractUserIntent(prompt) {
+  const trimmed = prompt.trim();
+  if (trimmed === '') {
+    return '';
+  }
+
+  const segments = trimmed
+    .split(/(?<=[.!?。！？])\s+|\n{2,}/u)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  if (segments.length < 2) {
+    return trimmed;
+  }
+
+  const tail = segments.at(-1);
+  const body = segments.slice(0, -1).join(' ');
+  if (
+    tail.length > 0 &&
+    tail.length <= 120 &&
+    body.length >= 80 &&
+    body.length >= tail.length * 3
+  ) {
+    return tail;
+  }
+
+  return trimmed;
+}
+
+function isCodeLikeToken(token) {
+  return (
+    token.includes('_') ||
+    /\d/.test(token) ||
+    /[a-z][A-Z]/.test(token) ||
+    /^[A-Z0-9]{2,}$/.test(token)
+  );
+}
+
+function isEnglishProsePrompt(prompt) {
+  const intent = extractUserIntent(cleanPrompt(prompt));
+  if (intent === '') {
+    return false;
+  }
+
+  const englishWords = intent.match(/\b[A-Za-z][A-Za-z'-]*\b/g) ?? [];
+  if (englishWords.length < 3) {
+    return false;
+  }
+
+  if (englishWords.every(isCodeLikeToken)) {
     return false;
   }
 
   const cjkChars = countMatches(
-    prompt,
+    intent,
     /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu,
   );
   if (cjkChars === 0) {
@@ -60,7 +117,7 @@ try {
   }
 
   const prompt = extractPrompt(input);
-  if (prompt.trim() === '' || !isEnglishDominantPrompt(prompt)) {
+  if (prompt.trim() === '' || !isEnglishProsePrompt(prompt)) {
     writeJson({});
     process.exit(0);
   }

@@ -12,6 +12,8 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - **Anki MCP server** - connects to local AnkiConnect to read collection context, validate candidate notes, create cards, store media, and open notes in Anki's Browser for review.
 - **Anki Japanese sentence card maker skill** - turns Japanese example sentences and grammar points into `Japanese Sentence` Anki notes with cloze deletion, English translation, English grammar notes, and user-selected tags.
 
+The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
+
 ## Anki MCP Server
 
 The Anki tools require Anki desktop with the AnkiConnect add-on running locally. By default, CthuCodex connects to:
