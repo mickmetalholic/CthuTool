@@ -1,0 +1,6 @@
+interface:
+  display_name: "Anki Japanese Sentence Card Maker"
+  short_description: "Create Japanese grammar sentence notes in Anki."
+  default_prompt: "Use $anki-japanese-sentence-card-maker to create a Japanese Sentence Anki note from this example sentence and grammar point."
+policy:
+  allow_implicit_invocation: false

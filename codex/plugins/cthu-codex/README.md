@@ -10,6 +10,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 
 - **Language coach hook** - checks English prose before continuing with the user's request.
 - **Anki MCP server** - connects to local AnkiConnect to read collection context, validate candidate notes, create cards, store media, and open notes in Anki's Browser for review.
+- **Anki Japanese sentence card maker skill** - turns Japanese example sentences and grammar points into `Japanese Sentence` Anki notes with cloze deletion, English translation, English grammar notes, and user-selected tags.
 
 ## Anki MCP Server
 
@@ -33,6 +34,31 @@ Available tools:
 - `cthu_anki_open_notes` - open existing note IDs in Anki's Browser.
 
 `cthu_anki_add_notes` uses validation before writing and limits batch size. When `openAfterCreate` is true, it opens created notes with an Anki Browser search like `nid:123 OR nid:456`. Browser opening failures are reported as warnings and do not undo successful note creation.
+
+## Anki Japanese Sentence Card Maker Skill
+
+Use `$anki-japanese-sentence-card-maker` when you want Codex to create a Japanese grammar sentence card. The skill defaults to deck `0.Japanese::Japanese Sentences` and model `Japanese Sentence`.
+
+The skill is explicit-only: `agents/openai.yaml` sets `policy.allow_implicit_invocation: false`, so Codex should not implicitly invoke it from ordinary prompts.
+
+It accepts either a marked grammar point:
+
+```text
+うちの課は女性がよく飲みに行くの**に対して**、男性は皆まっすぐ家に帰る。
+```
+
+Or a separate grammar point line:
+
+```text
+うちの課は女性がよく飲みに行くのに対して、男性は皆まっすぐ家に帰る。
+に対して
+```
+
+If `tags:` is omitted, the skill lists all existing Anki collection tags and asks you to choose tags before writing the note.
+
+When `tags:` is provided, the skill normalizes spaced hyphen hierarchy shorthand such as `新完全マスター - N３・文法 - 第１部・１１課` to `新完全マスター::N３・文法::第１部・１１課` before validation.
+
+The `ヒント` field uses the canonical grammar pattern rather than the raw clozed phrase; for example, a cloze over `買うことにした` uses `～ことにする` as `ヒント`.
 
 ## Install
 
