@@ -1,6 +1,6 @@
 ---
 name: anki-japanese-sentence-card-maker
-description: Create Japanese Sentence Anki notes from Japanese example sentences and grammar points through the CthuCodex Anki MCP tools. Use when the user asks to make, add, generate, or create a Japanese grammar sentence card/note for Anki, especially for the `Japanese Sentence` note type with fields `文`, `ヒント`, `訳`, and `メモ`, cloze deletion, English translation, English grammar explanations, and user-selected tags.
+description: Create Japanese Sentence Anki notes from Japanese example sentences and grammar points through the CthuCodex Anki MCP tools. Use when the user asks to make, add, generate, or create a Japanese grammar sentence card/note for Anki, especially for the `Japanese Sentence` note type with fields `文`, `ヒント`, `訳`, and `メモ`, cloze deletion, English translation, English grammar explanations, and optional tags.
 ---
 
 # Anki Japanese Sentence Card Maker
@@ -19,17 +19,17 @@ Use this skill to create one `Japanese Sentence` Anki note from a Japanese examp
    - `sentence`: the Japanese example sentence without markdown markers.
    - `surfacePhrase`: the exact sentence span to cloze.
    - `grammarPoint`: the canonical grammar item being studied.
-   - `tags`: optional tags from a `tags:` line, normalized before validation.
+   - `tags`: optional tags from a `tags:` line or standalone tag-like line, normalized before validation.
 2. Call `cthu_anki_collection_schema` for `Japanese Sentence`.
 3. Confirm the model exists and fields include `文`, `ヒント`, `訳`, and `メモ`.
-4. If no tags were supplied, list every existing collection tag from the schema result and ask the user to choose tags before writing.
+4. If no tags were supplied, use an empty tag list and continue without asking for tags.
 5. Generate a candidate note payload.
 6. Show the candidate if review would help, especially when the cloze span or explanation required judgment.
 7. Call `cthu_anki_validate_notes` with the candidate note.
 8. If validation passes, call `cthu_anki_add_notes` with `openAfterCreate: true`.
 9. Report the created note ID and any Browser-opening warning.
 
-Do not write a note if the sentence, grammar point, tags, schema, or validation result is unclear.
+Do not write a note if the sentence, grammar point, schema, or validation result is unclear.
 
 ## Input Parsing
 
@@ -66,10 +66,20 @@ Normalize it before validation as:
 新完全マスター::N３・文法::第１部・１１課
 ```
 
+Also accept a standalone tag-like line without the `tags:` prefix:
+
+```text
+佐藤さんの奥さんは料理の先生だ**って**。
+新完全マスター - N３・文法 - 第１部・７課
+```
+
+In this example, parse `って` as the grammar point clue and normalize the final line to the tag `新完全マスター::N３・文法::第１部・７課`.
+
 Parsing rules:
 
+- Before treating a short standalone line as a grammar clue, check whether it is tag-like. A line is tag-like when it contains `::`, contains spaced hyphen hierarchy separators with at least three non-empty parts such as `A - B - C`, or matches an existing collection tag after normalization. Treat tag-like lines as tags, not grammar clues.
 - If exactly one `**...**` span exists, use that span as `surfacePhrase` and remove only the markdown `**` markers from `sentence`.
-- If there is no `**...**` span, treat the last short non-`tags:` line as a grammar clue. Use it to identify `surfacePhrase` in the sentence and canonicalize `grammarPoint`.
+- If there is no `**...**` span, treat the last short non-tag line as a grammar clue. Use it to identify `surfacePhrase` in the sentence and canonicalize `grammarPoint`.
 - If the grammar clue does not occur exactly in the sentence but is a clear conjugated phrase, typo, or partial phrase for a known grammar construction, infer the matching `surfacePhrase` only when confident. For example, with `冷蔵庫が壊れたので、新しいのを買うことにした。` and `買うとにした`, use `買うことにした` as `surfacePhrase` and `～ことにする` as `grammarPoint`.
 - If the grammar clue is a canonical pattern such as `～ことにする`, find the matching surface phrase in the sentence, such as `買うことにした`.
 - If the surface phrase cannot be confidently found in the sentence, ask the user to clarify.
@@ -115,7 +125,7 @@ Example for canonical `ヒント`:
 
 ## Tag Selection
 
-If the user supplied `tags:`, normalize and use those tags.
+If the user supplied `tags:` or a standalone tag-like line, normalize and use those tags.
 
 Tag normalization rules:
 
@@ -123,14 +133,13 @@ Tag normalization rules:
 - Trim surrounding whitespace from each tag.
 - When a tag contains spaced ASCII hyphen separators like `A - B - C`, convert those separators to Anki hierarchy separators: `A::B::C`.
 - Do not convert unspaced hyphens inside tag names.
+- Treat an unprefixed line as a tag only when it is tag-like: it contains `::`, contains spaced hyphen hierarchy separators with at least three non-empty parts, or matches an existing collection tag after normalization.
 
 If tags are missing:
 
-1. Use collection tags from `cthu_anki_collection_schema`.
-2. List all existing collection tags returned by the schema result so the user can choose from the full set.
-3. Ask the user which tags to use or whether to enter different tags.
-
-Do not create the note before the user selects tags.
+1. Use an empty tag list: `[]`.
+2. Continue directly to validation and creation.
+3. Do not ask the user to choose tags.
 
 ## Candidate Payload
 
@@ -146,7 +155,7 @@ Use this Anki MCP note shape:
     "訳": "<English translation>",
     "メモ": "<English grammar explanation>"
   },
-  "tags": ["<selected tags>"]
+  "tags": []
 }
 ```
 
@@ -164,7 +173,7 @@ Validate with:
         "訳": "<English translation>",
         "メモ": "<English grammar explanation>"
       },
-      "tags": ["<selected tags>"]
+      "tags": []
     }
   ]
 }
@@ -184,7 +193,7 @@ Create with:
         "訳": "<English translation>",
         "メモ": "<English grammar explanation>"
       },
-      "tags": ["<selected tags>"]
+      "tags": []
     }
   ],
   "openAfterCreate": true
