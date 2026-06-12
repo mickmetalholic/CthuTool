@@ -10,9 +10,19 @@ describe('bootstrap', () => {
     const log = jest.fn();
     const error = jest.fn();
     const config: ServiceConfiguration = {
-      port: 3000,
-      nodeEnv: 'development',
+      browser: {
+        authStateDir: './data/secrets/browser-auth',
+        dataDir: './data/browser',
+        defaultDelayMs: 1000,
+        defaultTimeoutMs: 30000,
+        diagnosticsDir: './data/browser-diagnostics',
+        headless: true,
+        maxConcurrency: 1,
+        provider: 'local-playwright',
+      },
       logLevel: 'info',
+      nodeEnv: 'development',
+      port: 3000,
     };
 
     await bootstrap({

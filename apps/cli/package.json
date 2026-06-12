@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun build src/index.ts --outdir dist --target node --watch",
-    "build": "bun build src/index.ts --outdir dist --target node",
+    "build": "bun build src/index.ts --outdir dist --target node --external playwright",
     "test": "bun test --preload ./tests/setup.ts",
     "test:cov": "bun test --coverage --preload ./tests/setup.ts",
     "typecheck": "bun x tsc --noEmit"
@@ -19,6 +19,7 @@
     "neverthrow": "^8.2.0",
     "p-limit": "^7.3.0",
     "picocolors": "^1.1.1",
+    "playwright": "^1.60.0",
     "valibot": "^1.1.0"
   },
   "devDependencies": {

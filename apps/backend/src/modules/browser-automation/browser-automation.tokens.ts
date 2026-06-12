@@ -1,0 +1,1 @@
+export const BROWSER_PROVIDER = Symbol('BROWSER_PROVIDER');

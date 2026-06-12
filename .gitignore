@@ -27,6 +27,11 @@ out/
 build
 dist
 
+# Runtime data
+data/browser/
+data/browser-diagnostics/
+data/secrets/browser-auth/
+apps/cli/data/
 
 # Debug
 npm-debug.log*

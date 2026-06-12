@@ -1,4 +1,5 @@
 import { type CommandDef, defineCommand } from 'citty';
+import { browserCommand } from './browser.command';
 import { codexCommand } from './codex.command';
 import {
   createCompletionCommand,
@@ -14,6 +15,7 @@ rootCommand = defineCommand({
     description: 'CthuTool monorepo CLI',
   },
   subCommands: {
+    browser: browserCommand,
     codex: codexCommand,
     scripts: scriptsCommand,
     completion: createCompletionCommand(),
