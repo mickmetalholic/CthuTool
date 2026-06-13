@@ -12,12 +12,15 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import type { HttpAdapterHost } from '@nestjs/core';
+// Nest DI needs runtime class reference; `import type` strips it and breaks metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { HttpAdapterHost } from '@nestjs/core';
 import type WebSocket from 'ws';
 import { WebSocketServer } from 'ws';
 // Nest DI needs runtime class reference; `import type` strips it and breaks metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { AgentRegistryLogger } from './agent-registry.logger';
+// Nest DI needs runtime class reference; `import type` strips it and breaks metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { AgentRegistryService } from './agent-registry.service';
 
