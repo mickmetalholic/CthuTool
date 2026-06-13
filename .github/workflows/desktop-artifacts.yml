@@ -1,0 +1,79 @@
+name: Desktop Artifacts
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-artifacts.yml"
+      - "apps/desktop/**"
+      - "packages/agent-protocol/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/desktop-artifacts.yml"
+      - "apps/desktop/**"
+      - "packages/agent-protocol/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck desktop
+        run: pnpm --filter @cthutool/desktop typecheck
+
+      - name: Test desktop
+        run: pnpm --filter @cthutool/desktop test
+
+      - name: Build desktop
+        run: pnpm --filter @cthutool/desktop build
+
+      - name: Package Windows desktop
+        if: matrix.os == 'windows-latest'
+        run: pnpm --filter @cthutool/desktop package:win
+
+      - name: Package macOS desktop
+        if: matrix.os == 'macos-latest'
+        run: pnpm --filter @cthutool/desktop package:mac
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cthudesktop-${{ runner.os }}
+          path: apps/desktop/release/**
+          if-no-files-found: error

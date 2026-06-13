@@ -36,6 +36,7 @@ export type AgentConnectionState = {
   readonly backendUrl: string;
   readonly agentId: string;
   readonly deviceName: string;
+  readonly environmentLabel?: string;
   readonly lastError?: string;
   readonly lastRegisteredAt?: string;
 };
@@ -70,6 +71,7 @@ export class AgentClient {
       backendUrl: config.backendUrl,
       agentId: config.agentId,
       deviceName: config.deviceName,
+      environmentLabel: config.activeEnvironment.label,
     };
     this.timers = options.timers ?? {
       setTimeout,
@@ -102,6 +104,7 @@ export class AgentClient {
       backendUrl: config.backendUrl,
       agentId: config.agentId,
       deviceName: config.deviceName,
+      environmentLabel: config.activeEnvironment.label,
     };
     if (!config.connectionEnabled) {
       this.stop();

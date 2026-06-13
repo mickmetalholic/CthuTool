@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  DEFAULT_APPEARANCE,
   DEFAULT_BACKEND_URL,
   type DesktopConfig,
   type DesktopConfigStorage,
@@ -28,12 +29,19 @@ describe('desktop config', () => {
     const loaded = store.load();
 
     expect(saved.backendUrl).toBe(DEFAULT_BACKEND_URL);
+    expect(saved.activeEnvironmentId).toBe('local');
+    expect(saved.activeEnvironment).toEqual({
+      id: 'local',
+      label: 'Local',
+      backendUrl: DEFAULT_BACKEND_URL,
+    });
+    expect(saved.appearance).toEqual(DEFAULT_APPEARANCE);
     expect(saved.deviceName).toBe('Desk');
     expect(saved.agentId).toMatch(/^agent-/);
     expect(loaded.agentId).toBe(saved.agentId);
   });
 
-  test('updates editable fields without changing agent id and keeps agent enabled', () => {
+  test('updates editable fields without changing agent id', () => {
     const storage = new MemoryStorage();
     const store = new DesktopConfigStore(storage);
 
@@ -51,23 +59,88 @@ describe('desktop config', () => {
       ...first,
       backendUrl: 'http://backend.local:3000',
       deviceName: 'Renamed',
-      connectionEnabled: true,
+      connectionEnabled: false,
+      activeEnvironment: {
+        ...first.activeEnvironment,
+        backendUrl: 'http://backend.local:3000',
+      },
+      environmentProfiles: [
+        {
+          ...first.environmentProfiles[0],
+          backendUrl: 'http://backend.local:3000',
+        },
+      ],
     });
   });
 
-  test('forces the local agent on for pre-existing persisted config', () => {
+  test('migrates a pre-existing persisted backend url into the local profile', () => {
     expect(
       normalizeConfig({
         agentId: 'windows-pc',
         backendUrl: 'http://backend.local:3000/',
         deviceName: 'Windows PC',
-        connectionEnabled: false,
+        connectionEnabled: true,
       }),
-    ).toEqual({
+    ).toMatchObject({
       agentId: 'windows-pc',
       backendUrl: 'http://backend.local:3000',
       deviceName: 'Windows PC',
       connectionEnabled: true,
+      activeEnvironmentId: 'local',
+      activeEnvironment: {
+        id: 'local',
+        label: 'Local',
+        backendUrl: 'http://backend.local:3000',
+      },
+      appearance: DEFAULT_APPEARANCE,
+    });
+  });
+
+  test('uses packaged test and production environment defaults', () => {
+    expect(normalizeConfig(undefined, { isPackaged: true })).toMatchObject({
+      activeEnvironmentId: 'test',
+      environmentProfiles: [
+        { id: 'test', label: 'Test' },
+        { id: 'production', label: 'Production' },
+      ],
+    });
+  });
+
+  test('switches active environment and updates that backend url', () => {
+    const storage = new MemoryStorage();
+    const store = new DesktopConfigStore(storage, { isPackaged: true });
+    const first = store.load();
+    const second = store.savePatch({
+      activeEnvironmentId: 'production',
+      backendUrl: 'https://api.example.com',
+    });
+
+    expect(second.activeEnvironmentId).toBe('production');
+    expect(second.backendUrl).toBe('https://api.example.com');
+    expect(second.agentId).toBe(first.agentId);
+    expect(second.environmentProfiles[1]).toMatchObject({
+      id: 'production',
+      backendUrl: 'https://api.example.com',
+    });
+  });
+
+  test('normalizes persisted window state for restore', () => {
+    expect(
+      normalizeConfig({
+        windowState: {
+          x: 42,
+          y: 64,
+          width: 320,
+          height: 420,
+          isMaximized: true,
+        },
+      }).windowState,
+    ).toEqual({
+      x: 42,
+      y: 64,
+      width: 860,
+      height: 600,
+      isMaximized: true,
     });
   });
 });

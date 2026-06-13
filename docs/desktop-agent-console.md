@@ -1,12 +1,29 @@
-# Desktop Agent Console
+# CthuDesktop
 
-`apps/desktop` is the first CthuTool desktop app. The first version is a
-connection and management shell only: it registers the current machine with the
-backend as an agent, shows connection state, and lists agents reported by the
-backend.
+`apps/desktop` builds `CthuDesktop`, the first CthuTool desktop app. The first
+version is a product shell for future local capabilities: it registers the
+current machine with the backend as an agent, shows connection state, lists
+agents reported by the backend, and reserves workspace sections for capabilities
+such as local Chrome control.
 
 It does not launch browsers, control Chrome, fetch pages, verify Douban login,
 or run host tasks yet.
+
+## Product Shell
+
+The renderer opens directly into the main workspace instead of a landing page.
+The left activity bar contains product areas such as Overview, Local Chrome,
+Agents, and Logs. Settings sits at the bottom-left and switches into app-level
+configuration, including service connection, local status, diagnostics, logs,
+and appearance.
+
+The desktop window uses a custom title bar so the app reads as `CthuDesktop`
+rather than a generic browser window. Window controls are handled by the
+Electron main process.
+
+The first built-in appearance is Dracula. The configuration model stores an
+appearance mode and color scheme so additional built-in color schemes can be
+added later without changing the app shell contract.
 
 ## Development
 
@@ -36,9 +53,19 @@ Start the desktop app in another terminal:
 pnpm --filter @cthutool/desktop dev
 ```
 
-The desktop app defaults to `http://localhost:3000`. Change the Backend URL in
-the app when the backend runs on a homelab host such as
-`http://homelab.local:3000`.
+The desktop app defaults to a local-only environment named `Local` with
+`http://localhost:3000`. Change the Backend URL in Settings when the backend
+runs on a homelab host such as `http://homelab.local:3000`.
+
+Development builds intentionally expose only the local environment by default.
+Packaged builds default to two selectable environments:
+
+```text
+Test        https://test.cthutool.local
+Production  https://api.cthutool.local
+```
+
+Both URLs are stored in local configuration and can be edited from Settings.
 
 ## Runtime Model
 
@@ -116,6 +143,32 @@ Response shape:
 
 The API returns public status only. It does not expose raw WebSocket objects or
 socket internals.
+
+## Packaging
+
+The package name and installer product name are `CthuDesktop`. App icons live
+under `apps/desktop/build` for electron-builder and under renderer assets for
+in-app branding.
+
+Local package commands:
+
+```powershell
+pnpm --filter @cthutool/desktop package:win
+pnpm --filter @cthutool/desktop package:mac
+```
+
+GitHub Actions runs `.github/workflows/desktop-artifacts.yml` on relevant
+desktop changes and uploads unsigned macOS and Windows artifacts. The workflow
+does not notarize, sign, or publish installers yet.
+
+On local Windows machines, `package:win` may require Developer Mode or an
+administrator terminal because electron-builder extracts `winCodeSign` files
+that include symlinks before it edits the executable resources. A directory
+package smoke test can be run without executable resource editing:
+
+```powershell
+pnpm --filter @cthutool/desktop exec electron-builder --dir --config.win.signAndEditExecutable=false
+```
 
 ## Current Limits
 

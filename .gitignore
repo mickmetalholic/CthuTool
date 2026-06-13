@@ -26,6 +26,9 @@ coverage
 out/
 build
 dist
+!apps/desktop/build/
+!apps/desktop/build/icon.svg
+!apps/desktop/build/icon.png
 
 # Runtime data
 data/browser/

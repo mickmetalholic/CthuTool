@@ -7,6 +7,8 @@
     "dev": "electron-vite dev",
     "build": "pnpm --filter @cthutool/agent-protocol build && electron-vite build",
     "package": "pnpm run build && electron-builder --dir",
+    "package:win": "pnpm run build && electron-builder --win",
+    "package:mac": "pnpm run build && electron-builder --mac",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -36,20 +38,26 @@
   },
   "build": {
     "appId": "dev.cthutool.desktop",
-    "productName": "CthuTool Desktop",
+    "productName": "CthuDesktop",
     "asar": true,
+    "npmRebuild": false,
     "directories": {
+      "buildResources": "build",
       "output": "release"
     },
     "mac": {
+      "icon": "build/icon.png",
       "identity": null,
       "target": [
-        "dir"
+        "dmg",
+        "zip"
       ]
     },
     "win": {
+      "icon": "build/icon.png",
       "target": [
-        "dir"
+        "nsis",
+        "portable"
       ]
     }
   }

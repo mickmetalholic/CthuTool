@@ -12,4 +12,20 @@ describe("CI workflow contract", () => {
     expect(yml).toMatch(/pnpm\s+install/);
     expect(yml).toMatch(/pnpm\s+run\s+lint/);
   });
+
+  it("packages desktop artifacts for macOS and Windows", () => {
+    const yml = readFileSync(
+      join(root, ".github", "workflows", "desktop-artifacts.yml"),
+      "utf8",
+    );
+
+    expect(yml).toContain("macos-latest");
+    expect(yml).toContain("windows-latest");
+    expect(yml).toMatch(/@cthutool\/desktop\s+typecheck/);
+    expect(yml).toMatch(/@cthutool\/desktop\s+test/);
+    expect(yml).toMatch(/@cthutool\/desktop\s+build/);
+    expect(yml).toMatch(/@cthutool\/desktop\s+package:win/);
+    expect(yml).toMatch(/@cthutool\/desktop\s+package:mac/);
+    expect(yml).toContain("actions/upload-artifact@v4");
+  });
 });

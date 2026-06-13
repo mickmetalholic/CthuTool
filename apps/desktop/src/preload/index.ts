@@ -5,10 +5,17 @@ import type { DesktopConfig, DesktopConfigPatch } from '../main/config';
 const api = {
   getConfig: (): Promise<DesktopConfig> =>
     ipcRenderer.invoke('desktop:getConfig'),
+  getAppInfo: (): Promise<{
+    readonly version: string;
+    readonly platform: string;
+    readonly isPackaged: boolean;
+  }> => ipcRenderer.invoke('desktop:getAppInfo'),
   saveConfig: (patch: DesktopConfigPatch): Promise<DesktopConfig> =>
     ipcRenderer.invoke('desktop:saveConfig', patch),
   getConnectionState: (): Promise<AgentConnectionState> =>
     ipcRenderer.invoke('desktop:getConnectionState'),
+  windowAction: (action: 'minimize' | 'maximize' | 'close'): Promise<void> =>
+    ipcRenderer.invoke('desktop:windowAction', action),
   onConnectionStateChange: (
     callback: (state: AgentConnectionState) => void,
   ): (() => void) => {

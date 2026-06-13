@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { AgentClient, toAgentWsUrl } from '../../src/main/agent-client';
-import type { DesktopConfig } from '../../src/main/config';
+import { normalizeConfig } from '../../src/main/config';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -37,12 +37,12 @@ class FakeWebSocket {
 }
 
 describe('AgentClient', () => {
-  const config: DesktopConfig = {
+  const config = normalizeConfig({
     agentId: 'windows-pc',
     backendUrl: 'http://backend.local:3000',
     connectionEnabled: true,
     deviceName: 'Windows PC',
-  };
+  });
 
   test('builds the backend agent WebSocket URL', () => {
     expect(toAgentWsUrl('http://backend.local:3000')).toBe(
