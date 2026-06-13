@@ -49,7 +49,7 @@ Install or link `chc` first so the command is available on your shell `PATH`.
 Load PowerShell completion in the current session:
 
 ```powershell
-chc completion powershell | Invoke-Expression
+chc completion powershell | Out-String | Invoke-Expression
 ```
 
 To load it for every PowerShell session, add the same line to your PowerShell profile.

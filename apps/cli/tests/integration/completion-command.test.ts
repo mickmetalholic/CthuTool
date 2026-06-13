@@ -31,6 +31,8 @@ describe('shell completion command', () => {
     expect(powershell.err).toBe('');
     expect(powershell.out).toContain('Register-ArgumentCompleter');
     expect(powershell.out).toContain('chc __complete');
+    expect(powershell.out).toContain('$completionText');
+    expect(powershell.out).toContain('__cthutool_empty_completion_word__');
 
     expect(zsh.code).toBe(0);
     expect(zsh.err).toBe('');
@@ -68,6 +70,20 @@ describe('shell completion command', () => {
       'auth',
       'doctor',
       'install',
+    ]);
+    expect(
+      lines(
+        (
+          await runCli([
+            '__complete',
+            'browser',
+            '__cthutool_empty_completion_word__',
+          ])
+        ).out,
+      ),
+    ).toEqual(['auth', 'doctor', 'install']);
+    expect(lines((await runCli(['__complete', 'browser'])).out)).toEqual([
+      'browser',
     ]);
     expect(
       lines((await runCli(['__complete', 'browser', 'auth', ''])).out),

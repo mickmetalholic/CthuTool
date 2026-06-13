@@ -3,14 +3,21 @@ import { getCompletionCandidates } from '../domain/completion-candidates';
 
 type RootCommandResolver = () => CommandDef;
 
+const emptyCompletionWord = '__cthutool_empty_completion_word__';
+
 const powershellScript = String.raw`Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
   $words = @($commandAst.CommandElements | Select-Object -Skip 1 | ForEach-Object { $_.Extent.Text })
   if ($words.Count -eq 0 -or $words[-1] -ne $wordToComplete) {
-    $words += $wordToComplete
+    if ($wordToComplete -eq '') {
+      $words += '__cthutool_empty_completion_word__'
+    } else {
+      $words += $wordToComplete
+    }
   }
   chc __complete @words | ForEach-Object {
-    [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    $completionText = if ($_.StartsWith('-')) { $_ } else { "$_ " }
+    [System.Management.Automation.CompletionResult]::new($completionText, $_, 'ParameterValue', $_)
   }
 }
 `;
@@ -71,9 +78,12 @@ export function createInternalCompleteCommand(
     },
     async run({ rawArgs }) {
       try {
+        const words = rawArgs.map((word) =>
+          word === emptyCompletionWord ? '' : word,
+        );
         const candidates = await getCompletionCandidates({
           rootCommand: resolveRootCommand(),
-          words: rawArgs,
+          words,
         });
         if (candidates.length > 0) {
           process.stdout.write(`${candidates.join('\n')}\n`);
