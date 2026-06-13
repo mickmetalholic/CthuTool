@@ -1,12 +1,7 @@
-export type BrowserResourceType =
-  | 'document'
-  | 'font'
-  | 'image'
-  | 'media'
-  | 'script'
-  | 'stylesheet'
-  | 'xhr'
-  | 'fetch';
+import type { BrowserProfileSummary } from '@cthutool/agent-protocol';
+import type { BrowserResourceType } from '@cthutool/config';
+
+export type { BrowserResourceType, BrowserSiteConfig } from '@cthutool/config';
 
 export type BrowserDetectionKind =
   | 'ok'
@@ -106,18 +101,6 @@ export type BrowserProfileStatus = {
   readonly updatedAt?: string;
 };
 
-export type BrowserSiteConfig = {
-  readonly siteId: string;
-  readonly displayName: string;
-  readonly allowedOrigins: readonly string[];
-  readonly authPolicy: 'anonymous' | 'required';
-  readonly profileName?: string;
-  readonly loginUrl?: string;
-  readonly verifyUrl?: string;
-  readonly defaultBlockResources?: readonly BrowserResourceType[];
-  readonly defaultTimeoutMs?: number;
-};
-
 export type BrowserPendingAuthReason =
   | 'missing'
   | 'expired'
@@ -137,5 +120,3 @@ export type BrowserPendingAuthTask = {
 };
 
 export type BrowserProfileRegistryEntry = BrowserProfileSummary;
-
-import type { BrowserProfileSummary } from '@cthutool/agent-protocol';

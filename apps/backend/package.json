@@ -7,14 +7,15 @@
     "start": "nest start",
     "start:debug": "nest start --debug --watch",
     "start:prod": "nest start --prod",
-    "build": "pnpm --filter @cthutool/agent-protocol build && nest build",
-    "test": "pnpm --filter @cthutool/agent-protocol build && jest",
+    "build": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/config build && nest build",
+    "test": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/config build && jest",
     "test:watch": "jest --watch",
     "test:debug": "node --inspect-brk node_modules/jest/bin/jest.js --runInBand",
     "test:cov": "jest --coverage"
   },
   "dependencies": {
     "@cthutool/agent-protocol": "workspace:*",
+    "@cthutool/config": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",

@@ -1,5 +1,9 @@
+import {
+  type BrowserSiteConfig,
+  loadBrowserSitesFile,
+  mergeBrowserSites,
+} from '@cthutool/config';
 import { Injectable } from '@nestjs/common';
-import type { BrowserSiteConfig } from './browser-automation.types';
 
 const DEFAULT_BROWSER_SITES: readonly BrowserSiteConfig[] = [
   {
@@ -24,9 +28,27 @@ const DEFAULT_BROWSER_SITES: readonly BrowserSiteConfig[] = [
 
 @Injectable()
 export class BrowserSiteConfigService {
-  private readonly sites = new Map<string, BrowserSiteConfig>(
-    DEFAULT_BROWSER_SITES.map((site) => [site.siteId, site]),
-  );
+  static async create(
+    options: { readonly sitesFilePath?: string } = {},
+  ): Promise<BrowserSiteConfigService> {
+    const overrides = options.sitesFilePath
+      ? await loadBrowserSitesFile(options.sitesFilePath)
+      : [];
+    return new BrowserSiteConfigService(
+      mergeBrowserSites(DEFAULT_BROWSER_SITES, overrides),
+    );
+  }
+
+  private readonly sites: Map<string, BrowserSiteConfig>;
+
+  constructor(sites: readonly BrowserSiteConfig[] = DEFAULT_BROWSER_SITES) {
+    this.sites = new Map(
+      mergeBrowserSites(DEFAULT_BROWSER_SITES, sites).map((site) => [
+        site.siteId,
+        site,
+      ]),
+    );
+  }
 
   listSites(): BrowserSiteConfig[] {
     return [...this.sites.values()].map(copySiteConfig);

@@ -11,6 +11,7 @@ const BROWSER_CONFIGURATION_SCHEMA = v.object({
   dataDir: v.optional(v.string(), './data/browser'),
   authStateDir: v.optional(v.string(), './data/secrets/browser-auth'),
   diagnosticsDir: v.optional(v.string(), './data/browser-diagnostics'),
+  sitesConfigFile: v.optional(v.string()),
   maxConcurrency: v.pipe(
     v.string(),
     v.transform((input) => Number(input)),
@@ -78,6 +79,7 @@ export const parseBrowserConfiguration = (
     dataDir: env.BROWSER_DATA_DIR,
     authStateDir: env.BROWSER_AUTH_STATE_DIR,
     diagnosticsDir: env.BROWSER_DIAGNOSTICS_DIR,
+    sitesConfigFile: env.BROWSER_SITES_CONFIG_FILE,
     maxConcurrency: env.BROWSER_MAX_CONCURRENCY ?? '1',
     defaultTimeoutMs: env.BROWSER_DEFAULT_TIMEOUT_MS ?? '30000',
     defaultDelayMs: env.BROWSER_DEFAULT_DELAY_MS ?? '1000',

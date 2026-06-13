@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "sites": [
+    {
+      "siteId": "douban",
+      "displayName": "Douban",
+      "authPolicy": "required",
+      "allowedOrigins": [
+        "https://movie.douban.com",
+        "https://www.douban.com"
+      ],
+      "profileName": "douban-main",
+      "loginUrl": "https://accounts.douban.com/passport/login",
+      "verifyUrl": "https://www.douban.com/mine/",
+      "defaultBlockResources": ["image", "font", "media"],
+      "defaultTimeoutMs": 30000
+    },
+    {
+      "siteId": "example_public",
+      "displayName": "Example Public Site",
+      "authPolicy": "anonymous",
+      "allowedOrigins": ["https://example.com"],
+      "defaultBlockResources": ["image", "font"]
+    }
+  ]
+}

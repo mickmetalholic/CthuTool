@@ -7,6 +7,7 @@ module.exports = {
   testMatch: ['<rootDir>/e2e/**/*.e2e-spec.ts', '<rootDir>/src/**/*.spec.ts'],
   moduleNameMapper: {
     '^@cthutool/agent-protocol$': '<rootDir>/../../packages/agent-protocol/src',
+    '^@cthutool/config$': '<rootDir>/../../packages/config/src',
   },
   transform: {
     '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],

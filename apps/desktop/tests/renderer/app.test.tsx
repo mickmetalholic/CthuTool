@@ -95,10 +95,13 @@ describe('CthuDesktop shell', () => {
       profiles: [
         {
           agentId: 'agent-1',
+          displayName: 'Cthu User',
+          externalUserId: '50353979',
           siteId: 'douban',
           profileName: 'douban-main',
           status: 'verified',
           updatedAt: '2026-06-13T10:00:00.000Z',
+          verifiedAt: '2026-06-13T10:00:00.000Z',
         },
       ],
       sites: [
@@ -307,8 +310,87 @@ describe('CthuDesktop shell', () => {
     ).toBeInTheDocument();
     expect(await screen.findByText('Browser Sites')).toBeInTheDocument();
     expect(screen.getAllByText('douban-main')).not.toHaveLength(0);
-    expect(screen.getByText('verified')).toBeInTheDocument();
+    expect(screen.getAllByText('verified')).not.toHaveLength(0);
+    expect(screen.getByText('Cthu User')).toBeInTheDocument();
+    expect(screen.getByText('ID 50353979')).toBeInTheDocument();
+    expect(screen.getAllByText(/2026/)).not.toHaveLength(0);
     expect(screen.getByText('missing')).toBeInTheDocument();
+  });
+
+  test('shows a pending Douban login reason when no verified profile exists', async () => {
+    const fetchBrowserStatus = vi.fn().mockResolvedValue({
+      pendingAuthTasks: [
+        {
+          id: 'agent-1:douban:douban-main',
+          agentId: 'agent-1',
+          siteId: 'douban',
+          profileName: 'douban-main',
+          reason: 'missing',
+          updatedAt: '2026-06-13T10:00:00.000Z',
+        },
+      ],
+      profiles: [],
+      sites: [
+        {
+          siteId: 'douban',
+          displayName: 'Douban',
+          allowedOrigins: ['https://movie.douban.com'],
+          authPolicy: 'required',
+          profileName: 'douban-main',
+          loginUrl: 'https://accounts.douban.com/passport/login',
+          verifyUrl: 'https://www.douban.com/mine/',
+        },
+      ],
+    });
+
+    render(
+      <App
+        desktopApi={createDesktopApi()}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={fetchBrowserStatus}
+      />,
+    );
+
+    await userEvent.click(primaryNavButton('Browser Profiles'));
+
+    expect(await screen.findByText('Pending missing')).toBeInTheDocument();
+  });
+
+  test('starts login using site fields returned by backend browser APIs', async () => {
+    const desktopApi = createDesktopApi();
+    const fetchBrowserStatus = vi.fn().mockResolvedValue({
+      pendingAuthTasks: [],
+      profiles: [],
+      sites: [
+        {
+          siteId: 'custom',
+          displayName: 'Custom Site',
+          allowedOrigins: ['https://custom.example'],
+          authPolicy: 'required',
+          profileName: 'custom-main',
+          loginUrl: 'https://custom.example/login',
+          verifyUrl: 'https://custom.example/me',
+        },
+      ],
+    });
+
+    render(
+      <App
+        desktopApi={desktopApi}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={fetchBrowserStatus}
+      />,
+    );
+
+    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
+
+    expect(desktopApi.openBrowserLogin).toHaveBeenCalledWith({
+      loginUrl: 'https://custom.example/login',
+      profileName: 'custom-main',
+      siteId: 'custom',
+      verifyUrl: 'https://custom.example/me',
+    });
   });
 
   test('shows browser action errors instead of silently ignoring them', async () => {
@@ -355,11 +437,12 @@ describe('CthuDesktop shell', () => {
       },
     });
 
+    const fetchBrowserStatus = createFetchBrowserStatus();
     render(
       <App
         desktopApi={desktopApi}
         fetchAgents={vi.fn().mockResolvedValue([])}
-        fetchBrowserStatus={createFetchBrowserStatus()}
+        fetchBrowserStatus={fetchBrowserStatus}
       />,
     );
 
@@ -369,6 +452,7 @@ describe('CthuDesktop shell', () => {
     expect(
       await screen.findByText(/Login window opened, but navigation failed/),
     ).toBeInTheDocument();
+    await waitFor(() => expect(fetchBrowserStatus).toHaveBeenCalledTimes(2));
   });
 
   test('shows a restart hint when browser action APIs are missing from preload', async () => {

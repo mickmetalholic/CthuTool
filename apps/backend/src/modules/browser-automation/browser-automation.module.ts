@@ -29,9 +29,15 @@ import { BrowserTaskRunner } from './browser-task-runner';
     BrowserContentService,
     BrowserPendingAuthTaskService,
     BrowserProfileRegistryService,
-    BrowserSiteConfigService,
     BrowserStateProjectionService,
     BrowserStateSnapshotListener,
+    {
+      provide: BrowserSiteConfigService,
+      useFactory: () =>
+        BrowserSiteConfigService.create({
+          sitesFilePath: getBrowserConfig().sitesConfigFile,
+        }),
+    },
     {
       provide: BrowserDiagnosticsStore,
       useFactory: () =>
