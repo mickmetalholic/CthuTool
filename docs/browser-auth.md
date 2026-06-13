@@ -13,37 +13,8 @@ profile paths.
 - `apps/desktop` connects as a browser-capable agent, runs Playwright on the
   user's machine, stores persistent profile directories under Electron app data,
   and opens login or verification flows.
-- `apps/cli` may install/check the Playwright runtime and inspect backend
-  browser status. It does not open login browsers or export auth bundles.
-
-## CLI
-
-```powershell
-chc browser doctor
-chc browser install
-chc browser status --json
-```
-
-`doctor` checks whether the CLI can load Playwright and whether Chromium is
-available. `install` downloads the Chromium browser binary used by desktop-side
-browser automation.
-
-`status` reads backend state only:
-
-```json
-{
-  "ok": true,
-  "command": "browser status",
-  "result": {
-    "sites": [],
-    "profiles": [],
-    "pendingAuthTasks": []
-  }
-}
-```
-
-Set `CTHUTOOL_BACKEND_URL` or pass `--backend-url` when the backend is not on
-`http://localhost:3000`.
+- `apps/cli` does not own browser runtime, login, verification, profile, or
+  browser-status commands. Use CthuDesktop and backend APIs for browser state.
 
 ## Login Flow
 

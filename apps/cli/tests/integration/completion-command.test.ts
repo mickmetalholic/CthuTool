@@ -57,7 +57,6 @@ describe('shell completion command', () => {
     });
 
     expect(lines((await runCli(['__complete', ''])).out)).toEqual([
-      'browser',
       'codex',
       'completion',
       'scripts',
@@ -66,8 +65,9 @@ describe('shell completion command', () => {
       'codex',
       'completion',
     ]);
-    expect(lines((await runCli(['__complete', 'browser', ''])).out)).toEqual([
-      'doctor',
+    expect(lines((await runCli(['__complete', 'codex', ''])).out)).toEqual([
+      'apply',
+      'export',
       'install',
       'status',
     ]);
@@ -76,29 +76,14 @@ describe('shell completion command', () => {
         (
           await runCli([
             '__complete',
-            'browser',
+            'codex',
             '__cthutool_empty_completion_word__',
           ])
         ).out,
       ),
-    ).toEqual(['doctor', 'install', 'status']);
-    expect(lines((await runCli(['__complete', 'browser'])).out)).toEqual([
-      'browser',
-    ]);
-    expect(
-      lines((await runCli(['__complete', 'browser', 'install', '--'])).out),
-    ).toContain('--with-deps');
-    expect(
-      lines((await runCli(['__complete', 'browser', 'doctor', '--'])).out),
-    ).toContain('--json');
-    expect(
-      lines((await runCli(['__complete', 'browser', 'status', '--'])).out),
-    ).toContain('--backend-url');
-    expect(lines((await runCli(['__complete', 'codex', ''])).out)).toEqual([
-      'apply',
-      'export',
-      'install',
-      'status',
+    ).toEqual(['apply', 'export', 'install', 'status']);
+    expect(lines((await runCli(['__complete', 'codex'])).out)).toEqual([
+      'codex',
     ]);
     expect(lines((await runCli(['__complete', 'completion', ''])).out)).toEqual(
       ['powershell', 'zsh'],
