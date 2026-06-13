@@ -4,9 +4,10 @@ import { bootstrap } from './main';
 
 describe('bootstrap', () => {
   it('starts app with validated configuration', async () => {
+    const enableCors = jest.fn();
     const useGlobalFilters = jest.fn();
     const listen = jest.fn().mockResolvedValue(undefined);
-    const app = { useGlobalFilters, listen };
+    const app = { enableCors, useGlobalFilters, listen };
     const log = jest.fn();
     const error = jest.fn();
     const config: ServiceConfiguration = {
@@ -28,10 +29,12 @@ describe('bootstrap', () => {
     await bootstrap({
       createApp: jest.fn().mockResolvedValue(app),
       parseConfig: jest.fn().mockReturnValue(ok(config)),
+      loadEnv: jest.fn(),
       createLogger: jest.fn().mockReturnValue({ log, error }),
       exit: jest.fn(),
     });
 
+    expect(enableCors).toHaveBeenCalledWith({ origin: true });
     expect(useGlobalFilters).toHaveBeenCalledTimes(1);
     expect(listen).toHaveBeenCalledWith(3000);
     expect(log).toHaveBeenCalledWith(
@@ -53,6 +56,7 @@ describe('bootstrap', () => {
     await bootstrap({
       createApp,
       parseConfig: jest.fn().mockReturnValue(err(new Error('invalid config'))),
+      loadEnv: jest.fn(),
       createLogger: jest.fn().mockReturnValue({ log, error }),
       exit,
     });

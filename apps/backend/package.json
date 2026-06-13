@@ -7,22 +7,25 @@
     "start": "nest start",
     "start:debug": "nest start --debug --watch",
     "start:prod": "nest start --prod",
-    "build": "nest build",
-    "test": "jest",
+    "build": "pnpm --filter @cthutool/agent-protocol build && nest build",
+    "test": "pnpm --filter @cthutool/agent-protocol build && jest",
     "test:watch": "jest --watch",
     "test:debug": "node --inspect-brk node_modules/jest/bin/jest.js --runInBand",
     "test:cov": "jest --coverage"
   },
   "dependencies": {
+    "@cthutool/agent-protocol": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "neverthrow": "^8.2.0",
     "playwright": "^1.60.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "valibot": "^1.0.0"
+    "valibot": "^1.0.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -30,6 +33,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
     "@types/supertest": "^6.0.2",
+    "@types/ws": "^8.5.13",
     "jest": "^29.7.0",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.6",

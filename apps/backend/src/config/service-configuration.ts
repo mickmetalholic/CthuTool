@@ -47,6 +47,18 @@ const SERVICE_CONFIGURATION_SCHEMA = v.object({
   logLevel: v.optional(v.picklist(['debug', 'info', 'warn', 'error']), 'info'),
 });
 
+const formatValidationIssues = (issues: readonly v.BaseIssue<unknown>[]) => {
+  return issues
+    .map((issue) => {
+      const path = issue.path
+        ?.map((item) => item.key)
+        .filter((key): key is string | number => key !== undefined)
+        .join('.');
+      return `${path || 'configuration'}: ${issue.message}`;
+    })
+    .join('; ');
+};
+
 export type ServiceConfiguration = v.InferOutput<
   typeof SERVICE_CONFIGURATION_SCHEMA
 > & {
@@ -71,11 +83,7 @@ export const parseBrowserConfiguration = (
     defaultDelayMs: env.BROWSER_DEFAULT_DELAY_MS ?? '1000',
   });
   if (!parsed.success) {
-    return err(
-      new Error(
-        v.flatten(parsed.issues).nested?.toString() ?? 'Invalid configuration',
-      ),
-    );
+    return err(new Error(formatValidationIssues(parsed.issues)));
   }
   return ok(parsed.output);
 };
@@ -99,11 +107,7 @@ export const parseServiceConfiguration = (
     logLevel: env.LOG_LEVEL,
   });
   if (!parsed.success) {
-    return err(
-      new Error(
-        v.flatten(parsed.issues).nested?.toString() ?? 'Invalid configuration',
-      ),
-    );
+    return err(new Error(formatValidationIssues(parsed.issues)));
   }
   return ok({ ...parsed.output, browser: browser.value });
 };

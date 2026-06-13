@@ -4,10 +4,7 @@ const preset = require('../../jest.preset.cjs');
 module.exports = {
   ...preset,
   rootDir: '.',
-  testMatch: ['<rootDir>/e2e/**/*.e2e-spec.ts', '<rootDir>/src/**/*.spec.ts'],
-  moduleNameMapper: {
-    '^@cthutool/agent-protocol$': '<rootDir>/../../packages/agent-protocol/src',
-  },
+  testMatch: ['<rootDir>/src/**/*.spec.ts'],
   transform: {
     '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
   },
