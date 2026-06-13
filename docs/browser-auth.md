@@ -1,100 +1,57 @@
 # Browser Auth Profiles
 
-Browser automation uses named auth profiles stored as Playwright-compatible
-storage-state bundles. The backend reads these bundles from
-`BROWSER_AUTH_STATE_DIR`, which defaults to `./data/secrets/browser-auth`.
+Browser login state is owned by CthuDesktop. The backend orchestrates browser
+work, stores site policy, and records public status only; it does not store
+third-party cookies, localStorage, Playwright storage-state bundles, or desktop
+profile paths.
 
-Each profile lives in its own directory:
+## Ownership
 
-```text
-data/secrets/browser-auth/
-  douban/
-    meta.json
-    storage-state.json
-```
+- `apps/backend` defines browser site configuration, origin allowlists,
+  `anonymous` or `required` auth policy, login URLs, verify URLs, public profile
+  summaries, and pending auth tasks.
+- `apps/desktop` connects as a browser-capable agent, runs Playwright on the
+  user's machine, stores persistent profile directories under Electron app data,
+  and opens login or verification flows.
+- `apps/cli` may install/check the Playwright runtime and inspect backend
+  browser status. It does not open login browsers or export auth bundles.
 
-`storage-state.json` is the Playwright browser context storage state. `meta.json`
-contains non-secret profile metadata:
-
-```json
-{
-  "profileName": "douban",
-  "source": "cli-helper",
-  "updatedAt": "2026-06-12T00:00:00.000Z",
-  "loginUrl": "https://accounts.douban.com/passport/login",
-  "verifyUrl": "https://movie.douban.com/",
-  "allowedOrigins": ["https://movie.douban.com"]
-}
-```
-
-## CLI Helper
-
-Use the CLI helper when the service runs in a trusted local or intranet
-environment and you want to authorize once on the same machine:
+## CLI
 
 ```powershell
 chc browser doctor
 chc browser install
+chc browser status --json
 ```
 
 `doctor` checks whether the CLI can load Playwright and whether Chromium is
-available. `install` downloads the Chromium browser binary used by Playwright.
-The browser install is intentionally explicit instead of a package install hook
-because it may download large files, use network access, and fail for proxy or
-permission reasons.
+available. `install` downloads the Chromium browser binary used by desktop-side
+browser automation.
 
-```powershell
-chc browser auth login douban --out ./data/secrets/browser-auth
-chc browser auth verify douban --json
-```
-
-The helper opens a headed Playwright browser, waits for manual login
-confirmation, then writes `storage-state.json` and `meta.json`. It does not ask
-for account passwords and does not store passwords.
-
-`verify` reuses the stored auth profile and returns only the user identity needed
-to confirm the login:
+`status` reads backend state only:
 
 ```json
 {
   "ok": true,
-  "command": "browser auth verify",
+  "command": "browser status",
   "result": {
-    "profileName": "douban",
-    "user": {
-      "id": "123456789",
-      "nickname": "nickname"
-    }
+    "sites": [],
+    "profiles": [],
+    "pendingAuthTasks": []
   }
 }
 ```
 
-For a custom site profile, provide the login URL:
+Set `CTHUTOOL_BACKEND_URL` or pass `--backend-url` when the backend is not on
+`http://localhost:3000`.
 
-```powershell
-chc browser auth login my-site `
-  --login-url https://example.com/login `
-  --verify-url https://example.com/ `
-  --allowed-origin https://example.com `
-  --out ./data/secrets/browser-auth
-```
+## Login Flow
 
-The first version uses documented file placement instead of uploading bundles to
-the backend. Deployments should mount or copy only the intended profile
-directory into the backend auth-state directory.
+When backend work requires a site whose auth policy is `required`, the backend
+dispatches a controlled browser command to an online CthuDesktop agent. If the
+desktop profile is missing or expired, desktop records a local pending auth task
+and the backend records a matching public pending task.
 
-## Browser Extension Producer
-
-A frontend plus browser extension can also produce the same bundle format. The
-frontend role is limited to:
-
-- displaying backend profile status;
-- asking the extension to capture auth state for an allowed site;
-- sending the converted bundle to a trusted backend endpoint when that endpoint
-  exists.
-
-The frontend must not directly read third-party cookies or localStorage. The
-extension performs privileged browser reads after explicit user action, then
-converts its captured cookie and per-origin storage snapshot into the shared
-bundle format before backend storage. The backend auth store rejects raw
-extension-shaped snapshots and accepts only validated bundles.
+The user completes login from CthuDesktop. After verification succeeds, desktop
+reports a public profile summary with `agentId`, `siteId`, `profileName`,
+`status`, and timestamps. Raw browser storage stays on the desktop machine.

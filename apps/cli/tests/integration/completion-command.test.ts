@@ -67,9 +67,9 @@ describe('shell completion command', () => {
       'completion',
     ]);
     expect(lines((await runCli(['__complete', 'browser', ''])).out)).toEqual([
-      'auth',
       'doctor',
       'install',
+      'status',
     ]);
     expect(
       lines(
@@ -81,34 +81,19 @@ describe('shell completion command', () => {
           ])
         ).out,
       ),
-    ).toEqual(['auth', 'doctor', 'install']);
+    ).toEqual(['doctor', 'install', 'status']);
     expect(lines((await runCli(['__complete', 'browser'])).out)).toEqual([
       'browser',
     ]);
-    expect(
-      lines((await runCli(['__complete', 'browser', 'auth', ''])).out),
-    ).toEqual(['login', 'verify']);
-    expect(
-      lines(
-        (await runCli(['__complete', 'browser', 'auth', 'login', '--'])).out,
-      ),
-    ).toContain('--login-url');
-    expect(
-      lines(
-        (await runCli(['__complete', 'browser', 'auth', 'login', '--'])).out,
-      ),
-    ).toContain('--out');
-    expect(
-      lines(
-        (await runCli(['__complete', 'browser', 'auth', 'verify', '--'])).out,
-      ),
-    ).toContain('--headed');
     expect(
       lines((await runCli(['__complete', 'browser', 'install', '--'])).out),
     ).toContain('--with-deps');
     expect(
       lines((await runCli(['__complete', 'browser', 'doctor', '--'])).out),
     ).toContain('--json');
+    expect(
+      lines((await runCli(['__complete', 'browser', 'status', '--'])).out),
+    ).toContain('--backend-url');
     expect(lines((await runCli(['__complete', 'codex', ''])).out)).toEqual([
       'apply',
       'export',

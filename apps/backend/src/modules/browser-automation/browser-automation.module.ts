@@ -1,25 +1,33 @@
 import { Module } from '@nestjs/common';
 import { parseBrowserConfiguration } from '../../config/service-configuration';
-import { BrowserAuthStateStore } from './browser-auth-state.store';
+import { AgentRegistryModule } from '../agent-registry/agent-registry.module';
+import { AgentBrowserProvider } from './agent-browser.provider';
+import { BrowserAutomationController } from './browser-automation.controller';
+import { BROWSER_PROVIDER } from './browser-automation.tokens';
 import { BrowserBlockDetector } from './browser-block-detector';
 import { BrowserContentService } from './browser-content.service';
 import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
+import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
+import { BrowserProfileRegistryService } from './browser-profile-registry.service';
+import { BrowserSiteConfigService } from './browser-site-config.service';
 import { BrowserTaskRunner } from './browser-task-runner';
-import { BROWSER_PROVIDER } from './browser-automation.tokens';
-import { LocalPlaywrightProvider } from './local-playwright.provider';
 
 @Module({
-  exports: [BrowserAuthStateStore, BrowserContentService],
+  imports: [AgentRegistryModule],
+  controllers: [BrowserAutomationController],
+  exports: [
+    BrowserContentService,
+    BrowserPendingAuthTaskService,
+    BrowserProfileRegistryService,
+    BrowserSiteConfigService,
+  ],
   providers: [
+    AgentBrowserProvider,
     BrowserBlockDetector,
     BrowserContentService,
-    {
-      provide: BrowserAuthStateStore,
-      useFactory: () =>
-        new BrowserAuthStateStore({
-          authStateDir: getBrowserConfig().authStateDir,
-        }),
-    },
+    BrowserPendingAuthTaskService,
+    BrowserProfileRegistryService,
+    BrowserSiteConfigService,
     {
       provide: BrowserDiagnosticsStore,
       useFactory: () =>
@@ -41,13 +49,7 @@ import { LocalPlaywrightProvider } from './local-playwright.provider';
     },
     {
       provide: BROWSER_PROVIDER,
-      useFactory: () => {
-        const config = getBrowserConfig();
-        return new LocalPlaywrightProvider({
-          dataDir: config.dataDir,
-          headless: config.headless,
-        });
-      },
+      useExisting: AgentBrowserProvider,
     },
   ],
 })

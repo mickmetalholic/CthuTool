@@ -1,11 +1,22 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AgentConnectionState } from '../main/agent-client';
 import type { DesktopConfig, DesktopConfigPatch } from '../main/config';
+import type { PendingAuthTask } from '../main/pending-auth-task-store';
+
+type BrowserSiteActionInput = {
+  readonly siteId: string;
+  readonly profileName?: string;
+  readonly loginUrl?: string;
+  readonly verifyUrl?: string;
+};
 
 const api = {
   getConfig: (): Promise<DesktopConfig> =>
     ipcRenderer.invoke('desktop:getConfig'),
   getAppInfo: (): Promise<{
+    readonly browserProfilesDir: string;
+    readonly configPath: string;
+    readonly userDataDir: string;
     readonly version: string;
     readonly platform: string;
     readonly isPackaged: boolean;
@@ -14,6 +25,14 @@ const api = {
     ipcRenderer.invoke('desktop:saveConfig', patch),
   getConnectionState: (): Promise<AgentConnectionState> =>
     ipcRenderer.invoke('desktop:getConnectionState'),
+  getLocalPendingAuthTasks: (): Promise<PendingAuthTask[]> =>
+    ipcRenderer.invoke('browser:getLocalPendingAuthTasks'),
+  openBrowserLogin: (input: BrowserSiteActionInput): Promise<unknown> =>
+    ipcRenderer.invoke('browser:openLogin', input),
+  verifyBrowserProfile: (input: BrowserSiteActionInput): Promise<unknown> =>
+    ipcRenderer.invoke('browser:verifyProfile', input),
+  clearBrowserProfile: (input: BrowserSiteActionInput): Promise<unknown> =>
+    ipcRenderer.invoke('browser:clearProfile', input),
   windowAction: (action: 'minimize' | 'maximize' | 'close'): Promise<void> =>
     ipcRenderer.invoke('desktop:windowAction', action),
   onConnectionStateChange: (

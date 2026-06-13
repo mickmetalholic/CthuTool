@@ -1,17 +1,8 @@
-import { confirm, isCancel } from '@clack/prompts';
-import { defineCommand } from 'citty';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
-import {
-  runBrowserAuthLogin,
-  runBrowserAuthVerify,
-  type BrowserAuthLoginInput,
-  type BrowserAuthLoginResult,
-  type BrowserAuthVerifyInput,
-  type BrowserAuthVerifyResult,
-} from '../domain/browser-auth-helper';
+import { dirname, join } from 'node:path';
+import { defineCommand } from 'citty';
 import { cliContractArgs, createCliContext } from '../runtime/cli-context';
 import { createCliError } from '../runtime/cli-error';
 import {
@@ -23,13 +14,10 @@ import {
 
 export type BrowserCommandDeps = {
   readonly checkBrowsers: () => Promise<BrowserDoctorResult>;
+  readonly fetchBrowserStatus: (
+    input: BrowserStatusInput,
+  ) => Promise<BrowserStatusResult>;
   readonly installBrowsers: (input: BrowserInstallInput) => Promise<void>;
-  readonly runLogin: (
-    input: BrowserAuthLoginInput,
-  ) => Promise<BrowserAuthLoginResult>;
-  readonly runVerify: (
-    input: BrowserAuthVerifyInput,
-  ) => Promise<BrowserAuthVerifyResult>;
 };
 
 export type BrowserInstallInput = {
@@ -44,60 +32,20 @@ export type BrowserDoctorResult = {
   readonly error?: string;
 };
 
-const profileDefaults: Record<
-  string,
-  {
-    readonly allowedOrigins: readonly string[];
-    readonly loginUrl: string;
-    readonly userVerifyUrl?: string;
-    readonly verifyUrl: string;
-  }
-> = {
-  douban: {
-    allowedOrigins: [
-      'https://accounts.douban.com',
-      'https://movie.douban.com',
-      'https://www.douban.com',
-    ],
-    loginUrl: 'https://accounts.douban.com/passport/login',
-    userVerifyUrl: 'https://www.douban.com/mine/',
-    verifyUrl: 'https://movie.douban.com/',
-  },
+export type BrowserStatusInput = {
+  readonly backendUrl: string;
+};
+
+export type BrowserStatusResult = {
+  readonly pendingAuthTasks: unknown[];
+  readonly profiles: unknown[];
+  readonly sites: unknown[];
 };
 
 const defaultDeps: BrowserCommandDeps = {
   checkBrowsers: async () => checkBrowserRuntime(),
+  fetchBrowserStatus: async (input) => fetchBrowserStatus(input),
   installBrowsers: async (input) => installPlaywrightBrowsers(input),
-  runLogin: async (input) =>
-    runBrowserAuthLogin(input, {
-      launchBrowser: async () => {
-        const { chromium } = await import('playwright');
-        const browser = await chromium.launch({ headless: false });
-        return { browser };
-      },
-      waitForUser: async () => {
-        const result = await confirm({
-          message: 'Complete login in the browser, then confirm here.',
-        });
-        if (isCancel(result) || result !== true) {
-          throw createCliError('invalid_option', 'browser auth login cancelled');
-        }
-      },
-    }),
-  runVerify: async (input) =>
-    runBrowserAuthVerify(input, {
-      launchBrowser: async (verifyInput) => {
-        const { chromium } = await import('playwright');
-        const browser = await chromium.launch({
-          headless: verifyInput.headed !== true,
-        });
-        const context = await browser.newContext({
-          storageState: verifyInput.storageStatePath,
-        });
-        const page = await context.newPage();
-        return { browser, page };
-      },
-    }),
 };
 
 const installArgs = {
@@ -117,49 +65,12 @@ const doctorArgs = {
   ...cliContractArgs,
 } as const;
 
-const loginArgs = {
+const statusArgs = {
   ...cliContractArgs,
-  profile: {
-    type: 'positional',
-    description: 'Browser auth profile name, such as douban',
-    required: false,
-  },
-  out: {
+  backendUrl: {
     type: 'string',
-    description: 'Output root for browser auth bundles',
-  },
-  loginUrl: {
-    type: 'string',
-    description: 'Login URL to open when no profile default exists',
-  },
-  verifyUrl: {
-    type: 'string',
-    description: 'Optional URL used later to verify the profile',
-  },
-  allowedOrigin: {
-    type: 'string',
-    description: 'Comma-separated list of allowed origins for the profile',
-  },
-} as const;
-
-const verifyArgs = {
-  ...cliContractArgs,
-  profile: {
-    type: 'positional',
-    description: 'Browser auth profile name, such as douban',
-    required: false,
-  },
-  headed: {
-    type: 'boolean',
-    description: 'Show the browser while verifying auth',
-  },
-  out: {
-    type: 'string',
-    description: 'Output root that contains browser auth bundles',
-  },
-  verifyUrl: {
-    type: 'string',
-    description: 'Optional URL used to verify the profile',
+    description:
+      'Backend base URL. Defaults to CTHUTOOL_BACKEND_URL or localhost.',
   },
 } as const;
 
@@ -171,25 +82,11 @@ type InstallArgs = {
   readonly withDeps?: unknown;
 };
 
-type LoginArgs = {
-  readonly allowedOrigin?: unknown;
-  readonly json?: unknown;
-  readonly loginUrl?: unknown;
-  readonly noInteractive?: unknown;
-  readonly out?: unknown;
-  readonly profile?: unknown;
-  readonly quiet?: unknown;
-  readonly verifyUrl?: unknown;
-};
-
-type VerifyArgs = {
-  readonly headed?: unknown;
+type StatusArgs = {
+  readonly backendUrl?: unknown;
   readonly json?: unknown;
   readonly noInteractive?: unknown;
-  readonly out?: unknown;
-  readonly profile?: unknown;
   readonly quiet?: unknown;
-  readonly verifyUrl?: unknown;
 };
 
 export const createBrowserCommand = (
@@ -286,103 +183,43 @@ export const createBrowserCommand = (
           process.exitCode = ok ? 0 : 1;
         },
       }),
-      auth: defineCommand({
+      status: defineCommand({
         meta: {
-          name: 'auth',
-          description: 'Browser auth profile helpers',
+          name: 'status',
+          description:
+            'Show backend browser sites, profile summaries, and pending auth tasks',
         },
-        subCommands: {
-          login: defineCommand({
-            meta: {
-              name: 'login',
-              description:
-                'Open a headed browser for manual login and export auth state',
-            },
-            args: loginArgs,
-            async run({ args }) {
-              const context = createCliContext(args);
-              const input = resolveLoginInput(args);
-              if (input instanceof Error) {
-                const error = createCliError('invalid_option', input.message);
-                writeCommandError(context, processOutput, error);
-                process.exitCode = error.exitCode;
-                return;
-              }
-
-              try {
-                const result = await commandDeps.runLogin(input);
-                if (context.json) {
-                  writeJsonValue(processOutput, {
-                    ok: true,
-                    command: 'browser auth login',
-                    result,
-                  });
-                } else {
-                  writeHumanStatus(
-                    context,
-                    processOutput,
-                    `Browser auth profile written: ${result.profilePath}`,
+        args: statusArgs,
+        async run({ args }) {
+          const context = createCliContext(args);
+          const input = resolveStatusInput(args);
+          try {
+            const result = await commandDeps.fetchBrowserStatus(input);
+            if (context.json) {
+              writeJsonValue(processOutput, {
+                ok: true,
+                command: 'browser status',
+                result,
+              });
+            } else {
+              writeHumanStatus(
+                context,
+                processOutput,
+                `Browser sites: ${result.sites.length}, profiles: ${result.profiles.length}, pending auth tasks: ${result.pendingAuthTasks.length}`,
+              );
+            }
+            process.exitCode = 0;
+          } catch (error) {
+            const commandError =
+              error instanceof Error
+                ? createCliError('script_execution_failed', error.message)
+                : createCliError(
+                    'script_execution_failed',
+                    'browser status failed',
                   );
-                }
-                process.exitCode = 0;
-              } catch (error) {
-                const commandError =
-                  error instanceof Error
-                    ? createCliError('script_execution_failed', error.message)
-                    : createCliError(
-                        'script_execution_failed',
-                        'browser auth login failed',
-                      );
-                writeCommandError(context, processOutput, commandError);
-                process.exitCode = commandError.exitCode;
-              }
-            },
-          }),
-          verify: defineCommand({
-            meta: {
-              name: 'verify',
-              description: 'Verify a stored browser auth profile',
-            },
-            args: verifyArgs,
-            async run({ args }) {
-              const context = createCliContext(args);
-              const input = resolveVerifyInput(args);
-              if (input instanceof Error) {
-                const error = createCliError('invalid_option', input.message);
-                writeCommandError(context, processOutput, error);
-                process.exitCode = error.exitCode;
-                return;
-              }
-
-              try {
-                const result = await commandDeps.runVerify(input);
-                if (context.json) {
-                  writeJsonValue(processOutput, {
-                    ok: true,
-                    command: 'browser auth verify',
-                    result,
-                  });
-                } else {
-                  writeHumanStatus(
-                    context,
-                    processOutput,
-                    `${result.user.nickname} (${result.user.id})`,
-                  );
-                }
-                process.exitCode = 0;
-              } catch (error) {
-                const commandError =
-                  error instanceof Error
-                    ? createCliError('script_execution_failed', error.message)
-                    : createCliError(
-                        'script_execution_failed',
-                        'browser auth verify failed',
-                      );
-                writeCommandError(context, processOutput, commandError);
-                process.exitCode = commandError.exitCode;
-              }
-            },
-          }),
+            writeCommandError(context, processOutput, commandError);
+            process.exitCode = commandError.exitCode;
+          }
         },
       }),
     },
@@ -400,46 +237,12 @@ function resolveInstallInput(args: InstallArgs): BrowserInstallInput | Error {
   };
 }
 
-function resolveLoginInput(args: LoginArgs): BrowserAuthLoginInput | Error {
-  const profileName = getStringArg(args.profile);
-  if (!profileName) {
-    return new Error('profile is required');
-  }
-
-  const defaults = profileDefaults[profileName];
-  const loginUrl = getStringArg(args.loginUrl) ?? defaults?.loginUrl;
-  if (!loginUrl) {
-    return new Error(
-      'login URL is required for profiles without a built-in default',
-    );
-  }
-
-  const outputRoot =
-    getStringArg(args.out) ?? './data/secrets/browser-auth';
+function resolveStatusInput(args: StatusArgs): BrowserStatusInput {
   return {
-    allowedOrigins:
-      parseAllowedOrigins(args.allowedOrigin) ?? defaults?.allowedOrigins,
-    loginUrl,
-    outputRoot,
-    profileName,
-    verifyUrl: getStringArg(args.verifyUrl) ?? defaults?.verifyUrl,
-  };
-}
-
-function resolveVerifyInput(args: VerifyArgs): BrowserAuthVerifyInput | Error {
-  const profileName = getStringArg(args.profile);
-  if (!profileName) {
-    return new Error('profile is required');
-  }
-  const defaults = profileDefaults[profileName];
-  return {
-    authRoot: getStringArg(args.out) ?? './data/secrets/browser-auth',
-    headed: args.headed === true,
-    profileName,
-    verifyUrl:
-      getStringArg(args.verifyUrl) ??
-      defaults?.userVerifyUrl ??
-      defaults?.verifyUrl,
+    backendUrl:
+      getStringArg(args.backendUrl) ??
+      process.env.CTHUTOOL_BACKEND_URL ??
+      'http://localhost:3000',
   };
 }
 
@@ -455,7 +258,8 @@ async function checkBrowserRuntime(): Promise<BrowserDoctorResult> {
   } catch (error) {
     return {
       chromiumAvailable: false,
-      error: error instanceof Error ? error.message : 'failed to load Playwright',
+      error:
+        error instanceof Error ? error.message : 'failed to load Playwright',
       installCommand: 'chc browser install',
       playwrightAvailable: false,
     };
@@ -484,26 +288,46 @@ async function installPlaywrightBrowsers(
         resolve();
         return;
       }
-      reject(new Error(`playwright install exited with code ${code ?? 'null'}`));
+      reject(
+        new Error(`playwright install exited with code ${code ?? 'null'}`),
+      );
     });
   });
+}
+
+async function fetchBrowserStatus(
+  input: BrowserStatusInput,
+): Promise<BrowserStatusResult> {
+  const baseUrl = input.backendUrl.replace(/\/+$/, '');
+  const [sites, profiles, pendingAuthTasks] = await Promise.all([
+    fetchJson(`${baseUrl}/api/browser/sites`, 'sites'),
+    fetchJson(`${baseUrl}/api/browser/profiles`, 'profiles'),
+    fetchJson(`${baseUrl}/api/browser/pending-auth-tasks`, 'tasks'),
+  ]);
+  return {
+    pendingAuthTasks,
+    profiles,
+    sites,
+  };
+}
+
+async function fetchJson(url: string, key: string): Promise<unknown[]> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`GET ${url} failed with HTTP ${response.status}`);
+  }
+  const body = (await response.json()) as Record<string, unknown>;
+  const value = body[key];
+  if (!Array.isArray(value)) {
+    throw new Error(`GET ${url} did not return an array field "${key}"`);
+  }
+  return value;
 }
 
 function getStringArg(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0
     ? value.trim()
     : undefined;
-}
-
-function parseAllowedOrigins(value: unknown): string[] | undefined {
-  const raw = getStringArg(value);
-  if (!raw) {
-    return undefined;
-  }
-  return raw
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
 }
 
 export const browserCommand = createBrowserCommand();

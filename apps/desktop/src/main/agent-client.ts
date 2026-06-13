@@ -2,7 +2,11 @@ import type {
   AgentClientMessage,
   AgentHelloPayload,
   AgentPlatform,
+  BrowserCommandPayload,
+  BrowserErrorMessage,
+  BrowserResultMessage,
 } from '@cthutool/agent-protocol';
+import { parseAgentServerMessageJson } from '@cthutool/agent-protocol';
 import type { DesktopConfig } from './config';
 
 type MinimalWebSocket = {
@@ -50,7 +54,12 @@ export type AgentClientOptions = {
   readonly heartbeatIntervalMs?: number;
   readonly reconnectDelayMs?: number;
   readonly onStateChange?: (state: AgentConnectionState) => void;
+  readonly onRegistered?: (state: AgentConnectionState) => void;
   readonly now?: () => Date;
+  readonly getCapabilities?: () => readonly string[];
+  readonly handleBrowserCommand?: (
+    command: BrowserCommandPayload,
+  ) => Promise<BrowserResultMessage | BrowserErrorMessage>;
 };
 
 export class AgentClient {
@@ -128,7 +137,7 @@ export class AgentClient {
       deviceName: config.deviceName,
       platform: this.options.platform,
       version: this.options.version,
-      capabilities: [],
+      capabilities: [...(this.options.getCapabilities?.() ?? [])],
     };
   }
 
@@ -171,18 +180,45 @@ export class AgentClient {
   }
 
   private handleMessage(data: unknown): void {
-    try {
-      const message = JSON.parse(String(data)) as { type?: string };
-      if (message.type === 'agent.registered') {
-        this.setState('connected', undefined, this.now().toISOString());
-        this.startHeartbeat();
-      }
-      if (message.type === 'agent.error') {
-        this.setState(this.state.status, 'Backend rejected agent message');
-      }
-    } catch {
+    const parsed = parseAgentServerMessageJson(String(data));
+    if (!parsed.ok) {
       this.setState(this.state.status, 'Backend sent an invalid message');
+      return;
     }
+
+    if (parsed.value.type === 'agent.registered') {
+      this.setState('connected', undefined, this.now().toISOString());
+      this.options.onRegistered?.(this.state);
+      this.startHeartbeat();
+      return;
+    }
+
+    if (parsed.value.type === 'agent.error') {
+      this.setState(this.state.status, 'Backend rejected agent message');
+      return;
+    }
+
+    if (parsed.value.type === 'browser.command') {
+      void this.handleBrowserCommand(parsed.value.payload);
+    }
+  }
+
+  private async handleBrowserCommand(
+    command: BrowserCommandPayload,
+  ): Promise<void> {
+    if (!this.options.handleBrowserCommand) {
+      this.send({
+        type: 'browser.error',
+        payload: {
+          code: 'BROWSER_CAPABILITY_UNAVAILABLE',
+          command: command.command,
+          commandId: command.commandId,
+          message: 'Browser capability is not available',
+        },
+      });
+      return;
+    }
+    this.send(await this.options.handleBrowserCommand(command));
   }
 
   private startHeartbeat(): void {

@@ -1,24 +1,29 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { BrowserAutomationError } from './browser-automation.errors';
+import { BROWSER_PROVIDER } from './browser-automation.tokens';
 import type {
   BrowserAuthUsage,
   BrowserContentRequest,
   BrowserContentResult,
   BrowserProvider,
   BrowserProviderSnapshot,
+  BrowserSiteConfig,
 } from './browser-automation.types';
-import { BrowserAuthStateStore } from './browser-auth-state.store';
+// biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserBlockDetector } from './browser-block-detector';
+// biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BrowserSiteConfigService } from './browser-site-config.service';
+// biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserTaskRunner } from './browser-task-runner';
-import { BROWSER_PROVIDER } from './browser-automation.tokens';
 
 @Injectable()
 export class BrowserContentService {
   constructor(
     @Inject(BROWSER_PROVIDER)
     private readonly provider: BrowserProvider,
-    private readonly authStateStore: BrowserAuthStateStore,
+    private readonly siteConfig: BrowserSiteConfigService,
     private readonly taskRunner: BrowserTaskRunner,
     private readonly blockDetector: BrowserBlockDetector,
     private readonly diagnosticsStore: BrowserDiagnosticsStore,
@@ -27,19 +32,18 @@ export class BrowserContentService {
   async getPageContent(
     request: BrowserContentRequest,
   ): Promise<BrowserContentResult> {
-    assertAllowedOrigin(request.url, request.allowedOrigins);
-
-    const { auth, storageState } = await this.resolveAuth(request);
-    const snapshot = await this.taskRunner.run(
-      `browser:${request.url}`,
-      () =>
-        this.provider.capturePage({
-          ...request,
-          storageState,
-        }),
-      { timeoutMs: request.timeoutMs },
+    const { site, providerRequest } = this.resolveProviderRequest(request);
+    assertAllowedOrigin(
+      providerRequest.url,
+      providerRequest.allowedOrigins ?? [],
     );
-    const detection = this.blockDetector.detect(snapshot);
+
+    const snapshot = await this.taskRunner.run(
+      `browser:${providerRequest.url}`,
+      () => this.provider.capturePage(providerRequest),
+      { timeoutMs: providerRequest.timeoutMs },
+    );
+    const detection = snapshot.detection ?? this.blockDetector.detect(snapshot);
     const diagnostics = await this.saveDiagnosticsIfNeeded(
       detection.kind === 'ok' ? undefined : detection.kind.toUpperCase(),
       detection.reason,
@@ -48,50 +52,79 @@ export class BrowserContentService {
 
     return {
       ...snapshot,
-      auth,
+      auth: this.resolveAuthUsage(providerRequest, site),
       capturedAt: new Date().toISOString(),
       detection,
       ...(diagnostics ? { diagnostics } : {}),
     };
   }
 
-  private async resolveAuth(
+  private resolveProviderRequest(request: BrowserContentRequest): {
+    readonly providerRequest: BrowserContentRequest;
+    readonly site?: BrowserSiteConfig;
+  } {
+    const site = request.siteId
+      ? this.siteConfig.getSite(request.siteId)
+      : this.siteConfig.resolveForUrl(request.url);
+    if (request.siteId && !site) {
+      throw new BrowserAutomationError(
+        'SITE_NOT_CONFIGURED',
+        `Browser site "${request.siteId}" is not configured`,
+      );
+    }
+
+    const allowedOrigins = request.allowedOrigins ?? site?.allowedOrigins ?? [];
+    const authPolicy =
+      request.authPolicy ??
+      (request.requireAuth === true
+        ? 'required'
+        : request.requireAuth === false
+          ? 'anonymous'
+          : (site?.authPolicy ?? 'anonymous'));
+    const profileName =
+      request.profileName ??
+      (authPolicy === 'required' ? site?.profileName : undefined);
+
+    return {
+      providerRequest: {
+        ...request,
+        allowedOrigins,
+        authPolicy,
+        blockResources:
+          request.blockResources ?? site?.defaultBlockResources ?? undefined,
+        loginUrl: site?.loginUrl,
+        profileName,
+        siteId: site?.siteId ?? request.siteId,
+        timeoutMs: request.timeoutMs ?? site?.defaultTimeoutMs,
+        verifyUrl: site?.verifyUrl,
+      },
+      ...(site ? { site } : {}),
+    };
+  }
+
+  private resolveAuthUsage(
     request: BrowserContentRequest,
-  ): Promise<{ auth: BrowserAuthUsage; storageState?: unknown }> {
-    if (!request.profileName) {
+    _site: BrowserSiteConfig | undefined,
+  ): BrowserAuthUsage {
+    if (request.authPolicy === 'required' && request.profileName) {
       return {
-        auth: { status: 'anonymous', used: false },
+        profileName: request.profileName,
+        status: 'available',
+        used: true,
       };
     }
 
-    const hasProfile = await this.authStateStore.hasProfile(
-      request.profileName,
-    );
-    if (!hasProfile) {
-      if (request.requireAuth === true) {
-        throw new BrowserAutomationError(
-          'AUTH_STATE_MISSING',
-          `Browser auth profile "${request.profileName}" is required but missing`,
-        );
-      }
+    if (request.profileName) {
       return {
-        auth: {
-          profileName: request.profileName,
-          status: 'missing',
-          used: false,
-        },
+        profileName: request.profileName,
+        status: 'missing',
+        used: false,
       };
     }
 
     return {
-      auth: {
-        profileName: request.profileName,
-        status: 'available',
-        used: true,
-      },
-      storageState: await this.authStateStore.readStorageState(
-        request.profileName,
-      ),
+      status: 'anonymous',
+      used: false,
     };
   }
 

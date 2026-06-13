@@ -95,6 +95,39 @@ describe('AgentClient', () => {
     );
   });
 
+  test('notifies after backend registration is accepted', () => {
+    FakeWebSocket.instances = [];
+    const registered = vi.fn();
+    const client = new AgentClient({
+      getConfig: () => config,
+      WebSocketImpl: FakeWebSocket,
+      platform: 'win32',
+      version: '0.1.0',
+      onRegistered: registered,
+    });
+
+    client.start();
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+    socket.receive(
+      JSON.stringify({
+        type: 'agent.registered',
+        payload: {
+          agentId: 'windows-pc',
+          serverTime: '2026-06-13T10:00:00.000Z',
+        },
+      }),
+    );
+
+    expect(registered).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'windows-pc',
+        backendUrl: 'http://backend.local:3000',
+        status: 'connected',
+      }),
+    );
+  });
+
   test('sends heartbeat while connected', () => {
     vi.useFakeTimers();
     FakeWebSocket.instances = [];
@@ -130,6 +163,77 @@ describe('AgentClient', () => {
     });
     client.stop();
     vi.useRealTimers();
+  });
+
+  test('includes dynamic browser capabilities in hello payload', () => {
+    FakeWebSocket.instances = [];
+    const client = new AgentClient({
+      getCapabilities: () => ['browser'],
+      getConfig: () => config,
+      WebSocketImpl: FakeWebSocket,
+      platform: 'win32',
+      version: '0.1.0',
+    });
+
+    client.start();
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+
+    expect(JSON.parse(socket.sent[0])).toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          capabilities: ['browser'],
+        }),
+      }),
+    );
+  });
+
+  test('handles browser commands and sends browser results', async () => {
+    FakeWebSocket.instances = [];
+    const client = new AgentClient({
+      getCapabilities: () => ['browser'],
+      getConfig: () => config,
+      WebSocketImpl: FakeWebSocket,
+      platform: 'win32',
+      version: '0.1.0',
+      handleBrowserCommand: async (command) => ({
+        type: 'browser.result',
+        payload: {
+          capturedAt: '2026-06-13T10:00:00.000Z',
+          command: command.command,
+          commandId: command.commandId,
+          detection: { kind: 'ok' },
+          finalUrl: command.url,
+        },
+      }),
+    });
+
+    client.start();
+    const socket = FakeWebSocket.instances[0];
+    socket.receive(
+      JSON.stringify({
+        type: 'browser.command',
+        payload: {
+          authPolicy: 'anonymous',
+          command: 'browser.capturePage',
+          commandId: 'cmd-1',
+          siteId: 'example',
+          url: 'https://example.com/',
+        },
+      }),
+    );
+    await Promise.resolve();
+
+    expect(JSON.parse(socket.sent[0])).toEqual({
+      type: 'browser.result',
+      payload: {
+        capturedAt: '2026-06-13T10:00:00.000Z',
+        command: 'browser.capturePage',
+        commandId: 'cmd-1',
+        detection: { kind: 'ok' },
+        finalUrl: 'https://example.com/',
+      },
+    });
   });
 
   test('reconnects after close while enabled', () => {

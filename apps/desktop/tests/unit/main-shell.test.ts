@@ -27,5 +27,26 @@ describe('desktop main shell contract', () => {
     expect(mainSource).toContain('windowState');
     expect(mainSource).toContain('isMaximized');
     expect(mainSource).toContain('configStore.savePatch');
+    expect(mainSource).toContain('mainWindow.isDestroyed()');
+    expect(mainSource).toContain("mainWindow.on('closed'");
+  });
+
+  test('exposes local data paths in app info', () => {
+    expect(mainSource).toContain(
+      "browserProfilesDir: join(app.getPath('userData'), 'browser-profiles')",
+    );
+    expect(mainSource).toContain(
+      "configPath: join(app.getPath('userData'), 'config.json')",
+    );
+    expect(mainSource).toContain("userDataDir: app.getPath('userData')");
+  });
+
+  test('syncs local browser state after agent registration', () => {
+    expect(mainSource).toContain('reportLocalBrowserStateToBackend');
+    expect(mainSource).toContain('onRegistered: (state)');
+    expect(mainSource).toContain('profileStore.listProfiles()');
+    expect(mainSource).toContain(
+      "task.status === 'open' || task.status === 'in_progress'",
+    );
   });
 });

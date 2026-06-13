@@ -3,8 +3,12 @@ import type { IncomingMessage } from 'node:http';
 import { parse as parseUrl } from 'node:url';
 import {
   type AgentClientMessage,
+  type BrowserCommandPayload,
+  type BrowserErrorMessage,
+  type BrowserResultMessage,
   createAgentErrorMessage,
   createAgentRegisteredMessage,
+  createBrowserCommandMessage,
   parseAgentClientMessageJson,
 } from '@cthutool/agent-protocol';
 import {
@@ -33,10 +37,23 @@ type SocketState = {
   agentId?: string;
 };
 
+type PendingBrowserCommand = {
+  readonly agentId: string;
+  readonly timer: NodeJS.Timeout;
+  readonly resolve: (
+    message: BrowserResultMessage | BrowserErrorMessage,
+  ) => void;
+  readonly reject: (error: Error) => void;
+};
+
 @Injectable()
 export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
   private readonly server = new WebSocketServer({ noServer: true });
   private readonly sockets = new Map<string, WebSocket>();
+  private readonly pendingBrowserCommands = new Map<
+    string,
+    PendingBrowserCommand
+  >();
   private sweepTimer?: NodeJS.Timeout;
 
   constructor(
@@ -69,6 +86,56 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       socket.close();
     }
     this.sockets.clear();
+    for (const pending of this.pendingBrowserCommands.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('agent websocket server stopped'));
+    }
+    this.pendingBrowserCommands.clear();
+  }
+
+  sendBrowserCommand(
+    agentId: string,
+    payload: BrowserCommandPayload,
+    timeoutMs = 30_000,
+  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    const status = this.registry
+      .listOnlineAgents()
+      .find((agent) => agent.agentId === agentId);
+    if (!status) {
+      return Promise.reject(new Error(`Agent "${agentId}" is not online`));
+    }
+
+    const socket = this.sockets.get(status.connectionId);
+    if (!socket || socket.readyState !== 1) {
+      return Promise.reject(new Error(`Agent "${agentId}" socket is not open`));
+    }
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingBrowserCommands.delete(payload.commandId);
+        reject(new Error(`Browser command "${payload.commandId}" timed out`));
+      }, timeoutMs);
+      timer.unref();
+
+      this.pendingBrowserCommands.set(payload.commandId, {
+        agentId,
+        reject,
+        resolve,
+        timer,
+      });
+
+      socket.send(
+        JSON.stringify(createBrowserCommandMessage(payload)),
+        (error) => {
+          if (!error) {
+            return;
+          }
+          clearTimeout(timer);
+          this.pendingBrowserCommands.delete(payload.commandId);
+          reject(error);
+        },
+      );
+    });
   }
 
   private readonly handleUpgrade = (
@@ -121,12 +188,21 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (parsed.value.type === 'agent.hello') {
-      this.handleHello(socket, state, parsed.value);
-      return;
+    switch (parsed.value.type) {
+      case 'agent.hello':
+        this.handleHello(socket, state, parsed.value);
+        return;
+      case 'agent.heartbeat':
+        this.handleHeartbeat(socket, state, parsed.value);
+        return;
+      case 'browser.result':
+      case 'browser.error':
+        this.handleBrowserResponse(socket, state, parsed.value);
+        return;
+      case 'browser.profileStatus':
+        this.handleProfileStatus(socket, state, parsed.value);
+        return;
     }
-
-    this.handleHeartbeat(socket, state, parsed.value);
   }
 
   private handleHello(
@@ -193,6 +269,41 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       connectionId: state.connectionId,
       agentId: result.status.agentId,
     });
+  }
+
+  private handleBrowserResponse(
+    socket: WebSocket,
+    state: SocketState,
+    message: BrowserResultMessage | BrowserErrorMessage,
+  ): void {
+    const pending = this.pendingBrowserCommands.get(message.payload.commandId);
+    if (!pending) {
+      this.reject(
+        socket,
+        state,
+        'browser response does not match a pending command',
+      );
+      return;
+    }
+    if (!state.agentId || state.agentId !== pending.agentId) {
+      this.reject(
+        socket,
+        state,
+        'browser response must come from the target agent',
+      );
+      return;
+    }
+    clearTimeout(pending.timer);
+    this.pendingBrowserCommands.delete(message.payload.commandId);
+    pending.resolve(message);
+  }
+
+  private handleProfileStatus(
+    _socket: WebSocket,
+    _state: SocketState,
+    _message: Extract<AgentClientMessage, { type: 'browser.profileStatus' }>,
+  ): void {
+    // Browser profile status is consumed by browser automation commands for now.
   }
 
   private reject(socket: WebSocket, state: SocketState, message: string): void {

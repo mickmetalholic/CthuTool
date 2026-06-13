@@ -22,15 +22,24 @@ export type BrowserDetection = {
 
 export type BrowserAuthUsage = {
   readonly profileName?: string;
-  readonly status: 'anonymous' | 'available' | 'missing' | 'expired' | 'unknown';
+  readonly status:
+    | 'anonymous'
+    | 'available'
+    | 'missing'
+    | 'expired'
+    | 'unknown';
   readonly used: boolean;
 };
 
 export type BrowserContentRequest = {
   readonly url: string;
-  readonly allowedOrigins: readonly string[];
+  readonly siteId?: string;
+  readonly allowedOrigins?: readonly string[];
   readonly profileName?: string;
+  readonly authPolicy?: 'anonymous' | 'required';
   readonly requireAuth?: boolean;
+  readonly loginUrl?: string;
+  readonly verifyUrl?: string;
   readonly includeHtml?: boolean;
   readonly includeText?: boolean;
   readonly includeScreenshot?: boolean;
@@ -39,11 +48,11 @@ export type BrowserContentRequest = {
   readonly waitUntil?: 'domcontentloaded' | 'load' | 'networkidle';
 };
 
-export type BrowserProviderRequest = BrowserContentRequest & {
-  readonly storageState?: unknown;
-};
+export type BrowserProviderRequest = BrowserContentRequest;
 
 export type BrowserProviderSnapshot = {
+  readonly agentId?: string;
+  readonly detection?: BrowserDetection;
   readonly finalUrl: string;
   readonly status?: number;
   readonly title?: string;
@@ -65,7 +74,9 @@ export type BrowserDiagnosticsSummary = {
 };
 
 export type BrowserProvider = {
-  capturePage(request: BrowserProviderRequest): Promise<BrowserProviderSnapshot>;
+  capturePage(
+    request: BrowserProviderRequest,
+  ): Promise<BrowserProviderSnapshot>;
 };
 
 export type BrowserAuthBundleMeta = {
@@ -94,3 +105,37 @@ export type BrowserProfileStatus = {
   readonly source?: BrowserAuthBundleMeta['source'];
   readonly updatedAt?: string;
 };
+
+export type BrowserSiteConfig = {
+  readonly siteId: string;
+  readonly displayName: string;
+  readonly allowedOrigins: readonly string[];
+  readonly authPolicy: 'anonymous' | 'required';
+  readonly profileName?: string;
+  readonly loginUrl?: string;
+  readonly verifyUrl?: string;
+  readonly defaultBlockResources?: readonly BrowserResourceType[];
+  readonly defaultTimeoutMs?: number;
+};
+
+export type BrowserPendingAuthReason =
+  | 'missing'
+  | 'expired'
+  | 'blocked'
+  | 'verification_failed';
+
+export type BrowserPendingAuthTask = {
+  readonly id: string;
+  readonly agentId: string;
+  readonly siteId: string;
+  readonly profileName: string;
+  readonly reason: BrowserPendingAuthReason;
+  readonly loginUrl?: string;
+  readonly verifyUrl?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
+export type BrowserProfileRegistryEntry = BrowserProfileSummary;
+
+import type { BrowserProfileSummary } from '@cthutool/agent-protocol';

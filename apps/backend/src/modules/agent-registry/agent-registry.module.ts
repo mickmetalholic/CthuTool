@@ -7,6 +7,6 @@ import { AgentWebSocketServer } from './agent-websocket.server';
 @Module({
   controllers: [AgentRegistryController],
   providers: [AgentRegistryLogger, AgentRegistryService, AgentWebSocketServer],
-  exports: [AgentRegistryService],
+  exports: [AgentRegistryService, AgentWebSocketServer],
 })
 export class AgentRegistryModule {}

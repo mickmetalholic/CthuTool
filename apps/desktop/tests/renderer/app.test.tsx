@@ -30,6 +30,11 @@ function createDesktopApi(): DesktopApi {
       },
     }),
     getAppInfo: vi.fn().mockResolvedValue({
+      browserProfilesDir:
+        'C:\\Users\\yuans\\AppData\\Roaming\\CthuDesktop\\browser-profiles',
+      configPath:
+        'C:\\Users\\yuans\\AppData\\Roaming\\CthuDesktop\\config.json',
+      userDataDir: 'C:\\Users\\yuans\\AppData\\Roaming\\CthuDesktop',
       version: '0.0.0',
       platform: 'win32',
       isPackaged: false,
@@ -65,12 +70,51 @@ function createDesktopApi(): DesktopApi {
       environmentLabel: 'Local',
       lastRegisteredAt: '2026-06-13T10:00:00.000Z',
     }),
+    getLocalPendingAuthTasks: vi.fn().mockResolvedValue([]),
+    openBrowserLogin: vi.fn().mockResolvedValue(undefined),
+    verifyBrowserProfile: vi.fn().mockResolvedValue(undefined),
+    clearBrowserProfile: vi.fn().mockResolvedValue(undefined),
     windowAction: vi.fn().mockResolvedValue(undefined),
     onConnectionStateChange: vi.fn().mockReturnValue(() => undefined),
   };
 }
 
 describe('CthuDesktop shell', () => {
+  function createFetchBrowserStatus() {
+    return vi.fn().mockResolvedValue({
+      pendingAuthTasks: [
+        {
+          id: 'agent-1:douban:douban-main',
+          agentId: 'agent-1',
+          siteId: 'douban',
+          profileName: 'douban-main',
+          reason: 'missing',
+          updatedAt: '2026-06-13T10:00:00.000Z',
+        },
+      ],
+      profiles: [
+        {
+          agentId: 'agent-1',
+          siteId: 'douban',
+          profileName: 'douban-main',
+          status: 'verified',
+          updatedAt: '2026-06-13T10:00:00.000Z',
+        },
+      ],
+      sites: [
+        {
+          siteId: 'douban',
+          displayName: 'Douban',
+          allowedOrigins: ['https://movie.douban.com'],
+          authPolicy: 'required',
+          profileName: 'douban-main',
+          loginUrl: 'https://accounts.douban.com/passport/login',
+          verifyUrl: 'https://www.douban.com/mine/',
+        },
+      ],
+    });
+  }
+
   function primaryNavButton(name: string) {
     return within(screen.getByLabelText('Primary')).getByRole('button', {
       name,
@@ -93,7 +137,13 @@ describe('CthuDesktop shell', () => {
       },
     ]);
 
-    render(<App desktopApi={desktopApi} fetchAgents={fetchAgents} />);
+    render(
+      <App
+        desktopApi={desktopApi}
+        fetchAgents={fetchAgents}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+      />,
+    );
 
     expect(await screen.findByText('CthuDesktop')).toBeInTheDocument();
     expect(await screen.findAllByText('Connected')).not.toHaveLength(0);
@@ -112,6 +162,7 @@ describe('CthuDesktop shell', () => {
       <App
         desktopApi={desktopApi}
         fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
       />,
     );
 
@@ -155,6 +206,7 @@ describe('CthuDesktop shell', () => {
       <App
         desktopApi={createDesktopApi()}
         fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
       />,
     );
 
@@ -177,6 +229,7 @@ describe('CthuDesktop shell', () => {
       <App
         desktopApi={createDesktopApi()}
         fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
       />,
     );
 
@@ -191,6 +244,39 @@ describe('CthuDesktop shell', () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText('win32')).toHaveLength(2);
     expect(screen.getByText('0.0.0')).toBeInTheDocument();
+    expect(screen.getByText('Browser Profiles')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'C:\\Users\\yuans\\AppData\\Roaming\\CthuDesktop\\browser-profiles',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  test('shows a restart hint when local path info is not available yet', async () => {
+    const desktopApi = createDesktopApi();
+    vi.mocked(desktopApi.getAppInfo).mockResolvedValue({
+      version: '0.0.0',
+      platform: 'win32',
+      isPackaged: false,
+    } as Awaited<ReturnType<DesktopApi['getAppInfo']>>);
+
+    render(
+      <App
+        desktopApi={desktopApi}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+      />,
+    );
+
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open client status',
+      }),
+    );
+
+    expect(
+      await screen.findAllByText('Restart CthuDesktop to load path info'),
+    ).toHaveLength(3);
   });
 
   test('shows a recoverable agent list failure', async () => {
@@ -198,6 +284,7 @@ describe('CthuDesktop shell', () => {
       <App
         desktopApi={createDesktopApi()}
         fetchAgents={vi.fn().mockRejectedValue(new Error('backend offline'))}
+        fetchBrowserStatus={createFetchBrowserStatus()}
       />,
     );
 
@@ -205,18 +292,102 @@ describe('CthuDesktop shell', () => {
     expect(await screen.findByText('backend offline')).toBeInTheDocument();
   });
 
-  test('renders local chrome as unavailable placeholder', async () => {
+  test('renders browser profiles and login state in one tab', async () => {
     render(
       <App
         desktopApi={createDesktopApi()}
         fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
       />,
     );
 
-    await userEvent.click(primaryNavButton('Chrome'));
+    await userEvent.click(primaryNavButton('Browser Profiles'));
     expect(
-      screen.getByRole('heading', { name: 'Local Chrome', level: 1 }),
+      screen.getByRole('heading', { name: 'Browser Profiles', level: 1 }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    expect(await screen.findByText('Browser Sites')).toBeInTheDocument();
+    expect(screen.getAllByText('douban-main')).not.toHaveLength(0);
+    expect(screen.getByText('verified')).toBeInTheDocument();
+    expect(screen.getByText('missing')).toBeInTheDocument();
+  });
+
+  test('shows browser action errors instead of silently ignoring them', async () => {
+    const desktopApi = createDesktopApi();
+    vi.mocked(desktopApi.openBrowserLogin).mockResolvedValue({
+      type: 'browser.error',
+      payload: {
+        command: 'browser.openLogin',
+        commandId: 'cmd-1',
+        code: 'BROWSER_COMMAND_FAILED',
+        message: 'Executable does not exist',
+      },
+    });
+
+    render(
+      <App
+        desktopApi={desktopApi}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+      />,
+    );
+
+    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
+
+    expect(
+      await screen.findByText('Executable does not exist'),
+    ).toBeInTheDocument();
+  });
+
+  test('shows a warning when login window opens but navigation fails', async () => {
+    const desktopApi = createDesktopApi();
+    vi.mocked(desktopApi.openBrowserLogin).mockResolvedValue({
+      type: 'browser.result',
+      payload: {
+        capturedAt: '2026-06-13T10:00:00.000Z',
+        command: 'browser.openLogin',
+        commandId: 'cmd-1',
+        detection: {
+          kind: 'blocked',
+          reason: 'page.goto: net::ERR_CONNECTION_TIMED_OUT',
+        },
+        finalUrl: 'about:blank',
+      },
+    });
+
+    render(
+      <App
+        desktopApi={desktopApi}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+      />,
+    );
+
+    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
+
+    expect(
+      await screen.findByText(/Login window opened, but navigation failed/),
+    ).toBeInTheDocument();
+  });
+
+  test('shows a restart hint when browser action APIs are missing from preload', async () => {
+    const desktopApi = createDesktopApi() as Partial<DesktopApi>;
+    delete desktopApi.openBrowserLogin;
+
+    render(
+      <App
+        desktopApi={desktopApi as DesktopApi}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+      />,
+    );
+
+    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
+
+    expect(
+      await screen.findByText(/Restart the desktop app/),
+    ).toBeInTheDocument();
   });
 });

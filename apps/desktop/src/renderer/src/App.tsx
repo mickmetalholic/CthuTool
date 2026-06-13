@@ -22,7 +22,11 @@ import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AgentConnectionState } from '../../main/agent-client';
 import type { DesktopConfig } from '../../main/config';
-import { fetchConnectedAgents } from './agents-api';
+import {
+  type BrowserStatus,
+  fetchBrowserStatus as fetchBrowserStatusFromBackend,
+  fetchConnectedAgents,
+} from './agents-api';
 import appIcon from './assets/cthudesktop-icon.svg?url';
 import { type DesktopApi, getDesktopApi } from './desktop-api';
 import './styles.css';
@@ -30,10 +34,16 @@ import './styles.css';
 type AppProps = {
   readonly desktopApi?: DesktopApi;
   readonly fetchAgents?: typeof fetchConnectedAgents;
+  readonly fetchBrowserStatus?: typeof fetchBrowserStatusFromBackend;
 };
 
+type LocalPendingAuthTask = Awaited<
+  ReturnType<DesktopApi['getLocalPendingAuthTasks']>
+>[number];
+type DesktopAppInfo = Awaited<ReturnType<DesktopApi['getAppInfo']>>;
+
 type Workspace = 'main' | 'settings';
-type MainView = 'home' | 'chrome' | 'agents';
+type MainView = 'home' | 'browser' | 'agents';
 type SettingsView =
   | 'service'
   | 'status'
@@ -50,7 +60,7 @@ const emptyState: AgentConnectionState = {
 
 const mainNav = [
   { id: 'home', label: 'Home', icon: Home },
-  { id: 'chrome', label: 'Chrome', icon: Chrome },
+  { id: 'browser', label: 'Browser Profiles', icon: Chrome },
   { id: 'agents', label: 'Agents', icon: Bot },
 ] as const;
 
@@ -65,6 +75,7 @@ const settingsNav = [
 export function App({
   desktopApi = getDesktopApi(),
   fetchAgents = fetchConnectedAgents,
+  fetchBrowserStatus = fetchBrowserStatusFromBackend,
 }: AppProps) {
   const [workspace, setWorkspace] = useState<Workspace>('main');
   const [mainView, setMainView] = useState<MainView>('home');
@@ -81,10 +92,28 @@ export function App({
     useState<AgentConnectionState>(emptyState);
   const [agents, setAgents] = useState<PublicAgentStatus[]>([]);
   const [agentsError, setAgentsError] = useState<string | undefined>();
+  const [browserStatus, setBrowserStatus] = useState<BrowserStatus>({
+    pendingAuthTasks: [],
+    profiles: [],
+    sites: [],
+  });
+  const [browserStatusError, setBrowserStatusError] = useState<
+    string | undefined
+  >();
+  const [localPendingAuthTasks, setLocalPendingAuthTasks] = useState<
+    LocalPendingAuthTask[]
+  >([]);
+  const [browserActionState, setBrowserActionState] = useState<{
+    readonly message?: string;
+    readonly status: 'idle' | 'running' | 'success' | 'error';
+  }>({ status: 'idle' });
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>(
     'idle',
   );
-  const [appInfo, setAppInfo] = useState({
+  const [appInfo, setAppInfo] = useState<DesktopAppInfo>({
+    browserProfilesDir: '',
+    configPath: '',
+    userDataDir: '',
     version: '0.0.0',
     platform: 'unknown',
     isPackaged: false,
@@ -150,13 +179,73 @@ export function App({
     }
   }, [backendUrl, fetchAgents]);
 
+  const refreshBrowserStatus = useCallback(async () => {
+    if (!backendUrl) return;
+    try {
+      setBrowserStatusError(undefined);
+      setBrowserStatus(await fetchBrowserStatus(backendUrl));
+    } catch (error) {
+      setBrowserStatusError(
+        error instanceof Error ? error.message : 'Browser status failed',
+      );
+    }
+  }, [backendUrl, fetchBrowserStatus]);
+
+  const refreshLocalPendingAuthTasks = useCallback(async () => {
+    setLocalPendingAuthTasks(await desktopApi.getLocalPendingAuthTasks());
+  }, [desktopApi]);
+
+  const runBrowserSiteAction = useCallback(
+    async (
+      action: 'openLogin' | 'verifyProfile' | 'clearProfile',
+      site: BrowserStatus['sites'][number],
+    ) => {
+      setBrowserActionState({
+        message: `${browserActionVerb(action)} ${site.displayName}`,
+        status: 'running',
+      });
+      const input = {
+        loginUrl: site.loginUrl,
+        profileName: site.profileName,
+        siteId: site.siteId,
+        verifyUrl: site.verifyUrl,
+      };
+      try {
+        const runAction = resolveBrowserAction(desktopApi, action);
+        const result = await runAction(input);
+        assertBrowserActionResult(result);
+        setBrowserActionState({
+          message:
+            getBrowserResultWarning(result) ??
+            `${browserActionDone(action)} ${site.displayName}`,
+          status: 'success',
+        });
+      } catch (error) {
+        setBrowserActionState({
+          message:
+            error instanceof Error
+              ? error.message
+              : `${browserActionVerb(action)} failed`,
+          status: 'error',
+        });
+      }
+      await refreshLocalPendingAuthTasks();
+      await refreshBrowserStatus();
+    },
+    [desktopApi, refreshBrowserStatus, refreshLocalPendingAuthTasks],
+  );
+
   useEffect(() => {
     void refreshAgents();
+    void refreshBrowserStatus();
+    void refreshLocalPendingAuthTasks();
     const timer = setInterval(() => {
       void refreshAgents();
+      void refreshBrowserStatus();
+      void refreshLocalPendingAuthTasks();
     }, 5000);
     return () => clearInterval(timer);
-  }, [refreshAgents]);
+  }, [refreshAgents, refreshBrowserStatus, refreshLocalPendingAuthTasks]);
 
   const saveConfig = async () => {
     setSaveState('saving');
@@ -333,7 +422,13 @@ export function App({
                 view: mainView,
                 agents,
                 agentsError,
+                browserStatus,
+                browserStatusError,
+                browserActionState,
+                localPendingAuthTasks,
                 refreshAgents,
+                refreshBrowserStatus,
+                runBrowserSiteAction,
                 connection,
                 config,
               })
@@ -413,25 +508,45 @@ function renderMainWorkspace({
   view,
   agents,
   agentsError,
+  browserStatus,
+  browserStatusError,
+  browserActionState,
+  localPendingAuthTasks,
   refreshAgents,
+  refreshBrowserStatus,
+  runBrowserSiteAction,
   connection,
   config,
 }: {
   readonly view: MainView;
   readonly agents: readonly PublicAgentStatus[];
   readonly agentsError: string | undefined;
+  readonly browserStatus: BrowserStatus;
+  readonly browserStatusError: string | undefined;
+  readonly browserActionState: {
+    readonly message?: string;
+    readonly status: 'idle' | 'running' | 'success' | 'error';
+  };
+  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
   readonly refreshAgents: () => Promise<void>;
+  readonly refreshBrowserStatus: () => Promise<void>;
+  readonly runBrowserSiteAction: (
+    action: 'openLogin' | 'verifyProfile' | 'clearProfile',
+    site: BrowserStatus['sites'][number],
+  ) => Promise<void>;
   readonly connection: AgentConnectionState;
   readonly config: DesktopConfig | undefined;
 }) {
-  if (view === 'chrome') {
+  if (view === 'browser') {
     return (
-      <WorkspacePanel title="Local Chrome" eyebrow="Capability">
-        <div className="placeholder-panel">
-          <Chrome size={34} />
-          <h2>Local Chrome</h2>
-          <p>Unavailable</p>
-        </div>
+      <WorkspacePanel title="Browser Profiles" eyebrow="Browser">
+        <BrowserStatusPanel
+          browserStatus={browserStatus}
+          browserStatusError={browserStatusError}
+          browserActionState={browserActionState}
+          localPendingAuthTasks={localPendingAuthTasks}
+          runBrowserSiteAction={runBrowserSiteAction}
+        />
       </WorkspacePanel>
     );
   }
@@ -442,6 +557,7 @@ function renderMainWorkspace({
         agents={agents}
         agentsError={agentsError}
         refreshAgents={refreshAgents}
+        refreshBrowserStatus={refreshBrowserStatus}
       />
     );
   }
@@ -462,7 +578,7 @@ function renderMainWorkspace({
       </div>
       <div className="capability-grid">
         <CapabilityCard title="Agent Console" value="Available" />
-        <CapabilityCard title="Local Chrome" value="Later" muted />
+        <CapabilityCard title="Browser Profiles" value="Available" />
         <CapabilityCard title="Task Runs" value="Later" muted />
       </div>
     </WorkspacePanel>
@@ -503,6 +619,9 @@ function renderSettingsWorkspace({
   readonly saveState: 'idle' | 'saving' | 'saved';
   readonly connection: AgentConnectionState;
   readonly appInfo: {
+    readonly browserProfilesDir: string;
+    readonly configPath: string;
+    readonly userDataDir: string;
     readonly version: string;
     readonly platform: string;
     readonly isPackaged: boolean;
@@ -550,6 +669,9 @@ function renderSettingsWorkspace({
             ['Connection', connection.status],
             ['Version', appInfo.version],
             ['Platform', appInfo.platform],
+            ['User Data', localPathValue(appInfo.userDataDir)],
+            ['Browser Profiles', localPathValue(appInfo.browserProfilesDir)],
+            ['Config File', localPathValue(appInfo.configPath)],
           ]}
         />
       </WorkspacePanel>
@@ -668,10 +790,12 @@ function AgentsPanel({
   agents,
   agentsError,
   refreshAgents,
+  refreshBrowserStatus,
 }: {
   readonly agents: readonly PublicAgentStatus[];
   readonly agentsError: string | undefined;
   readonly refreshAgents: () => Promise<void>;
+  readonly refreshBrowserStatus: () => Promise<void>;
 }) {
   return (
     <WorkspacePanel title="Agents" eyebrow="Main">
@@ -681,7 +805,10 @@ function AgentsPanel({
           type="button"
           className="icon-button"
           aria-label="Refresh agents"
-          onClick={() => void refreshAgents()}
+          onClick={() => {
+            void refreshAgents();
+            void refreshBrowserStatus();
+          }}
         >
           <RefreshCw size={16} />
         </button>
@@ -722,6 +849,223 @@ function AgentsPanel({
         </tbody>
       </table>
     </WorkspacePanel>
+  );
+}
+
+function BrowserStatusPanel({
+  browserStatus,
+  browserStatusError,
+  browserActionState,
+  localPendingAuthTasks,
+  runBrowserSiteAction,
+}: {
+  readonly browserStatus: BrowserStatus;
+  readonly browserStatusError: string | undefined;
+  readonly browserActionState: {
+    readonly message?: string;
+    readonly status: 'idle' | 'running' | 'success' | 'error';
+  };
+  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
+  readonly runBrowserSiteAction: (
+    action: 'openLogin' | 'verifyProfile' | 'clearProfile',
+    site: BrowserStatus['sites'][number],
+  ) => Promise<void>;
+}) {
+  return (
+    <div className="browser-status-grid">
+      {browserStatusError ? (
+        <p className="error-text">{browserStatusError}</p>
+      ) : null}
+      {browserActionState.status !== 'idle' && browserActionState.message ? (
+        <p className={`browser-action-message ${browserActionState.status}`}>
+          {browserActionState.message}
+        </p>
+      ) : null}
+      <section className="mini-status">
+        <h2>Browser Sites</h2>
+        {browserStatus.sites.length > 0 ? (
+          <div className="mini-status-list">
+            {browserStatus.sites.map((site) => (
+              <div className="site-status-row" key={site.siteId}>
+                <div>
+                  <strong>{site.displayName}</strong>
+                  <small>{site.profileName ?? 'anonymous'}</small>
+                </div>
+                <span>{site.authPolicy}</span>
+                <div className="site-actions">
+                  <button
+                    type="button"
+                    disabled={
+                      site.authPolicy !== 'required' ||
+                      browserActionState.status === 'running'
+                    }
+                    onClick={() => void runBrowserSiteAction('openLogin', site)}
+                  >
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      site.authPolicy !== 'required' ||
+                      browserActionState.status === 'running'
+                    }
+                    onClick={() =>
+                      void runBrowserSiteAction('verifyProfile', site)
+                    }
+                  >
+                    Verify
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      site.authPolicy !== 'required' ||
+                      browserActionState.status === 'running'
+                    }
+                    onClick={() =>
+                      void runBrowserSiteAction('clearProfile', site)
+                    }
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>No browser sites</p>
+        )}
+      </section>
+      <MiniStatusTable
+        emptyLabel="No profile summaries"
+        rows={browserStatus.profiles.map((profile) => [
+          profile.siteId,
+          profile.profileName,
+          profile.status,
+        ])}
+        title="Profiles"
+      />
+      <MiniStatusTable
+        emptyLabel="No pending auth tasks"
+        rows={[...browserStatus.pendingAuthTasks, ...localPendingAuthTasks].map(
+          (task) => [task.siteId, task.profileName, task.reason],
+        )}
+        title="Pending Auth"
+      />
+    </div>
+  );
+}
+
+function resolveBrowserAction(
+  desktopApi: DesktopApi,
+  action: 'openLogin' | 'verifyProfile' | 'clearProfile',
+): (input: {
+  readonly siteId: string;
+  readonly profileName?: string;
+  readonly loginUrl?: string;
+  readonly verifyUrl?: string;
+}) => Promise<unknown> {
+  const actionMethod =
+    action === 'openLogin'
+      ? desktopApi.openBrowserLogin
+      : action === 'verifyProfile'
+        ? desktopApi.verifyBrowserProfile
+        : desktopApi.clearBrowserProfile;
+
+  if (typeof actionMethod !== 'function') {
+    throw new Error(
+      'Browser actions are not available in this CthuDesktop window. Restart the desktop app so the updated preload API is loaded.',
+    );
+  }
+
+  return actionMethod;
+}
+
+function getBrowserResultWarning(result: unknown): string | undefined {
+  if (
+    !result ||
+    typeof result !== 'object' ||
+    !('type' in result) ||
+    result.type !== 'browser.result' ||
+    !('payload' in result) ||
+    !result.payload ||
+    typeof result.payload !== 'object'
+  ) {
+    return undefined;
+  }
+  const payload = result.payload as {
+    readonly detection?: { readonly kind?: string; readonly reason?: string };
+  };
+  if (payload.detection?.kind !== 'blocked') {
+    return undefined;
+  }
+  return payload.detection.reason
+    ? `Login window opened, but navigation failed: ${payload.detection.reason}`
+    : 'Login window opened, but navigation failed.';
+}
+
+function assertBrowserActionResult(result: unknown): void {
+  if (
+    result &&
+    typeof result === 'object' &&
+    'type' in result &&
+    result.type === 'browser.error'
+  ) {
+    const payload =
+      'payload' in result &&
+      result.payload &&
+      typeof result.payload === 'object'
+        ? result.payload
+        : undefined;
+    const message =
+      payload && 'message' in payload && typeof payload.message === 'string'
+        ? payload.message
+        : 'Browser action failed';
+    throw new Error(message);
+  }
+}
+
+function browserActionVerb(
+  action: 'openLogin' | 'verifyProfile' | 'clearProfile',
+): string {
+  if (action === 'openLogin') return 'Opening';
+  if (action === 'verifyProfile') return 'Verifying';
+  return 'Clearing';
+}
+
+function browserActionDone(
+  action: 'openLogin' | 'verifyProfile' | 'clearProfile',
+): string {
+  if (action === 'openLogin') return 'Login window opened for';
+  if (action === 'verifyProfile') return 'Verified';
+  return 'Cleared';
+}
+
+function MiniStatusTable({
+  emptyLabel,
+  rows,
+  title,
+}: {
+  readonly emptyLabel: string;
+  readonly rows: readonly (readonly [string, string, string])[];
+  readonly title: string;
+}) {
+  return (
+    <section className="mini-status">
+      <h2>{title}</h2>
+      {rows.length > 0 ? (
+        <div className="mini-status-list">
+          {rows.map(([left, middle, right]) => (
+            <div className="mini-status-row" key={`${left}:${middle}:${right}`}>
+              <strong>{left}</strong>
+              <span>{middle}</span>
+              <small>{right}</small>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p>{emptyLabel}</p>
+      )}
+    </section>
   );
 }
 
@@ -769,6 +1113,10 @@ function StatusList({ rows }: { readonly rows: readonly [string, string][] }) {
       ))}
     </dl>
   );
+}
+
+function localPathValue(value: string): string {
+  return value || 'Restart CthuDesktop to load path info';
 }
 
 function SaveButton({

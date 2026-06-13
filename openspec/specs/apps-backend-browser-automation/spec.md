@@ -1,100 +1,38 @@
 ## Purpose
 Define backend-owned browser automation services, browser auth profiles, controlled diagnostics, and CLI auth helper behavior for internal page content retrieval.
-
 ## Requirements
-
 ### Requirement: Internal browser content service
-The backend SHALL provide an internal browser content service that retrieves controlled page content snapshots for other backend modules.
+The backend SHALL provide an internal browser content service that retrieves controlled page content snapshots for other backend modules by dispatching browser work to desktop agents.
 
 #### Scenario: Fetch page content snapshot
-- **WHEN** a backend module requests a page content snapshot for an allowed URL with HTML and text enabled
-- **THEN** the service returns the final URL, response status when available, page title when available, captured timestamp, optional HTML, optional text, auth usage metadata, and a detection result
+- **WHEN** a backend module requests a page content snapshot for a configured site with HTML and text enabled
+- **THEN** the service returns the final URL, response status when available, page title when available, captured timestamp, optional HTML, optional text, auth usage metadata, selected agent metadata, and a detection result
 
 #### Scenario: Raw browser page is not exposed
 - **WHEN** a backend module uses the browser content service
-- **THEN** the service result does not expose a raw Playwright page, browser context, cookies, localStorage, or storage-state file contents
+- **THEN** the service result does not expose a raw Playwright page, browser context, cookies, localStorage, storage-state file contents, or desktop profile path
 
 ### Requirement: Browser provider abstraction
-The backend SHALL hide browser runtime details behind a provider abstraction and SHALL include a local Playwright-backed provider as the initial implementation.
+The backend SHALL hide browser runtime details behind an agent-backed provider abstraction and SHALL NOT include a backend-local Playwright provider as a supported implementation.
 
-#### Scenario: Local provider creates content snapshot
-- **WHEN** the configured provider is the local Playwright provider and a page content request is accepted
-- **THEN** the provider creates an isolated browser context, navigates to the requested URL, captures the requested content fields, and closes browser resources after the task completes
+#### Scenario: Agent provider creates content snapshot
+- **WHEN** the configured provider is the agent browser provider and a page content request is accepted
+- **THEN** the provider dispatches a controlled browser command to a selected desktop agent and returns the requested content snapshot from the agent response
 
 #### Scenario: Provider can be replaced later
 - **WHEN** a future browser runtime provider is added
 - **THEN** business modules using the browser content service do not need to change their content request or result handling contract
 
 ### Requirement: Origin allowlist enforcement
-The browser content service SHALL require each page content request to declare allowed origins and SHALL reject navigation outside those origins.
+The browser content service SHALL require each page content request to resolve to a configured site origin and SHALL reject navigation outside that site's origins.
 
 #### Scenario: URL origin is allowed
-- **WHEN** a request URL has an origin listed in the request allowed origins
-- **THEN** the service continues with browser navigation
+- **WHEN** a request URL has an origin listed by the resolved site configuration
+- **THEN** the service continues with agent browser dispatch
 
 #### Scenario: URL origin is rejected
-- **WHEN** a request URL has an origin not listed in the request allowed origins
-- **THEN** the service fails before navigation with an `ORIGIN_NOT_ALLOWED` error
-
-### Requirement: Browser auth profiles
-The backend SHALL support named browser auth profiles stored as Playwright-compatible storage-state bundles in a configured secrets directory.
-
-#### Scenario: Auth profile is required and present
-- **WHEN** a page content request sets `profileName` and `requireAuth` to true and a matching auth profile exists
-- **THEN** the service uses that profile storage state for browser navigation and reports that auth was used
-
-#### Scenario: Auth profile is required and missing
-- **WHEN** a page content request sets `profileName` and `requireAuth` to true and no matching auth profile exists
-- **THEN** the service fails before navigation with an `AUTH_STATE_MISSING` error
-
-#### Scenario: Optional auth profile is missing
-- **WHEN** a page content request sets `profileName` and `requireAuth` to false and no matching auth profile exists
-- **THEN** the service continues anonymously and reports that auth was not used
-
-#### Scenario: Auth state remains secret
-- **WHEN** auth profile status or page content results are returned to callers
-- **THEN** the backend does not include raw cookies, localStorage values, or storage-state file contents
-
-### Requirement: Shared auth bundle format
-The backend SHALL accept a shared auth bundle format that can be produced by CLI helper flows and browser extension flows.
-
-#### Scenario: Valid auth bundle is stored
-- **WHEN** a valid auth bundle contains a Playwright-compatible `storage-state.json` and profile metadata
-- **THEN** the backend stores the bundle under the configured profile path and records the profile source and update time
-
-#### Scenario: Invalid auth bundle is rejected
-- **WHEN** an auth bundle is missing required storage-state fields or declares an invalid profile name
-- **THEN** the backend rejects the bundle without replacing any existing stored profile
-
-### Requirement: CLI auth helper
-The CLI SHALL provide an auth helper flow that lets a user manually create a browser auth bundle for a named profile without storing account passwords.
-
-#### Scenario: Manual login exports storage state
-- **WHEN** the user runs the auth helper for a profile and completes login in the headed browser
-- **THEN** the helper exports Playwright storage state and metadata for that profile
-
-#### Scenario: Helper does not automate credentials
-- **WHEN** the CLI auth helper opens a login page
-- **THEN** it does not ask for, store, or automatically submit the user's account password
-
-#### Scenario: Browser runtime is installed explicitly
-- **WHEN** a user prepares browser auth on a machine without the required Playwright browser binary
-- **THEN** the CLI provides explicit `browser doctor` and `browser install` commands instead of relying on package install hooks
-
-#### Scenario: Stored auth profile is verified
-- **WHEN** a user verifies a stored Douban auth profile
-- **THEN** the CLI returns only the profile name and minimal user identity containing the Douban user id and nickname
-
-### Requirement: Extension auth compatibility
-The browser auth design SHALL support a future frontend-plus-browser-extension auth flow that produces the same backend auth bundle format.
-
-#### Scenario: Extension uploads equivalent auth bundle
-- **WHEN** a browser extension collects permitted cookies and origin storage for a profile
-- **THEN** it can submit a Playwright-compatible auth bundle that the backend stores through the same validation path as CLI-created bundles
-
-#### Scenario: Frontend cannot read site auth directly
-- **WHEN** the frontend auth page starts an extension-based auth flow
-- **THEN** the frontend itself does not read third-party site cookies or localStorage and relies on the extension or backend APIs for status updates
+- **WHEN** a request URL has an origin not listed by the resolved site configuration
+- **THEN** the service fails before agent dispatch with an `ORIGIN_NOT_ALLOWED` error
 
 ### Requirement: Task execution controls
 The browser content service SHALL run browser tasks through a controlled task runner with timeout, concurrency, retry, and resource blocking controls.
@@ -112,18 +50,18 @@ The browser content service SHALL run browser tasks through a controlled task ru
 - **THEN** the browser provider blocks those resource types during navigation
 
 ### Requirement: Block and auth detection
-The browser content service SHALL classify known access problems into structured detection states rather than attempting to bypass them.
+The browser content service SHALL classify access problems reported by desktop agents into structured detection states rather than attempting to bypass them.
 
 #### Scenario: Rate limit is detected
-- **WHEN** navigation returns a rate-limit status or matching page content
+- **WHEN** the desktop agent reports a rate-limit status or matching page content
 - **THEN** the service reports `rate_limited` detection and does not retry indefinitely
 
 #### Scenario: Login requirement is detected
-- **WHEN** navigation redirects to a login page or matching page content indicates that login is required
-- **THEN** the service reports `login_required` detection
+- **WHEN** the desktop agent reports a login page redirect or page content indicating that login is required
+- **THEN** the service reports `login_required` detection and updates pending auth state when the site auth policy is required
 
 #### Scenario: Captcha requirement is detected
-- **WHEN** page content indicates that captcha or abnormal access verification is required
+- **WHEN** the desktop agent reports that page content indicates captcha or abnormal access verification is required
 - **THEN** the service reports `captcha_required` detection and does not attempt automated captcha solving
 
 ### Requirement: Diagnostics storage
@@ -136,3 +74,59 @@ The browser content service SHALL store failure diagnostics behind diagnostic id
 #### Scenario: Diagnostic artifacts are not returned inline
 - **WHEN** a service result includes diagnostics
 - **THEN** the result includes only diagnostic identifiers and summaries, not raw screenshots, HTML files, cookies, or storage-state contents
+
+### Requirement: Backend browser site configuration
+The backend SHALL define browser site configurations that map allowed origins to site identifiers, auth policy, login URL, verification URL, default profile name, and detection hints.
+
+#### Scenario: Required site is configured
+- **WHEN** a backend module requests browser content for a URL whose origin matches a configured required-auth site
+- **THEN** the browser automation module resolves the site id, default profile name, login URL, verification URL, and `required` auth policy before dispatching any browser task
+
+#### Scenario: Anonymous site is configured
+- **WHEN** a backend module requests browser content for a URL whose origin matches a configured anonymous site
+- **THEN** the browser automation module resolves the site id and `anonymous` auth policy without requiring any profile
+
+#### Scenario: Unknown site is rejected
+- **WHEN** a backend module requests browser content for a URL that does not match any configured site origin
+- **THEN** the browser automation module fails before dispatching browser work with a `SITE_NOT_CONFIGURED` error
+
+### Requirement: Agent-backed browser provider
+The backend SHALL dispatch browser content requests through a connected desktop agent that advertises browser capability.
+
+#### Scenario: Browser-capable agent is available
+- **WHEN** an accepted browser content request targets a site that can be served by an online browser-capable desktop agent
+- **THEN** the backend sends a correlated browser command to that agent and maps the agent response into the browser content service result
+
+#### Scenario: No browser-capable agent is available
+- **WHEN** an accepted browser content request requires browser execution and no online desktop agent advertises browser capability
+- **THEN** the backend fails the request with `AGENT_NOT_AVAILABLE` or `AGENT_CAPABILITY_MISSING` without starting local Playwright
+
+### Requirement: Pending auth task coordination
+The backend SHALL create or update pending auth tasks when required site auth is missing or expired on the selected desktop agent.
+
+#### Scenario: Required profile is missing
+- **WHEN** a browser content request targets a required-auth site and the selected agent has not reported a verified profile for that site
+- **THEN** the backend records or updates a pending auth task with reason `missing` and returns `AUTH_PROFILE_REQUIRED`
+
+#### Scenario: Required profile expires during access
+- **WHEN** a desktop agent reports that a required profile produced a login-required or expired-auth result during browser access
+- **THEN** the backend records or updates a pending auth task with reason `expired` and marks the public profile summary as unavailable
+
+#### Scenario: Duplicate pending task is coalesced
+- **WHEN** multiple requests need the same site profile on the same desktop agent
+- **THEN** the backend updates the existing open pending auth task instead of creating duplicate tasks
+
+### Requirement: Public profile summaries
+The backend SHALL store and expose only public browser profile summaries reported by desktop agents as a non-sensitive projection of desktop-owned state.
+
+#### Scenario: Agent reports verified profile
+- **WHEN** a desktop agent reports a verified site profile
+- **THEN** the backend stores the site id, profile name, agent id, status, optional display identity, and verification timestamp
+
+#### Scenario: Agent reconnects with local profile state
+- **WHEN** a desktop agent connects or reconnects and publishes its local profile summary snapshot
+- **THEN** the backend updates its public profile projection for that agent without receiving raw cookies, localStorage values, storage-state contents, or profile directory paths
+
+#### Scenario: Raw auth state is not accepted
+- **WHEN** a client or agent submits raw cookies, localStorage, or Playwright storage-state contents to backend browser profile APIs
+- **THEN** the backend rejects or ignores those fields and does not persist them
