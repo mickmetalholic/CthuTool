@@ -9,6 +9,14 @@
 - Use prefixes such as `apps-cli-*`, `packages-<package>-*`, or `scratches-collection-hub-*` instead of generic names when creating or syncing main specs.
 - Keep existing clear area prefixes, such as `collection-hub-*`, unless a broader rename is explicitly requested.
 
+## Worktree Policy
+
+- Prefer Codex App Worktree threads for isolated Codex tasks.
+- Use project-local `.worktrees/<task>` only for manual, long-lived local debugging.
+- Keep each worktree scoped to one task or one OpenSpec change.
+- Do not archive, sync, or commit neighboring OpenSpec changes unless explicitly requested.
+- Verify the current directory and branch before running tests or committing.
+
 ## Collection Hub
 
 - For work under `scratches/collection-hub`, read `scratches/collection-hub/AGENTS.md`.
