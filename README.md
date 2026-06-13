@@ -8,7 +8,7 @@ Turborepo monorepo for CthuTool. Workspace layout follows the official `create-t
 
 ## Prerequisites
 
-- **Node.js** 20.x or newer (see `engines` in root `package.json`).
+- **Node.js** 24.x (see `engines` and `volta` in root `package.json`).
 - **pnpm** 9.15.4 (see `packageManager` in root `package.json`). Recommended:
 
   ```bash
@@ -31,12 +31,12 @@ pnpm install
 | `pnpm run build`  | Runs `turbo run build` across workspace members. |
 | `pnpm run lint`   | Runs `biome check .` at repo root.               |
 | `pnpm run lint:fix` | Runs `biome check --write .` at repo root.   |
-| `pnpm run test`   | Root Jest suite (contract + integration tests).  |
+| `pnpm run test`   | Runs root Jest tests plus workspace tests via Turborepo. |
 
 ## Layout
 
-- **`apps/`** — application packages (`apps/*` are matched by `pnpm-workspace.yaml`).
-- **`packages/`** — libraries and tooling packages (`packages/*`).
+- **`apps/`** — application packages (`apps/*` are matched by `pnpm-workspace.yaml`), including backend, CLI, and desktop apps.
+- **`packages/`** — libraries and tooling packages (`packages/*`), including shared protocol and package tooling.
 - **Package names** — use the `@cthutool/*` scope (see **Naming** below).
 
 ### Naming and directories
@@ -76,5 +76,9 @@ The workflow triggers on `push` to `main` and on `pull_request`, so Biome and co
 
 ## More documentation
 
-- Project notes live in package-level `README.md` files and OpenSpec specs under `openspec/specs/`.
+- Documentation index: `docs/README.md`.
+- Desktop app and agent console: `docs/desktop-agent-console.md`.
+- Browser login state and auth profile ownership: `docs/browser-auth.md`.
+- Package-level notes live in package `README.md` files such as `apps/cli/README.md` and `apps/backend/README.md`.
+- OpenSpec requirements live under `openspec/specs/`.
 - CthuCodex plugin details live in `codex/plugins/cthu-codex/README.md`.

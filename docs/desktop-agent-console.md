@@ -1,13 +1,15 @@
 # CthuDesktop
 
 `apps/desktop` builds `CthuDesktop`, the first CthuTool desktop app. The first
-version is a product shell for future local capabilities: it registers the
+product line is a desktop companion for local capabilities: it registers the
 current machine with the backend as an agent, shows connection state, lists
-agents reported by the backend, and reserves workspace sections for capabilities
-such as local Chrome control.
+agents reported by the backend, and hosts local browser automation state that
+must stay on the user's machine.
 
-It does not launch browsers, control Chrome, fetch pages, verify Douban login,
-or run host tasks yet.
+CthuDesktop owns local browser profiles, headed login windows, verification,
+and Playwright execution. The backend owns orchestration and public status. The
+backend does not receive raw cookies, localStorage, Playwright storage-state
+bundles, or desktop profile paths.
 
 ## Product Shell
 
@@ -72,16 +74,19 @@ Both URLs are stored in local configuration and can be edited from Settings.
 The desktop app has two parts:
 
 - Electron main process: stores local configuration and maintains the backend
-  WebSocket agent connection.
+  WebSocket agent connection. It also owns local browser profiles, pending auth
+  tasks, and the Playwright host.
 - Renderer: displays a frontend management page using main-process state and
   backend HTTP APIs.
 
-The backend owns the agent registry. Desktop instances do not call each other
-directly.
+The backend owns the agent registry and browser task orchestration. Desktop
+instances do not call each other directly, and backend browser work is routed to
+an online desktop agent with the `browser` capability.
 
 ```text
 Desktop App -> WebSocket -> Backend Agent Registry
 Desktop App -> HTTP GET /api/agents -> Backend Agent Registry
+Backend -> structured browser command -> Desktop Playwright Host
 ```
 
 ## Agent Protocol
@@ -102,16 +107,14 @@ After the socket opens it sends:
     "deviceName": "Windows PC",
     "platform": "win32",
     "version": "0.1.0",
-    "capabilities": []
+    "capabilities": ["browser"]
   }
 }
 ```
 
 The backend acknowledges with `agent.registered`. The desktop app then sends
-`agent.heartbeat` messages while connected.
-
-The first version intentionally sends an empty capabilities list. Future changes
-can add capabilities such as `browser`.
+`agent.heartbeat` messages while connected. The capability list is dynamic; the
+desktop advertises `browser` only when its local Playwright host is ready.
 
 ## Backend APIs
 
@@ -144,6 +147,17 @@ Response shape:
 The API returns public status only. It does not expose raw WebSocket objects or
 socket internals.
 
+Browser status APIs used by the CLI and desktop surfaces:
+
+```text
+GET /api/browser/sites
+GET /api/browser/profiles
+GET /api/browser/pending-auth-tasks
+```
+
+These endpoints expose configured sites, public profile summaries, and public
+pending-auth tasks. Raw browser storage stays in CthuDesktop.
+
 ## Packaging
 
 The package name and installer product name are `CthuDesktop`. App icons live
@@ -172,12 +186,15 @@ pnpm --filter @cthutool/desktop exec electron-builder --dir --config.win.signAnd
 
 ## Current Limits
 
-- No browser profile management.
-- No Playwright or CDP worker.
-- No Douban or movie parsing.
-- No backend task dispatch to agents.
+- Browser commands are structured capture, login, verify, and clear-profile
+  actions. The backend does not send arbitrary Playwright scripts for desktop to
+  evaluate.
+- Browser profiles are Playwright-managed persistent profile directories under
+  Electron app data, not direct reuse of a user's everyday Chrome profile.
+- No Douban or movie parsing in desktop.
+- No generic backend task queue or arbitrary host-task dispatch.
 - No installer signing, notarization, or auto-update.
 
-The next browser-focused change should add a `browser` capability and route
-generic browser tasks through the backend to a selected desktop agent. Douban
-searching, parsing, caching, and MCP tools should remain backend-owned.
+Douban searching, parsing, caching, and MCP tools should remain backend-owned or
+service-owned; CthuDesktop should stay focused on local browser execution and
+user-visible login state.
