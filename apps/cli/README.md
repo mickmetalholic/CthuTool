@@ -54,6 +54,17 @@ chc completion powershell | Out-String | Invoke-Expression
 
 To load it for every PowerShell session, add the same line to your PowerShell profile.
 
+Or let `chc` manage the PowerShell profile entry:
+
+```powershell
+chc completion enable powershell
+chc completion status powershell
+chc completion disable powershell
+```
+
+The managed profile entry is wrapped in `cthutool chc completion` markers so `disable` only removes the block written by `chc`.
+`enable` and `status` report the managed profile entry state. Open a new PowerShell session, or run the current-session load command above, to register completion in an already-open shell.
+
 Load zsh completion in the current session:
 
 ```zsh

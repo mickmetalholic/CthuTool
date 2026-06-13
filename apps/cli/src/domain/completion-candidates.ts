@@ -152,6 +152,17 @@ function shouldCompleteShellName(
   return path.join(' ') === 'completion' && completedWords.length === 1;
 }
 
+function shouldCompleteManagedShellName(
+  path: readonly string[],
+  completedWords: readonly string[],
+): boolean {
+  return (
+    path.join(' ') === 'completion' &&
+    completedWords.length === 2 &&
+    ['disable', 'enable', 'status'].includes(completedWords[1])
+  );
+}
+
 export async function getCompletionCandidates({
   rootCommand,
   words,
@@ -172,7 +183,14 @@ export async function getCompletionCandidates({
   }
 
   if (shouldCompleteShellName(state.path, completedWords)) {
-    return filterByPrefix(['powershell', 'zsh'], currentWord);
+    return filterByPrefix(
+      ['disable', 'enable', 'powershell', 'status', 'zsh'],
+      currentWord,
+    );
+  }
+
+  if (shouldCompleteManagedShellName(state.path, completedWords)) {
+    return filterByPrefix(['powershell'], currentWord);
   }
 
   const subCommands = await getSubCommands(state.command);
