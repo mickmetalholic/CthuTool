@@ -4,6 +4,8 @@ import { platform } from 'node:process';
 import {
   BROWSER_CAPABILITY,
   type BrowserCommandPayload,
+  type BrowserPendingAuthTaskSummary,
+  type BrowserStateSnapshotPayload,
 } from '@cthutool/agent-protocol';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import WebSocket from 'ws';
@@ -154,74 +156,51 @@ async function executeBrowserAction(
     verifyUrl: input.verifyUrl,
   };
   const result = await playwrightHost.execute(payload);
-  await reportBrowserStateToBackend(
-    configStore?.load().backendUrl ?? '',
-    result,
-  );
+  await publishLocalBrowserState();
   return result;
 }
 
-async function reportBrowserStateToBackend(
-  backendUrl: string,
-  _result: Awaited<ReturnType<PlaywrightHost['execute']>>,
-): Promise<void> {
-  await reportLocalBrowserStateToBackend(backendUrl);
+async function publishLocalBrowserState(): Promise<void> {
+  await agentClient?.sendBrowserStateSnapshot();
 }
 
-async function reportLocalBrowserStateToBackend(
-  backendUrl: string,
-): Promise<void> {
-  if (!backendUrl) {
-    return;
-  }
+async function buildBrowserStateSnapshot(): Promise<BrowserStateSnapshotPayload> {
   const agentId = configStore?.load().agentId;
   if (!agentId) {
-    return;
+    throw new Error('Desktop agent id is not configured');
   }
-  const baseUrl = backendUrl.replace(/\/+$/, '');
-  const reports: Promise<unknown>[] = [];
-
   const profileStore = browserProfileStore;
-  if (profileStore) {
-    reports.push(
-      ...(await profileStore.listProfiles()).map((profile) =>
-        postJson(
-          `${baseUrl}/api/browser/profiles`,
-          profileStore.toPublicProfile(agentId, profile),
-        ),
-      ),
-    );
-  }
 
-  if (agentId && pendingAuthTasks) {
-    reports.push(
-      ...pendingAuthTasks
-        .list()
+  return {
+    agentId,
+    pendingAuthTasks:
+      pendingAuthTasks
+        ?.list()
         .filter(
           (task) => task.status === 'open' || task.status === 'in_progress',
         )
-        .map((task) =>
-          postJson(`${baseUrl}/api/browser/pending-auth-tasks`, {
+        .map(
+          (task): BrowserPendingAuthTaskSummary => ({
             agentId,
+            createdAt: task.createdAt,
+            id: `${agentId}:${task.siteId}:${task.profileName}`,
             loginUrl: task.loginUrl,
             profileName: task.profileName,
-            reason: task.reason,
+            reason:
+              task.reason === 'access_failed'
+                ? 'verification_failed'
+                : task.reason,
             siteId: task.siteId,
+            updatedAt: task.updatedAt,
             verifyUrl: task.verifyUrl,
           }),
-        ),
-    );
-  }
-
-  await Promise.allSettled(reports);
-}
-
-async function postJson(url: string, body: unknown): Promise<void> {
-  await fetch(url, {
-    body: JSON.stringify(body),
-    headers: { 'content-type': 'application/json' },
-    method: 'POST',
-  });
+        ) ?? [],
+    profiles: profileStore
+      ? (await profileStore.listProfiles()).map((profile) =>
+          profileStore.toPublicProfile(agentId, profile),
+        )
+      : [],
+  };
 }
 
 function persistWindowState(): void {
@@ -249,8 +228,7 @@ app.whenReady().then(() => {
   playwrightHost = new PlaywrightHost({
     agentId: store.load().agentId,
     headless: false,
-    onStateChanged: () =>
-      reportLocalBrowserStateToBackend(store.load().backendUrl),
+    onStateChanged: () => publishLocalBrowserState(),
     pendingAuthTasks,
     profileStore,
   });
@@ -272,9 +250,7 @@ app.whenReady().then(() => {
       }
       return playwrightHost.execute(command);
     },
-    onRegistered: (state) => {
-      void reportLocalBrowserStateToBackend(state.backendUrl);
-    },
+    getBrowserStateSnapshot: buildBrowserStateSnapshot,
     onStateChange: emitConnectionState,
   });
   agentClient.start();

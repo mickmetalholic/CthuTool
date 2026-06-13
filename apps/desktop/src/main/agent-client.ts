@@ -5,8 +5,12 @@ import type {
   BrowserCommandPayload,
   BrowserErrorMessage,
   BrowserResultMessage,
+  BrowserStateSnapshotPayload,
 } from '@cthutool/agent-protocol';
-import { parseAgentServerMessageJson } from '@cthutool/agent-protocol';
+import {
+  createBrowserStateSnapshotMessage,
+  parseAgentServerMessageJson,
+} from '@cthutool/agent-protocol';
 import type { DesktopConfig } from './config';
 
 type MinimalWebSocket = {
@@ -60,6 +64,9 @@ export type AgentClientOptions = {
   readonly handleBrowserCommand?: (
     command: BrowserCommandPayload,
   ) => Promise<BrowserResultMessage | BrowserErrorMessage>;
+  readonly getBrowserStateSnapshot?: () =>
+    | BrowserStateSnapshotPayload
+    | Promise<BrowserStateSnapshotPayload>;
 };
 
 export class AgentClient {
@@ -141,6 +148,22 @@ export class AgentClient {
     };
   }
 
+  async sendBrowserStateSnapshot(): Promise<void> {
+    if (
+      this.state.status !== 'connected' ||
+      this.socket?.readyState !== 1 ||
+      !this.options.getBrowserStateSnapshot
+    ) {
+      return;
+    }
+
+    this.send(
+      createBrowserStateSnapshotMessage(
+        await this.options.getBrowserStateSnapshot(),
+      ),
+    );
+  }
+
   private connect(): void {
     const config = this.options.getConfig();
     if (!config.connectionEnabled) {
@@ -190,6 +213,7 @@ export class AgentClient {
       this.setState('connected', undefined, this.now().toISOString());
       this.options.onRegistered?.(this.state);
       this.startHeartbeat();
+      void this.sendBrowserStateSnapshot();
       return;
     }
 

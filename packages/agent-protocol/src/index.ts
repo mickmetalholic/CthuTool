@@ -39,6 +39,12 @@ export const BROWSER_PROFILE_STATUSES = [
   'expired',
   'blocked',
 ] as const;
+export const BROWSER_PENDING_AUTH_REASONS = [
+  'missing',
+  'expired',
+  'blocked',
+  'verification_failed',
+] as const;
 
 const AgentIdSchema = v.pipe(
   v.string(),
@@ -134,6 +140,29 @@ export const BrowserProfileStatusMessageSchema = v.object({
   payload: BrowserProfileSummarySchema,
 });
 
+export const BrowserPendingAuthTaskSummarySchema = v.object({
+  agentId: AgentIdSchema,
+  id: NonEmptyDisplayStringSchema,
+  siteId: SiteIdSchema,
+  profileName: ProfileNameSchema,
+  reason: v.picklist(BROWSER_PENDING_AUTH_REASONS),
+  loginUrl: v.optional(HttpUrlSchema),
+  verifyUrl: v.optional(HttpUrlSchema),
+  createdAt: v.pipe(v.string(), v.isoTimestamp()),
+  updatedAt: v.pipe(v.string(), v.isoTimestamp()),
+});
+
+export const BrowserStateSnapshotPayloadSchema = v.object({
+  agentId: AgentIdSchema,
+  profiles: v.array(BrowserProfileSummarySchema),
+  pendingAuthTasks: v.array(BrowserPendingAuthTaskSummarySchema),
+});
+
+export const BrowserStateSnapshotMessageSchema = v.object({
+  type: v.literal('browser.stateSnapshot'),
+  payload: BrowserStateSnapshotPayloadSchema,
+});
+
 export const BrowserCommandPayloadSchema = v.object({
   commandId: CommandIdSchema,
   command: v.picklist(BROWSER_COMMANDS),
@@ -202,6 +231,7 @@ export const AgentClientMessageSchema = v.variant('type', [
   BrowserResultMessageSchema,
   BrowserErrorMessageSchema,
   BrowserProfileStatusMessageSchema,
+  BrowserStateSnapshotMessageSchema,
 ]);
 
 export const AgentRegisteredMessageSchema = v.object({
@@ -286,6 +316,15 @@ export type BrowserProfileSummary = v.InferOutput<
 export type BrowserProfileStatusMessage = v.InferOutput<
   typeof BrowserProfileStatusMessageSchema
 >;
+export type BrowserPendingAuthTaskSummary = v.InferOutput<
+  typeof BrowserPendingAuthTaskSummarySchema
+>;
+export type BrowserStateSnapshotPayload = v.InferOutput<
+  typeof BrowserStateSnapshotPayloadSchema
+>;
+export type BrowserStateSnapshotMessage = v.InferOutput<
+  typeof BrowserStateSnapshotMessageSchema
+>;
 export type PublicAgentStatus = v.InferOutput<typeof PublicAgentStatusSchema>;
 
 export type ValidationResult<T> =
@@ -307,6 +346,12 @@ export function validateAgentHeartbeatMessage(
 export function validateAgentClientMessage(
   input: unknown,
 ): ValidationResult<AgentClientMessage> {
+  if (isBrowserStateSnapshotInput(input) && containsRawAuthState(input)) {
+    return {
+      ok: false,
+      message: 'browser state snapshot must not include raw auth state',
+    };
+  }
   return parseSchema(AgentClientMessageSchema, input);
 }
 
@@ -332,6 +377,18 @@ export function validateBrowserErrorMessage(
   input: unknown,
 ): ValidationResult<BrowserErrorMessage> {
   return parseSchema(BrowserErrorMessageSchema, input);
+}
+
+export function validateBrowserStateSnapshotMessage(
+  input: unknown,
+): ValidationResult<BrowserStateSnapshotMessage> {
+  if (containsRawAuthState(input)) {
+    return {
+      ok: false,
+      message: 'browser state snapshot must not include raw auth state',
+    };
+  }
+  return parseSchema(BrowserStateSnapshotMessageSchema, input);
 }
 
 export function parseAgentClientMessageJson(
@@ -416,6 +473,15 @@ export function createBrowserProfileStatusMessage(
   };
 }
 
+export function createBrowserStateSnapshotMessage(
+  payload: BrowserStateSnapshotPayload,
+): BrowserStateSnapshotMessage {
+  return {
+    type: 'browser.stateSnapshot',
+    payload,
+  };
+}
+
 function parseSchema<TSchema extends v.GenericSchema>(
   schema: TSchema,
   input: unknown,
@@ -435,4 +501,41 @@ function summarizeIssues(issues: readonly v.BaseIssue<unknown>[]): string {
     .slice(0, 3)
     .map((issue) => issue.message)
     .join('; ');
+}
+
+const RAW_AUTH_STATE_KEYS = new Set([
+  'cookies',
+  'origins',
+  'storageState',
+  'localStorage',
+  'sessionStorage',
+  'profilePath',
+  'userDataDir',
+]);
+
+function isBrowserStateSnapshotInput(input: unknown): boolean {
+  return (
+    typeof input === 'object' &&
+    input !== null &&
+    'type' in input &&
+    input.type === 'browser.stateSnapshot'
+  );
+}
+
+function containsRawAuthState(input: unknown): boolean {
+  if (Array.isArray(input)) {
+    return input.some((item) => containsRawAuthState(item));
+  }
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+  for (const [key, value] of Object.entries(input)) {
+    if (RAW_AUTH_STATE_KEYS.has(key)) {
+      return true;
+    }
+    if (containsRawAuthState(value)) {
+      return true;
+    }
+  }
+  return false;
 }

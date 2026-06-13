@@ -4,6 +4,7 @@ import {
   createBrowserErrorMessage,
   createBrowserProfileStatusMessage,
   createBrowserResultMessage,
+  createBrowserStateSnapshotMessage,
   parseAgentClientMessageJson,
   parseAgentServerMessageJson,
   validateAgentClientMessage,
@@ -13,6 +14,7 @@ import {
   validateBrowserCommandMessage,
   validateBrowserErrorMessage,
   validateBrowserResultMessage,
+  validateBrowserStateSnapshotMessage,
 } from './index';
 
 describe('agent protocol validation', () => {
@@ -208,5 +210,86 @@ describe('agent protocol validation', () => {
       ok: true,
       value: message,
     });
+  });
+
+  it('accepts public browser state snapshots from the agent', () => {
+    const message = createBrowserStateSnapshotMessage({
+      agentId: 'homelab-mac',
+      pendingAuthTasks: [
+        {
+          agentId: 'homelab-mac',
+          createdAt: '2026-06-13T12:00:00.000Z',
+          id: 'homelab-mac:douban:douban-main',
+          loginUrl: 'https://accounts.douban.com/passport/login',
+          profileName: 'douban-main',
+          reason: 'missing',
+          siteId: 'douban',
+          updatedAt: '2026-06-13T12:00:00.000Z',
+          verifyUrl: 'https://www.douban.com/mine/',
+        },
+      ],
+      profiles: [
+        {
+          agentId: 'homelab-mac',
+          displayName: 'Mick',
+          externalUserId: '123456',
+          profileName: 'douban-main',
+          siteId: 'douban',
+          status: 'verified',
+          updatedAt: '2026-06-13T12:00:00.000Z',
+          verifiedAt: '2026-06-13T12:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(validateBrowserStateSnapshotMessage(message)).toEqual({
+      ok: true,
+      value: message,
+    });
+    expect(validateAgentClientMessage(message)).toEqual({
+      ok: true,
+      value: message,
+    });
+  });
+
+  it('rejects malformed or raw browser state snapshots', () => {
+    const rawSnapshot = {
+      type: 'browser.stateSnapshot',
+      payload: {
+        agentId: 'homelab-mac',
+        pendingAuthTasks: [],
+        profiles: [
+          {
+            agentId: 'homelab-mac',
+            cookies: [],
+            profileName: 'douban-main',
+            siteId: 'douban',
+            status: 'verified',
+            updatedAt: '2026-06-13T12:00:00.000Z',
+          },
+        ],
+      },
+    };
+    const malformedSnapshot = {
+      type: 'browser.stateSnapshot',
+      payload: {
+        agentId: 'homelab-mac',
+        pendingAuthTasks: [],
+        profiles: [
+          {
+            agentId: 'homelab-mac',
+            profileName: 'douban-main',
+            siteId: 'douban',
+            status: 'verified',
+          },
+        ],
+      },
+    };
+
+    expect(validateBrowserStateSnapshotMessage(rawSnapshot).ok).toBe(false);
+    expect(validateAgentClientMessage(rawSnapshot).ok).toBe(false);
+    expect(validateBrowserStateSnapshotMessage(malformedSnapshot).ok).toBe(
+      false,
+    );
   });
 });

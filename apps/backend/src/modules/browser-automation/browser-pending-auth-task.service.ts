@@ -40,6 +40,28 @@ export class BrowserPendingAuthTaskService {
     this.tasks.delete(taskKey(agentId, siteId, profileName));
   }
 
+  replaceForAgent(
+    agentId: string,
+    tasks: readonly BrowserPendingAuthTask[],
+  ): BrowserPendingAuthTask[] {
+    for (const key of this.tasks.keys()) {
+      if (key.startsWith(`${agentId}:`)) {
+        this.tasks.delete(key);
+      }
+    }
+
+    for (const task of tasks) {
+      const key = taskKey(agentId, task.siteId, task.profileName);
+      this.tasks.set(key, {
+        ...task,
+        agentId,
+        id: key,
+      });
+    }
+
+    return this.list().filter((task) => task.agentId === agentId);
+  }
+
   list(): BrowserPendingAuthTask[] {
     return [...this.tasks.values()]
       .map((task) => ({ ...task }))

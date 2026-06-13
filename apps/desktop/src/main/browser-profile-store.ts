@@ -1,5 +1,12 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BrowserProfileSummary } from '@cthutool/agent-protocol';
 
@@ -65,11 +72,10 @@ export class BrowserProfileStore {
         : {}),
     };
     await mkdir(this.profileDir(siteId, profileName), { recursive: true });
-    await writeFile(
-      this.metaPath(siteId, profileName),
-      `${JSON.stringify(next, null, 2)}\n`,
-      'utf8',
-    );
+    const metaPath = this.metaPath(siteId, profileName);
+    const tempMetaPath = `${metaPath}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(tempMetaPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+    await rename(tempMetaPath, metaPath);
     return next;
   }
 

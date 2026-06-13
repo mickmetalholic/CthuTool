@@ -33,4 +33,6 @@ export type AgentRegistryEvent =
   | 'agent_heartbeat'
   | 'agent_disconnected'
   | 'agent_stale'
+  | 'agent_browser_state_snapshot'
+  | 'agent_snapshot_stale'
   | 'invalid_payload';

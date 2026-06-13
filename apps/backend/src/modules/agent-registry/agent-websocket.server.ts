@@ -6,6 +6,7 @@ import {
   type BrowserCommandPayload,
   type BrowserErrorMessage,
   type BrowserResultMessage,
+  type BrowserStateSnapshotPayload,
   createAgentErrorMessage,
   createAgentRegisteredMessage,
   createBrowserCommandMessage,
@@ -46,6 +47,11 @@ type PendingBrowserCommand = {
   readonly reject: (error: Error) => void;
 };
 
+type BrowserStateSnapshotHandler = (
+  agentId: string,
+  snapshot: BrowserStateSnapshotPayload,
+) => void;
+
 @Injectable()
 export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
   private readonly server = new WebSocketServer({ noServer: true });
@@ -54,6 +60,7 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
     string,
     PendingBrowserCommand
   >();
+  private browserStateSnapshotHandler?: BrowserStateSnapshotHandler;
   private sweepTimer?: NodeJS.Timeout;
 
   constructor(
@@ -138,6 +145,10 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  setBrowserStateSnapshotHandler(handler: BrowserStateSnapshotHandler): void {
+    this.browserStateSnapshotHandler = handler;
+  }
+
   private readonly handleUpgrade = (
     request: IncomingMessage,
     socket: Parameters<WebSocketServer['handleUpgrade']>[1],
@@ -201,6 +212,9 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
         return;
       case 'browser.profileStatus':
         this.handleProfileStatus(socket, state, parsed.value);
+        return;
+      case 'browser.stateSnapshot':
+        this.handleBrowserStateSnapshot(socket, state, parsed.value);
         return;
     }
   }
@@ -304,6 +318,54 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
     _message: Extract<AgentClientMessage, { type: 'browser.profileStatus' }>,
   ): void {
     // Browser profile status is consumed by browser automation commands for now.
+  }
+
+  private handleBrowserStateSnapshot(
+    socket: WebSocket,
+    state: SocketState,
+    message: Extract<AgentClientMessage, { type: 'browser.stateSnapshot' }>,
+  ): void {
+    if (!state.agentId || state.agentId !== message.payload.agentId) {
+      this.reject(
+        socket,
+        state,
+        'browser snapshot must match registered agent',
+      );
+      return;
+    }
+
+    if (!this.isAuthoritativeConnection(state)) {
+      this.registryLogger.warn({
+        event: 'agent_snapshot_stale',
+        connectionId: state.connectionId,
+        agentId: state.agentId,
+      });
+      return;
+    }
+
+    this.browserStateSnapshotHandler?.(state.agentId, message.payload);
+    this.registryLogger.log({
+      event: 'agent_browser_state_snapshot',
+      connectionId: state.connectionId,
+      agentId: state.agentId,
+      details: {
+        pendingAuthTaskCount: message.payload.pendingAuthTasks.length,
+        profileCount: message.payload.profiles.length,
+      },
+    });
+  }
+
+  private isAuthoritativeConnection(state: SocketState): boolean {
+    if (!state.agentId) {
+      return false;
+    }
+    return this.registry
+      .listOnlineAgents()
+      .some(
+        (status) =>
+          status.agentId === state.agentId &&
+          status.connectionId === state.connectionId,
+      );
   }
 
   private reject(socket: WebSocket, state: SocketState, message: string): void {

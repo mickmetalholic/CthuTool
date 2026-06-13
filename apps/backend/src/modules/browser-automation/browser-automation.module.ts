@@ -10,6 +10,8 @@ import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
 import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
 import { BrowserProfileRegistryService } from './browser-profile-registry.service';
 import { BrowserSiteConfigService } from './browser-site-config.service';
+import { BrowserStateProjectionService } from './browser-state-projection.service';
+import { BrowserStateSnapshotListener } from './browser-state-snapshot-listener';
 import { BrowserTaskRunner } from './browser-task-runner';
 
 @Module({
@@ -28,6 +30,8 @@ import { BrowserTaskRunner } from './browser-task-runner';
     BrowserPendingAuthTaskService,
     BrowserProfileRegistryService,
     BrowserSiteConfigService,
+    BrowserStateProjectionService,
+    BrowserStateSnapshotListener,
     {
       provide: BrowserDiagnosticsStore,
       useFactory: () =>

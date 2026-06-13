@@ -18,6 +18,26 @@ export class BrowserProfileRegistryService {
     return profile;
   }
 
+  replaceForAgent(
+    agentId: string,
+    profiles: readonly BrowserProfileRegistryEntry[],
+  ): BrowserProfileRegistryEntry[] {
+    for (const key of this.profiles.keys()) {
+      if (key.startsWith(`${agentId}:`)) {
+        this.profiles.delete(key);
+      }
+    }
+
+    for (const profile of profiles) {
+      this.upsert({
+        ...profile,
+        agentId,
+      });
+    }
+
+    return this.list().filter((profile) => profile.agentId === agentId);
+  }
+
   get(
     agentId: string,
     siteId: string,

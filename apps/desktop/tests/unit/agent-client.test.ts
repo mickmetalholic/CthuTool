@@ -128,6 +128,129 @@ describe('AgentClient', () => {
     );
   });
 
+  test('sends browser state snapshot after backend registration is accepted', async () => {
+    FakeWebSocket.instances = [];
+    const client = new AgentClient({
+      getBrowserStateSnapshot: () => ({
+        agentId: 'windows-pc',
+        pendingAuthTasks: [
+          {
+            agentId: 'windows-pc',
+            createdAt: '2026-06-13T10:00:00.000Z',
+            id: 'windows-pc:douban:douban-main',
+            profileName: 'douban-main',
+            reason: 'missing',
+            siteId: 'douban',
+            updatedAt: '2026-06-13T10:00:00.000Z',
+          },
+        ],
+        profiles: [],
+      }),
+      getConfig: () => config,
+      WebSocketImpl: FakeWebSocket,
+      platform: 'win32',
+      version: '0.1.0',
+    });
+
+    client.start();
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+    socket.receive(
+      JSON.stringify({
+        type: 'agent.registered',
+        payload: {
+          agentId: 'windows-pc',
+          serverTime: '2026-06-13T10:00:00.000Z',
+        },
+      }),
+    );
+    await Promise.resolve();
+
+    expect(JSON.parse(socket.sent[1])).toEqual({
+      type: 'browser.stateSnapshot',
+      payload: expect.objectContaining({
+        agentId: 'windows-pc',
+        pendingAuthTasks: [
+          expect.objectContaining({
+            id: 'windows-pc:douban:douban-main',
+            reason: 'missing',
+          }),
+        ],
+        profiles: [],
+      }),
+    });
+  });
+
+  test('publishes the latest browser state on reconnect registration', async () => {
+    vi.useFakeTimers();
+    FakeWebSocket.instances = [];
+    let profileStatus: 'missing' | 'verified' = 'missing';
+    const client = new AgentClient({
+      getBrowserStateSnapshot: () => ({
+        agentId: 'windows-pc',
+        pendingAuthTasks: [],
+        profiles: [
+          {
+            agentId: 'windows-pc',
+            profileName: 'douban-main',
+            siteId: 'douban',
+            status: profileStatus,
+            updatedAt: '2026-06-13T10:00:00.000Z',
+          },
+        ],
+      }),
+      getConfig: () => config,
+      WebSocketImpl: FakeWebSocket,
+      platform: 'win32',
+      reconnectDelayMs: 500,
+      version: '0.1.0',
+    });
+
+    client.start();
+    const firstSocket = FakeWebSocket.instances[0];
+    firstSocket.open();
+    firstSocket.receive(
+      JSON.stringify({
+        type: 'agent.registered',
+        payload: {
+          agentId: 'windows-pc',
+          serverTime: '2026-06-13T10:00:00.000Z',
+        },
+      }),
+    );
+    await Promise.resolve();
+
+    profileStatus = 'verified';
+    firstSocket.close();
+    vi.advanceTimersByTime(500);
+    const secondSocket = FakeWebSocket.instances[1];
+    secondSocket.open();
+    secondSocket.receive(
+      JSON.stringify({
+        type: 'agent.registered',
+        payload: {
+          agentId: 'windows-pc',
+          serverTime: '2026-06-13T10:01:00.000Z',
+        },
+      }),
+    );
+    await Promise.resolve();
+
+    expect(JSON.parse(secondSocket.sent[1])).toEqual({
+      type: 'browser.stateSnapshot',
+      payload: expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profileName: 'douban-main',
+            status: 'verified',
+          }),
+        ],
+      }),
+    });
+    client.stop();
+    vi.useRealTimers();
+  });
+
   test('sends heartbeat while connected', () => {
     vi.useFakeTimers();
     FakeWebSocket.instances = [];
