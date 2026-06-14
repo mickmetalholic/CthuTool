@@ -326,7 +326,82 @@ describe('CthuDesktop shell', () => {
     expect(screen.getByText('Cthu User')).toBeInTheDocument();
     expect(screen.getByText('ID 50353979')).toBeInTheDocument();
     expect(screen.getAllByText(/2026/)).not.toHaveLength(0);
+  });
+
+  test('renders task center with auth task badge and browser actions', async () => {
+    const desktopApi = createDesktopApi();
+    const fetchBrowserStatus = createFetchBrowserStatus();
+
+    render(
+      <App
+        desktopApi={desktopApi}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={fetchBrowserStatus}
+      />,
+    );
+
+    await waitFor(() => expect(fetchBrowserStatus).toHaveBeenCalledTimes(1));
+    expect(
+      within(screen.getByLabelText('Primary')).getByText('1'),
+    ).toBeInTheDocument();
+
+    await userEvent.click(primaryNavButton('Tasks'));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Tasks', level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Douban login required')).toBeInTheDocument();
+    expect(screen.getByText('backend')).toBeInTheDocument();
     expect(screen.getByText('missing')).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Open Login Douban' }),
+    );
+
+    expect(desktopApi.openBrowserLogin).toHaveBeenCalledWith({
+      loginUrl: 'https://accounts.douban.com/passport/login',
+      profileName: 'douban-main',
+      siteId: 'douban',
+      verifyUrl: 'https://www.douban.com/mine/',
+    });
+    await waitFor(() => expect(fetchBrowserStatus).toHaveBeenCalledTimes(2));
+  });
+
+  test('shows local auth tasks when backend browser status is unavailable', async () => {
+    const desktopApi = createDesktopApi();
+    vi.mocked(desktopApi.getLocalPendingAuthTasks).mockResolvedValue([
+      {
+        taskId: 'zhihu:zhihu-main',
+        siteId: 'zhihu',
+        profileName: 'zhihu-main',
+        reason: 'missing',
+        source: 'local_preflight',
+        status: 'open',
+        loginUrl: 'https://www.zhihu.com/signin',
+        verifyUrl: 'https://www.zhihu.com/people/me',
+        createdAt: '2026-06-13T10:00:00.000Z',
+        updatedAt: '2026-06-13T10:00:00.000Z',
+      },
+    ]);
+
+    render(
+      <App
+        desktopApi={desktopApi}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={vi
+          .fn()
+          .mockRejectedValue(new Error('browser status offline'))}
+      />,
+    );
+
+    await userEvent.click(primaryNavButton('Tasks'));
+
+    expect(
+      await screen.findByText('browser status offline'),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('zhihu login required')).toBeInTheDocument();
+    expect(screen.getByText('local')).toBeInTheDocument();
+    expect(desktopApi.openBrowserLogin).not.toHaveBeenCalled();
   });
 
   test('shows a pending Douban login reason when no verified profile exists', async () => {

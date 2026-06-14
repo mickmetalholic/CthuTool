@@ -14,6 +14,7 @@ import {
   FileText,
   Home,
   Info,
+  ListChecks,
   Maximize2,
   Minus,
   Palette,
@@ -42,6 +43,13 @@ import {
   getDesktopApi,
 } from './desktop-api';
 import { createDesktopRuntimeAdapter } from './desktop-runtime';
+import {
+  buildDesktopTasks,
+  countActionableTasks,
+  countTasksByStatus,
+  type DesktopTask,
+  type LocalPendingAuthTask,
+} from './desktop-tasks';
 import './styles.css';
 
 type AppProps = {
@@ -50,12 +58,8 @@ type AppProps = {
   readonly fetchBrowserStatus?: typeof fetchBrowserStatusFromBackend;
 };
 
-type LocalPendingAuthTask = Awaited<
-  ReturnType<DesktopApi['getLocalPendingAuthTasks']>
->[number];
-
 type Workspace = 'main' | 'settings';
-type MainView = 'home' | 'browser' | 'agents';
+type MainView = 'home' | 'tasks' | 'browser' | 'agents';
 type SettingsView =
   | 'service'
   | 'status'
@@ -72,6 +76,7 @@ const emptyState: AgentConnectionState = {
 
 const mainNav = [
   { id: 'home', label: 'Home', icon: Home },
+  { id: 'tasks', label: 'Tasks', icon: ListChecks },
   { id: 'browser', label: 'Browser Profiles', icon: Chrome },
   { id: 'agents', label: 'Agents', icon: Bot },
 ] as const;
@@ -112,6 +117,7 @@ export function App({
   const [browserStatusError, setBrowserStatusError] = useState<
     string | undefined
   >();
+  const [browserStatusLoading, setBrowserStatusLoading] = useState(false);
   const [localPendingAuthTasks, setLocalPendingAuthTasks] = useState<
     LocalPendingAuthTask[]
   >([]);
@@ -202,6 +208,7 @@ export function App({
 
   const refreshBrowserStatus = useCallback(async () => {
     if (!backendUrl) return;
+    setBrowserStatusLoading(true);
     try {
       setBrowserStatusError(undefined);
       setBrowserStatus(await fetchBrowserStatus(backendUrl));
@@ -209,6 +216,8 @@ export function App({
       setBrowserStatusError(
         error instanceof Error ? error.message : 'Browser status failed',
       );
+    } finally {
+      setBrowserStatusLoading(false);
     }
   }, [backendUrl, fetchBrowserStatus]);
 
@@ -321,6 +330,18 @@ export function App({
         return 'Disconnected';
     }
   }, [connection.status]);
+  const desktopTasks = useMemo(
+    () =>
+      buildDesktopTasks({
+        browserStatus,
+        localPendingAuthTasks,
+      }),
+    [browserStatus, localPendingAuthTasks],
+  );
+  const actionableTaskCount = useMemo(
+    () => countActionableTasks(desktopTasks),
+    [desktopTasks],
+  );
 
   const openEnvironmentSettings = () => {
     setWorkspace('settings');
@@ -402,6 +423,8 @@ export function App({
               {mainNav.map((item) => {
                 const Icon = item.icon;
                 const selected = workspace === 'main' && mainView === item.id;
+                const badgeCount =
+                  item.id === 'tasks' ? actionableTaskCount : 0;
                 return (
                   <button
                     aria-label={item.label}
@@ -416,6 +439,9 @@ export function App({
                     }}
                   >
                     <Icon size={20} />
+                    {badgeCount > 0 ? (
+                      <span className="activity-badge">{badgeCount}</span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -455,10 +481,13 @@ export function App({
                   agentsError,
                   browserStatus,
                   browserStatusError,
+                  browserStatusLoading,
                   browserActionState,
                   localPendingAuthTasks,
+                  desktopTasks,
                   refreshAgents,
                   refreshBrowserStatus,
+                  refreshLocalPendingAuthTasks,
                   runBrowserSiteAction,
                   connection,
                   config,
@@ -542,10 +571,13 @@ function renderMainWorkspace({
   agentsError,
   browserStatus,
   browserStatusError,
+  browserStatusLoading,
   browserActionState,
   localPendingAuthTasks,
+  desktopTasks,
   refreshAgents,
   refreshBrowserStatus,
+  refreshLocalPendingAuthTasks,
   runBrowserSiteAction,
   connection,
   config,
@@ -555,13 +587,16 @@ function renderMainWorkspace({
   readonly agentsError: string | undefined;
   readonly browserStatus: BrowserStatus;
   readonly browserStatusError: string | undefined;
+  readonly browserStatusLoading: boolean;
   readonly browserActionState: {
     readonly message?: string;
     readonly status: 'idle' | 'running' | 'success' | 'error';
   };
   readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
+  readonly desktopTasks: readonly DesktopTask[];
   readonly refreshAgents: () => Promise<void>;
   readonly refreshBrowserStatus: () => Promise<void>;
+  readonly refreshLocalPendingAuthTasks: () => Promise<void>;
   readonly runBrowserSiteAction: (
     action: 'openLogin' | 'verifyProfile' | 'clearProfile',
     site: BrowserStatus['sites'][number],
@@ -578,6 +613,22 @@ function renderMainWorkspace({
           browserActionState={browserActionState}
           localPendingAuthTasks={localPendingAuthTasks}
           runBrowserSiteAction={runBrowserSiteAction}
+        />
+      </WorkspacePanel>
+    );
+  }
+
+  if (view === 'tasks') {
+    return (
+      <WorkspacePanel title="Tasks" eyebrow="Main">
+        <TaskCenterPanel
+          browserActionState={browserActionState}
+          browserStatusLoading={browserStatusLoading}
+          browserStatusError={browserStatusError}
+          refreshBrowserStatus={refreshBrowserStatus}
+          refreshLocalPendingAuthTasks={refreshLocalPendingAuthTasks}
+          runBrowserSiteAction={runBrowserSiteAction}
+          tasks={desktopTasks}
         />
       </WorkspacePanel>
     );
@@ -892,6 +943,135 @@ function AgentsPanel({
   );
 }
 
+function TaskCenterPanel({
+  browserActionState,
+  browserStatusError,
+  browserStatusLoading,
+  refreshBrowserStatus,
+  refreshLocalPendingAuthTasks,
+  runBrowserSiteAction,
+  tasks,
+}: {
+  readonly browserActionState: {
+    readonly message?: string;
+    readonly status: 'idle' | 'running' | 'success' | 'error';
+  };
+  readonly browserStatusError: string | undefined;
+  readonly browserStatusLoading: boolean;
+  readonly refreshBrowserStatus: () => Promise<void>;
+  readonly refreshLocalPendingAuthTasks: () => Promise<void>;
+  readonly runBrowserSiteAction: (
+    action: 'openLogin' | 'verifyProfile' | 'clearProfile',
+    site: BrowserStatus['sites'][number],
+  ) => Promise<void>;
+  readonly tasks: readonly DesktopTask[];
+}) {
+  const counts = countTasksByStatus(tasks);
+  const isRunning = browserActionState.status === 'running';
+
+  return (
+    <div className="task-center">
+      <div className="panel-toolbar">
+        <p>{countActionableTasks(tasks)} actionable</p>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Refresh tasks"
+          onClick={() => {
+            void refreshBrowserStatus();
+            void refreshLocalPendingAuthTasks();
+          }}
+        >
+          <RefreshCw size={16} />
+        </button>
+      </div>
+      {browserStatusError ? (
+        <p className="error-text">{browserStatusError}</p>
+      ) : null}
+      {browserActionState.status !== 'idle' && browserActionState.message ? (
+        <p className={`browser-action-message ${browserActionState.status}`}>
+          {browserActionState.message}
+        </p>
+      ) : null}
+      <section className="task-summary-grid" aria-label="Task summary">
+        <div className="metric compact">
+          <span>Open</span>
+          <strong>{counts.open}</strong>
+        </div>
+        <div className="metric compact">
+          <span>In Progress</span>
+          <strong>{counts.in_progress}</strong>
+        </div>
+        <div className="metric compact">
+          <span>Failed</span>
+          <strong>{counts.failed}</strong>
+        </div>
+        <div className="metric compact">
+          <span>Resolved</span>
+          <strong>{counts.resolved}</strong>
+        </div>
+      </section>
+      {browserStatusLoading ? (
+        <div className="placeholder-panel compact">
+          <p>Loading tasks</p>
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="placeholder-panel compact">
+          <p>No pending tasks</p>
+        </div>
+      ) : (
+        <div className="task-list">
+          {tasks.map((task) => {
+            const target = taskToBrowserSite(task);
+            return (
+              <article className="task-card" key={task.id}>
+                <div className="task-card-header">
+                  <div>
+                    <h2>{task.title}</h2>
+                    <div className="task-meta">
+                      <span>{task.profileName}</span>
+                      <span>{task.source}</span>
+                      <span>{task.reason}</span>
+                      {task.updatedAt ? (
+                        <span>{formatTimestamp(task.updatedAt)}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span className={`task-status ${task.status}`}>
+                    {task.status}
+                  </span>
+                </div>
+                <div className="task-actions">
+                  <button
+                    type="button"
+                    disabled={isRunning || !target.loginUrl}
+                    aria-label={`Open Login ${task.siteDisplayName}`}
+                    onClick={() =>
+                      void runBrowserSiteAction('openLogin', target)
+                    }
+                  >
+                    Open Login
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isRunning || !target.verifyUrl}
+                    aria-label={`Verify ${task.siteDisplayName}`}
+                    onClick={() =>
+                      void runBrowserSiteAction('verifyProfile', target)
+                    }
+                  >
+                    Verify
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BrowserStatusPanel({
   browserStatus,
   browserStatusError,
@@ -984,15 +1164,20 @@ function BrowserStatusPanel({
         ])}
         title="Profiles"
       />
-      <MiniStatusTable
-        emptyLabel="No pending auth tasks"
-        rows={[...browserStatus.pendingAuthTasks, ...localPendingAuthTasks].map(
-          (task) => [task.siteId, task.profileName, task.reason],
-        )}
-        title="Pending Auth"
-      />
     </div>
   );
+}
+
+function taskToBrowserSite(task: DesktopTask): BrowserStatus['sites'][number] {
+  return {
+    allowedOrigins: [],
+    authPolicy: 'required',
+    displayName: task.siteDisplayName,
+    loginUrl: task.loginUrl,
+    profileName: task.profileName,
+    siteId: task.siteId,
+    verifyUrl: task.verifyUrl,
+  };
 }
 
 function findSiteProfile(
