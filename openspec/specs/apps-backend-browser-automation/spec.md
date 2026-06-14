@@ -17,11 +17,11 @@ The backend SHALL provide an internal browser content service that retrieves con
 - **THEN** the service result does not expose raw WebSocket connections, command correlation maps, agent registry internals, or agent state storage internals
 
 ### Requirement: Browser provider abstraction
-The backend SHALL hide browser capture execution details behind a browser capture provider abstraction and SHALL NOT include a backend-local Playwright provider as a supported implementation.
+The backend SHALL hide browser capture execution details behind a browser capture provider abstraction supplied by `BrowserAgentCaptureModule` and SHALL NOT include a backend-local Playwright provider as a supported implementation.
 
 #### Scenario: Agent provider creates content snapshot
 - **WHEN** the configured provider is the agent-backed browser capture provider and a page content request is accepted
-- **THEN** the provider dispatches a controlled browser command through the agent command gateway and returns the requested content snapshot from the agent response
+- **THEN** `BrowserContentService` uses the `BROWSER_CAPTURE_PROVIDER` binding from `BrowserAgentCaptureModule`, and the provider dispatches a controlled browser command through the agent command gateway before returning the requested content snapshot from the agent response
 
 #### Scenario: Provider can be replaced later
 - **WHEN** a future browser runtime provider is added
@@ -107,15 +107,19 @@ The backend browser automation module SHALL consume effective site configuration
 - **THEN** browser automation uses the built-in default site configuration exposed by `SitesConfigModule`
 
 ### Requirement: Agent-backed browser provider
-The backend SHALL dispatch browser capture requests through a browser capture provider implementation backed by an online desktop agent that advertises browser capability.
+The backend browser automation module SHALL consume agent-backed browser capture through `BrowserAgentCaptureModule` rather than registering the concrete agent-backed provider directly.
 
 #### Scenario: Browser-capable agent is available
 - **WHEN** an accepted browser content request targets a site that can be served by an online browser-capable desktop agent
-- **THEN** the agent-backed capture provider sends a correlated browser command through `AgentCommandGateway` and maps the agent response into the browser content service result
+- **THEN** `BrowserContentService` delegates capture execution through `BROWSER_CAPTURE_PROVIDER` and receives a browser capture snapshot without depending on `AgentCommandGateway` directly
 
 #### Scenario: No browser-capable agent is available
 - **WHEN** an accepted browser content request requires browser execution and no online desktop agent advertises browser capability
 - **THEN** the backend fails the request with `AGENT_NOT_AVAILABLE` or `AGENT_CAPABILITY_MISSING` without starting local Playwright
+
+#### Scenario: Browser automation module wiring
+- **WHEN** `BrowserAutomationModule` is compiled
+- **THEN** it imports `BrowserAgentCaptureModule` and does not register `AgentBrowserCaptureProvider` or the agent-backed capture provider token itself
 
 ### Requirement: Pending auth task coordination
 The backend SHALL coordinate required browser auth through `BrowserAuthModule` and public agent state when required site auth is missing or expired on the selected desktop agent.

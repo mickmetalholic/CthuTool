@@ -1,13 +1,13 @@
 import { HttpAdapterHost } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
-import { AgentBrowserCaptureProvider } from '../browser-agent-capture/agent-browser-capture.provider';
-import { SitesConfigService } from '../sites-config/sites-config.service';
-import { BrowserAutomationModule } from './browser-automation.module';
+import { AgentBrowserCaptureProvider } from './agent-browser-capture.provider';
+import { BrowserAgentCaptureModule } from './browser-agent-capture.module';
+import { BROWSER_CAPTURE_PROVIDER } from './browser-agent-capture.tokens';
 
-describe('BrowserAutomationModule', () => {
-  it('resolves the agent-backed browser provider dependencies', async () => {
+describe('BrowserAgentCaptureModule', () => {
+  it('exports the agent-backed browser capture provider binding', async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [BrowserAutomationModule],
+      imports: [BrowserAgentCaptureModule],
     })
       .overrideProvider(HttpAdapterHost)
       .useValue({
@@ -23,8 +23,8 @@ describe('BrowserAutomationModule', () => {
     expect(moduleRef.get(AgentBrowserCaptureProvider)).toBeInstanceOf(
       AgentBrowserCaptureProvider,
     );
-    expect(moduleRef.get(SitesConfigService)).toBeInstanceOf(
-      SitesConfigService,
+    expect(moduleRef.get(BROWSER_CAPTURE_PROVIDER)).toBeInstanceOf(
+      AgentBrowserCaptureProvider,
     );
 
     await moduleRef.close();

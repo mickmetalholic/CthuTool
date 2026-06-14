@@ -14,12 +14,12 @@ import {
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserAuthService } from '../browser-auth/browser-auth.service';
-import { BrowserAutomationError } from './browser-automation.errors';
+import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
 import type {
   BrowserCaptureProvider,
   BrowserCaptureRequest,
   BrowserCaptureSnapshot,
-} from './browser-automation.types';
+} from '../browser-automation/browser-automation.types';
 
 @Injectable()
 export class AgentBrowserCaptureProvider implements BrowserCaptureProvider {

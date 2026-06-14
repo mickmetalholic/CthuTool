@@ -1,28 +1,19 @@
 import { Module } from '@nestjs/common';
 import { parseBrowserConfiguration } from '../../config/service-configuration';
-import { AgentCommandGatewayModule } from '../agent-command-gateway/agent-command-gateway.module';
-import { AgentStateModule } from '../agent-state/agent-state.module';
+import { BrowserAgentCaptureModule } from '../browser-agent-capture/browser-agent-capture.module';
 import { BrowserAuthModule } from '../browser-auth/browser-auth.module';
 import { SitesConfigModule } from '../sites-config/sites-config.module';
-import { AgentBrowserCaptureProvider } from './agent-browser-capture.provider';
 import { BrowserAutomationController } from './browser-automation.controller';
-import { BROWSER_CAPTURE_PROVIDER } from './browser-automation.tokens';
 import { BrowserBlockDetector } from './browser-block-detector';
 import { BrowserContentService } from './browser-content.service';
 import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
 import { BrowserTaskRunner } from './browser-task-runner';
 
 @Module({
-  imports: [
-    AgentCommandGatewayModule,
-    AgentStateModule,
-    BrowserAuthModule,
-    SitesConfigModule,
-  ],
+  imports: [BrowserAgentCaptureModule, BrowserAuthModule, SitesConfigModule],
   controllers: [BrowserAutomationController],
   exports: [BrowserAuthModule, BrowserContentService, SitesConfigModule],
   providers: [
-    AgentBrowserCaptureProvider,
     BrowserBlockDetector,
     BrowserContentService,
     {
@@ -43,10 +34,6 @@ import { BrowserTaskRunner } from './browser-task-runner';
           maxConcurrency: config.maxConcurrency,
         });
       },
-    },
-    {
-      provide: BROWSER_CAPTURE_PROVIDER,
-      useExisting: AgentBrowserCaptureProvider,
     },
   ],
 })

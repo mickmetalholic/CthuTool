@@ -90,6 +90,63 @@ describe('AgentBrowserCaptureProvider', () => {
       }),
     ]);
   });
+
+  it('records expired pending auth tasks when the agent reports an expired profile', async () => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserErrorMessage({
+        code: 'AUTH_PROFILE_EXPIRED',
+        command: 'browser.capturePage',
+        commandId: 'cmd-returned',
+        message: 'Required browser profile expired',
+        profileStatus: 'expired',
+      }),
+    );
+    const pendingAuthTasks = new AgentBrowserPendingAuthTaskService();
+    const provider = createProvider(gateway, pendingAuthTasks);
+
+    await expect(
+      provider.capturePage({
+        authPolicy: 'required',
+        profileName: 'douban-main',
+        siteId: 'douban',
+        url: 'https://movie.douban.com/subject/1/',
+      }),
+    ).rejects.toMatchObject({ code: 'AUTH_PROFILE_EXPIRED' });
+
+    expect(pendingAuthTasks.list()).toEqual([
+      expect.objectContaining({
+        agentId: 'agent-1',
+        profileName: 'douban-main',
+        reason: 'expired',
+        siteId: 'douban',
+      }),
+    ]);
+  });
+
+  it('maps non-auth browser errors without recording pending auth', async () => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserErrorMessage({
+        code: 'CAPTURE_FAILED',
+        command: 'browser.capturePage',
+        commandId: 'cmd-returned',
+        message: 'Capture failed',
+      }),
+    );
+    const pendingAuthTasks = new AgentBrowserPendingAuthTaskService();
+    const provider = createProvider(gateway, pendingAuthTasks);
+
+    await expect(
+      provider.capturePage({
+        authPolicy: 'anonymous',
+        siteId: 'example',
+        url: 'https://example.com/',
+      }),
+    ).rejects.toMatchObject({ code: 'BROWSER_AGENT_COMMAND_FAILED' });
+
+    expect(pendingAuthTasks.list()).toEqual([]);
+  });
 });
 
 function createProvider(
