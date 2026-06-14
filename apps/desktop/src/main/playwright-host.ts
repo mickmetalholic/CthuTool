@@ -11,6 +11,7 @@ import {
 import type { Route } from 'playwright';
 import { chromium } from 'playwright';
 import type { BrowserProfileStore } from './browser-profile-store';
+import type { DesktopBrowserRuntime } from './config';
 import type { PendingAuthTaskStore } from './pending-auth-task-store';
 
 type RuntimeResponse = {
@@ -53,39 +54,73 @@ type RuntimeBrowser = {
   readonly newContext: () => Promise<RuntimeContext>;
 };
 
+type RuntimeLaunchOptions = {
+  readonly channel?: string;
+  readonly executablePath?: string;
+  readonly headless: boolean;
+};
+
 type ChromiumRuntime = {
-  readonly launch: (options: {
-    readonly headless: boolean;
-  }) => Promise<RuntimeBrowser>;
+  readonly launch: (options: RuntimeLaunchOptions) => Promise<RuntimeBrowser>;
   readonly launchPersistentContext: (
     userDataDir: string,
-    options: { readonly headless: boolean },
+    options: RuntimeLaunchOptions,
   ) => Promise<RuntimeContext>;
 };
 
+export type BrowserRuntimeDiagnostic = {
+  readonly activeKind?: DesktopBrowserRuntime['kind'];
+  readonly message: string;
+  readonly preferredKind: DesktopBrowserRuntime['kind'];
+  readonly status: 'pending' | 'ready' | 'unavailable';
+};
+
+type ResolvedBrowserRuntime = {
+  readonly diagnostic: BrowserRuntimeDiagnostic;
+  readonly launchOptions: Omit<RuntimeLaunchOptions, 'headless'>;
+};
+
+type RuntimeValidationResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly message: string };
+
+type RuntimeValidator = (input: {
+  readonly kind: DesktopBrowserRuntime['kind'];
+  readonly launchOptions: Omit<RuntimeLaunchOptions, 'headless'>;
+  readonly runtime: ChromiumRuntime;
+}) => Promise<RuntimeValidationResult>;
+
 export type PlaywrightHostOptions = {
   readonly agentId: string;
+  readonly browserRuntime?: DesktopBrowserRuntime;
   readonly headless?: boolean;
   readonly maxPayloadBytes?: number;
   readonly profileStore: BrowserProfileStore;
   readonly pendingAuthTasks: PendingAuthTaskStore;
   readonly runtime?: ChromiumRuntime;
+  readonly runtimeValidator?: RuntimeValidator;
   readonly now?: () => Date;
   readonly onStateChanged?: () => void | Promise<void>;
 };
 
 export class PlaywrightHost {
   private readonly runtime: ChromiumRuntime;
+  private readonly runtimeValidator: RuntimeValidator;
   private readonly headless: boolean;
   private readonly maxPayloadBytes: number;
   private readonly now: () => Date;
   private readonly loginContexts = new Map<string, RuntimeContext>();
   private readonly suppressedLoginContextCloses = new Set<string>();
+  private runtimeConfig: DesktopBrowserRuntime;
+  private resolvedRuntime?: ResolvedBrowserRuntime;
+  private runtimeInitialization?: Promise<void>;
   private stateChanged?: () => void | Promise<void>;
   private queue: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: PlaywrightHostOptions) {
     this.runtime = (options.runtime ?? chromium) as ChromiumRuntime;
+    this.runtimeValidator = options.runtimeValidator ?? validateRuntimeLaunch;
+    this.runtimeConfig = options.browserRuntime ?? { kind: 'host-chrome' };
     this.headless = options.headless ?? true;
     this.maxPayloadBytes = options.maxPayloadBytes ?? 2_000_000;
     this.now = options.now ?? (() => new Date());
@@ -96,8 +131,31 @@ export class PlaywrightHost {
     this.stateChanged = callback;
   }
 
+  setBrowserRuntime(runtime: DesktopBrowserRuntime): void {
+    this.runtimeConfig = runtime;
+    this.resolvedRuntime = undefined;
+    this.runtimeInitialization = undefined;
+  }
+
+  async initialize(): Promise<void> {
+    await this.ensureRuntimeReady();
+  }
+
   isReady(): boolean {
-    return this.options.profileStore.isReady();
+    return (
+      this.options.profileStore.isReady() &&
+      this.getRuntimeDiagnostic().status === 'ready'
+    );
+  }
+
+  getRuntimeDiagnostic(): BrowserRuntimeDiagnostic {
+    return (
+      this.resolvedRuntime?.diagnostic ?? {
+        message: 'Browser runtime has not been initialized',
+        preferredKind: this.runtimeConfig.kind,
+        status: 'pending',
+      }
+    );
   }
 
   async execute(
@@ -110,11 +168,12 @@ export class PlaywrightHost {
     command: BrowserCommandPayload,
   ): Promise<BrowserResultMessage | BrowserErrorMessage> {
     try {
+      await this.ensureRuntimeReady();
       if (!this.isReady()) {
         return this.error(
           command,
           'BROWSER_HOST_NOT_READY',
-          'Browser host is not ready',
+          this.getRuntimeDiagnostic().message,
         );
       }
       return await this.executeOrThrow(command);
@@ -357,6 +416,7 @@ export class PlaywrightHost {
     );
     await mkdir(profileDir, { recursive: true });
     return this.runtime.launchPersistentContext(profileDir, {
+      ...this.activeRuntimeLaunchOptions(),
       headless: this.headless,
     });
   }
@@ -456,7 +516,10 @@ export class PlaywrightHost {
 
     let browser: RuntimeBrowser | undefined;
     try {
-      browser = await this.runtime.launch({ headless: this.headless });
+      browser = await this.runtime.launch({
+        ...this.activeRuntimeLaunchOptions(),
+        headless: this.headless,
+      });
       const context = await browser.newContext();
       return await callback(context);
     } finally {
@@ -521,6 +584,88 @@ export class PlaywrightHost {
 
   private notifyStateChanged(): void {
     void this.stateChanged?.();
+  }
+
+  private async ensureRuntimeReady(): Promise<void> {
+    if (this.resolvedRuntime) {
+      return;
+    }
+    this.runtimeInitialization ??= this.resolveRuntime().then((resolved) => {
+      this.resolvedRuntime = resolved;
+      this.runtimeInitialization = undefined;
+    });
+    await this.runtimeInitialization;
+  }
+
+  private async resolveRuntime(): Promise<ResolvedBrowserRuntime> {
+    const hostLaunchOptions = this.runtimeConfig.executablePath
+      ? { executablePath: this.runtimeConfig.executablePath }
+      : { channel: 'chrome' };
+    const result = await this.tryRuntimeCandidate(
+      'host-chrome',
+      hostLaunchOptions,
+    );
+    if (result.ok) {
+      return {
+        diagnostic: {
+          activeKind: 'host-chrome',
+          message: 'Using host Google Chrome for browser automation',
+          preferredKind: 'host-chrome',
+          status: 'ready',
+        },
+        launchOptions: hostLaunchOptions,
+      };
+    }
+
+    return {
+      diagnostic: {
+        message: `Host Google Chrome is unavailable: ${result.message}`,
+        preferredKind: 'host-chrome',
+        status: 'unavailable',
+      },
+      launchOptions: hostLaunchOptions,
+    };
+  }
+
+  private async tryRuntimeCandidate(
+    kind: DesktopBrowserRuntime['kind'],
+    launchOptions: Omit<RuntimeLaunchOptions, 'headless'>,
+  ): Promise<RuntimeValidationResult> {
+    return this.runtimeValidator({
+      kind,
+      launchOptions,
+      runtime: this.runtime,
+    });
+  }
+
+  private activeRuntimeLaunchOptions(): Omit<RuntimeLaunchOptions, 'headless'> {
+    if (this.resolvedRuntime?.diagnostic.status !== 'ready') {
+      throw new Error(this.getRuntimeDiagnostic().message);
+    }
+    return this.resolvedRuntime.launchOptions;
+  }
+}
+
+async function validateRuntimeLaunch({
+  launchOptions,
+  runtime,
+}: {
+  readonly kind: DesktopBrowserRuntime['kind'];
+  readonly launchOptions: Omit<RuntimeLaunchOptions, 'headless'>;
+  readonly runtime: ChromiumRuntime;
+}): Promise<RuntimeValidationResult> {
+  let browser: RuntimeBrowser | undefined;
+  try {
+    browser = await runtime.launch({ ...launchOptions, headless: true });
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error ? error.message : 'Browser runtime unavailable',
+    };
+  } finally {
+    await browser?.close();
   }
 }
 

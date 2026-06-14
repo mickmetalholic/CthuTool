@@ -26,6 +26,11 @@ export type DesktopWindowState = {
   readonly isMaximized: boolean;
 };
 
+export type DesktopBrowserRuntime = {
+  readonly kind: 'host-chrome';
+  readonly executablePath?: string;
+};
+
 export type DesktopConfig = {
   readonly backendUrl: string;
   readonly agentId: string;
@@ -35,6 +40,7 @@ export type DesktopConfig = {
   readonly activeEnvironmentId: string;
   readonly activeEnvironment: DesktopEnvironmentProfile;
   readonly appearance: DesktopAppearance;
+  readonly browserRuntime: DesktopBrowserRuntime;
   readonly windowState?: DesktopWindowState;
 };
 
@@ -47,6 +53,7 @@ export type DesktopConfigPatch = Partial<
     | 'environmentProfiles'
     | 'activeEnvironmentId'
     | 'appearance'
+    | 'browserRuntime'
     | 'windowState'
   >
 >;
@@ -64,6 +71,9 @@ export const DEFAULT_BACKEND_URL = 'http://localhost:3000';
 export const DEFAULT_APPEARANCE: DesktopAppearance = {
   mode: 'dark',
   colorScheme: 'dracula',
+};
+export const DEFAULT_BROWSER_RUNTIME: DesktopBrowserRuntime = {
+  kind: 'host-chrome',
 };
 
 export class JsonDesktopConfigStorage implements DesktopConfigStorage {
@@ -97,7 +107,7 @@ export class DesktopConfigStore {
   load(): DesktopConfig {
     const raw = this.storage.read();
     const config = normalizeConfig(raw, this.defaults);
-    if (!raw?.agentId || !raw.environmentProfiles) {
+    if (!raw?.agentId || !raw.environmentProfiles || !raw.browserRuntime) {
       this.storage.write(config);
     }
     return config;
@@ -135,6 +145,7 @@ export function normalizeConfig(
     activeEnvironmentId: activeEnvironment.id,
     activeEnvironment,
     appearance: normalizeAppearance(input?.appearance),
+    browserRuntime: normalizeBrowserRuntime(input?.browserRuntime),
     windowState: normalizeWindowState(input?.windowState),
   };
 }
@@ -237,6 +248,18 @@ function normalizeWindowState(
     height: Math.max(600, Math.round(input.height || 760)),
     isMaximized: Boolean(input.isMaximized),
   };
+}
+
+function normalizeBrowserRuntime(
+  input: DesktopBrowserRuntime | undefined,
+): DesktopBrowserRuntime {
+  if (input?.kind === 'host-chrome') {
+    const executablePath = normalizeText(input.executablePath);
+    return executablePath
+      ? { kind: 'host-chrome', executablePath }
+      : DEFAULT_BROWSER_RUNTIME;
+  }
+  return DEFAULT_BROWSER_RUNTIME;
 }
 
 function mergeConfigPatch(

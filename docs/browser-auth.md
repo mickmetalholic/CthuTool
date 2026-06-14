@@ -13,8 +13,37 @@ profile paths.
 - `apps/desktop` connects as a browser-capable agent, runs Playwright on the
   user's machine, stores persistent profile directories under Electron app data,
   and opens login or verification flows.
-- `apps/cli` does not own browser runtime, login, verification, profile, or
-  browser-status commands. Use CthuDesktop and backend APIs for browser state.
+- `apps/cli` checks local browser runtime readiness and reads backend browser
+  status. It does not install browsers, open login browsers, or store browser
+  profiles.
+
+## Browser Runtime
+
+CthuDesktop uses the host Google Chrome binary for local browser automation.
+The Chrome executable and profile directory are separate concerns: automation
+runs with CthuDesktop-owned profile directories under Electron app data, and
+CthuDesktop does not reuse the user's everyday Chrome profile.
+
+The desktop config can set a host Chrome executable path when Playwright's
+`chrome` channel discovery is not enough. Runtime configuration is exposed
+through the local config file and read-only desktop diagnostics rather than a
+Settings form.
+
+Use the CLI to inspect the local runtime:
+
+```powershell
+chc browser doctor
+```
+
+`doctor` reports Playwright availability, host Chrome availability, and the
+preferred runtime. Browser setup means installing Google Chrome on the host or
+configuring an explicit executable path.
+
+`status` reads backend state only and does not require local Chrome discovery:
+
+```powershell
+chc browser status --json
+```
 
 ## Site Configuration
 

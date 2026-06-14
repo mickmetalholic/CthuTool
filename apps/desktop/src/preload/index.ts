@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { AgentConnectionState } from '../main/agent-client';
 import type { DesktopConfig, DesktopConfigPatch } from '../main/config';
 import type { PendingAuthTask } from '../main/pending-auth-task-store';
+import type { BrowserRuntimeDiagnostic } from '../main/playwright-host';
 
 type BrowserSiteActionInput = {
   readonly siteId: string;
@@ -15,6 +16,7 @@ const api = {
     ipcRenderer.invoke('desktop:getConfig'),
   getAppInfo: (): Promise<{
     readonly browserProfilesDir: string;
+    readonly browserRuntime?: BrowserRuntimeDiagnostic;
     readonly configPath: string;
     readonly userDataDir: string;
     readonly version: string;

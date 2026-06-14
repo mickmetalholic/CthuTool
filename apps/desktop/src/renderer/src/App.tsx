@@ -28,7 +28,11 @@ import {
   fetchConnectedAgents,
 } from './agents-api';
 import appIcon from './assets/cthudesktop-icon.svg?url';
-import { type DesktopApi, getDesktopApi } from './desktop-api';
+import {
+  type DesktopApi,
+  type DesktopAppInfo,
+  getDesktopApi,
+} from './desktop-api';
 import './styles.css';
 
 type AppProps = {
@@ -40,7 +44,6 @@ type AppProps = {
 type LocalPendingAuthTask = Awaited<
   ReturnType<DesktopApi['getLocalPendingAuthTasks']>
 >[number];
-type DesktopAppInfo = Awaited<ReturnType<DesktopApi['getAppInfo']>>;
 
 type Workspace = 'main' | 'settings';
 type MainView = 'home' | 'browser' | 'agents';
@@ -112,6 +115,11 @@ export function App({
   );
   const [appInfo, setAppInfo] = useState<DesktopAppInfo>({
     browserProfilesDir: '',
+    browserRuntime: {
+      message: 'Browser runtime has not been initialized',
+      preferredKind: 'host-chrome',
+      status: 'pending',
+    },
     configPath: '',
     userDataDir: '',
     version: '0.0.0',
@@ -618,14 +626,7 @@ function renderSettingsWorkspace({
   readonly saveConfig: () => Promise<void>;
   readonly saveState: 'idle' | 'saving' | 'saved';
   readonly connection: AgentConnectionState;
-  readonly appInfo: {
-    readonly browserProfilesDir: string;
-    readonly configPath: string;
-    readonly userDataDir: string;
-    readonly version: string;
-    readonly platform: string;
-    readonly isPackaged: boolean;
-  };
+  readonly appInfo: DesktopAppInfo;
 }) {
   if (view === 'appearance') {
     return (

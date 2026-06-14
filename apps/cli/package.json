@@ -19,6 +19,7 @@
     "neverthrow": "^8.2.0",
     "p-limit": "^7.3.0",
     "picocolors": "^1.1.1",
+    "playwright": "^1.60.0",
     "valibot": "^1.1.0"
   },
   "devDependencies": {

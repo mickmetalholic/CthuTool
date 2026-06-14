@@ -28,10 +28,19 @@ function createDesktopApi(): DesktopApi {
         mode: 'dark',
         colorScheme: 'dracula',
       },
+      browserRuntime: {
+        kind: 'host-chrome',
+      },
     }),
     getAppInfo: vi.fn().mockResolvedValue({
       browserProfilesDir:
         'C:\\Users\\yuans\\AppData\\Roaming\\CthuDesktop\\browser-profiles',
+      browserRuntime: {
+        activeKind: 'host-chrome',
+        message: 'Using host Google Chrome for browser automation',
+        preferredKind: 'host-chrome',
+        status: 'ready',
+      },
       configPath:
         'C:\\Users\\yuans\\AppData\\Roaming\\CthuDesktop\\config.json',
       userDataDir: 'C:\\Users\\yuans\\AppData\\Roaming\\CthuDesktop',
@@ -60,6 +69,9 @@ function createDesktopApi(): DesktopApi {
       appearance: patch.appearance ?? {
         mode: 'dark',
         colorScheme: 'dracula',
+      },
+      browserRuntime: patch.browserRuntime ?? {
+        kind: 'host-chrome',
       },
     })),
     getConnectionState: vi.fn().mockResolvedValue({

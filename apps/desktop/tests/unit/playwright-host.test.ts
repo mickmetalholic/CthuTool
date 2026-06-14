@@ -27,8 +27,14 @@ describe('PlaywrightHost', () => {
 
   async function createHost(
     options: {
+      readonly browserRuntime?: ConstructorParameters<
+        typeof PlaywrightHost
+      >[0]['browserRuntime'];
       readonly gotoError?: Error;
       readonly pages?: readonly PageState[];
+      readonly runtimeValidator?: ConstructorParameters<
+        typeof PlaywrightHost
+      >[0]['runtimeValidator'];
     } = {},
   ) {
     tempDir = await mkdtemp(join(tmpdir(), 'cthutool-playwright-host-'));
@@ -87,10 +93,13 @@ describe('PlaywrightHost', () => {
     return {
       host: new PlaywrightHost({
         agentId: 'agent-1',
+        browserRuntime: options.browserRuntime,
         now: () => new Date('2026-06-13T10:00:00.000Z'),
         pendingAuthTasks,
         profileStore,
         runtime,
+        runtimeValidator:
+          options.runtimeValidator ?? (async () => ({ ok: true })),
       }),
       pendingAuthTasks,
       closeLoginWindow: () => closeHandler?.(),
@@ -133,7 +142,10 @@ describe('PlaywrightHost', () => {
     const result = await host.execute(captureCommand);
 
     expect(result.type).toBe('browser.result');
-    expect(runtime.launchPersistentContext).toHaveBeenCalled();
+    expect(runtime.launchPersistentContext).toHaveBeenCalledWith(
+      expect.stringContaining(join('douban', 'douban-main')),
+      { channel: 'chrome', headless: true },
+    );
   });
 
   test('uses temporary context for anonymous capture', async () => {
@@ -148,7 +160,50 @@ describe('PlaywrightHost', () => {
     });
 
     expect(result.type).toBe('browser.result');
-    expect(runtime.launch).toHaveBeenCalled();
+    expect(runtime.launch).toHaveBeenCalledWith({
+      channel: 'chrome',
+      headless: true,
+    });
+  });
+
+  test('uses explicit host Chrome executable path launch options', async () => {
+    const { host, profileStore, runtime } = await createHost({
+      browserRuntime: {
+        kind: 'host-chrome',
+        executablePath:
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      },
+    });
+    await profileStore.markStatus('douban', 'douban-main', 'verified');
+
+    await host.execute(captureCommand);
+
+    expect(runtime.launchPersistentContext).toHaveBeenCalledWith(
+      expect.stringContaining(join('douban', 'douban-main')),
+      {
+        executablePath:
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        headless: true,
+      },
+    );
+  });
+
+  test('does not become ready when host Chrome does not validate', async () => {
+    const { host } = await createHost({
+      runtimeValidator: async () => ({
+        ok: false,
+        message: 'Chrome channel missing',
+      }),
+    });
+
+    await host.initialize();
+
+    expect(host.isReady()).toBe(false);
+    expect(host.getRuntimeDiagnostic()).toEqual({
+      message: 'Host Google Chrome is unavailable: Chrome channel missing',
+      preferredKind: 'host-chrome',
+      status: 'unavailable',
+    });
   });
 
   test('keeps login window open when login navigation times out', async () => {

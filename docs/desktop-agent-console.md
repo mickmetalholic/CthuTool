@@ -7,9 +7,10 @@ agents reported by the backend, and hosts local browser automation state that
 must stay on the user's machine.
 
 CthuDesktop owns local browser profiles, headed login windows, verification,
-and Playwright execution. The backend owns orchestration and public status. The
-backend does not receive raw cookies, localStorage, Playwright storage-state
-bundles, or desktop profile paths.
+and Playwright execution. The browser executable defaults to the host Google
+Chrome binary. The backend owns orchestration and public status. The backend
+does not receive raw cookies, localStorage, Playwright storage-state bundles, or
+desktop profile paths.
 
 ## Product Shell
 
@@ -88,6 +89,36 @@ Desktop App -> WebSocket -> Backend Agent Registry
 Desktop App -> HTTP GET /api/agents -> Backend Agent Registry
 Backend -> structured browser command -> Desktop Playwright Host
 ```
+
+The Playwright host resolves its browser runtime at startup. By default it
+validates host Google Chrome. If that launch path fails, CthuDesktop keeps
+running but does not advertise the `browser` capability, and Local Status shows
+the runtime diagnostic.
+
+Runtime selection is stored in the local desktop config file. The default is:
+
+```json
+{
+  "browserRuntime": {
+    "kind": "host-chrome"
+  }
+}
+```
+
+To use a specific Chrome binary:
+
+```json
+{
+  "browserRuntime": {
+    "kind": "host-chrome",
+    "executablePath": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  }
+}
+```
+
+Changing runtime mode does not move cookies or localStorage into the user's
+normal Chrome profile. Required-auth profiles stay under CthuDesktop's
+`browser-profiles` directory.
 
 ## Agent Protocol
 
@@ -190,7 +221,8 @@ pnpm --filter @cthutool/desktop exec electron-builder --dir --config.win.signAnd
   actions. The backend does not send arbitrary Playwright scripts for desktop to
   evaluate.
 - Browser profiles are Playwright-managed persistent profile directories under
-  Electron app data, not direct reuse of a user's everyday Chrome profile.
+  Electron app data, not direct reuse of a user's everyday Chrome profile,
+  even when the browser executable is host Chrome.
 - No Douban or movie parsing in desktop.
 - No generic backend task queue or arbitrary host-task dispatch.
 - No installer signing, notarization, or auto-update.

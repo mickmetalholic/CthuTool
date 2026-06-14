@@ -102,6 +102,7 @@ function setupIpc(store: DesktopConfigStore): void {
   );
   ipcMain.handle('desktop:getAppInfo', () => ({
     browserProfilesDir: join(app.getPath('userData'), 'browser-profiles'),
+    browserRuntime: playwrightHost?.getRuntimeDiagnostic(),
     configPath: join(app.getPath('userData'), 'config.json'),
     userDataDir: app.getPath('userData'),
     version: appVersion,
@@ -113,7 +114,11 @@ function setupIpc(store: DesktopConfigStore): void {
   }));
   ipcMain.handle('desktop:saveConfig', (_event, patch: DesktopConfigPatch) => {
     const config = store.savePatch(patch);
-    agentClient?.refreshConfig();
+    playwrightHost?.setBrowserRuntime(config.browserRuntime);
+    void playwrightHost?.initialize().then(() => {
+      void publishLocalBrowserState();
+      agentClient?.refreshConfig();
+    });
     return config;
   });
   ipcMain.handle(
@@ -214,7 +219,7 @@ function persistWindowState(): void {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const userDataDir = app.getPath('userData');
   const store = new DesktopConfigStore(
     new JsonDesktopConfigStorage(join(userDataDir, 'config.json')),
@@ -225,13 +230,16 @@ app.whenReady().then(() => {
   );
   browserProfileStore = profileStore;
   pendingAuthTasks = new PendingAuthTaskStore();
+  const config = store.load();
   playwrightHost = new PlaywrightHost({
-    agentId: store.load().agentId,
+    agentId: config.agentId,
+    browserRuntime: config.browserRuntime,
     headless: false,
     onStateChanged: () => publishLocalBrowserState(),
     pendingAuthTasks,
     profileStore,
   });
+  await playwrightHost.initialize();
   configStore = store;
   setupIpc(store);
   agentClient = new AgentClient({
