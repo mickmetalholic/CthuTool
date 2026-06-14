@@ -76,15 +76,15 @@ The browser content service SHALL store failure diagnostics behind diagnostic id
 - **THEN** the result includes only diagnostic identifiers and summaries, not raw screenshots, HTML files, cookies, or storage-state contents
 
 ### Requirement: Backend browser site configuration
-The backend SHALL load effective browser site configurations from built-in defaults plus an optional validated JSON override file, using the shared config package to map allowed origins to site identifiers, auth policy, login URL, verification URL, default profile name, and detection hints.
+The backend browser automation module SHALL consume effective site configurations from the backend sites config module, using the shared config package data shape to map allowed origins to site identifiers, auth policy, login URL, verification URL, default profile name, and detection hints.
 
 #### Scenario: Required site is configured
 - **WHEN** a backend module requests browser content for a URL whose origin matches a configured required-auth site
-- **THEN** the browser automation module resolves the site id, default profile name, login URL, verification URL, and `required` auth policy from the effective site configuration before dispatching any browser task
+- **THEN** the browser automation module resolves the site id, default profile name, login URL, verification URL, and `required` auth policy from `SitesConfigService` before dispatching any browser task
 
 #### Scenario: Anonymous site is configured
 - **WHEN** a backend module requests browser content for a URL whose origin matches a configured anonymous site
-- **THEN** the browser automation module resolves the site id and `anonymous` auth policy from the effective site configuration without requiring any profile
+- **THEN** the browser automation module resolves the site id and `anonymous` auth policy from `SitesConfigService` without requiring any profile
 
 #### Scenario: Unknown site is rejected
 - **WHEN** a backend module requests browser content for a URL that does not match any configured site origin
@@ -92,7 +92,7 @@ The backend SHALL load effective browser site configurations from built-in defau
 
 #### Scenario: JSON override updates built-in site
 - **WHEN** backend starts with a browser sites JSON file that overrides a built-in site by `siteId`
-- **THEN** `/api/browser/sites` and browser content resolution use the merged site configuration
+- **THEN** `/api/browser/sites` and browser content resolution use the merged site configuration exposed by `SitesConfigModule`
 
 #### Scenario: JSON override is invalid
 - **WHEN** backend starts with an explicit browser sites JSON file that cannot be read or validated
@@ -100,7 +100,7 @@ The backend SHALL load effective browser site configurations from built-in defau
 
 #### Scenario: No JSON override is configured
 - **WHEN** backend starts without a browser sites JSON file path
-- **THEN** browser automation uses the built-in default site configuration
+- **THEN** browser automation uses the built-in default site configuration exposed by `SitesConfigModule`
 
 ### Requirement: Agent-backed browser provider
 The backend SHALL dispatch browser content requests through a connected desktop agent that advertises browser capability.

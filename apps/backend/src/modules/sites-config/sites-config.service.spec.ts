@@ -2,11 +2,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigError } from '@cthutool/config';
-import { BrowserSiteConfigService } from './browser-site-config.service';
+import { SitesConfigService } from './sites-config.service';
 
-describe('BrowserSiteConfigService', () => {
+describe('SitesConfigService', () => {
   it('loads built-in browser sites by default', async () => {
-    const service = await BrowserSiteConfigService.create();
+    const service = await SitesConfigService.create();
 
     expect(service.getSite('douban')).toEqual(
       expect.objectContaining({
@@ -35,7 +35,7 @@ describe('BrowserSiteConfigService', () => {
         ],
       },
       async (sitesFilePath) => {
-        const service = await BrowserSiteConfigService.create({
+        const service = await SitesConfigService.create({
           sitesFilePath,
         });
 
@@ -65,7 +65,7 @@ describe('BrowserSiteConfigService', () => {
         ],
       },
       async (sitesFilePath) => {
-        const service = await BrowserSiteConfigService.create({
+        const service = await SitesConfigService.create({
           sitesFilePath,
         });
 
@@ -82,13 +82,13 @@ describe('BrowserSiteConfigService', () => {
   it('fails when an explicit JSON override is invalid', async () => {
     await withRawFile('{', async (sitesFilePath) => {
       await expect(
-        BrowserSiteConfigService.create({ sitesFilePath }),
+        SitesConfigService.create({ sitesFilePath }),
       ).rejects.toThrow(ConfigError);
     });
   });
 
   it('returns copies of effective sites', async () => {
-    const service = await BrowserSiteConfigService.create();
+    const service = await SitesConfigService.create();
     const [site] = service.listSites();
     if (!site) {
       throw new Error('expected at least one site');

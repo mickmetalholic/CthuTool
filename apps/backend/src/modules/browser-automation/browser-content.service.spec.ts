@@ -1,3 +1,4 @@
+import { SitesConfigService } from '../sites-config/sites-config.service';
 import type {
   BrowserContentRequest,
   BrowserProvider,
@@ -6,7 +7,6 @@ import type {
 import { BrowserBlockDetector } from './browser-block-detector';
 import { BrowserContentService } from './browser-content.service';
 import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
-import { BrowserSiteConfigService } from './browser-site-config.service';
 import { BrowserTaskRunner } from './browser-task-runner';
 
 describe('BrowserContentService', () => {
@@ -132,12 +132,25 @@ describe('BrowserContentService', () => {
       }),
     );
   });
+
+  it('rejects an unknown site before navigation', async () => {
+    const provider = createProvider();
+    const service = createService(provider);
+
+    await expect(
+      service.getPageContent({
+        includeHtml: true,
+        url: 'https://unknown.example/page',
+      }),
+    ).rejects.toMatchObject({ code: 'SITE_NOT_CONFIGURED' });
+    expect(provider.capturePage).not.toHaveBeenCalled();
+  });
 });
 
 function createService(provider: BrowserProvider): BrowserContentService {
   return new BrowserContentService(
     provider,
-    new BrowserSiteConfigService(),
+    new SitesConfigService(),
     new BrowserTaskRunner({
       defaultDelayMs: 0,
       defaultTimeoutMs: 1000,

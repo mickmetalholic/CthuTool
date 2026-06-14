@@ -1,4 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: constructor injection token
+import { SitesConfigService } from '../sites-config/sites-config.service';
 import { BrowserAutomationError } from './browser-automation.errors';
 import { BROWSER_PROVIDER } from './browser-automation.tokens';
 import type {
@@ -14,8 +16,6 @@ import { BrowserBlockDetector } from './browser-block-detector';
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
 // biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserSiteConfigService } from './browser-site-config.service';
-// biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserTaskRunner } from './browser-task-runner';
 
 @Injectable()
@@ -23,7 +23,7 @@ export class BrowserContentService {
   constructor(
     @Inject(BROWSER_PROVIDER)
     private readonly provider: BrowserProvider,
-    private readonly siteConfig: BrowserSiteConfigService,
+    private readonly siteConfig: SitesConfigService,
     private readonly taskRunner: BrowserTaskRunner,
     private readonly blockDetector: BrowserBlockDetector,
     private readonly diagnosticsStore: BrowserDiagnosticsStore,
@@ -66,10 +66,12 @@ export class BrowserContentService {
     const site = request.siteId
       ? this.siteConfig.getSite(request.siteId)
       : this.siteConfig.resolveForUrl(request.url);
-    if (request.siteId && !site) {
+    if (!site && (request.siteId || !request.allowedOrigins)) {
       throw new BrowserAutomationError(
         'SITE_NOT_CONFIGURED',
-        `Browser site "${request.siteId}" is not configured`,
+        request.siteId
+          ? `Browser site "${request.siteId}" is not configured`
+          : `No browser site is configured for "${new URL(request.url).origin}"`,
       );
     }
 

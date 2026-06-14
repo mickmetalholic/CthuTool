@@ -1,13 +1,31 @@
+import { SitesConfigService } from '../sites-config/sites-config.service';
 import { BrowserAutomationController } from './browser-automation.controller';
 import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
 import { BrowserProfileRegistryService } from './browser-profile-registry.service';
-import { BrowserSiteConfigService } from './browser-site-config.service';
 
 describe('BrowserAutomationController', () => {
+  it('returns browser sites with the existing response shape', () => {
+    const controller = new BrowserAutomationController(
+      new SitesConfigService(),
+      new BrowserProfileRegistryService(),
+      new BrowserPendingAuthTaskService(),
+    );
+
+    expect(controller.listSites()).toEqual({
+      sites: expect.arrayContaining([
+        expect.objectContaining({
+          allowedOrigins: expect.arrayContaining(['https://movie.douban.com']),
+          authPolicy: 'required',
+          siteId: 'douban',
+        }),
+      ]),
+    });
+  });
+
   it('resolves pending auth when a verified profile is reported', () => {
     const pendingAuthTasks = new BrowserPendingAuthTaskService();
     const controller = new BrowserAutomationController(
-      new BrowserSiteConfigService(),
+      new SitesConfigService(),
       new BrowserProfileRegistryService(),
       pendingAuthTasks,
     );

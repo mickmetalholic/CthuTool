@@ -27,14 +27,14 @@ const DEFAULT_BROWSER_SITES: readonly BrowserSiteConfig[] = [
 ];
 
 @Injectable()
-export class BrowserSiteConfigService {
+export class SitesConfigService {
   static async create(
     options: { readonly sitesFilePath?: string } = {},
-  ): Promise<BrowserSiteConfigService> {
+  ): Promise<SitesConfigService> {
     const overrides = options.sitesFilePath
       ? await loadBrowserSitesFile(options.sitesFilePath)
       : [];
-    return new BrowserSiteConfigService(
+    return new SitesConfigService(
       mergeBrowserSites(DEFAULT_BROWSER_SITES, overrides),
     );
   }

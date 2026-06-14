@@ -1,4 +1,6 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: constructor injection token
+import { SitesConfigService } from '../sites-config/sites-config.service';
 import type {
   BrowserPendingAuthReason,
   BrowserProfileRegistryEntry,
@@ -7,13 +9,11 @@ import type {
 import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserProfileRegistryService } from './browser-profile-registry.service';
-// biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserSiteConfigService } from './browser-site-config.service';
 
 @Controller('api/browser')
 export class BrowserAutomationController {
   constructor(
-    private readonly siteConfig: BrowserSiteConfigService,
+    private readonly siteConfig: SitesConfigService,
     private readonly profileRegistry: BrowserProfileRegistryService,
     private readonly pendingAuthTasks: BrowserPendingAuthTaskService,
   ) {}

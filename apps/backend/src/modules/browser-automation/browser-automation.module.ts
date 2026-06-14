@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { parseBrowserConfiguration } from '../../config/service-configuration';
 import { AgentRegistryModule } from '../agent-registry/agent-registry.module';
+import { SitesConfigModule } from '../sites-config/sites-config.module';
 import { AgentBrowserProvider } from './agent-browser.provider';
 import { BrowserAutomationController } from './browser-automation.controller';
 import { BROWSER_PROVIDER } from './browser-automation.tokens';
@@ -9,19 +10,18 @@ import { BrowserContentService } from './browser-content.service';
 import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
 import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
 import { BrowserProfileRegistryService } from './browser-profile-registry.service';
-import { BrowserSiteConfigService } from './browser-site-config.service';
 import { BrowserStateProjectionService } from './browser-state-projection.service';
 import { BrowserStateSnapshotListener } from './browser-state-snapshot-listener';
 import { BrowserTaskRunner } from './browser-task-runner';
 
 @Module({
-  imports: [AgentRegistryModule],
+  imports: [AgentRegistryModule, SitesConfigModule],
   controllers: [BrowserAutomationController],
   exports: [
     BrowserContentService,
     BrowserPendingAuthTaskService,
     BrowserProfileRegistryService,
-    BrowserSiteConfigService,
+    SitesConfigModule,
   ],
   providers: [
     AgentBrowserProvider,
@@ -31,13 +31,6 @@ import { BrowserTaskRunner } from './browser-task-runner';
     BrowserProfileRegistryService,
     BrowserStateProjectionService,
     BrowserStateSnapshotListener,
-    {
-      provide: BrowserSiteConfigService,
-      useFactory: () =>
-        BrowserSiteConfigService.create({
-          sitesFilePath: getBrowserConfig().sitesConfigFile,
-        }),
-    },
     {
       provide: BrowserDiagnosticsStore,
       useFactory: () =>

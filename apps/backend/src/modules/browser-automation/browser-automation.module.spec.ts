@@ -1,5 +1,6 @@
 import { HttpAdapterHost } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
+import { SitesConfigService } from '../sites-config/sites-config.service';
 import { AgentBrowserProvider } from './agent-browser.provider';
 import { BrowserAutomationModule } from './browser-automation.module';
 
@@ -21,6 +22,9 @@ describe('BrowserAutomationModule', () => {
 
     expect(moduleRef.get(AgentBrowserProvider)).toBeInstanceOf(
       AgentBrowserProvider,
+    );
+    expect(moduleRef.get(SitesConfigService)).toBeInstanceOf(
+      SitesConfigService,
     );
 
     await moduleRef.close();
