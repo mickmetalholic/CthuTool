@@ -56,20 +56,22 @@ export class BrowserProfileStore {
     assertProfileKey(siteId, profileName);
     const current = await this.getProfile(siteId, profileName);
     const updatedAt = this.now().toISOString();
+    const displayName =
+      'displayName' in patch ? patch.displayName : current?.displayName;
+    const externalUserId =
+      'externalUserId' in patch
+        ? patch.externalUserId
+        : current?.externalUserId;
+    const verifiedAt =
+      'verifiedAt' in patch ? patch.verifiedAt : current?.verifiedAt;
     const next: LocalBrowserProfile = {
       profileName,
       siteId,
       status: patch.status ?? current?.status ?? 'missing',
       updatedAt,
-      ...((patch.displayName ?? current?.displayName)
-        ? { displayName: patch.displayName ?? current?.displayName }
-        : {}),
-      ...((patch.externalUserId ?? current?.externalUserId)
-        ? { externalUserId: patch.externalUserId ?? current?.externalUserId }
-        : {}),
-      ...((patch.verifiedAt ?? current?.verifiedAt)
-        ? { verifiedAt: patch.verifiedAt ?? current?.verifiedAt }
-        : {}),
+      ...(displayName ? { displayName } : {}),
+      ...(externalUserId ? { externalUserId } : {}),
+      ...(verifiedAt ? { verifiedAt } : {}),
     };
     await mkdir(this.profileDir(siteId, profileName), { recursive: true });
     const metaPath = this.metaPath(siteId, profileName);

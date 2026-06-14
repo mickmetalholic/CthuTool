@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import type {
   BrowserCommandPayload,
+  BrowserDetection,
   BrowserErrorMessage,
   BrowserResultMessage,
 } from '@cthutool/agent-protocol';
@@ -10,7 +11,10 @@ import {
 } from '@cthutool/agent-protocol';
 import type { Route } from 'playwright';
 import { chromium } from 'playwright';
-import type { BrowserProfileStore } from './browser-profile-store';
+import type {
+  BrowserProfileStatus,
+  BrowserProfileStore,
+} from './browser-profile-store';
 import type { DesktopBrowserRuntime } from './config';
 import type { PendingAuthTaskStore } from './pending-auth-task-store';
 
@@ -89,6 +93,25 @@ type RuntimeValidator = (input: {
   readonly launchOptions: Omit<RuntimeLaunchOptions, 'headless'>;
   readonly runtime: ChromiumRuntime;
 }) => Promise<RuntimeValidationResult>;
+
+type ProfileVerificationResult = {
+  readonly detection: BrowserDetection;
+  readonly displayName?: string;
+  readonly externalUserId?: string;
+  readonly finalUrl?: string;
+  readonly response?: RuntimeResponse | null;
+  readonly status: BrowserProfileStatus;
+  readonly title?: string;
+};
+
+type ProfileVerifier = (input: {
+  readonly command: BrowserCommandPayload;
+  readonly context: RuntimeContext;
+}) => Promise<ProfileVerificationResult>;
+
+const profileVerifiers = new Map<string, ProfileVerifier>([
+  ['douban', verifyDoubanProfile],
+]);
 
 export type PlaywrightHostOptions = {
   readonly agentId: string;
@@ -311,27 +334,30 @@ export class PlaywrightHost {
       );
     }
     const profileName = command.profileName;
-    const verifyUrl = command.verifyUrl;
     return this.withPersistentContext(command, async (context) => {
-      const page = await context.newPage();
-      const response = await page.goto(verifyUrl, {
-        timeout: command.timeoutMs,
-        waitUntil: command.waitUntil ?? 'domcontentloaded',
-      });
-      const text = (await page.locator('body').textContent()) ?? '';
-      const detection = detectAccessProblem(page.url(), text);
-      const status = detection.kind === 'ok' ? 'verified' : 'login_required';
-      const profile = await this.options.profileStore.markStatus(
+      const verification = await verifyProfileInContext(command, context);
+      const profile = await this.options.profileStore.saveProfile(
         command.siteId,
         profileName,
-        status,
+        {
+          displayName: verification.displayName,
+          externalUserId: verification.externalUserId,
+          status: verification.status,
+          verifiedAt:
+            verification.status === 'verified'
+              ? this.now().toISOString()
+              : undefined,
+        },
       );
-      if (status === 'verified') {
+      if (verification.status === 'verified') {
         this.options.pendingAuthTasks.resolve(command.siteId, profileName);
       } else {
         this.options.pendingAuthTasks.upsert({
           profileName,
-          reason: 'verification_failed',
+          reason:
+            verification.status === 'blocked'
+              ? 'blocked'
+              : 'verification_failed',
           siteId: command.siteId,
           source: 'runtime_failure',
         });
@@ -341,16 +367,16 @@ export class PlaywrightHost {
         capturedAt: this.now().toISOString(),
         command: command.command,
         commandId: command.commandId,
-        detection,
-        finalUrl: page.url(),
+        detection: verification.detection,
+        finalUrl: verification.finalUrl,
         profile: this.options.profileStore.toPublicProfile(
           this.options.agentId,
           profile,
         ),
-        ...(response?.status() !== undefined
-          ? { status: response.status() }
+        ...(verification.response?.status() !== undefined
+          ? { status: verification.response.status() }
           : {}),
-        title: await page.title(),
+        title: verification.title,
       });
     });
   }
@@ -378,7 +404,12 @@ export class PlaywrightHost {
     await this.options.profileStore.saveProfile(
       command.siteId,
       command.profileName,
-      { status: 'login_required' },
+      {
+        displayName: undefined,
+        externalUserId: undefined,
+        status: 'login_required',
+        verifiedAt: undefined,
+      },
     );
     this.options.pendingAuthTasks.upsert({
       loginUrl: command.loginUrl,
@@ -673,16 +704,126 @@ function profileKey(siteId: string, profileName: string | undefined): string {
   return `${siteId}:${profileName ?? ''}`;
 }
 
+async function verifyProfileInContext(
+  command: BrowserCommandPayload,
+  context: RuntimeContext,
+): Promise<ProfileVerificationResult> {
+  const verifier = profileVerifiers.get(command.siteId);
+  return verifier
+    ? verifier({ command, context })
+    : verifyGenericProfile({ command, context });
+}
+
+async function verifyGenericProfile({
+  command,
+  context,
+}: {
+  readonly command: BrowserCommandPayload;
+  readonly context: RuntimeContext;
+}): Promise<ProfileVerificationResult> {
+  const page = await context.newPage();
+  const navigation = await safeGoto(page, command.verifyUrl ?? '', {
+    timeout: command.timeoutMs,
+    waitUntil: command.waitUntil ?? 'domcontentloaded',
+  });
+  if (navigation.error) {
+    return {
+      detection: { kind: 'blocked', reason: navigation.error },
+      finalUrl: page.url(),
+      response: navigation.response,
+      status: 'blocked',
+      title: await page.title(),
+    };
+  }
+  const text = (await page.locator('body').textContent()) ?? '';
+  const detection = detectAccessProblem(page.url(), text);
+  return {
+    detection,
+    finalUrl: page.url(),
+    response: navigation.response,
+    status: detection.kind === 'ok' ? 'verified' : 'login_required',
+    title: await page.title(),
+  };
+}
+
+async function verifyDoubanProfile({
+  command,
+  context,
+}: {
+  readonly command: BrowserCommandPayload;
+  readonly context: RuntimeContext;
+}): Promise<ProfileVerificationResult> {
+  const page = await context.newPage();
+  const navigationOptions = {
+    timeout: command.timeoutMs,
+    waitUntil: command.waitUntil ?? ('domcontentloaded' as const),
+  };
+  const homeNavigation = await safeGoto(
+    page,
+    'https://www.douban.com/',
+    navigationOptions,
+  );
+  if (homeNavigation.error) {
+    return {
+      detection: { kind: 'blocked', reason: homeNavigation.error },
+      finalUrl: page.url(),
+      response: homeNavigation.response,
+      status: 'blocked',
+      title: await page.title(),
+    };
+  }
+
+  const homeText = (await page.locator('body').textContent()) ?? '';
+  const homeHtml = await page.content();
+  const homeDetection = detectAccessProblem(
+    page.url(),
+    `${homeText}\n${homeHtml}`,
+  );
+  const displayName = extractDoubanAccountDisplayName(homeHtml, homeText);
+  if (!displayName) {
+    const blockedDetection = isBlockedDetection(homeDetection)
+      ? homeDetection
+      : undefined;
+    return {
+      detection:
+        blockedDetection ??
+        ({
+          kind: 'login_required',
+          reason: 'Douban account menu was not found',
+        } satisfies BrowserDetection),
+      finalUrl: page.url(),
+      response: homeNavigation.response,
+      status: blockedDetection ? 'blocked' : 'login_required',
+      title: await page.title(),
+    };
+  }
+
+  const mineNavigation = await safeGoto(
+    page,
+    'https://www.douban.com/mine/',
+    navigationOptions,
+  );
+  const externalUserId = mineNavigation.error
+    ? undefined
+    : extractDoubanExternalUserId(page.url());
+  return {
+    detection: mineNavigation.error
+      ? {
+          kind: 'ok',
+          reason: `Douban account menu verified; mine page unavailable: ${mineNavigation.error}`,
+        }
+      : { kind: 'ok' },
+    displayName,
+    externalUserId,
+    finalUrl: page.url(),
+    response: mineNavigation.response ?? homeNavigation.response,
+    status: 'verified',
+    title: await page.title(),
+  };
+}
+
 function detectAccessProblem(finalUrl: string, content: string | undefined) {
   const haystack = `${finalUrl}\n${content ?? ''}`.toLowerCase();
-  if (
-    haystack.includes('/login') ||
-    haystack.includes('/signin') ||
-    haystack.includes('登录') ||
-    haystack.includes('sign in')
-  ) {
-    return { kind: 'login_required' as const };
-  }
   if (haystack.includes('captcha') || haystack.includes('验证码')) {
     return { kind: 'captcha_required' as const };
   }
@@ -692,7 +833,73 @@ function detectAccessProblem(finalUrl: string, content: string | undefined) {
   ) {
     return { kind: 'rate_limited' as const };
   }
+  if (
+    haystack.includes('access denied') ||
+    haystack.includes('forbidden') ||
+    haystack.includes('异常访问') ||
+    haystack.includes('访问异常')
+  ) {
+    return { kind: 'blocked' as const };
+  }
+  if (
+    haystack.includes('/login') ||
+    haystack.includes('/signin') ||
+    haystack.includes('登录') ||
+    haystack.includes('sign in')
+  ) {
+    return { kind: 'login_required' as const };
+  }
   return { kind: 'ok' as const };
+}
+
+function isBlockedDetection(detection: BrowserDetection): boolean {
+  return (
+    detection.kind === 'blocked' ||
+    detection.kind === 'captcha_required' ||
+    detection.kind === 'rate_limited'
+  );
+}
+
+function extractDoubanAccountDisplayName(
+  html: string,
+  bodyText: string,
+): string | undefined {
+  if (!/accounts\.douban\.com\/passport\/setting\/?/i.test(html)) {
+    return undefined;
+  }
+  const anchorMatch = html.match(
+    /<a\b[^>]*href=["'][^"']*accounts\.douban\.com\/passport\/setting\/?[^"']*["'][^>]*>([\s\S]*?)<\/a>/i,
+  );
+  const anchorText = anchorMatch ? stripHtml(anchorMatch[1] ?? '') : undefined;
+  return (
+    extractDoubanAccountName(anchorText) ?? extractDoubanAccountName(bodyText)
+  );
+}
+
+function extractDoubanAccountName(
+  text: string | undefined,
+): string | undefined {
+  const normalized = text?.replace(/\s+/g, ' ').trim();
+  const match = normalized?.match(/(.{1,64}?)的账号/);
+  return match?.[1]?.trim() || undefined;
+}
+
+function extractDoubanExternalUserId(finalUrl: string): string | undefined {
+  const match = finalUrl.match(/\/people\/([^/?#]+)\/?/i);
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
+
+function stripHtml(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 async function safeGoto(

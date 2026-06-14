@@ -47,14 +47,14 @@ describe('BrowserProfileStore', () => {
     });
   });
 
-  test('marks an existing profile expired', async () => {
+  test('marks an existing profile expired and clears stale verification metadata', async () => {
     const store = await createStore();
     await store.markStatus('zhihu', 'zhihu-main', 'verified');
 
     const expired = await store.markStatus('zhihu', 'zhihu-main', 'expired');
 
     expect(expired.status).toBe('expired');
-    expect(expired.verifiedAt).toBe('2026-06-13T10:00:00.000Z');
+    expect(expired.verifiedAt).toBeUndefined();
   });
 
   test('lists local profile metadata for state projection', async () => {

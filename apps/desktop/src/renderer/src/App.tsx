@@ -886,51 +886,76 @@ function BrowserStatusPanel({
         <h2>Browser Sites</h2>
         {browserStatus.sites.length > 0 ? (
           <div className="mini-status-list">
-            {browserStatus.sites.map((site) => (
-              <div className="site-status-row" key={site.siteId}>
-                <div>
-                  <strong>{site.displayName}</strong>
-                  <small>{site.profileName ?? 'anonymous'}</small>
+            {browserStatus.sites.map((site) => {
+              const profile = findSiteProfile(browserStatus, site);
+              const pendingTask = findSitePendingAuthTask(
+                browserStatus,
+                localPendingAuthTasks,
+                site,
+              );
+              return (
+                <div className="site-status-row" key={site.siteId}>
+                  <div>
+                    <strong>{site.displayName}</strong>
+                    <small>{site.profileName ?? 'anonymous'}</small>
+                    <div className="site-profile-summary">
+                      {profile?.displayName ? (
+                        <span>{profile.displayName}</span>
+                      ) : null}
+                      {profile?.externalUserId ? (
+                        <span>ID {profile.externalUserId}</span>
+                      ) : null}
+                      {profile?.verifiedAt ? (
+                        <span>{formatTimestamp(profile.verifiedAt)}</span>
+                      ) : null}
+                      {(!profile || profile.status !== 'verified') &&
+                      pendingTask ? (
+                        <span>Pending {pendingTask.reason}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span>{profile?.status ?? site.authPolicy}</span>
+                  <div className="site-actions">
+                    <button
+                      type="button"
+                      disabled={
+                        site.authPolicy !== 'required' ||
+                        browserActionState.status === 'running'
+                      }
+                      onClick={() =>
+                        void runBrowserSiteAction('openLogin', site)
+                      }
+                    >
+                      Open
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        site.authPolicy !== 'required' ||
+                        browserActionState.status === 'running'
+                      }
+                      onClick={() =>
+                        void runBrowserSiteAction('verifyProfile', site)
+                      }
+                    >
+                      Verify
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        site.authPolicy !== 'required' ||
+                        browserActionState.status === 'running'
+                      }
+                      onClick={() =>
+                        void runBrowserSiteAction('clearProfile', site)
+                      }
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </div>
-                <span>{site.authPolicy}</span>
-                <div className="site-actions">
-                  <button
-                    type="button"
-                    disabled={
-                      site.authPolicy !== 'required' ||
-                      browserActionState.status === 'running'
-                    }
-                    onClick={() => void runBrowserSiteAction('openLogin', site)}
-                  >
-                    Open
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      site.authPolicy !== 'required' ||
-                      browserActionState.status === 'running'
-                    }
-                    onClick={() =>
-                      void runBrowserSiteAction('verifyProfile', site)
-                    }
-                  >
-                    Verify
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      site.authPolicy !== 'required' ||
-                      browserActionState.status === 'running'
-                    }
-                    onClick={() =>
-                      void runBrowserSiteAction('clearProfile', site)
-                    }
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p>No browser sites</p>
@@ -954,6 +979,40 @@ function BrowserStatusPanel({
       />
     </div>
   );
+}
+
+function findSiteProfile(
+  browserStatus: BrowserStatus,
+  site: BrowserStatus['sites'][number],
+): BrowserStatus['profiles'][number] | undefined {
+  return browserStatus.profiles.find(
+    (profile) =>
+      profile.siteId === site.siteId &&
+      (!site.profileName || profile.profileName === site.profileName),
+  );
+}
+
+function findSitePendingAuthTask(
+  browserStatus: BrowserStatus,
+  localPendingAuthTasks: readonly LocalPendingAuthTask[],
+  site: BrowserStatus['sites'][number],
+):
+  | BrowserStatus['pendingAuthTasks'][number]
+  | LocalPendingAuthTask
+  | undefined {
+  return [...browserStatus.pendingAuthTasks, ...localPendingAuthTasks].find(
+    (task) =>
+      task.siteId === site.siteId &&
+      (!site.profileName || task.profileName === site.profileName) &&
+      (!('status' in task) ||
+        task.status === 'open' ||
+        task.status === 'in_progress'),
+  );
+}
+
+function formatTimestamp(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 function resolveBrowserAction(

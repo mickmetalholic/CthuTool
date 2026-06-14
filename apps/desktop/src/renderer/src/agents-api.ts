@@ -19,6 +19,9 @@ export type BrowserProfileSummary = {
   readonly siteId: string;
   readonly profileName: string;
   readonly status: string;
+  readonly displayName?: string;
+  readonly externalUserId?: string;
+  readonly verifiedAt?: string;
   readonly updatedAt: string;
 };
 

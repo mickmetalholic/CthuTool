@@ -1,6 +1,7 @@
 export type PendingAuthReason =
   | 'missing'
   | 'expired'
+  | 'blocked'
   | 'verification_failed'
   | 'access_failed';
 
