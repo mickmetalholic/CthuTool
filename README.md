@@ -76,6 +76,7 @@ The workflow triggers on `push` to `main` and on `pull_request`, so Biome and co
 
 ## More documentation
 
+- Docs site: `apps/docs/` (`pnpm --filter @cthutool/docs dev`).
 - Documentation index: `docs/README.md`.
 - Desktop app and agent console: `docs/desktop-agent-console.md`.
 - Browser login state and auth profile ownership: `docs/browser-auth.md`.
