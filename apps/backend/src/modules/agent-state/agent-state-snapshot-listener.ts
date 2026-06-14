@@ -4,18 +4,18 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { AgentWebSocketServer } from '../agent-registry/agent-websocket.server';
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserStateProjectionService } from './browser-state-projection.service';
+import { AgentStateProjectionService } from './agent-state-projection.service';
 
 @Injectable()
-export class BrowserStateSnapshotListener implements OnModuleInit {
+export class AgentStateSnapshotListener implements OnModuleInit {
   constructor(
     private readonly agentSocketServer: AgentWebSocketServer,
-    private readonly projection: BrowserStateProjectionService,
+    private readonly projection: AgentStateProjectionService,
   ) {}
 
   onModuleInit(): void {
     this.agentSocketServer.setBrowserStateSnapshotHandler((agentId, snapshot) =>
-      this.projection.replaceAgentSnapshot(agentId, snapshot),
+      this.projection.replaceBrowserSnapshot(agentId, snapshot),
     );
   }
 }

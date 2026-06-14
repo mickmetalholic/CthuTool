@@ -3,20 +3,17 @@ import {
   type BrowserResultMessage,
   createBrowserErrorMessage,
   createBrowserResultMessage,
+  type PublicAgentStatus,
 } from '@cthutool/agent-protocol';
-import { AgentRegistryService } from '../agent-registry/agent-registry.service';
-import type { AgentWebSocketServer } from '../agent-registry/agent-websocket.server';
-import { AgentBrowserProvider } from './agent-browser.provider';
-import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
-import { BrowserProfileRegistryService } from './browser-profile-registry.service';
+import type { AgentCommandGateway } from '../agent-command-gateway/agent-command-gateway.service';
+import { AgentBrowserPendingAuthTaskService } from '../agent-state/agent-browser-pending-auth-task.service';
+import { AgentBrowserProfileRegistryService } from '../agent-state/agent-browser-profile-registry.service';
+import { BrowserAuthService } from '../browser-auth/browser-auth.service';
+import { AgentBrowserCaptureProvider } from './agent-browser-capture.provider';
 
-describe('AgentBrowserProvider', () => {
+describe('AgentBrowserCaptureProvider', () => {
   it('fails when no online agent exposes browser capability', async () => {
-    const provider = createProvider(
-      createSocketMock(),
-      new BrowserPendingAuthTaskService(),
-      false,
-    );
+    const provider = createProvider(createGatewayMock(null));
 
     await expect(
       provider.capturePage({
@@ -28,8 +25,8 @@ describe('AgentBrowserProvider', () => {
   });
 
   it('sends capture commands to an online browser agent', async () => {
-    const socket = createSocketMock();
-    const provider = createProvider(socket);
+    const gateway = createGatewayMock();
+    const provider = createProvider(gateway);
 
     const snapshot = await provider.capturePage({
       authPolicy: 'anonymous',
@@ -38,7 +35,7 @@ describe('AgentBrowserProvider', () => {
       url: 'https://example.com/',
     });
 
-    expect(socket.sendBrowserCommand).toHaveBeenCalledWith(
+    expect(gateway.sendBrowserCommand).toHaveBeenCalledWith(
       'agent-1',
       expect.objectContaining({
         authPolicy: 'anonymous',
@@ -60,7 +57,8 @@ describe('AgentBrowserProvider', () => {
   });
 
   it('records pending auth tasks when the agent reports a missing required profile', async () => {
-    const socket = createSocketMock(
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
       createBrowserErrorMessage({
         code: 'AUTH_PROFILE_REQUIRED',
         command: 'browser.capturePage',
@@ -69,8 +67,8 @@ describe('AgentBrowserProvider', () => {
         profileStatus: 'missing',
       }),
     );
-    const pendingAuthTasks = new BrowserPendingAuthTaskService();
-    const provider = createProvider(socket, pendingAuthTasks);
+    const pendingAuthTasks = new AgentBrowserPendingAuthTaskService();
+    const provider = createProvider(gateway, pendingAuthTasks);
 
     await expect(
       provider.capturePage({
@@ -95,32 +93,23 @@ describe('AgentBrowserProvider', () => {
 });
 
 function createProvider(
-  socket: Pick<AgentWebSocketServer, 'sendBrowserCommand'> = createSocketMock(),
-  pendingAuthTasks = new BrowserPendingAuthTaskService(),
-  registerAgent = true,
-): AgentBrowserProvider {
-  const registry = new AgentRegistryService();
-  if (registerAgent) {
-    registry.register({
-      connectionId: 'connection-1',
-      hello: {
-        agentId: 'agent-1',
-        capabilities: ['browser'],
-        deviceName: 'desktop',
-        platform: 'win32',
-        version: '0.0.0',
-      },
-    });
-  }
-  return new AgentBrowserProvider(
-    registry,
-    socket as AgentWebSocketServer,
-    new BrowserProfileRegistryService(),
-    pendingAuthTasks,
+  gateway: Pick<
+    AgentCommandGateway,
+    'selectAgentByCapability' | 'sendBrowserCommand'
+  > = createGatewayMock(),
+  pendingAuthTasks = new AgentBrowserPendingAuthTaskService(),
+): AgentBrowserCaptureProvider {
+  return new AgentBrowserCaptureProvider(
+    gateway as AgentCommandGateway,
+    new BrowserAuthService(
+      new AgentBrowserProfileRegistryService(),
+      pendingAuthTasks,
+    ),
   );
 }
 
-function createSocketMock(
+function createGatewayMock(
+  agent: PublicAgentStatus | null = createAgentStatus('agent-1'),
   response:
     | BrowserResultMessage
     | BrowserErrorMessage = createBrowserResultMessage({
@@ -133,10 +122,29 @@ function createSocketMock(
     status: 200,
     title: 'Example',
   }),
-): Pick<AgentWebSocketServer, 'sendBrowserCommand'> & {
+): Pick<
+  AgentCommandGateway,
+  'selectAgentByCapability' | 'sendBrowserCommand'
+> & {
+  readonly selectAgentByCapability: jest.Mock;
   readonly sendBrowserCommand: jest.Mock;
 } {
   return {
+    selectAgentByCapability: jest.fn(() => agent ?? undefined),
     sendBrowserCommand: jest.fn(async () => response),
+  };
+}
+
+function createAgentStatus(agentId: string): PublicAgentStatus {
+  return {
+    agentId,
+    capabilities: ['browser'],
+    connectedAt: '2026-06-13T10:00:00.000Z',
+    connectionId: `${agentId}-connection`,
+    deviceName: 'desktop',
+    lastSeenAt: '2026-06-13T10:00:00.000Z',
+    platform: 'win32',
+    state: 'online',
+    version: '0.0.0',
   };
 }

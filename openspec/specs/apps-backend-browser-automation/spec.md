@@ -2,7 +2,7 @@
 Define backend-owned browser automation services, browser auth profiles, controlled diagnostics, and CLI auth helper behavior for internal page content retrieval.
 ## Requirements
 ### Requirement: Internal browser content service
-The backend SHALL provide an internal browser content service that retrieves controlled page content snapshots for other backend modules by dispatching browser work to desktop agents.
+The backend SHALL provide an internal browser content service that retrieves controlled page content snapshots for other backend modules through a browser capture provider.
 
 #### Scenario: Fetch page content snapshot
 - **WHEN** a backend module requests a page content snapshot for a configured site with HTML and text enabled
@@ -12,12 +12,16 @@ The backend SHALL provide an internal browser content service that retrieves con
 - **WHEN** a backend module uses the browser content service
 - **THEN** the service result does not expose a raw Playwright page, browser context, cookies, localStorage, storage-state file contents, or desktop profile path
 
+#### Scenario: Agent infrastructure is hidden
+- **WHEN** a backend module uses the browser content service
+- **THEN** the service result does not expose raw WebSocket connections, command correlation maps, agent registry internals, or agent state storage internals
+
 ### Requirement: Browser provider abstraction
-The backend SHALL hide browser runtime details behind an agent-backed provider abstraction and SHALL NOT include a backend-local Playwright provider as a supported implementation.
+The backend SHALL hide browser capture execution details behind a browser capture provider abstraction and SHALL NOT include a backend-local Playwright provider as a supported implementation.
 
 #### Scenario: Agent provider creates content snapshot
-- **WHEN** the configured provider is the agent browser provider and a page content request is accepted
-- **THEN** the provider dispatches a controlled browser command to a selected desktop agent and returns the requested content snapshot from the agent response
+- **WHEN** the configured provider is the agent-backed browser capture provider and a page content request is accepted
+- **THEN** the provider dispatches a controlled browser command through the agent command gateway and returns the requested content snapshot from the agent response
 
 #### Scenario: Provider can be replaced later
 - **WHEN** a future browser runtime provider is added
@@ -103,65 +107,27 @@ The backend browser automation module SHALL consume effective site configuration
 - **THEN** browser automation uses the built-in default site configuration exposed by `SitesConfigModule`
 
 ### Requirement: Agent-backed browser provider
-The backend SHALL dispatch browser content requests through a connected desktop agent that advertises browser capability.
+The backend SHALL dispatch browser capture requests through a browser capture provider implementation backed by an online desktop agent that advertises browser capability.
 
 #### Scenario: Browser-capable agent is available
 - **WHEN** an accepted browser content request targets a site that can be served by an online browser-capable desktop agent
-- **THEN** the backend sends a correlated browser command to that agent and maps the agent response into the browser content service result
+- **THEN** the agent-backed capture provider sends a correlated browser command through `AgentCommandGateway` and maps the agent response into the browser content service result
 
 #### Scenario: No browser-capable agent is available
 - **WHEN** an accepted browser content request requires browser execution and no online desktop agent advertises browser capability
 - **THEN** the backend fails the request with `AGENT_NOT_AVAILABLE` or `AGENT_CAPABILITY_MISSING` without starting local Playwright
 
 ### Requirement: Pending auth task coordination
-The backend SHALL create or update pending auth tasks when required site auth is missing or expired on the selected desktop agent.
+The backend SHALL coordinate required browser auth through `BrowserAuthModule` and public agent state when required site auth is missing or expired on the selected desktop agent.
 
 #### Scenario: Required profile is missing
-- **WHEN** a browser content request targets a required-auth site and the selected agent has not reported a verified profile for that site
-- **THEN** the backend records or updates a pending auth task with reason `missing` and returns `AUTH_PROFILE_REQUIRED`
+- **WHEN** a browser content request targets a required-auth site and no selected agent has reported a verified profile for that site
+- **THEN** browser automation receives `AUTH_PROFILE_REQUIRED` from the auth/capture boundary and `BrowserAuthModule` records or updates a pending auth task with reason `missing`
 
 #### Scenario: Required profile expires during access
 - **WHEN** a desktop agent reports that a required profile produced a login-required or expired-auth result during browser access
-- **THEN** the backend records or updates a pending auth task with reason `expired` and marks the public profile summary as unavailable
+- **THEN** `BrowserAuthModule` records or updates a pending auth task with reason `expired` and public agent state marks the profile summary as unavailable
 
 #### Scenario: Duplicate pending task is coalesced
 - **WHEN** multiple requests need the same site profile on the same desktop agent
-- **THEN** the backend updates the existing open pending auth task instead of creating duplicate tasks
-
-### Requirement: Browser state snapshot projection
-The backend browser automation module SHALL treat WebSocket browser state snapshots from desktop agents as authoritative non-sensitive projections for each reporting agent.
-
-#### Scenario: Snapshot replaces agent profile projection
-- **WHEN** the backend receives a browser state snapshot for an agent containing profile summaries
-- **THEN** it replaces previously stored profile summaries for that agent with the profiles from the snapshot
-
-#### Scenario: Snapshot replaces agent pending-auth projection
-- **WHEN** the backend receives a browser state snapshot for an agent containing pending auth tasks
-- **THEN** it replaces previously stored pending auth tasks for that agent with the tasks from the snapshot
-
-#### Scenario: Empty snapshot clears agent browser projection
-- **WHEN** the backend receives a browser state snapshot for an agent with empty profile and pending-auth arrays
-- **THEN** it clears the backend browser state projection for that agent without affecting other agents
-
-#### Scenario: Snapshot contains only public state
-- **WHEN** the backend receives a browser state snapshot
-- **THEN** it stores only agent id, site id, profile name, profile status, optional public display identity, timestamps, pending-auth reason, login URL, and verification URL
-
-#### Scenario: Snapshot includes raw auth state
-- **WHEN** a browser state snapshot includes cookies, localStorage values, storage-state contents, or desktop profile paths
-- **THEN** the backend rejects or ignores those fields and does not persist them
-
-### Requirement: Public profile summaries
-The backend SHALL store and expose only public browser profile summaries reported by desktop agents as a non-sensitive projection of desktop-owned state.
-
-#### Scenario: Agent reports verified profile
-- **WHEN** a desktop agent reports a verified site profile through a browser state snapshot or compatible report endpoint
-- **THEN** the backend stores the site id, profile name, agent id, status, optional display identity, and verification timestamp
-
-#### Scenario: Agent reconnects with local profile state
-- **WHEN** a desktop agent connects or reconnects and publishes its local profile summary snapshot over WebSocket
-- **THEN** the backend replaces its public profile projection for that agent without receiving raw cookies, localStorage values, storage-state contents, or profile directory paths
-
-#### Scenario: Raw auth state is not accepted
-- **WHEN** a client or agent submits raw cookies, localStorage, or Playwright storage-state contents to backend browser profile APIs or WebSocket snapshot messages
-- **THEN** the backend rejects or ignores those fields and does not persist them
+- **THEN** `BrowserAuthModule` updates the existing open pending auth task instead of creating duplicate tasks

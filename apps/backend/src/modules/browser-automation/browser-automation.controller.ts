@@ -1,21 +1,18 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: constructor injection token
+import { BrowserAuthService } from '../browser-auth/browser-auth.service';
+// biome-ignore lint/style/useImportType: constructor injection token
 import { SitesConfigService } from '../sites-config/sites-config.service';
 import type {
   BrowserPendingAuthReason,
   BrowserProfileRegistryEntry,
 } from './browser-automation.types';
-// biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
-// biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserProfileRegistryService } from './browser-profile-registry.service';
 
 @Controller('api/browser')
 export class BrowserAutomationController {
   constructor(
     private readonly siteConfig: SitesConfigService,
-    private readonly profileRegistry: BrowserProfileRegistryService,
-    private readonly pendingAuthTasks: BrowserPendingAuthTaskService,
+    private readonly browserAuth: BrowserAuthService,
   ) {}
 
   @Get('/sites')
@@ -28,27 +25,20 @@ export class BrowserAutomationController {
   @Get('/profiles')
   listProfiles() {
     return {
-      profiles: this.profileRegistry.list(),
+      profiles: this.browserAuth.listProfiles(),
     };
   }
 
   @Get('/pending-auth-tasks')
   listPendingAuthTasks() {
     return {
-      tasks: this.pendingAuthTasks.list(),
+      tasks: this.browserAuth.listPendingAuthTasks(),
     };
   }
 
   @Post('/profiles')
   reportProfile(@Body() body: BrowserProfileRegistryEntry) {
-    const profile = this.profileRegistry.upsert(body);
-    if (profile.status === 'verified') {
-      this.pendingAuthTasks.resolve(
-        profile.agentId,
-        profile.siteId,
-        profile.profileName,
-      );
-    }
+    const profile = this.browserAuth.reportProfile(body);
     return {
       profile,
     };
@@ -67,7 +57,7 @@ export class BrowserAutomationController {
     },
   ) {
     return {
-      task: this.pendingAuthTasks.upsert(body),
+      task: this.browserAuth.reportPendingAuthTask(body),
     };
   }
 }

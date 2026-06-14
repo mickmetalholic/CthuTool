@@ -1,36 +1,30 @@
 import { Module } from '@nestjs/common';
 import { parseBrowserConfiguration } from '../../config/service-configuration';
-import { AgentRegistryModule } from '../agent-registry/agent-registry.module';
+import { AgentCommandGatewayModule } from '../agent-command-gateway/agent-command-gateway.module';
+import { AgentStateModule } from '../agent-state/agent-state.module';
+import { BrowserAuthModule } from '../browser-auth/browser-auth.module';
 import { SitesConfigModule } from '../sites-config/sites-config.module';
-import { AgentBrowserProvider } from './agent-browser.provider';
+import { AgentBrowserCaptureProvider } from './agent-browser-capture.provider';
 import { BrowserAutomationController } from './browser-automation.controller';
-import { BROWSER_PROVIDER } from './browser-automation.tokens';
+import { BROWSER_CAPTURE_PROVIDER } from './browser-automation.tokens';
 import { BrowserBlockDetector } from './browser-block-detector';
 import { BrowserContentService } from './browser-content.service';
 import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
-import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
-import { BrowserProfileRegistryService } from './browser-profile-registry.service';
-import { BrowserStateProjectionService } from './browser-state-projection.service';
-import { BrowserStateSnapshotListener } from './browser-state-snapshot-listener';
 import { BrowserTaskRunner } from './browser-task-runner';
 
 @Module({
-  imports: [AgentRegistryModule, SitesConfigModule],
-  controllers: [BrowserAutomationController],
-  exports: [
-    BrowserContentService,
-    BrowserPendingAuthTaskService,
-    BrowserProfileRegistryService,
+  imports: [
+    AgentCommandGatewayModule,
+    AgentStateModule,
+    BrowserAuthModule,
     SitesConfigModule,
   ],
+  controllers: [BrowserAutomationController],
+  exports: [BrowserAuthModule, BrowserContentService, SitesConfigModule],
   providers: [
-    AgentBrowserProvider,
+    AgentBrowserCaptureProvider,
     BrowserBlockDetector,
     BrowserContentService,
-    BrowserPendingAuthTaskService,
-    BrowserProfileRegistryService,
-    BrowserStateProjectionService,
-    BrowserStateSnapshotListener,
     {
       provide: BrowserDiagnosticsStore,
       useFactory: () =>
@@ -51,8 +45,8 @@ import { BrowserTaskRunner } from './browser-task-runner';
       },
     },
     {
-      provide: BROWSER_PROVIDER,
-      useExisting: AgentBrowserProvider,
+      provide: BROWSER_CAPTURE_PROVIDER,
+      useExisting: AgentBrowserCaptureProvider,
     },
   ],
 })

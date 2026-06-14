@@ -1,14 +1,17 @@
+import { AgentBrowserPendingAuthTaskService } from '../agent-state/agent-browser-pending-auth-task.service';
+import { AgentBrowserProfileRegistryService } from '../agent-state/agent-browser-profile-registry.service';
+import { BrowserAuthService } from '../browser-auth/browser-auth.service';
 import { SitesConfigService } from '../sites-config/sites-config.service';
 import { BrowserAutomationController } from './browser-automation.controller';
-import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
-import { BrowserProfileRegistryService } from './browser-profile-registry.service';
 
 describe('BrowserAutomationController', () => {
   it('returns browser sites with the existing response shape', () => {
     const controller = new BrowserAutomationController(
       new SitesConfigService(),
-      new BrowserProfileRegistryService(),
-      new BrowserPendingAuthTaskService(),
+      new BrowserAuthService(
+        new AgentBrowserProfileRegistryService(),
+        new AgentBrowserPendingAuthTaskService(),
+      ),
     );
 
     expect(controller.listSites()).toEqual({
@@ -23,11 +26,13 @@ describe('BrowserAutomationController', () => {
   });
 
   it('resolves pending auth when a verified profile is reported', () => {
-    const pendingAuthTasks = new BrowserPendingAuthTaskService();
+    const pendingAuthTasks = new AgentBrowserPendingAuthTaskService();
     const controller = new BrowserAutomationController(
       new SitesConfigService(),
-      new BrowserProfileRegistryService(),
-      pendingAuthTasks,
+      new BrowserAuthService(
+        new AgentBrowserProfileRegistryService(),
+        pendingAuthTasks,
+      ),
     );
     pendingAuthTasks.upsert({
       agentId: 'agent-1',

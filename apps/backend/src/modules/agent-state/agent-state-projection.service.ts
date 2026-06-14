@@ -1,21 +1,20 @@
 import type { BrowserStateSnapshotPayload } from '@cthutool/agent-protocol';
 import { Injectable } from '@nestjs/common';
-import type { BrowserPendingAuthTask } from './browser-automation.types';
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
+import { AgentBrowserPendingAuthTaskService } from './agent-browser-pending-auth-task.service';
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserProfileRegistryService } from './browser-profile-registry.service';
+import { AgentBrowserProfileRegistryService } from './agent-browser-profile-registry.service';
 
 @Injectable()
-export class BrowserStateProjectionService {
+export class AgentStateProjectionService {
   constructor(
-    private readonly profiles: BrowserProfileRegistryService,
-    private readonly pendingAuthTasks: BrowserPendingAuthTaskService,
+    private readonly profiles: AgentBrowserProfileRegistryService,
+    private readonly pendingAuthTasks: AgentBrowserPendingAuthTaskService,
   ) {}
 
-  replaceAgentSnapshot(
+  replaceBrowserSnapshot(
     agentId: string,
     snapshot: BrowserStateSnapshotPayload,
   ): void {
@@ -28,13 +27,11 @@ export class BrowserStateProjectionService {
     );
     this.pendingAuthTasks.replaceForAgent(
       agentId,
-      snapshot.pendingAuthTasks.map(
-        (task): BrowserPendingAuthTask => ({
-          ...task,
-          agentId,
-          id: `${agentId}:${task.siteId}:${task.profileName}`,
-        }),
-      ),
+      snapshot.pendingAuthTasks.map((task) => ({
+        ...task,
+        agentId,
+        id: `${agentId}:${task.siteId}:${task.profileName}`,
+      })),
     );
   }
 }

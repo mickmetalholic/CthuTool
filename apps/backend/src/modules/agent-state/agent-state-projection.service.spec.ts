@@ -1,12 +1,12 @@
-import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
-import { BrowserProfileRegistryService } from './browser-profile-registry.service';
-import { BrowserStateProjectionService } from './browser-state-projection.service';
+import { AgentBrowserPendingAuthTaskService } from './agent-browser-pending-auth-task.service';
+import { AgentBrowserProfileRegistryService } from './agent-browser-profile-registry.service';
+import { AgentStateProjectionService } from './agent-state-projection.service';
 
-describe('BrowserStateProjectionService', () => {
-  it('replaces profiles and pending auth tasks for one agent only', () => {
-    const profiles = new BrowserProfileRegistryService();
-    const pendingAuthTasks = new BrowserPendingAuthTaskService();
-    const projection = new BrowserStateProjectionService(
+describe('AgentStateProjectionService', () => {
+  it('replaces browser profiles and pending auth tasks for one agent only', () => {
+    const profiles = new AgentBrowserProfileRegistryService();
+    const pendingAuthTasks = new AgentBrowserPendingAuthTaskService();
+    const projection = new AgentStateProjectionService(
       profiles,
       pendingAuthTasks,
     );
@@ -37,7 +37,7 @@ describe('BrowserStateProjectionService', () => {
       siteId: 'zhihu',
     });
 
-    projection.replaceAgentSnapshot('agent-1', {
+    projection.replaceBrowserSnapshot('agent-1', {
       agentId: 'agent-1',
       pendingAuthTasks: [
         {
@@ -85,10 +85,10 @@ describe('BrowserStateProjectionService', () => {
     );
   });
 
-  it('clears state for an agent when a snapshot is empty', () => {
-    const profiles = new BrowserProfileRegistryService();
-    const pendingAuthTasks = new BrowserPendingAuthTaskService();
-    const projection = new BrowserStateProjectionService(
+  it('clears browser state for an agent when a snapshot is empty', () => {
+    const profiles = new AgentBrowserProfileRegistryService();
+    const pendingAuthTasks = new AgentBrowserPendingAuthTaskService();
+    const projection = new AgentStateProjectionService(
       profiles,
       pendingAuthTasks,
     );
@@ -106,7 +106,7 @@ describe('BrowserStateProjectionService', () => {
       siteId: 'douban',
     });
 
-    projection.replaceAgentSnapshot('agent-1', {
+    projection.replaceBrowserSnapshot('agent-1', {
       agentId: 'agent-1',
       pendingAuthTasks: [],
       profiles: [],
@@ -114,5 +114,30 @@ describe('BrowserStateProjectionService', () => {
 
     expect(profiles.list()).toEqual([]);
     expect(pendingAuthTasks.list()).toEqual([]);
+  });
+
+  it('stores only public browser state fields', () => {
+    const profiles = new AgentBrowserProfileRegistryService();
+    profiles.upsert({
+      agentId: 'agent-1',
+      cookies: [{ name: 'sid', value: 'secret' }],
+      localStorage: [{ name: 'token', value: 'secret' }],
+      profileName: 'douban-main',
+      siteId: 'douban',
+      status: 'verified',
+      updatedAt: '2026-06-13T09:00:00.000Z',
+    } as never);
+
+    expect(JSON.stringify(profiles.list())).not.toContain('secret');
+    expect(profiles.list()[0]).toEqual({
+      agentId: 'agent-1',
+      displayName: undefined,
+      externalUserId: undefined,
+      profileName: 'douban-main',
+      siteId: 'douban',
+      status: 'verified',
+      updatedAt: '2026-06-13T09:00:00.000Z',
+      verifiedAt: undefined,
+    });
   });
 });

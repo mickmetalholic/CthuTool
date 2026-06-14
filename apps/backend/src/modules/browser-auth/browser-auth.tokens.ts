@@ -1,0 +1,1 @@
+export const BROWSER_AUTH_PROVIDER = Symbol('BROWSER_AUTH_PROVIDER');

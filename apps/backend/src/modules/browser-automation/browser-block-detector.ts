@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  BrowserCaptureSnapshot,
   BrowserDetection,
-  BrowserProviderSnapshot,
 } from './browser-automation.types';
 
 @Injectable()
 export class BrowserBlockDetector {
-  detect(snapshot: BrowserProviderSnapshot): BrowserDetection {
+  detect(snapshot: BrowserCaptureSnapshot): BrowserDetection {
     if (snapshot.status === 429) {
       return {
         kind: 'rate_limited',
@@ -36,7 +36,8 @@ export class BrowserBlockDetector {
     ) {
       return {
         kind: 'captcha_required',
-        reason: 'Page content indicates captcha or abnormal access verification',
+        reason:
+          'Page content indicates captcha or abnormal access verification',
       };
     }
 

@@ -1,8 +1,8 @@
 import { SitesConfigService } from '../sites-config/sites-config.service';
 import type {
+  BrowserCaptureProvider,
+  BrowserCaptureSnapshot,
   BrowserContentRequest,
-  BrowserProvider,
-  BrowserProviderSnapshot,
 } from './browser-automation.types';
 import { BrowserBlockDetector } from './browser-block-detector';
 import { BrowserContentService } from './browser-content.service';
@@ -147,7 +147,9 @@ describe('BrowserContentService', () => {
   });
 });
 
-function createService(provider: BrowserProvider): BrowserContentService {
+function createService(
+  provider: BrowserCaptureProvider,
+): BrowserContentService {
   return new BrowserContentService(
     provider,
     new SitesConfigService(),
@@ -165,17 +167,17 @@ function createService(provider: BrowserProvider): BrowserContentService {
 }
 
 function createProvider(
-  snapshot: BrowserProviderSnapshot = {
+  snapshot: BrowserCaptureSnapshot = {
     finalUrl: 'https://example.com',
     status: 200,
     title: 'Example',
   },
-): BrowserProvider & { capturePage: jest.Mock } {
+): BrowserCaptureProvider & { capturePage: jest.Mock } {
   return {
     capturePage: jest.fn(
       async (
         _request: BrowserContentRequest,
-      ): Promise<BrowserProviderSnapshot> => snapshot,
+      ): Promise<BrowserCaptureSnapshot> => snapshot,
     ),
   };
 }

@@ -43,9 +43,9 @@ export type BrowserContentRequest = {
   readonly waitUntil?: 'domcontentloaded' | 'load' | 'networkidle';
 };
 
-export type BrowserProviderRequest = BrowserContentRequest;
+export type BrowserCaptureRequest = BrowserContentRequest;
 
-export type BrowserProviderSnapshot = {
+export type BrowserCaptureSnapshot = {
   readonly agentId?: string;
   readonly detection?: BrowserDetection;
   readonly finalUrl: string;
@@ -56,7 +56,7 @@ export type BrowserProviderSnapshot = {
   readonly screenshot?: Buffer;
 };
 
-export type BrowserContentResult = BrowserProviderSnapshot & {
+export type BrowserContentResult = BrowserCaptureSnapshot & {
   readonly capturedAt: string;
   readonly auth: BrowserAuthUsage;
   readonly detection: BrowserDetection;
@@ -68,10 +68,8 @@ export type BrowserDiagnosticsSummary = {
   readonly summary: string;
 };
 
-export type BrowserProvider = {
-  capturePage(
-    request: BrowserProviderRequest,
-  ): Promise<BrowserProviderSnapshot>;
+export type BrowserCaptureProvider = {
+  capturePage(request: BrowserCaptureRequest): Promise<BrowserCaptureSnapshot>;
 };
 
 export type BrowserAuthBundleMeta = {
@@ -120,3 +118,7 @@ export type BrowserPendingAuthTask = {
 };
 
 export type BrowserProfileRegistryEntry = BrowserProfileSummary;
+
+export type BrowserProviderRequest = BrowserCaptureRequest;
+export type BrowserProviderSnapshot = BrowserCaptureSnapshot;
+export type BrowserProvider = BrowserCaptureProvider;

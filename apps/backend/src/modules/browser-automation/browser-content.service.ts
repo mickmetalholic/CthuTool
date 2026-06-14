@@ -2,13 +2,13 @@ import { Inject, Injectable } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: constructor injection token
 import { SitesConfigService } from '../sites-config/sites-config.service';
 import { BrowserAutomationError } from './browser-automation.errors';
-import { BROWSER_PROVIDER } from './browser-automation.tokens';
+import { BROWSER_CAPTURE_PROVIDER } from './browser-automation.tokens';
 import type {
   BrowserAuthUsage,
+  BrowserCaptureProvider,
+  BrowserCaptureSnapshot,
   BrowserContentRequest,
   BrowserContentResult,
-  BrowserProvider,
-  BrowserProviderSnapshot,
   BrowserSiteConfig,
 } from './browser-automation.types';
 // biome-ignore lint/style/useImportType: constructor injection token
@@ -21,8 +21,8 @@ import { BrowserTaskRunner } from './browser-task-runner';
 @Injectable()
 export class BrowserContentService {
   constructor(
-    @Inject(BROWSER_PROVIDER)
-    private readonly provider: BrowserProvider,
+    @Inject(BROWSER_CAPTURE_PROVIDER)
+    private readonly provider: BrowserCaptureProvider,
     private readonly siteConfig: SitesConfigService,
     private readonly taskRunner: BrowserTaskRunner,
     private readonly blockDetector: BrowserBlockDetector,
@@ -133,7 +133,7 @@ export class BrowserContentService {
   private async saveDiagnosticsIfNeeded(
     errorCode: string | undefined,
     summary: string | undefined,
-    snapshot: BrowserProviderSnapshot,
+    snapshot: BrowserCaptureSnapshot,
   ) {
     if (!errorCode) {
       return undefined;

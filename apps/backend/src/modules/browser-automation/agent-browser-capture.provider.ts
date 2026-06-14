@@ -7,39 +7,32 @@ import {
 import { Injectable } from '@nestjs/common';
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
-import { AgentRegistryService } from '../agent-registry/agent-registry.service';
+import {
+  AgentCommandGateway,
+  AgentCommandGatewayError,
+} from '../agent-command-gateway/agent-command-gateway.service';
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
-import { AgentWebSocketServer } from '../agent-registry/agent-websocket.server';
+import { BrowserAuthService } from '../browser-auth/browser-auth.service';
 import { BrowserAutomationError } from './browser-automation.errors';
 import type {
-  BrowserPendingAuthReason,
-  BrowserProvider,
-  BrowserProviderRequest,
-  BrowserProviderSnapshot,
+  BrowserCaptureProvider,
+  BrowserCaptureRequest,
+  BrowserCaptureSnapshot,
 } from './browser-automation.types';
-// Nest DI needs runtime class references; `import type` strips metadata.
-// biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
-// Nest DI needs runtime class references; `import type` strips metadata.
-// biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserProfileRegistryService } from './browser-profile-registry.service';
 
 @Injectable()
-export class AgentBrowserProvider implements BrowserProvider {
+export class AgentBrowserCaptureProvider implements BrowserCaptureProvider {
   constructor(
-    private readonly registry: AgentRegistryService,
-    private readonly agentSocketServer: AgentWebSocketServer,
-    private readonly profileRegistry: BrowserProfileRegistryService,
-    private readonly pendingAuthTasks: BrowserPendingAuthTaskService,
+    private readonly commandGateway: AgentCommandGateway,
+    private readonly browserAuth: BrowserAuthService,
   ) {}
 
   async capturePage(
-    request: BrowserProviderRequest,
-  ): Promise<BrowserProviderSnapshot> {
-    const agent = this.registry
-      .listOnlineAgents()
-      .find((status) => status.capabilities.includes(BROWSER_CAPABILITY));
+    request: BrowserCaptureRequest,
+  ): Promise<BrowserCaptureSnapshot> {
+    const agent =
+      this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
     if (!agent) {
       throw new BrowserAutomationError(
         'AGENT_NOT_AVAILABLE',
@@ -49,7 +42,7 @@ export class AgentBrowserProvider implements BrowserProvider {
 
     let response: BrowserResultMessage | BrowserErrorMessage;
     try {
-      response = await this.agentSocketServer.sendBrowserCommand(
+      response = await this.commandGateway.sendBrowserCommand(
         agent.agentId,
         {
           authPolicy:
@@ -76,10 +69,9 @@ export class AgentBrowserProvider implements BrowserProvider {
     } catch (error) {
       throw new BrowserAutomationError(
         'AGENT_NOT_AVAILABLE',
-        error instanceof Error
+        error instanceof AgentCommandGatewayError
           ? error.message
           : 'Browser-capable desktop agent is not available',
-        { agentId: agent.agentId },
       );
     }
 
@@ -89,7 +81,6 @@ export class AgentBrowserProvider implements BrowserProvider {
         mapBrowserErrorCode(response),
         response.payload.message,
         {
-          agentId: agent.agentId,
           browserCode: response.payload.code,
           profileStatus: response.payload.profileStatus,
         },
@@ -102,16 +93,9 @@ export class AgentBrowserProvider implements BrowserProvider {
   private toSnapshot(
     agentId: string,
     response: BrowserResultMessage,
-  ): BrowserProviderSnapshot {
+  ): BrowserCaptureSnapshot {
     if (response.payload.profile) {
-      this.profileRegistry.upsert(response.payload.profile);
-      if (response.payload.profile.status === 'verified') {
-        this.pendingAuthTasks.resolve(
-          response.payload.profile.agentId,
-          response.payload.profile.siteId,
-          response.payload.profile.profileName,
-        );
-      }
+      this.browserAuth.reportProfile(response.payload.profile);
     }
 
     return {
@@ -130,7 +114,7 @@ export class AgentBrowserProvider implements BrowserProvider {
 
   private recordPendingAuth(
     agentId: string,
-    request: BrowserProviderRequest,
+    request: BrowserCaptureRequest,
     response: BrowserErrorMessage,
   ): void {
     if (
@@ -142,7 +126,7 @@ export class AgentBrowserProvider implements BrowserProvider {
     if (!request.siteId || !request.profileName) {
       return;
     }
-    this.pendingAuthTasks.upsert({
+    this.browserAuth.reportPendingAuthTask({
       agentId,
       loginUrl: request.loginUrl,
       profileName: request.profileName,
@@ -167,7 +151,7 @@ function mapBrowserErrorCode(
 
 function mapPendingReason(
   profileStatus: BrowserErrorMessage['payload']['profileStatus'],
-): BrowserPendingAuthReason {
+) {
   if (profileStatus === 'expired') {
     return 'expired';
   }
