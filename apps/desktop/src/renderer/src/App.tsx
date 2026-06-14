@@ -666,6 +666,17 @@ function renderSettingsWorkspace({
         <StatusList
           rows={[
             ['Agent ID', config?.agentId ?? connection.agentId],
+            [
+              'Browser Runtime',
+              appInfo.browserRuntime?.activeKind ??
+                appInfo.browserRuntime?.preferredKind ??
+                'Unknown',
+            ],
+            ['Runtime Status', appInfo.browserRuntime?.status ?? 'unknown'],
+            [
+              'Runtime Detail',
+              appInfo.browserRuntime?.message ?? 'Not available',
+            ],
             ['Device', config?.deviceName ?? connection.deviceName],
             ['Connection', connection.status],
             ['Version', appInfo.version],
