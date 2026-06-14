@@ -1,8 +1,16 @@
 import type { PublicAgentStatus } from '@cthutool/agent-protocol';
 import {
+  AppRuntimeProvider,
+  type BrowserProfileActionInput,
+  BrowserProfileActions,
+  type HostActions,
+  LocalStatusPage,
+  OverviewPage,
+} from '@cthutool/app-shell';
+import { Badge, Button } from '@cthutool/ui';
+import {
   Bot,
   Chrome,
-  Circle,
   FileText,
   Home,
   Info,
@@ -33,6 +41,7 @@ import {
   type DesktopAppInfo,
   getDesktopApi,
 } from './desktop-api';
+import { createDesktopRuntimeAdapter } from './desktop-runtime';
 import './styles.css';
 
 type AppProps = {
@@ -126,6 +135,10 @@ export function App({
     platform: 'unknown',
     isPackaged: false,
   });
+  const runtime = useMemo(
+    () => createDesktopRuntimeAdapter(desktopApi),
+    [desktopApi],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -219,7 +232,7 @@ export function App({
         verifyUrl: site.verifyUrl,
       };
       try {
-        const runAction = resolveBrowserAction(desktopApi, action);
+        const runAction = resolveBrowserAction(runtime.actions, action);
         const result = await runAction(input);
         assertBrowserActionResult(result);
         setBrowserActionState({
@@ -240,7 +253,7 @@ export function App({
       await refreshLocalPendingAuthTasks();
       await refreshBrowserStatus();
     },
-    [desktopApi, refreshBrowserStatus, refreshLocalPendingAuthTasks],
+    [refreshBrowserStatus, refreshLocalPendingAuthTasks, runtime.actions],
   );
 
   useEffect(() => {
@@ -320,162 +333,173 @@ export function App({
   };
 
   return (
-    <main className="desktop-shell">
-      <header className="titlebar">
-        <div className="titlebar-drag-region">
-          <img alt="" className="app-icon" src={appIcon} />
-          <div className="app-title">
-            <strong>CthuDesktop</strong>
-            <span>
-              {activeEnvironment?.label ??
-                connection.environmentLabel ??
-                'Local'}
-            </span>
-          </div>
-        </div>
-        <div className={`connection-chip ${connection.status}`}>
-          {connection.status === 'connected' ? (
-            <Wifi size={14} />
-          ) : (
-            <WifiOff size={14} />
-          )}
-          <span>{statusLabel}</span>
-        </div>
-        <div className="window-controls">
-          <button
-            aria-label="Minimize"
-            className="window-button"
-            type="button"
-            onClick={() => void desktopApi.windowAction('minimize')}
-          >
-            <Minus size={14} />
-          </button>
-          <button
-            aria-label="Maximize"
-            className="window-button"
-            type="button"
-            onClick={() => void desktopApi.windowAction('maximize')}
-          >
-            <Maximize2 size={13} />
-          </button>
-          <button
-            aria-label="Close"
-            className="window-button close"
-            type="button"
-            onClick={() => void desktopApi.windowAction('close')}
-          >
-            <X size={15} />
-          </button>
-        </div>
-      </header>
-
-      <div
-        className={
-          workspace === 'settings' ? 'shell-body with-subnav' : 'shell-body'
-        }
-      >
-        <nav className="activity-bar" aria-label="Primary">
-          <div className="activity-group">
-            {mainNav.map((item) => {
-              const Icon = item.icon;
-              const selected = workspace === 'main' && mainView === item.id;
-              return (
-                <button
-                  aria-label={item.label}
-                  className={
-                    selected ? 'activity-button active' : 'activity-button'
-                  }
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setWorkspace('main');
-                    setMainView(item.id);
-                  }}
-                >
-                  <Icon size={20} />
-                </button>
-              );
-            })}
-          </div>
-          <button
-            aria-label="Settings"
-            className={
-              workspace === 'settings'
-                ? 'activity-button active settings-button'
-                : 'activity-button settings-button'
-            }
-            type="button"
-            onClick={() => setWorkspace('settings')}
-          >
-            <Settings size={20} />
-          </button>
-        </nav>
-
-        {workspace === 'settings' ? (
-          <aside className="subnav">
-            <div className="subnav-heading">
-              <span>Settings</span>
+    <AppRuntimeProvider runtime={runtime}>
+      <main className="desktop-shell">
+        <header className="titlebar">
+          <div className="titlebar-drag-region">
+            <img alt="" className="app-icon" src={appIcon} />
+            <div className="app-title">
+              <strong>CthuDesktop</strong>
+              <span>
+                {activeEnvironment?.label ??
+                  connection.environmentLabel ??
+                  'Local'}
+              </span>
             </div>
-            <Submenu
-              active={settingsView}
-              items={settingsNav.map(({ id, label }) => ({ id, label }))}
-              onSelect={(id) => setSettingsView(id as SettingsView)}
-            />
-          </aside>
-        ) : null}
+          </div>
+          <Badge
+            className={`connection-chip ${connection.status}`}
+            variant="outline"
+          >
+            {connection.status === 'connected' ? (
+              <Wifi size={14} />
+            ) : (
+              <WifiOff size={14} />
+            )}
+            <span>{statusLabel}</span>
+          </Badge>
+          <div className="window-controls">
+            <Button
+              aria-label="Minimize"
+              className="window-button"
+              size="icon"
+              type="button"
+              variant="ghost"
+              onClick={() => void runtime.actions.windowAction?.('minimize')}
+            >
+              <Minus size={14} />
+            </Button>
+            <Button
+              aria-label="Maximize"
+              className="window-button"
+              size="icon"
+              type="button"
+              variant="ghost"
+              onClick={() => void runtime.actions.windowAction?.('maximize')}
+            >
+              <Maximize2 size={13} />
+            </Button>
+            <Button
+              aria-label="Close"
+              className="window-button close"
+              size="icon"
+              type="button"
+              variant="ghost"
+              onClick={() => void runtime.actions.windowAction?.('close')}
+            >
+              <X size={15} />
+            </Button>
+          </div>
+        </header>
 
-        <section className="workspace">
-          {workspace === 'main'
-            ? renderMainWorkspace({
-                view: mainView,
-                agents,
-                agentsError,
-                browserStatus,
-                browserStatusError,
-                browserActionState,
-                localPendingAuthTasks,
-                refreshAgents,
-                refreshBrowserStatus,
-                runBrowserSiteAction,
-                connection,
-                config,
-              })
-            : renderSettingsWorkspace({
-                view: settingsView,
-                config,
-                form,
-                setForm,
-                selectEnvironment,
-                saveConfig,
-                saveState,
-                connection,
-                appInfo,
+        <div
+          className={
+            workspace === 'settings' ? 'shell-body with-subnav' : 'shell-body'
+          }
+        >
+          <nav className="activity-bar" aria-label="Primary">
+            <div className="activity-group">
+              {mainNav.map((item) => {
+                const Icon = item.icon;
+                const selected = workspace === 'main' && mainView === item.id;
+                return (
+                  <button
+                    aria-label={item.label}
+                    className={
+                      selected ? 'activity-button active' : 'activity-button'
+                    }
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setWorkspace('main');
+                      setMainView(item.id);
+                    }}
+                  >
+                    <Icon size={20} />
+                  </button>
+                );
               })}
-        </section>
-      </div>
+            </div>
+            <button
+              aria-label="Settings"
+              className={
+                workspace === 'settings'
+                  ? 'activity-button active settings-button'
+                  : 'activity-button settings-button'
+              }
+              type="button"
+              onClick={() => setWorkspace('settings')}
+            >
+              <Settings size={20} />
+            </button>
+          </nav>
 
-      <footer className="statusbar">
-        <button
-          aria-label="Open environment settings"
-          className="statusbar-environment"
-          type="button"
-          onClick={openEnvironmentSettings}
-        >
-          <span>{activeEnvironment?.label ?? 'Local'}</span>
-          <span>{backendUrl}</span>
-          <span>{statusLabel}</span>
-        </button>
-        <button
-          aria-label="Open client status"
-          className="statusbar-meta"
-          type="button"
-          onClick={openClientStatusSettings}
-        >
-          <span>{appInfo.platform}</span>
-          <span>v{appInfo.version}</span>
-        </button>
-      </footer>
-    </main>
+          {workspace === 'settings' ? (
+            <aside className="subnav">
+              <div className="subnav-heading">
+                <span>Settings</span>
+              </div>
+              <Submenu
+                active={settingsView}
+                items={settingsNav.map(({ id, label }) => ({ id, label }))}
+                onSelect={(id) => setSettingsView(id as SettingsView)}
+              />
+            </aside>
+          ) : null}
+
+          <section className="workspace">
+            {workspace === 'main'
+              ? renderMainWorkspace({
+                  view: mainView,
+                  agents,
+                  agentsError,
+                  browserStatus,
+                  browserStatusError,
+                  browserActionState,
+                  localPendingAuthTasks,
+                  refreshAgents,
+                  refreshBrowserStatus,
+                  runBrowserSiteAction,
+                  connection,
+                  config,
+                })
+              : renderSettingsWorkspace({
+                  view: settingsView,
+                  config,
+                  form,
+                  setForm,
+                  selectEnvironment,
+                  saveConfig,
+                  saveState,
+                  connection,
+                  appInfo,
+                })}
+          </section>
+        </div>
+
+        <footer className="statusbar">
+          <button
+            aria-label="Open environment settings"
+            className="statusbar-environment"
+            type="button"
+            onClick={openEnvironmentSettings}
+          >
+            <span>{activeEnvironment?.label ?? 'Local'}</span>
+            <span>{backendUrl}</span>
+            <span>{statusLabel}</span>
+          </button>
+          <button
+            aria-label="Open client status"
+            className="statusbar-meta"
+            type="button"
+            onClick={openClientStatusSettings}
+          >
+            <span>{appInfo.platform}</span>
+            <span>v{appInfo.version}</span>
+          </button>
+        </footer>
+      </main>
+    </AppRuntimeProvider>
   );
 }
 
@@ -572,23 +596,25 @@ function renderMainWorkspace({
 
   return (
     <WorkspacePanel title="Overview" eyebrow="Main">
-      <div className="overview-grid">
-        <Metric
-          label="Environment"
-          value={config?.activeEnvironment.label ?? 'Local'}
-        />
-        <Metric
-          label="Backend"
-          value={config?.backendUrl ?? connection.backendUrl}
-        />
-        <Metric label="Agent" value={config?.agentId ?? connection.agentId} />
-        <Metric label="Online Agents" value={String(agents.length)} />
-      </div>
-      <div className="capability-grid">
-        <CapabilityCard title="Agent Console" value="Available" />
-        <CapabilityCard title="Browser Profiles" value="Available" />
-        <CapabilityCard title="Task Runs" value="Later" muted />
-      </div>
+      <OverviewPage
+        capabilities={[
+          { title: 'Agent Console', value: 'Available' },
+          { title: 'Browser Profiles', value: 'Available' },
+          { muted: true, title: 'Task Runs', value: 'Later' },
+        ]}
+        metrics={[
+          {
+            label: 'Environment',
+            value: config?.activeEnvironment.label ?? 'Local',
+          },
+          {
+            label: 'Backend',
+            value: config?.backendUrl ?? connection.backendUrl,
+          },
+          { label: 'Agent', value: config?.agentId ?? connection.agentId },
+          { label: 'Online Agents', value: String(agents.length) },
+        ]}
+      />
     </WorkspacePanel>
   );
 }
@@ -663,7 +689,7 @@ function renderSettingsWorkspace({
   if (view === 'status') {
     return (
       <WorkspacePanel title="Local Status" eyebrow="Settings">
-        <StatusList
+        <LocalStatusPage
           rows={[
             ['Agent ID', config?.agentId ?? connection.agentId],
             [
@@ -681,6 +707,8 @@ function renderSettingsWorkspace({
             ['Connection', connection.status],
             ['Version', appInfo.version],
             ['Platform', appInfo.platform],
+          ]}
+          localRows={[
             ['User Data', localPathValue(appInfo.userDataDir)],
             ['Browser Profiles', localPathValue(appInfo.browserProfilesDir)],
             ['Config File', localPathValue(appInfo.configPath)],
@@ -926,44 +954,19 @@ function BrowserStatusPanel({
                     </div>
                   </div>
                   <span>{profile?.status ?? site.authPolicy}</span>
-                  <div className="site-actions">
-                    <button
-                      type="button"
-                      disabled={
-                        site.authPolicy !== 'required' ||
-                        browserActionState.status === 'running'
-                      }
-                      onClick={() =>
-                        void runBrowserSiteAction('openLogin', site)
-                      }
-                    >
-                      Open
-                    </button>
-                    <button
-                      type="button"
-                      disabled={
-                        site.authPolicy !== 'required' ||
-                        browserActionState.status === 'running'
-                      }
-                      onClick={() =>
-                        void runBrowserSiteAction('verifyProfile', site)
-                      }
-                    >
-                      Verify
-                    </button>
-                    <button
-                      type="button"
-                      disabled={
-                        site.authPolicy !== 'required' ||
-                        browserActionState.status === 'running'
-                      }
-                      onClick={() =>
-                        void runBrowserSiteAction('clearProfile', site)
-                      }
-                    >
-                      Clear
-                    </button>
-                  </div>
+                  <BrowserProfileActions
+                    disabled={
+                      site.authPolicy !== 'required' ||
+                      browserActionState.status === 'running'
+                    }
+                    onClear={() =>
+                      void runBrowserSiteAction('clearProfile', site)
+                    }
+                    onOpen={() => void runBrowserSiteAction('openLogin', site)}
+                    onVerify={() =>
+                      void runBrowserSiteAction('verifyProfile', site)
+                    }
+                  />
                 </div>
               );
             })}
@@ -1027,20 +1030,15 @@ function formatTimestamp(value: string): string {
 }
 
 function resolveBrowserAction(
-  desktopApi: DesktopApi,
+  actions: HostActions,
   action: 'openLogin' | 'verifyProfile' | 'clearProfile',
-): (input: {
-  readonly siteId: string;
-  readonly profileName?: string;
-  readonly loginUrl?: string;
-  readonly verifyUrl?: string;
-}) => Promise<unknown> {
+): (input: BrowserProfileActionInput) => Promise<unknown> {
   const actionMethod =
     action === 'openLogin'
-      ? desktopApi.openBrowserLogin
+      ? actions.openBrowserLogin
       : action === 'verifyProfile'
-        ? desktopApi.verifyBrowserProfile
-        : desktopApi.clearBrowserProfile;
+        ? actions.verifyBrowserProfile
+        : actions.clearBrowserProfile;
 
   if (typeof actionMethod !== 'function') {
     throw new Error(
@@ -1140,39 +1138,6 @@ function MiniStatusTable({
   );
 }
 
-function Metric({
-  label,
-  value,
-}: {
-  readonly label: string;
-  readonly value: string;
-}) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value || 'Unknown'}</strong>
-    </div>
-  );
-}
-
-function CapabilityCard({
-  title,
-  value,
-  muted,
-}: {
-  readonly title: string;
-  readonly value: string;
-  readonly muted?: boolean;
-}) {
-  return (
-    <div className={muted ? 'capability-card muted' : 'capability-card'}>
-      <Circle size={10} />
-      <span>{title}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 function StatusList({ rows }: { readonly rows: readonly [string, string][] }) {
   return (
     <dl className="status-list">
@@ -1198,9 +1163,10 @@ function SaveButton({
   readonly saveState: 'idle' | 'saving' | 'saved';
 }) {
   return (
-    <button
+    <Button
       type="button"
       className="primary-button"
+      variant="default"
       onClick={() => void onClick()}
     >
       <Save size={16} />
@@ -1211,6 +1177,6 @@ function SaveButton({
             ? 'Saved'
             : 'Save'}
       </span>
-    </button>
+    </Button>
   );
 }

@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+:root {
+  --background: #282a36;
+  --foreground: #f8f8f2;
+  --card: #343746;
+  --card-foreground: #f8f8f2;
+  --popover: #343746;
+  --popover-foreground: #f8f8f2;
+  --primary: #bd93f9;
+  --primary-foreground: #191a21;
+  --secondary: #44475a;
+  --secondary-foreground: #f8f8f2;
+  --muted: #3d4051;
+  --muted-foreground: #b8bdd6;
+  --accent: #8be9fd;
+  --accent-foreground: #191a21;
+  --destructive: #ff5555;
+  --destructive-foreground: #ffffff;
+  --border: #44475a;
+  --input: #44475a;
+  --ring: #8be9fd;
+  --radius: 8px;
+}
+
+[data-mode="light"] {
+  --background: #f8f8f2;
+  --foreground: #282a36;
+  --card: #ffffff;
+  --card-foreground: #282a36;
+  --popover: #ffffff;
+  --popover-foreground: #282a36;
+  --primary: #6d43b8;
+  --primary-foreground: #ffffff;
+  --secondary: #ececf1;
+  --secondary-foreground: #282a36;
+  --muted: #ececf1;
+  --muted-foreground: #62677d;
+  --accent: #007c91;
+  --accent-foreground: #ffffff;
+  --destructive: #c72d3a;
+  --destructive-foreground: #ffffff;
+  --border: #d7d8e2;
+  --input: #d7d8e2;
+  --ring: #007c91;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

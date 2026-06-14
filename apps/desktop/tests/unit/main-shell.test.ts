@@ -41,9 +41,12 @@ describe('desktop main shell contract', () => {
     expect(mainSource).toContain("userDataDir: app.getPath('userData')");
   });
 
-  test('syncs local browser state after agent registration', () => {
-    expect(mainSource).toContain('reportLocalBrowserStateToBackend');
-    expect(mainSource).toContain('onRegistered: (state)');
+  test('publishes local browser state through the agent snapshot channel', () => {
+    expect(mainSource).toContain('publishLocalBrowserState');
+    expect(mainSource).toContain('agentClient?.sendBrowserStateSnapshot()');
+    expect(mainSource).toContain(
+      'getBrowserStateSnapshot: buildBrowserStateSnapshot',
+    );
     expect(mainSource).toContain('profileStore.listProfiles()');
     expect(mainSource).toContain(
       "task.status === 'open' || task.status === 'in_progress'",
