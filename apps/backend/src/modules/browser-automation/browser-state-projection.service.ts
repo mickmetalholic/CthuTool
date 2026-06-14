@@ -1,8 +1,12 @@
 import type { BrowserStateSnapshotPayload } from '@cthutool/agent-protocol';
 import { Injectable } from '@nestjs/common';
 import type { BrowserPendingAuthTask } from './browser-automation.types';
-import type { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
-import type { BrowserProfileRegistryService } from './browser-profile-registry.service';
+// Nest DI needs runtime class references; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
+// Nest DI needs runtime class references; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BrowserProfileRegistryService } from './browser-profile-registry.service';
 
 @Injectable()
 export class BrowserStateProjectionService {

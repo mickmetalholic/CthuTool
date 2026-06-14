@@ -3,12 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "nest start --watch",
-    "start": "nest start",
-    "start:debug": "nest start --debug --watch",
+    "build:deps": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/config build",
+    "dev": "pnpm run build:deps && nest start --watch",
+    "start": "pnpm run build:deps && nest start",
+    "start:debug": "pnpm run build:deps && nest start --debug --watch",
     "start:prod": "nest start --prod",
-    "build": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/config build && nest build",
-    "test": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/config build && jest",
+    "build": "pnpm run build:deps && nest build",
+    "test": "pnpm run build:deps && jest",
     "test:watch": "jest --watch",
     "test:debug": "node --inspect-brk node_modules/jest/bin/jest.js --runInBand",
     "test:cov": "jest --coverage"

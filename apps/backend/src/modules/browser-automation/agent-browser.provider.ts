@@ -5,8 +5,12 @@ import {
   type BrowserResultMessage,
 } from '@cthutool/agent-protocol';
 import { Injectable } from '@nestjs/common';
-import type { AgentRegistryService } from '../agent-registry/agent-registry.service';
-import type { AgentWebSocketServer } from '../agent-registry/agent-websocket.server';
+// Nest DI needs runtime class references; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { AgentRegistryService } from '../agent-registry/agent-registry.service';
+// Nest DI needs runtime class references; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { AgentWebSocketServer } from '../agent-registry/agent-websocket.server';
 import { BrowserAutomationError } from './browser-automation.errors';
 import type {
   BrowserPendingAuthReason,
@@ -14,8 +18,12 @@ import type {
   BrowserProviderRequest,
   BrowserProviderSnapshot,
 } from './browser-automation.types';
-import type { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
-import type { BrowserProfileRegistryService } from './browser-profile-registry.service';
+// Nest DI needs runtime class references; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BrowserPendingAuthTaskService } from './browser-pending-auth-task.service';
+// Nest DI needs runtime class references; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BrowserProfileRegistryService } from './browser-profile-registry.service';
 
 @Injectable()
 export class AgentBrowserProvider implements BrowserProvider {
