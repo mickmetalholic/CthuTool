@@ -12,6 +12,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - **Anki MCP server** - connects to local AnkiConnect to read collection context, validate candidate notes, create cards, store media, and open notes in Anki's Browser for review.
 - **Anki Japanese sentence card maker skill** - turns Japanese example sentences and grammar points into `Japanese Sentence` Anki notes with cloze deletion, English translation, English grammar notes, and optional tags.
 - **Anki Japanese vocabulary card maker skill** - turns marked Japanese example sentences into `Japanese Vocabulary` Anki notes with dictionary-form vocabulary, readings, bracket-cue blank examples, English meanings, and optional tags.
+- **Anki English expression card maker skill** - turns English sentences, excerpts, and target expressions into `English Expression` Anki notes with cloze deletion, structured English explanations, examples, and optional tags.
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -91,6 +92,37 @@ Or a single bold target when no double-bracket target exists:
 The skill removes `[[ ]]` and `** **` markers, preserves kana annotations, stores dictionary-form vocabulary in `単語`, and generates `穴埋め例文` in the existing style by replacing the sentence surface form with a short English cue such as `[serious]`.
 
 If `tags:` is omitted and no standalone tag-like line is present, the skill creates the note with no tags.
+
+## Anki English Expression Card Maker Skill
+
+Use `$anki-english-expression-card-maker` when you want Codex to create an English expression card. The skill defaults to deck `0.English` and model `English Expression`.
+
+The skill is explicit-only: `agents/openai.yaml` sets `policy.allow_implicit_invocation: false`, so Codex should not implicitly invoke it from ordinary English review prompts.
+
+It accepts a marked expression:
+
+```text
+Nutrition labels can offer some helpful clues if you can **get past the maze of** information and jargon.
+```
+
+Or a separate expression line:
+
+```text
+Nutrition labels can offer some helpful clues if you can get past the maze of information and jargon.
+get past the maze of
+```
+
+The `Sentence` field uses Anki cloze syntax with a short synonym/paraphrase hint:
+
+```text
+Nutrition labels can offer some helpful clues if you can {{c1::get past the maze of::navigate / work through / overcome}} information and jargon.
+```
+
+The `Expression` field stores the expression without user markup. The cloze hint should use two to four synonyms or paraphrases, not form cues such as word counts, initials, or partially masked spellings. The `Explanation` field uses the existing English style with `Definition`, `Synonyms`, and `Other Examples` sections, and its `Synonyms` section should provide a broader set of five to eight close options.
+
+If `tags:` is omitted and no standalone tag-like line is present, the skill creates the note with no tags.
+
+When `tags:` is provided, or when a standalone line looks like a tag hierarchy, the skill normalizes spaced hyphen hierarchy shorthand such as `english-reading - article` to `english-reading::article` before validation.
 
 ## Install
 
