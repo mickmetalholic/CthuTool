@@ -1,48 +1,12 @@
 import { Module } from '@nestjs/common';
-import { parseBrowserConfiguration } from '../../config/service-configuration';
-import { BrowserAgentCaptureModule } from '../browser-agent-capture/browser-agent-capture.module';
 import { BrowserAuthModule } from '../browser-auth/browser-auth.module';
+import { BrowserContentModule } from '../browser-content/browser-content.module';
 import { SitesConfigModule } from '../sites-config/sites-config.module';
 import { BrowserAutomationController } from './browser-automation.controller';
-import { BrowserBlockDetector } from './browser-block-detector';
-import { BrowserContentService } from './browser-content.service';
-import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
-import { BrowserTaskRunner } from './browser-task-runner';
 
 @Module({
-  imports: [BrowserAgentCaptureModule, BrowserAuthModule, SitesConfigModule],
+  imports: [BrowserAuthModule, BrowserContentModule, SitesConfigModule],
   controllers: [BrowserAutomationController],
-  exports: [BrowserAuthModule, BrowserContentService, SitesConfigModule],
-  providers: [
-    BrowserBlockDetector,
-    BrowserContentService,
-    {
-      provide: BrowserDiagnosticsStore,
-      useFactory: () =>
-        new BrowserDiagnosticsStore({
-          diagnosticsDir: getBrowserConfig().diagnosticsDir,
-          enabled: true,
-        }),
-    },
-    {
-      provide: BrowserTaskRunner,
-      useFactory: () => {
-        const config = getBrowserConfig();
-        return new BrowserTaskRunner({
-          defaultDelayMs: config.defaultDelayMs,
-          defaultTimeoutMs: config.defaultTimeoutMs,
-          maxConcurrency: config.maxConcurrency,
-        });
-      },
-    },
-  ],
+  exports: [BrowserAuthModule, BrowserContentModule, SitesConfigModule],
 })
 export class BrowserAutomationModule {}
-
-function getBrowserConfig() {
-  const result = parseBrowserConfiguration(process.env);
-  if (result.isErr()) {
-    throw result.error;
-  }
-  return result.value;
-}

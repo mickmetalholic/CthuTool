@@ -1,4 +1,4 @@
-import { BrowserAutomationError } from './browser-automation.errors';
+import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
 import { BrowserTaskRunner } from './browser-task-runner';
 
 describe('BrowserTaskRunner', () => {

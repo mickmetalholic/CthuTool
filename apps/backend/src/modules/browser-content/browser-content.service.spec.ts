@@ -1,9 +1,9 @@
-import { SitesConfigService } from '../sites-config/sites-config.service';
 import type {
   BrowserCaptureProvider,
   BrowserCaptureSnapshot,
   BrowserContentRequest,
-} from './browser-automation.types';
+} from '../browser-automation/browser-automation.types';
+import { SitesConfigService } from '../sites-config/sites-config.service';
 import { BrowserBlockDetector } from './browser-block-detector';
 import { BrowserContentService } from './browser-content.service';
 import { BrowserDiagnosticsStore } from './browser-diagnostics.store';

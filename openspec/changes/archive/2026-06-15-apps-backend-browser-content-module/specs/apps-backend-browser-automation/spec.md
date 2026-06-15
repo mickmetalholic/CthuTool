@@ -1,6 +1,5 @@
-## Purpose
-Define backend-owned browser automation services, browser auth profiles, controlled diagnostics, and CLI auth helper behavior for internal page content retrieval.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Internal browser content service
 The backend SHALL make internal browser content retrieval available through `BrowserContentModule`, while `BrowserAutomationModule` SHALL consume and export that module as part of the public browser backend composition.
 
@@ -30,58 +29,6 @@ The backend SHALL hide browser capture execution details behind a browser captur
 #### Scenario: Provider can be replaced later
 - **WHEN** a future browser runtime provider is added
 - **THEN** business modules using the browser content service do not need to change their content request or result handling contract
-
-### Requirement: Origin allowlist enforcement
-The browser content service SHALL require each page content request to resolve to a configured site origin and SHALL reject navigation outside that site's origins.
-
-#### Scenario: URL origin is allowed
-- **WHEN** a request URL has an origin listed by the resolved site configuration
-- **THEN** the service continues with agent browser dispatch
-
-#### Scenario: URL origin is rejected
-- **WHEN** a request URL has an origin not listed by the resolved site configuration
-- **THEN** the service fails before agent dispatch with an `ORIGIN_NOT_ALLOWED` error
-
-### Requirement: Task execution controls
-The browser content service SHALL run browser tasks through a controlled task runner with timeout, concurrency, retry, and resource blocking controls.
-
-#### Scenario: Concurrency limit is enforced
-- **WHEN** multiple page content requests are submitted and the configured maximum concurrency is reached
-- **THEN** additional requests wait for task capacity before starting browser navigation
-
-#### Scenario: Navigation times out
-- **WHEN** a page content request exceeds its configured timeout
-- **THEN** the service stops the navigation task and returns a `NAVIGATION_TIMEOUT` error or failed detection result
-
-#### Scenario: Resource blocking is applied
-- **WHEN** a page content request declares resource types to block
-- **THEN** the browser provider blocks those resource types during navigation
-
-### Requirement: Block and auth detection
-The browser content service SHALL classify access problems reported by desktop agents into structured detection states rather than attempting to bypass them.
-
-#### Scenario: Rate limit is detected
-- **WHEN** the desktop agent reports a rate-limit status or matching page content
-- **THEN** the service reports `rate_limited` detection and does not retry indefinitely
-
-#### Scenario: Login requirement is detected
-- **WHEN** the desktop agent reports a login page redirect or page content indicating that login is required
-- **THEN** the service reports `login_required` detection and updates pending auth state when the site auth policy is required
-
-#### Scenario: Captcha requirement is detected
-- **WHEN** the desktop agent reports that page content indicates captcha or abnormal access verification is required
-- **THEN** the service reports `captcha_required` detection and does not attempt automated captcha solving
-
-### Requirement: Diagnostics storage
-The browser content service SHALL store failure diagnostics behind diagnostic identifiers without returning raw sensitive artifacts by default.
-
-#### Scenario: Failed request saves diagnostics
-- **WHEN** a browser task fails or produces a blocked detection result and diagnostics are enabled
-- **THEN** the backend stores diagnostic metadata and configured artifacts under the diagnostics directory and returns a diagnostics identifier
-
-#### Scenario: Diagnostic artifacts are not returned inline
-- **WHEN** a service result includes diagnostics
-- **THEN** the result includes only diagnostic identifiers and summaries, not raw screenshots, HTML files, cookies, or storage-state contents
 
 ### Requirement: Backend browser site configuration
 The backend browser automation module SHALL expose public browser site configuration APIs from `SitesConfigModule`, while `BrowserContentModule` SHALL consume effective site configurations from `SitesConfigModule` for page content request resolution.
@@ -124,18 +71,3 @@ The backend browser automation module SHALL consume agent-backed browser capture
 #### Scenario: Browser automation module wiring
 - **WHEN** `BrowserAutomationModule` is compiled
 - **THEN** it imports `BrowserContentModule` and does not register `BrowserContentService`, `BrowserTaskRunner`, `BrowserBlockDetector`, `BrowserDiagnosticsStore`, `AgentBrowserCaptureProvider`, or the agent-backed capture provider token itself
-
-### Requirement: Pending auth task coordination
-The backend SHALL coordinate required browser auth through `BrowserAuthModule` and public agent state when required site auth is missing or expired on the selected desktop agent.
-
-#### Scenario: Required profile is missing
-- **WHEN** a browser content request targets a required-auth site and no selected agent has reported a verified profile for that site
-- **THEN** browser automation receives `AUTH_PROFILE_REQUIRED` from the auth/capture boundary and `BrowserAuthModule` records or updates a pending auth task with reason `missing`
-
-#### Scenario: Required profile expires during access
-- **WHEN** a desktop agent reports that a required profile produced a login-required or expired-auth result during browser access
-- **THEN** `BrowserAuthModule` records or updates a pending auth task with reason `expired` and public agent state marks the profile summary as unavailable
-
-#### Scenario: Duplicate pending task is coalesced
-- **WHEN** multiple requests need the same site profile on the same desktop agent
-- **THEN** `BrowserAuthModule` updates the existing open pending auth task instead of creating duplicate tasks

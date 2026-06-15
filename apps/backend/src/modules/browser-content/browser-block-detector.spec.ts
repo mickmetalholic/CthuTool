@@ -55,4 +55,31 @@ describe('BrowserBlockDetector', () => {
       }),
     ).toEqual({ kind: 'ok' });
   });
+
+  it('does not treat a normal Douban movie page login link as login required', () => {
+    expect(
+      detector.detect({
+        finalUrl: 'https://movie.douban.com/subject/1292052/',
+        status: 200,
+        title: '肖申克的救赎',
+        text: '肖申克的救赎 The Shawshank Redemption 登录 注册 9.7 剧情 犯罪',
+      }),
+    ).toEqual({ kind: 'ok' });
+  });
+
+  it('does not treat dormant Douban login redirects in movie page scripts as login required', () => {
+    expect(
+      detector.detect({
+        finalUrl: 'https://movie.douban.com/subject/1292052/',
+        status: 200,
+        title: '肖申克的救赎',
+        text: [
+          '肖申克的救赎 The Shawshank Redemption',
+          "if(sort === 'follow' && false){",
+          "window.location.href = '//www.douban.com/accounts/login?source=movie';",
+          '}',
+        ].join('\n'),
+      }),
+    ).toEqual({ kind: 'ok' });
+  });
 });

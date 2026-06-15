@@ -1,8 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { BROWSER_CAPTURE_PROVIDER } from '../browser-agent-capture/browser-agent-capture.tokens';
-// biome-ignore lint/style/useImportType: constructor injection token
-import { SitesConfigService } from '../sites-config/sites-config.service';
-import { BrowserAutomationError } from './browser-automation.errors';
+import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
 import type {
   BrowserAuthUsage,
   BrowserCaptureProvider,
@@ -10,7 +8,9 @@ import type {
   BrowserContentRequest,
   BrowserContentResult,
   BrowserSiteConfig,
-} from './browser-automation.types';
+} from '../browser-automation/browser-automation.types';
+// biome-ignore lint/style/useImportType: constructor injection token
+import { SitesConfigService } from '../sites-config/sites-config.service';
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserBlockDetector } from './browser-block-detector';
 // biome-ignore lint/style/useImportType: constructor injection token

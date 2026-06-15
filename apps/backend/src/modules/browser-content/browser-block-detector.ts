@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   BrowserCaptureSnapshot,
   BrowserDetection,
-} from './browser-automation.types';
+} from '../browser-automation/browser-automation.types';
 
 @Injectable()
 export class BrowserBlockDetector {
@@ -21,7 +21,8 @@ export class BrowserBlockDetector {
       };
     }
 
-    const haystack = [
+    const finalUrl = snapshot.finalUrl.toLowerCase();
+    const content = [
       snapshot.finalUrl,
       snapshot.title ?? '',
       snapshot.text ?? '',
@@ -30,9 +31,9 @@ export class BrowserBlockDetector {
       .toLowerCase();
 
     if (
-      haystack.includes('captcha') ||
-      haystack.includes('验证码') ||
-      haystack.includes('异常访问')
+      content.includes('captcha') ||
+      content.includes('验证码') ||
+      content.includes('异常访问')
     ) {
       return {
         kind: 'captcha_required',
@@ -41,12 +42,7 @@ export class BrowserBlockDetector {
       };
     }
 
-    if (
-      haystack.includes('/passport/login') ||
-      haystack.includes('/login') ||
-      haystack.includes('please sign in') ||
-      haystack.includes('登录')
-    ) {
+    if (isLoginRequiredSignal(finalUrl, content)) {
       return {
         kind: 'login_required',
         reason: 'Final URL or page content indicates login is required',
@@ -55,4 +51,19 @@ export class BrowserBlockDetector {
 
     return { kind: 'ok' };
   }
+}
+
+function isLoginRequiredSignal(finalUrl: string, content: string): boolean {
+  return (
+    finalUrl.includes('/passport/login') ||
+    finalUrl.includes('/accounts/login') ||
+    finalUrl.includes('/login?') ||
+    finalUrl.includes('/signin') ||
+    content.includes('please sign in') ||
+    content.includes('sign in to continue') ||
+    content.includes('请先登录') ||
+    content.includes('请登录后') ||
+    content.includes('登录后继续') ||
+    content.includes('账号密码登录')
+  );
 }

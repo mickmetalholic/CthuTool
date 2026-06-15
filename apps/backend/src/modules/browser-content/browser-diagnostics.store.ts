@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { BrowserDiagnosticsSummary } from './browser-automation.types';
+import { Injectable } from '@nestjs/common';
+import type { BrowserDiagnosticsSummary } from '../browser-automation/browser-automation.types';
 
 export type BrowserDiagnosticsStoreOptions = {
   readonly diagnosticsDir: string;

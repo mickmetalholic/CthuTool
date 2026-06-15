@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { BrowserAutomationError } from './browser-automation.errors';
+import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
 
 export type BrowserTaskRunnerOptions = {
   readonly defaultDelayMs: number;
@@ -46,10 +46,7 @@ export class BrowserTaskRunner {
   }
 
   private drain(): void {
-    while (
-      this.active < this.options.maxConcurrency &&
-      this.queue.length > 0
-    ) {
+    while (this.active < this.options.maxConcurrency && this.queue.length > 0) {
       const item = this.queue.shift();
       if (!item) {
         return;
@@ -71,7 +68,10 @@ export class BrowserTaskRunner {
   }
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([
