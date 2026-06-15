@@ -1,12 +1,18 @@
-import * as React from 'react';
 import {
   Badge,
   Button,
   Card,
   CardContent,
   cn,
+  EmptyState,
+  IconButton,
+  MetadataList,
+  MetricTile,
+  Notice,
   ScrollArea,
   Separator,
+  StatusBadge,
+  StatusList,
   Table,
   TableBody,
   TableCell,
@@ -28,7 +34,18 @@ export const SharedImports = () => (
     <Card className={className}>
       <CardContent>
         <Badge>Ready</Badge>
+        <StatusBadge status="connected">Connected</StatusBadge>
         <Button type="button">Save</Button>
+        <IconButton aria-label="Refresh" type="button">
+          <span aria-hidden="true">R</span>
+        </IconButton>
+        <Notice title="Connection unavailable" variant="warning">
+          Check the configured backend URL.
+        </Notice>
+        <EmptyState title="No tasks">Tasks will appear here.</EmptyState>
+        <MetricTile label="Online Agents" value="2" />
+        <MetadataList rows={[['Backend URL', 'http://localhost:3000']]} />
+        <StatusList rows={[['Runtime', 'ready']]} />
         <Separator />
         <ScrollArea>
           <Table>

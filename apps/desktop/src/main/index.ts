@@ -7,7 +7,7 @@ import {
   type BrowserPendingAuthTaskSummary,
   type BrowserStateSnapshotPayload,
 } from '@cthutool/agent-protocol';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import WebSocket from 'ws';
 import {
   AgentClient,
@@ -22,8 +22,11 @@ import {
 } from './config';
 import { PendingAuthTaskStore } from './pending-auth-task-store';
 import { PlaywrightHost } from './playwright-host';
+import { resolveDesktopWindowBounds } from './window-bounds';
 
 const appVersion = app.getVersion();
+app.setAppUserModelId('dev.cthutool.desktop');
+
 let mainWindow: BrowserWindow | undefined;
 let agentClient: AgentClient | undefined;
 let configStore: DesktopConfigStore | undefined;
@@ -40,15 +43,19 @@ type BrowserSiteActionInput = {
 
 function createWindow(): void {
   const config = configStore?.load();
-  const windowState = config?.windowState;
+  const windowBounds = resolveDesktopWindowBounds(
+    config?.windowState,
+    screen.getAllDisplays().map((display) => display.workArea),
+  );
   mainWindow = new BrowserWindow({
-    x: windowState?.x,
-    y: windowState?.y,
-    width: windowState?.width ?? 1120,
-    height: windowState?.height ?? 760,
+    x: windowBounds.x,
+    y: windowBounds.y,
+    width: windowBounds.width,
+    height: windowBounds.height,
     minWidth: 860,
     minHeight: 600,
     title: 'CthuDesktop',
+    icon: join(app.getAppPath(), 'build', 'icon.png'),
     frame: false,
     backgroundColor: '#282a36',
     webPreferences: {
@@ -58,7 +65,7 @@ function createWindow(): void {
     },
   });
 
-  if (windowState?.isMaximized) {
+  if (windowBounds.isMaximized) {
     mainWindow.maximize();
   }
 
@@ -68,6 +75,11 @@ function createWindow(): void {
     void mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
 
+  mainWindow.on('close', persistWindowState);
+  mainWindow.on('resize', persistWindowState);
+  mainWindow.on('move', persistWindowState);
+  mainWindow.on('maximize', persistWindowState);
+  mainWindow.on('unmaximize', persistWindowState);
   mainWindow.on('closed', () => {
     mainWindow = undefined;
   });
@@ -211,9 +223,12 @@ async function buildBrowserStateSnapshot(): Promise<BrowserStateSnapshotPayload>
 function persistWindowState(): void {
   if (!mainWindow || !configStore) return;
   if (mainWindow.isDestroyed()) return;
+  const bounds = mainWindow.isMaximized()
+    ? mainWindow.getNormalBounds()
+    : mainWindow.getBounds();
   configStore.savePatch({
     windowState: {
-      ...mainWindow.getBounds(),
+      ...bounds,
       isMaximized: mainWindow.isMaximized(),
     },
   });
@@ -234,7 +249,6 @@ app.whenReady().then(async () => {
   playwrightHost = new PlaywrightHost({
     agentId: config.agentId,
     browserRuntime: config.browserRuntime,
-    headless: false,
     onStateChanged: () => publishLocalBrowserState(),
     pendingAuthTasks,
     profileStore,

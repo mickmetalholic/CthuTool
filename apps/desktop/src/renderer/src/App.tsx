@@ -6,29 +6,25 @@ import {
   type HostActions,
   LocalStatusPage,
   OverviewPage,
+  PageFrame,
 } from '@cthutool/app-shell';
-import { Badge, Button } from '@cthutool/ui';
+import { Button } from '@cthutool/ui';
 import {
   Bot,
   Chrome,
   FileText,
+  Film,
   Home,
   Info,
   ListChecks,
-  Maximize2,
-  Minus,
-  Palette,
   RefreshCw,
   Save,
+  Search,
   Server,
-  Settings,
-  TerminalSquare,
-  Wifi,
-  WifiOff,
-  X,
 } from 'lucide-react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import appIcon from '../../../build/icon.png';
 import type { AgentConnectionState } from '../../main/agent-client';
 import type { DesktopConfig } from '../../main/config';
 import {
@@ -36,7 +32,6 @@ import {
   fetchBrowserStatus as fetchBrowserStatusFromBackend,
   fetchConnectedAgents,
 } from './agents-api';
-import appIcon from './assets/cthudesktop-icon.svg?url';
 import {
   type DesktopApi,
   type DesktopAppInfo,
@@ -50,6 +45,14 @@ import {
   type DesktopTask,
   type LocalPendingAuthTask,
 } from './desktop-tasks';
+import {
+  ActivityBar,
+  DesktopStatusBar,
+  DesktopTitlebar,
+  SettingsSubnav,
+  type ShellNavItem,
+  StartupIntro,
+} from './shell-components';
 import './styles.css';
 
 type AppProps = {
@@ -60,12 +63,7 @@ type AppProps = {
 
 type Workspace = 'main' | 'settings';
 type MainView = 'home' | 'tasks' | 'browser' | 'agents';
-type SettingsView =
-  | 'service'
-  | 'status'
-  | 'diagnostics'
-  | 'logs'
-  | 'appearance';
+type SettingsView = 'service' | 'status' | 'logs';
 
 const emptyState: AgentConnectionState = {
   status: 'disconnected',
@@ -84,9 +82,7 @@ const mainNav = [
 const settingsNav = [
   { id: 'service', label: 'Service', icon: Server },
   { id: 'status', label: 'Status', icon: Info },
-  { id: 'diagnostics', label: 'Diagnostics', icon: TerminalSquare },
   { id: 'logs', label: 'Logs', icon: FileText },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
 ] as const;
 
 export function App({
@@ -343,11 +339,6 @@ export function App({
     [desktopTasks],
   );
 
-  const openEnvironmentSettings = () => {
-    setWorkspace('settings');
-    setSettingsView('service');
-  };
-
   const openClientStatusSettings = () => {
     setWorkspace('settings');
     setSettingsView('status');
@@ -356,121 +347,41 @@ export function App({
   return (
     <AppRuntimeProvider runtime={runtime}>
       <main className="desktop-shell">
-        <header className="titlebar">
-          <div className="titlebar-drag-region">
-            <img alt="" className="app-icon" src={appIcon} />
-            <div className="app-title">
-              <strong>CthuDesktop</strong>
-              <span>
-                {activeEnvironment?.label ??
-                  connection.environmentLabel ??
-                  'Local'}
-              </span>
-            </div>
-          </div>
-          <Badge
-            className={`connection-chip ${connection.status}`}
-            variant="outline"
-          >
-            {connection.status === 'connected' ? (
-              <Wifi size={14} />
-            ) : (
-              <WifiOff size={14} />
-            )}
-            <span>{statusLabel}</span>
-          </Badge>
-          <div className="window-controls">
-            <Button
-              aria-label="Minimize"
-              className="window-button"
-              size="icon"
-              type="button"
-              variant="ghost"
-              onClick={() => void runtime.actions.windowAction?.('minimize')}
-            >
-              <Minus size={14} />
-            </Button>
-            <Button
-              aria-label="Maximize"
-              className="window-button"
-              size="icon"
-              type="button"
-              variant="ghost"
-              onClick={() => void runtime.actions.windowAction?.('maximize')}
-            >
-              <Maximize2 size={13} />
-            </Button>
-            <Button
-              aria-label="Close"
-              className="window-button close"
-              size="icon"
-              type="button"
-              variant="ghost"
-              onClick={() => void runtime.actions.windowAction?.('close')}
-            >
-              <X size={15} />
-            </Button>
-          </div>
-        </header>
+        <StartupIntro appIcon={appIcon} />
+        <DesktopTitlebar
+          appIcon={appIcon}
+          onWindowAction={(action) =>
+            void runtime.actions.windowAction?.(action)
+          }
+        />
 
         <div
           className={
             workspace === 'settings' ? 'shell-body with-subnav' : 'shell-body'
           }
         >
-          <nav className="activity-bar" aria-label="Primary">
-            <div className="activity-group">
-              {mainNav.map((item) => {
-                const Icon = item.icon;
-                const selected = workspace === 'main' && mainView === item.id;
-                const badgeCount =
-                  item.id === 'tasks' ? actionableTaskCount : 0;
-                return (
-                  <button
-                    aria-label={item.label}
-                    className={
-                      selected ? 'activity-button active' : 'activity-button'
-                    }
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setWorkspace('main');
-                      setMainView(item.id);
-                    }}
-                  >
-                    <Icon size={20} />
-                    {badgeCount > 0 ? (
-                      <span className="activity-badge">{badgeCount}</span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              aria-label="Settings"
-              className={
-                workspace === 'settings'
-                  ? 'activity-button active settings-button'
-                  : 'activity-button settings-button'
-              }
-              type="button"
-              onClick={() => setWorkspace('settings')}
-            >
-              <Settings size={20} />
-            </button>
-          </nav>
+          <ActivityBar
+            items={mainNav.map(
+              (item): ShellNavItem => ({
+                ...item,
+                badgeCount: item.id === 'tasks' ? actionableTaskCount : 0,
+              }),
+            )}
+            selectedId={workspace === 'main' ? mainView : ''}
+            settingsActive={workspace === 'settings'}
+            onSelectMain={(id) => {
+              setWorkspace('main');
+              setMainView(id as MainView);
+            }}
+            onSelectSettings={() => setWorkspace('settings')}
+          />
 
           {workspace === 'settings' ? (
-            <aside className="subnav">
-              <div className="subnav-heading">
-                <span>Settings</span>
-              </div>
-              <Submenu
-                active={settingsView}
-                items={settingsNav.map(({ id, label }) => ({ id, label }))}
-                onSelect={(id) => setSettingsView(id as SettingsView)}
-              />
-            </aside>
+            <SettingsSubnav
+              active={settingsView}
+              items={settingsNav.map(({ id, label }) => ({ id, label }))}
+              onSelect={(id) => setSettingsView(id as SettingsView)}
+            />
           ) : null}
 
           <section className="workspace">
@@ -489,7 +400,6 @@ export function App({
                   refreshBrowserStatus,
                   refreshLocalPendingAuthTasks,
                   runBrowserSiteAction,
-                  connection,
                   config,
                 })
               : renderSettingsWorkspace({
@@ -506,62 +416,17 @@ export function App({
           </section>
         </div>
 
-        <footer className="statusbar">
-          <button
-            aria-label="Open environment settings"
-            className="statusbar-environment"
-            type="button"
-            onClick={openEnvironmentSettings}
-          >
-            <span>{activeEnvironment?.label ?? 'Local'}</span>
-            <span>{backendUrl}</span>
-            <span>{statusLabel}</span>
-          </button>
-          <button
-            aria-label="Open client status"
-            className="statusbar-meta"
-            type="button"
-            onClick={openClientStatusSettings}
-          >
-            <span>{appInfo.platform}</span>
-            <span>v{appInfo.version}</span>
-          </button>
-        </footer>
+        <DesktopStatusBar
+          backendUrl={backendUrl}
+          connectionStatus={connection.status}
+          environmentLabel={activeEnvironment?.label ?? 'Local'}
+          platform={appInfo.platform}
+          statusLabel={statusLabel}
+          version={appInfo.version}
+          onOpenStatus={openClientStatusSettings}
+        />
       </main>
     </AppRuntimeProvider>
-  );
-}
-
-function Submenu({
-  active,
-  items,
-  onSelect,
-}: {
-  readonly active: string;
-  readonly items: readonly {
-    readonly id: string;
-    readonly label: string;
-    readonly disabled?: boolean;
-  }[];
-  readonly onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="submenu">
-      {items.map((item) => (
-        <button
-          className={
-            active === item.id ? 'submenu-item active' : 'submenu-item'
-          }
-          disabled={item.disabled}
-          key={item.id}
-          type="button"
-          onClick={() => onSelect(item.id)}
-        >
-          <span>{item.label}</span>
-          {item.disabled ? <small>Later</small> : null}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -579,7 +444,6 @@ function renderMainWorkspace({
   refreshBrowserStatus,
   refreshLocalPendingAuthTasks,
   runBrowserSiteAction,
-  connection,
   config,
 }: {
   readonly view: MainView;
@@ -601,7 +465,6 @@ function renderMainWorkspace({
     action: 'openLogin' | 'verifyProfile' | 'clearProfile',
     site: BrowserStatus['sites'][number],
   ) => Promise<void>;
-  readonly connection: AgentConnectionState;
   readonly config: DesktopConfig | undefined;
 }) {
   if (view === 'browser') {
@@ -658,11 +521,8 @@ function renderMainWorkspace({
             label: 'Environment',
             value: config?.activeEnvironment.label ?? 'Local',
           },
-          {
-            label: 'Backend',
-            value: config?.backendUrl ?? connection.backendUrl,
-          },
-          { label: 'Agent', value: config?.agentId ?? connection.agentId },
+          { label: 'Task Queue', value: String(desktopTasks.length) },
+          { label: 'Profiles', value: String(browserStatus.profiles.length) },
           { label: 'Online Agents', value: String(agents.length) },
         ]}
       />
@@ -705,43 +565,12 @@ function renderSettingsWorkspace({
   readonly connection: AgentConnectionState;
   readonly appInfo: DesktopAppInfo;
 }) {
-  if (view === 'appearance') {
-    return (
-      <WorkspacePanel title="Appearance" eyebrow="Settings">
-        <div className="settings-form compact">
-          <label>
-            <span>Mode</span>
-            <select
-              value={form.appearanceMode}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  appearanceMode: event.target.value,
-                }))
-              }
-            >
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-              <option value="system">System</option>
-            </select>
-          </label>
-          <label>
-            <span>Color Scheme</span>
-            <select value="dracula" disabled>
-              <option value="dracula">Dracula</option>
-            </select>
-          </label>
-          <SaveButton onClick={saveConfig} saveState={saveState} />
-        </div>
-      </WorkspacePanel>
-    );
-  }
-
   if (view === 'status') {
     return (
-      <WorkspacePanel title="Local Status" eyebrow="Settings">
+      <WorkspacePanel title="Connection Status" eyebrow="Settings">
         <LocalStatusPage
           rows={[
+            ['Backend URL', config?.backendUrl ?? connection.backendUrl],
             ['Agent ID', config?.agentId ?? connection.agentId],
             [
               'Browser Runtime',
@@ -756,8 +585,14 @@ function renderSettingsWorkspace({
             ],
             ['Device', config?.deviceName ?? connection.deviceName],
             ['Connection', connection.status],
+            [
+              'Last Registered',
+              connection.lastRegisteredAt ?? 'Not registered',
+            ],
+            ['Last Error', connection.lastError ?? 'None'],
             ['Version', appInfo.version],
             ['Platform', appInfo.platform],
+            ['Packaged', appInfo.isPackaged ? 'yes' : 'no'],
           ]}
           localRows={[
             ['User Data', localPathValue(appInfo.userDataDir)],
@@ -769,30 +604,11 @@ function renderSettingsWorkspace({
     );
   }
 
-  if (view === 'diagnostics') {
-    return (
-      <WorkspacePanel title="Diagnostics" eyebrow="Settings">
-        <StatusList
-          rows={[
-            ['Backend URL', config?.backendUrl ?? connection.backendUrl],
-            [
-              'Last Registered',
-              connection.lastRegisteredAt ?? 'Not registered',
-            ],
-            ['Last Error', connection.lastError ?? 'None'],
-            ['Packaged', appInfo.isPackaged ? 'yes' : 'no'],
-          ]}
-        />
-      </WorkspacePanel>
-    );
-  }
-
   if (view === 'logs') {
     return (
       <WorkspacePanel title="Logs" eyebrow="Settings">
         <div className="log-view">
           <code>{new Date().toISOString()} settings opened</code>
-          <code>{connection.status}</code>
         </div>
       </WorkspacePanel>
     );
@@ -867,13 +683,20 @@ function WorkspacePanel({
   readonly children: ReactNode;
 }) {
   return (
-    <section className="workspace-panel">
-      <div className="workspace-heading">
-        <span>{eyebrow}</span>
-        <h1>{title}</h1>
-      </div>
+    <PageFrame
+      atmosphere={
+        <>
+          <span className="workspace-atmosphere-grid" />
+          <span className="workspace-atmosphere-glow cyan" />
+          <span className="workspace-atmosphere-glow violet" />
+        </>
+      }
+      className="workspace-panel"
+      eyebrow={eyebrow}
+      title={title}
+    >
       {children}
-    </section>
+    </PageFrame>
   );
 }
 
@@ -1320,19 +1143,6 @@ function MiniStatusTable({
         <p>{emptyLabel}</p>
       )}
     </section>
-  );
-}
-
-function StatusList({ rows }: { readonly rows: readonly [string, string][] }) {
-  return (
-    <dl className="status-list">
-      {rows.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
-    </dl>
   );
 }
 

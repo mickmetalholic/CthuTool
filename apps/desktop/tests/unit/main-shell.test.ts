@@ -10,6 +10,12 @@ describe('desktop main shell contract', () => {
 
   test('creates an app-owned frameless CthuDesktop window', () => {
     expect(mainSource).toContain("title: 'CthuDesktop'");
+    expect(mainSource).toContain(
+      "app.setAppUserModelId('dev.cthutool.desktop')",
+    );
+    expect(mainSource).toContain(
+      "icon: join(app.getAppPath(), 'build', 'icon.png')",
+    );
     expect(mainSource).toContain('frame: false');
     expect(mainSource).toContain('contextIsolation: true');
     expect(mainSource).toContain("backgroundColor: '#282a36'");
@@ -26,8 +32,18 @@ describe('desktop main shell contract', () => {
     expect(mainSource).toContain('persistWindowState');
     expect(mainSource).toContain('windowState');
     expect(mainSource).toContain('isMaximized');
+    expect(mainSource).toContain('getNormalBounds');
     expect(mainSource).toContain('configStore.savePatch');
     expect(mainSource).toContain('mainWindow.isDestroyed()');
+    expect(mainSource).toContain("mainWindow.on('close', persistWindowState)");
+    expect(mainSource).toContain("mainWindow.on('resize', persistWindowState)");
+    expect(mainSource).toContain("mainWindow.on('move', persistWindowState)");
+    expect(mainSource).toContain(
+      "mainWindow.on('maximize', persistWindowState)",
+    );
+    expect(mainSource).toContain(
+      "mainWindow.on('unmaximize', persistWindowState)",
+    );
     expect(mainSource).toContain("mainWindow.on('closed'");
   });
 

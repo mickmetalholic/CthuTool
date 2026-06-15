@@ -136,6 +136,24 @@ describe('CthuDesktop shell', () => {
     });
   }
 
+  test('renders a startup intro over the already mounted shell', async () => {
+    render(
+      <App
+        desktopApi={createDesktopApi()}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+      />,
+    );
+
+    expect(screen.getByTestId('startup-intro')).toBeInTheDocument();
+    expect(screen.getByTestId('startup-intro-icon')).toHaveAttribute(
+      'src',
+      expect.stringContaining('build/icon.png'),
+    );
+    expect(await screen.findByText('CthuDesktop')).toBeInTheDocument();
+    expect(screen.getAllByText('Overview')).not.toHaveLength(0);
+  });
+
   test('renders app shell overview and connected agents', async () => {
     const desktopApi = createDesktopApi();
     const fetchAgents = vi.fn().mockResolvedValue([
@@ -161,7 +179,40 @@ describe('CthuDesktop shell', () => {
     );
 
     expect(await screen.findByText('CthuDesktop')).toBeInTheDocument();
-    expect(await screen.findAllByText('Connected')).not.toHaveLength(0);
+    await screen.findByRole('button', {
+      name: 'Open connection details',
+    });
+    const titlebar = document.querySelector('.titlebar');
+    expect(titlebar).toBeInstanceOf(HTMLElement);
+    expect(
+      within(titlebar as HTMLElement).getByText('CthuDesktop'),
+    ).toBeInTheDocument();
+    expect(titlebar?.querySelector('.app-icon')).toHaveAttribute(
+      'src',
+      expect.stringContaining('build/icon.png'),
+    );
+    expect(
+      within(titlebar as HTMLElement).queryByText('Local'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(titlebar as HTMLElement).queryByRole('button', {
+        name: 'Open connection details',
+      }),
+    ).not.toBeInTheDocument();
+    const statusbar = document.querySelector('.statusbar');
+    expect(statusbar).toBeInstanceOf(HTMLElement);
+    const connectionDetails = within(statusbar as HTMLElement).getByRole(
+      'button',
+      {
+        name: 'Open connection details',
+      },
+    );
+    expect(connectionDetails).toHaveTextContent('Connected');
+    expect(connectionDetails).toHaveTextContent('Local');
+    expect(connectionDetails).toHaveTextContent('http://backend.local:3000');
+    expect(
+      within(statusbar as HTMLElement).getAllByRole('button'),
+    ).toHaveLength(2);
     expect(document.documentElement.dataset.mode).toBe('dark');
     expect(document.documentElement.dataset.theme).toBe('dracula');
     expect(screen.getAllByText('Overview')).not.toHaveLength(0);
@@ -205,18 +256,26 @@ describe('CthuDesktop shell', () => {
     });
     await userEvent.click(screen.getByRole('button', { name: 'Status' }));
     expect(screen.getByText('windows-pc')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
     expect(screen.getByText('Last Registered')).toBeInTheDocument();
+    expect(screen.getByText('Last Error')).toBeInTheDocument();
+    expect(screen.getByText('Backend URL')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Diagnostics' }),
+    ).not.toBeInTheDocument();
     const logsButtons = screen.getAllByRole('button', { name: 'Logs' });
     const settingsLogsButton = logsButtons.at(-1);
     expect(settingsLogsButton).toBeDefined();
     await userEvent.click(settingsLogsButton as HTMLButtonElement);
     expect(screen.getByRole('heading', { name: 'Logs' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-    expect(screen.getByRole('option', { name: 'Dracula' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Appearance' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: 'Dracula' }),
+    ).not.toBeInTheDocument();
   });
 
-  test('opens service settings from the status bar environment button', async () => {
+  test('opens connection details from the combined status bar connection button', async () => {
     render(
       <App
         desktopApi={createDesktopApi()}
@@ -227,16 +286,15 @@ describe('CthuDesktop shell', () => {
 
     await userEvent.click(
       await screen.findByRole('button', {
-        name: 'Open environment settings',
+        name: 'Open connection details',
       }),
     );
 
     expect(
-      screen.getByRole('heading', { name: 'Service Connection' }),
+      screen.getByRole('heading', { name: 'Connection Status' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByDisplayValue('http://backend.local:3000'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Last Registered')).toBeInTheDocument();
+    expect(screen.getByText('Backend URL')).toBeInTheDocument();
   });
 
   test('opens client status from the status bar client button', async () => {
@@ -255,9 +313,9 @@ describe('CthuDesktop shell', () => {
     );
 
     expect(
-      screen.getByRole('heading', { name: 'Local Status' }),
+      screen.getByRole('heading', { name: 'Connection Status' }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText('win32')).toHaveLength(2);
+    expect(screen.getAllByText('win32')).not.toHaveLength(0);
     expect(screen.getByText('0.0.0')).toBeInTheDocument();
     expect(screen.getByText('Browser Profiles')).toBeInTheDocument();
     expect(
@@ -265,6 +323,27 @@ describe('CthuDesktop shell', () => {
         'C:\\Users\\yuans\\AppData\\Roaming\\CthuDesktop\\browser-profiles',
       ),
     ).toBeInTheDocument();
+  });
+
+  test('opens connection detail from the status bar status button', async () => {
+    render(
+      <App
+        desktopApi={createDesktopApi()}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+      />,
+    );
+
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open connection details',
+      }),
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Connection Status' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Last Registered')).toBeInTheDocument();
   });
 
   test('shows a restart hint when local path info is not available yet', async () => {

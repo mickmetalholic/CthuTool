@@ -31,6 +31,12 @@ export {
 export {
   AppShellFrame,
   CapabilityGate,
+  MetricSummary,
+  PageFrame,
   PageHeader,
+  PageMetadataList,
+  PageNotice,
+  PageStatusList,
   PageSurface,
+  PageToolbar,
 } from './shell';
