@@ -45,7 +45,7 @@ CthuDesktop SHALL store required-auth site profiles locally using persistent bro
 - **THEN** it does not include raw cookies, localStorage values, storage-state contents, or profile directory paths
 
 ### Requirement: Desktop login and verification flow
-CthuDesktop SHALL provide a user-driven login and verification flow for required-auth site profiles.
+CthuDesktop SHALL provide a user-driven login and verification flow for required-auth site profiles while keeping only interactive login windows visible to the user.
 
 #### Scenario: User starts login
 - **WHEN** the user starts login for a pending required site profile
@@ -66,6 +66,25 @@ CthuDesktop SHALL provide a user-driven login and verification flow for required
 #### Scenario: Login verification fails
 - **WHEN** verification cannot confirm logged-in status
 - **THEN** CthuDesktop marks the profile `login_required` or `blocked` and keeps a pending auth task open
+
+### Requirement: Browser launch visibility
+CthuDesktop SHALL run non-interactive browser automation without showing a Chrome window while preserving headed windows for user-driven login.
+
+#### Scenario: Capture page is hidden
+- **WHEN** CthuDesktop executes a `browser.capturePage` command for a required-auth or anonymous site
+- **THEN** it launches the browser context in hidden/headless mode and returns the requested bounded capture result
+
+#### Scenario: Verification is hidden
+- **WHEN** CthuDesktop executes a `browser.verifyProfile` command outside an active login window
+- **THEN** it performs verification in hidden/headless mode and reports only public profile status
+
+#### Scenario: Login remains visible
+- **WHEN** CthuDesktop executes a `browser.openLogin` command
+- **THEN** it opens a headed browser window so the user can complete manual login
+
+#### Scenario: Hidden capture does not bypass access controls
+- **WHEN** hidden browser execution encounters login-required, captcha, abnormal access, rate limiting, or blocked content
+- **THEN** CthuDesktop returns the structured detection state instead of automatically switching to a visible window or attempting to bypass the restriction
 
 ### Requirement: Desktop browser state projection
 CthuDesktop SHALL publish non-sensitive local browser state snapshots to the backend over the agent WebSocket after connection and after local profile or pending-auth state changes.
