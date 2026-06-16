@@ -136,6 +136,8 @@ describe('global bin', () => {
     for (const [args, explicitHelpArgs] of [
       [[], ['--help']],
       [['codex'], ['codex', '--help']],
+      [['scripts'], ['scripts', '--help']],
+      [['completion'], ['completion', '--help']],
     ] as const) {
       const proc = Bun.spawn(['node', 'bin/chc.mjs', ...args], {
         cwd: cliRoot,
@@ -163,9 +165,9 @@ describe('global bin', () => {
       expect(explicitErr).toBe('');
       expect(out).toBe(explicitOut);
       expect(out).toContain('USAGE');
-      expect(out).toContain('COMMANDS');
       const plain = stripAnsi(out);
       if (args.length === 0) {
+        expect(out).toContain('COMMANDS');
         expect(plain).toContain(
           '\n  codex    Manage reproducible Codex configuration.',
         );
@@ -175,7 +177,8 @@ describe('global bin', () => {
         expect(plain).not.toContain('\n    codex');
         expect(out).toContain(`${ESC}[36mcodex`);
         expect(out).toContain(`${ESC}[36mscripts`);
-      } else {
+      } else if (args[0] === 'codex') {
+        expect(out).toContain('COMMANDS');
         expect(plain).toContain(
           '\n  status   Summarize local-versus-repository Codex config state.',
         );
@@ -189,6 +192,17 @@ describe('global bin', () => {
         expect(out).toContain(`${ESC}[36mstatus`);
         expect(out).toContain(`${ESC}[36mapply`);
         expect(out).toContain(`${ESC}[36minstall`);
+      } else if (args[0] === 'scripts') {
+        expect(plain).toContain('chc scripts [OPTIONS] [ID]');
+        expect(plain).toContain(
+          'Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
+        );
+        expect(plain).toContain('Examples:');
+      } else {
+        expect(plain).toContain('chc completion [OPTIONS] <SHELL>');
+        expect(plain).toContain(
+          'Shell to generate completion for (powershell or zsh), or action to manage persistent completion',
+        );
       }
     }
   });

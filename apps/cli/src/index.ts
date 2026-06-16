@@ -1,6 +1,11 @@
-import { type ArgsDef, type CommandDef, renderUsage, runMain } from 'citty';
+import {
+  type ArgsDef,
+  type CommandDef,
+  type Resolvable,
+  renderUsage,
+  runMain,
+} from 'citty';
 import pc from 'picocolors';
-import { codexCommand } from './command/codex.command';
 import { rootCommand } from './command/root.command';
 
 function formatUsageForStdout(value: string): string {
@@ -81,12 +86,38 @@ async function showNativeUsage<T extends ArgsDef = ArgsDef>(
   );
 }
 
+async function resolveValue<T>(
+  value: Resolvable<T> | undefined,
+): Promise<T | undefined> {
+  if (typeof value === 'function') {
+    return await (value as () => T | Promise<T>)();
+  }
+  return await value;
+}
+
+async function resolveOmittedTopLevelCommand(
+  rawArgs: readonly string[],
+): Promise<CommandDef | undefined> {
+  if (rawArgs.length !== 1) {
+    return undefined;
+  }
+
+  const [name] = rawArgs;
+  if (!name || name.startsWith('-') || name === '__complete') {
+    return undefined;
+  }
+
+  const subCommands = await resolveValue(rootCommand.subCommands);
+  return await resolveValue(subCommands?.[name]);
+}
+
 const rawArgs = process.argv.slice(2);
+const omittedTopLevelCommand = await resolveOmittedTopLevelCommand(rawArgs);
 if (rawArgs.length === 0) {
   await showNativeUsage(rootCommand);
   process.exitCode = 0;
-} else if (rawArgs.length === 1 && rawArgs[0] === 'codex') {
-  await showNativeUsage(codexCommand, rootCommand);
+} else if (omittedTopLevelCommand) {
+  await showNativeUsage(omittedTopLevelCommand, rootCommand);
   process.exitCode = 0;
 } else {
   runMain(rootCommand, { showUsage: showNativeUsage }).catch(() => {
