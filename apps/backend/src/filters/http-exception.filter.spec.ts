@@ -50,4 +50,31 @@ describe('HttpExceptionFilter', () => {
       }),
     );
   });
+
+  it('preserves structured HttpException response bodies', () => {
+    const response: MockResponse = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    const filter = new HttpExceptionFilter();
+    const exception = new HttpException(
+      {
+        code: 'AUTH_REQUIRED',
+        message: 'Login required',
+        subjectId: '1292052',
+      },
+      HttpStatus.UNAUTHORIZED,
+    );
+
+    filter.catch(exception, createMockHost(response));
+
+    expect(response.status).toHaveBeenCalledWith(401);
+    expect(response.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'AUTH_REQUIRED',
+        message: 'Login required',
+        subjectId: '1292052',
+      }),
+    );
+  });
 });

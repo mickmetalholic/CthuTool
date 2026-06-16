@@ -29,8 +29,10 @@ import type { AgentConnectionState } from '../../main/agent-client';
 import type { DesktopConfig } from '../../main/config';
 import {
   type BrowserStatus,
+  type DoubanMovieInfo,
   fetchBrowserStatus as fetchBrowserStatusFromBackend,
   fetchConnectedAgents,
+  fetchDoubanMovieInfo as fetchDoubanMovieInfoFromBackend,
 } from './agents-api';
 import {
   type DesktopApi,
@@ -59,6 +61,7 @@ type AppProps = {
   readonly desktopApi?: DesktopApi;
   readonly fetchAgents?: typeof fetchConnectedAgents;
   readonly fetchBrowserStatus?: typeof fetchBrowserStatusFromBackend;
+  readonly fetchDoubanMovieInfo?: typeof fetchDoubanMovieInfoFromBackend;
 };
 
 type Workspace = 'main' | 'settings';
@@ -89,6 +92,7 @@ export function App({
   desktopApi = getDesktopApi(),
   fetchAgents = fetchConnectedAgents,
   fetchBrowserStatus = fetchBrowserStatusFromBackend,
+  fetchDoubanMovieInfo = fetchDoubanMovieInfoFromBackend,
 }: AppProps) {
   const [workspace, setWorkspace] = useState<Workspace>('main');
   const [mainView, setMainView] = useState<MainView>('home');
@@ -120,6 +124,14 @@ export function App({
   const [browserActionState, setBrowserActionState] = useState<{
     readonly message?: string;
     readonly status: 'idle' | 'running' | 'success' | 'error';
+  }>({ status: 'idle' });
+  const [doubanMovieInput, setDoubanMovieInput] = useState('');
+  const [doubanMovieResult, setDoubanMovieResult] = useState<
+    DoubanMovieInfo | undefined
+  >();
+  const [doubanMovieState, setDoubanMovieState] = useState<{
+    readonly message?: string;
+    readonly status: 'idle' | 'loading' | 'error';
   }>({ status: 'idle' });
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>(
     'idle',
@@ -344,6 +356,29 @@ export function App({
     setSettingsView('status');
   };
 
+  const lookupDoubanMovie = async () => {
+    const input = doubanMovieInput.trim();
+    if (!isValidDoubanMovieInput(input)) {
+      setDoubanMovieState({
+        message: 'Enter a numeric Douban subject id or subject URL',
+        status: 'error',
+      });
+      return;
+    }
+    setDoubanMovieState({ status: 'loading' });
+    try {
+      const movie = await fetchDoubanMovieInfo(backendUrl, input);
+      setDoubanMovieResult(movie);
+      setDoubanMovieState({ status: 'idle' });
+    } catch (error) {
+      setDoubanMovieState({
+        message:
+          error instanceof Error ? error.message : 'Douban movie lookup failed',
+        status: 'error',
+      });
+    }
+  };
+
   return (
     <AppRuntimeProvider runtime={runtime}>
       <main className="desktop-shell">
@@ -399,6 +434,11 @@ export function App({
                   refreshAgents,
                   refreshBrowserStatus,
                   refreshLocalPendingAuthTasks,
+                  doubanMovieInput,
+                  doubanMovieResult,
+                  doubanMovieState,
+                  setDoubanMovieInput,
+                  lookupDoubanMovie,
                   runBrowserSiteAction,
                   config,
                 })
@@ -443,6 +483,11 @@ function renderMainWorkspace({
   refreshAgents,
   refreshBrowserStatus,
   refreshLocalPendingAuthTasks,
+  doubanMovieInput,
+  doubanMovieResult,
+  doubanMovieState,
+  setDoubanMovieInput,
+  lookupDoubanMovie,
   runBrowserSiteAction,
   config,
 }: {
@@ -461,6 +506,14 @@ function renderMainWorkspace({
   readonly refreshAgents: () => Promise<void>;
   readonly refreshBrowserStatus: () => Promise<void>;
   readonly refreshLocalPendingAuthTasks: () => Promise<void>;
+  readonly doubanMovieInput: string;
+  readonly doubanMovieResult: DoubanMovieInfo | undefined;
+  readonly doubanMovieState: {
+    readonly message?: string;
+    readonly status: 'idle' | 'loading' | 'error';
+  };
+  readonly setDoubanMovieInput: Dispatch<SetStateAction<string>>;
+  readonly lookupDoubanMovie: () => Promise<void>;
   readonly runBrowserSiteAction: (
     action: 'openLogin' | 'verifyProfile' | 'clearProfile',
     site: BrowserStatus['sites'][number],
@@ -526,8 +579,128 @@ function renderMainWorkspace({
           { label: 'Online Agents', value: String(agents.length) },
         ]}
       />
+      <DoubanMovieLookupPanel
+        input={doubanMovieInput}
+        movie={doubanMovieResult}
+        state={doubanMovieState}
+        setInput={setDoubanMovieInput}
+        onLookup={lookupDoubanMovie}
+      />
     </WorkspacePanel>
   );
+}
+
+function DoubanMovieLookupPanel({
+  input,
+  movie,
+  state,
+  setInput,
+  onLookup,
+}: {
+  readonly input: string;
+  readonly movie: DoubanMovieInfo | undefined;
+  readonly state: {
+    readonly message?: string;
+    readonly status: 'idle' | 'loading' | 'error';
+  };
+  readonly setInput: Dispatch<SetStateAction<string>>;
+  readonly onLookup: () => Promise<void>;
+}) {
+  const loading = state.status === 'loading';
+  return (
+    <section className="douban-lookup-panel" aria-label="Douban movie lookup">
+      <div className="douban-lookup-header">
+        <div>
+          <h2>
+            <Film size={17} />
+            <span>Douban Movie</span>
+          </h2>
+        </div>
+      </div>
+      <form
+        className="douban-lookup-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onLookup();
+        }}
+      >
+        <label>
+          <span>Subject</span>
+          <input
+            aria-label="Douban subject"
+            placeholder="1292052"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+          />
+        </label>
+        <Button
+          className="primary-button"
+          disabled={loading}
+          type="submit"
+          variant="default"
+        >
+          <Search size={16} />
+          <span>{loading ? 'Fetching' : 'Fetch'}</span>
+        </Button>
+      </form>
+      {state.status === 'error' && state.message ? (
+        <p className="error-text">{state.message}</p>
+      ) : null}
+      {loading ? (
+        <p className="douban-lookup-status">Fetching movie data</p>
+      ) : null}
+      {movie ? <DoubanMovieResult movie={movie} /> : null}
+    </section>
+  );
+}
+
+function DoubanMovieResult({ movie }: { readonly movie: DoubanMovieInfo }) {
+  return (
+    <article className="douban-movie-result">
+      <div className="douban-movie-title">
+        <h3>
+          {movie.title}
+          {movie.year ? <span>({movie.year})</span> : null}
+        </h3>
+        {movie.rating !== undefined ? (
+          <strong>
+            {movie.rating.toFixed(1)}
+            {movie.ratingCount ? (
+              <span>{movie.ratingCount} ratings</span>
+            ) : null}
+          </strong>
+        ) : null}
+      </div>
+      <StatusList
+        rows={[
+          ['Directors', personNames(movie.directors)],
+          ['Casts', personNames(movie.casts)],
+          ['Genres', movie.genres.join(', ') || 'Unavailable'],
+          ['Countries', movie.countries.join(', ') || 'Unavailable'],
+          ['Runtime', movie.runtime ?? 'Unavailable'],
+          ['Release Dates', movie.releaseDates.join(', ') || 'Unavailable'],
+          ['Aliases', movie.aliases.join(', ') || 'Unavailable'],
+          ['IMDb', movie.imdbId ?? 'Unavailable'],
+          ['Source', movie.sourceUrl],
+        ]}
+      />
+      {movie.summary ? <p className="douban-summary">{movie.summary}</p> : null}
+    </article>
+  );
+}
+
+function isValidDoubanMovieInput(input: string): boolean {
+  if (/^\d+$/.test(input)) return true;
+  try {
+    const url = new URL(input);
+    return /\/subject\/\d+\/?/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function personNames(people: readonly { readonly name: string }[]): string {
+  return people.map((person) => person.name).join(', ') || 'Unavailable';
 }
 
 function renderSettingsWorkspace({
@@ -1143,6 +1316,19 @@ function MiniStatusTable({
         <p>{emptyLabel}</p>
       )}
     </section>
+  );
+}
+
+function StatusList({ rows }: { readonly rows: readonly [string, string][] }) {
+  return (
+    <dl className="status-list">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

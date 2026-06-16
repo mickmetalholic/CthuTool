@@ -1,9 +1,15 @@
 import { Module } from '@nestjs/common';
 import { AgentRegistryModule } from './modules/agent-registry/agent-registry.module';
 import { BrowserAutomationModule } from './modules/browser-automation/browser-automation.module';
+import { DoubanMovieInfoModule } from './modules/douban-movie-info/douban-movie-info.module';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
-  imports: [AgentRegistryModule, BrowserAutomationModule, HealthModule],
+  imports: [
+    AgentRegistryModule,
+    BrowserAutomationModule,
+    DoubanMovieInfoModule,
+    HealthModule,
+  ],
 })
 export class AppModule {}

@@ -280,7 +280,8 @@ export class PlaywrightHost {
       if (
         command.authPolicy === 'required' &&
         command.profileName &&
-        detection.kind === 'login_required'
+        detection.kind === 'login_required' &&
+        !command.suppressPendingAuthTask
       ) {
         await this.options.profileStore.markStatus(
           command.siteId,
@@ -393,7 +394,9 @@ export class PlaywrightHost {
     }
     const key = profileKey(command.siteId, command.profileName);
     await this.closeLoginContext(key);
-    const context = await this.launchPersistentContext(command);
+    const context = await this.launchPersistentContext(command, {
+      headless: false,
+    });
     this.loginContexts.set(key, context);
     this.watchLoginContextClose(key, command, context);
     const page = await context.newPage();
@@ -437,6 +440,7 @@ export class PlaywrightHost {
 
   private async launchPersistentContext(
     command: BrowserCommandPayload,
+    options: { readonly headless?: boolean } = {},
   ): Promise<RuntimeContext> {
     if (!command.profileName) {
       throw new Error('Persistent context requires profileName');
@@ -448,7 +452,7 @@ export class PlaywrightHost {
     await mkdir(profileDir, { recursive: true });
     return this.runtime.launchPersistentContext(profileDir, {
       ...this.activeRuntimeLaunchOptions(),
-      headless: this.headless,
+      headless: options.headless ?? this.headless,
     });
   }
 
@@ -512,19 +516,24 @@ export class PlaywrightHost {
         'missing',
       );
     }
+    if (command.suppressPendingAuthTask) {
+      return undefined;
+    }
     const profile = await this.options.profileStore.getProfile(
       command.siteId,
       command.profileName,
     );
     if (!profile || profile.status !== 'verified') {
-      this.options.pendingAuthTasks.upsert({
-        loginUrl: command.loginUrl,
-        profileName: command.profileName,
-        reason: profile?.status === 'expired' ? 'expired' : 'missing',
-        siteId: command.siteId,
-        source: 'backend_request',
-        verifyUrl: command.verifyUrl,
-      });
+      if (!command.suppressPendingAuthTask) {
+        this.options.pendingAuthTasks.upsert({
+          loginUrl: command.loginUrl,
+          profileName: command.profileName,
+          reason: profile?.status === 'expired' ? 'expired' : 'missing',
+          siteId: command.siteId,
+          source: 'backend_request',
+          verifyUrl: command.verifyUrl,
+        });
+      }
       return this.error(
         command,
         profile?.status === 'expired'
@@ -823,29 +832,39 @@ async function verifyDoubanProfile({
 }
 
 function detectAccessProblem(finalUrl: string, content: string | undefined) {
-  const haystack = `${finalUrl}\n${content ?? ''}`.toLowerCase();
-  if (haystack.includes('captcha') || haystack.includes('验证码')) {
+  const normalizedFinalUrl = finalUrl.toLowerCase();
+  const normalizedContent = (content ?? '').toLowerCase();
+  if (
+    normalizedContent.includes('captcha') ||
+    normalizedContent.includes('验证码')
+  ) {
     return { kind: 'captcha_required' as const };
   }
   if (
-    haystack.includes('rate limit') ||
-    haystack.includes('too many requests')
+    normalizedContent.includes('rate limit') ||
+    normalizedContent.includes('too many requests')
   ) {
     return { kind: 'rate_limited' as const };
   }
   if (
-    haystack.includes('access denied') ||
-    haystack.includes('forbidden') ||
-    haystack.includes('异常访问') ||
-    haystack.includes('访问异常')
+    normalizedContent.includes('access denied') ||
+    normalizedContent.includes('forbidden') ||
+    normalizedContent.includes('异常访问') ||
+    normalizedContent.includes('访问异常')
   ) {
     return { kind: 'blocked' as const };
   }
   if (
-    haystack.includes('/login') ||
-    haystack.includes('/signin') ||
-    haystack.includes('登录') ||
-    haystack.includes('sign in')
+    normalizedFinalUrl.includes('/passport/login') ||
+    normalizedFinalUrl.includes('/accounts/login') ||
+    normalizedFinalUrl.includes('/login?') ||
+    normalizedFinalUrl.includes('/signin') ||
+    normalizedContent.includes('please sign in') ||
+    normalizedContent.includes('sign in to continue') ||
+    normalizedContent.includes('请先登录') ||
+    normalizedContent.includes('请登录后') ||
+    normalizedContent.includes('登录后继续') ||
+    normalizedContent.includes('账号密码登录')
   ) {
     return { kind: 'login_required' as const };
   }

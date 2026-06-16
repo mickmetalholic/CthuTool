@@ -59,6 +59,7 @@ export class AgentBrowserCaptureProvider implements BrowserCaptureProvider {
           loginUrl: request.loginUrl,
           profileName: request.profileName,
           siteId: request.siteId ?? 'default',
+          suppressPendingAuthTask: request.suppressPendingAuthTask,
           timeoutMs: request.timeoutMs,
           url: request.url,
           verifyUrl: request.verifyUrl,
@@ -118,8 +119,9 @@ export class AgentBrowserCaptureProvider implements BrowserCaptureProvider {
     response: BrowserErrorMessage,
   ): void {
     if (
-      response.payload.code !== 'AUTH_PROFILE_REQUIRED' &&
-      response.payload.code !== 'AUTH_PROFILE_EXPIRED'
+      request.suppressPendingAuthTask ||
+      (response.payload.code !== 'AUTH_PROFILE_REQUIRED' &&
+        response.payload.code !== 'AUTH_PROFILE_EXPIRED')
     ) {
       return;
     }

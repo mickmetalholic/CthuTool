@@ -41,6 +41,7 @@ export type BrowserContentRequest = {
   readonly blockResources?: readonly BrowserResourceType[];
   readonly timeoutMs?: number;
   readonly waitUntil?: 'domcontentloaded' | 'load' | 'networkidle';
+  readonly suppressPendingAuthTask?: boolean;
 };
 
 export type BrowserCaptureRequest = BrowserContentRequest;

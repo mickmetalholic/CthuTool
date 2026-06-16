@@ -135,6 +135,22 @@ describe('PlaywrightHost', () => {
     expect(pendingAuthTasks.list()).toHaveLength(1);
   });
 
+  test('can suppress local pending auth preflight for business lookups', async () => {
+    const { host, pendingAuthTasks, runtime } = await createHost();
+
+    const result = await host.execute({
+      ...captureCommand,
+      suppressPendingAuthTask: true,
+    });
+
+    expect(result.type).toBe('browser.result');
+    expect(runtime.launchPersistentContext).toHaveBeenCalledWith(
+      expect.stringContaining(join('douban', 'douban-main')),
+      { channel: 'chrome', headless: true },
+    );
+    expect(pendingAuthTasks.list()).toHaveLength(0);
+  });
+
   test('uses persistent context for verified required profiles', async () => {
     const { host, profileStore, runtime } = await createHost();
     await profileStore.markStatus('douban', 'douban-main', 'verified');
@@ -146,6 +162,71 @@ describe('PlaywrightHost', () => {
       expect.stringContaining(join('douban', 'douban-main')),
       { channel: 'chrome', headless: true },
     );
+  });
+
+  test('does not treat a normal Douban movie page login link as login required', async () => {
+    const { host, profileStore } = await createHost({
+      pages: [
+        {
+          html: '<html><body>肖申克的救赎 登录 注册 9.7 剧情 犯罪</body></html>',
+          text: '肖申克的救赎 登录 注册 9.7 剧情 犯罪',
+          title: '肖申克的救赎',
+          url: 'https://movie.douban.com/subject/1292052/',
+        },
+      ],
+    });
+    await profileStore.markStatus('douban', 'douban-main', 'verified');
+
+    const result = await host.execute({
+      ...captureCommand,
+      includeText: true,
+    });
+
+    expect(result).toEqual({
+      type: 'browser.result',
+      payload: expect.objectContaining({
+        detection: { kind: 'ok' },
+        finalUrl: 'https://movie.douban.com/subject/1292052/',
+        text: '肖申克的救赎 登录 注册 9.7 剧情 犯罪',
+      }),
+    });
+  });
+
+  test('does not treat dormant Douban login redirects in movie page scripts as login required', async () => {
+    const html = [
+      '<html><body>',
+      '<h1>肖申克的救赎</h1>',
+      '<script>',
+      "if(sort === 'follow' && false){",
+      "window.location.href = '//www.douban.com/accounts/login?source=movie';",
+      '}',
+      '</script>',
+      '</body></html>',
+    ].join('\n');
+    const { host, profileStore } = await createHost({
+      pages: [
+        {
+          html,
+          text: html,
+          title: '肖申克的救赎',
+          url: 'https://movie.douban.com/subject/1292052/',
+        },
+      ],
+    });
+    await profileStore.markStatus('douban', 'douban-main', 'verified');
+
+    const result = await host.execute({
+      ...captureCommand,
+      includeText: true,
+    });
+
+    expect(result).toEqual({
+      type: 'browser.result',
+      payload: expect.objectContaining({
+        detection: { kind: 'ok' },
+        finalUrl: 'https://movie.douban.com/subject/1292052/',
+      }),
+    });
   });
 
   test('uses temporary context for anonymous capture', async () => {
@@ -232,8 +313,26 @@ describe('PlaywrightHost', () => {
       }),
     });
     expect(runtime.launchPersistentContext).toHaveBeenCalled();
+    expect(runtime.launchPersistentContext).toHaveBeenCalledWith(
+      expect.stringContaining(join('douban', 'douban-main')),
+      { channel: 'chrome', headless: false },
+    );
     expect(context.close).not.toHaveBeenCalled();
     expect(pendingAuthTasks.list()).toHaveLength(1);
+  });
+
+  test('uses hidden browser for explicit profile verification', async () => {
+    const { host, runtime } = await createHost({
+      pages: [doubanHomePage('Cthu User'), doubanMinePage('50353979')],
+    });
+
+    const result = await host.execute(verifyDoubanCommand());
+
+    expect(result.type).toBe('browser.result');
+    expect(runtime.launchPersistentContext).toHaveBeenCalledWith(
+      expect.stringContaining(join('douban', 'douban-main')),
+      { channel: 'chrome', headless: true },
+    );
   });
 
   test('verifies a profile after the login window closes', async () => {

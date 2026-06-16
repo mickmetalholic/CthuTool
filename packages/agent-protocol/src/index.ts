@@ -180,6 +180,7 @@ export const BrowserCommandPayloadSchema = v.object({
   ),
   timeoutMs: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   blockResources: v.optional(v.array(v.picklist(BROWSER_RESOURCE_TYPES))),
+  suppressPendingAuthTask: v.optional(v.boolean()),
 });
 
 export const BrowserCommandMessageSchema = v.object({

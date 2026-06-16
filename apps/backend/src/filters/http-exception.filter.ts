@@ -16,12 +16,23 @@ export class HttpExceptionFilter implements ExceptionFilter {
       exception instanceof HttpException
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
+    const exceptionBody =
+      exception instanceof HttpException ? exception.getResponse() : undefined;
+    const body =
+      exceptionBody && typeof exceptionBody === 'object'
+        ? {
+            ...(exceptionBody as Record<string, unknown>),
+            timestamp: new Date().toISOString(),
+          }
+        : {
+            code: status === HttpStatus.NOT_FOUND ? 'NOT_FOUND' : 'HTTP_ERROR',
+            message:
+              status === HttpStatus.NOT_FOUND
+                ? 'Route not found'
+                : 'Request failed',
+            timestamp: new Date().toISOString(),
+          };
 
-    response.status(status).json({
-      code: status === HttpStatus.NOT_FOUND ? 'NOT_FOUND' : 'HTTP_ERROR',
-      message:
-        status === HttpStatus.NOT_FOUND ? 'Route not found' : 'Request failed',
-      timestamp: new Date().toISOString(),
-    });
+    response.status(status).json(body);
   }
 }

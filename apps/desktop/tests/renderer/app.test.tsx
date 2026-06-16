@@ -407,6 +407,104 @@ describe('CthuDesktop shell', () => {
     expect(screen.getAllByText(/2026/)).not.toHaveLength(0);
   });
 
+  test('looks up a Douban movie from the overview panel', async () => {
+    let resolveLookup: (value: ReturnType<typeof movieFixture>) => void = () =>
+      undefined;
+    const lookup = new Promise<ReturnType<typeof movieFixture>>((resolve) => {
+      resolveLookup = resolve;
+    });
+    const fetchDoubanMovieInfo = vi.fn().mockReturnValue(lookup);
+
+    render(
+      <App
+        desktopApi={createDesktopApi()}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+        fetchDoubanMovieInfo={fetchDoubanMovieInfo}
+      />,
+    );
+
+    await userEvent.type(
+      await screen.findByLabelText('Douban subject'),
+      '1292052',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
+
+    expect(await screen.findByText('Fetching movie data')).toBeInTheDocument();
+    expect(fetchDoubanMovieInfo).toHaveBeenCalledWith(
+      'http://backend.local:3000',
+      '1292052',
+    );
+    expect(screen.getByRole('button', { name: 'Fetching' })).toBeDisabled();
+    resolveLookup(movieFixture('1292052'));
+    expect(await screen.findByText('肖申克的救赎')).toBeInTheDocument();
+    expect(screen.getByText('9.7')).toBeInTheDocument();
+    expect(screen.getByText('Frank Darabont')).toBeInTheDocument();
+    expect(screen.getByText('tt0111161')).toBeInTheDocument();
+  });
+
+  test('validates Douban lookup input without calling backend', async () => {
+    const fetchDoubanMovieInfo = vi.fn();
+
+    render(
+      <App
+        desktopApi={createDesktopApi()}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+        fetchDoubanMovieInfo={fetchDoubanMovieInfo}
+      />,
+    );
+
+    await userEvent.type(
+      await screen.findByLabelText('Douban subject'),
+      'nope',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
+
+    expect(
+      await screen.findByText(
+        'Enter a numeric Douban subject id or subject URL',
+      ),
+    ).toBeInTheDocument();
+    expect(fetchDoubanMovieInfo).not.toHaveBeenCalled();
+  });
+
+  test('shows Douban lookup backend errors and replaces prior results', async () => {
+    const fetchDoubanMovieInfo = vi
+      .fn()
+      .mockResolvedValueOnce(movieFixture('1292052'))
+      .mockRejectedValueOnce(new Error('Login required'))
+      .mockResolvedValueOnce({
+        ...movieFixture('1291546'),
+        title: '霸王别姬',
+        rating: 9.6,
+      });
+
+    render(
+      <App
+        desktopApi={createDesktopApi()}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createFetchBrowserStatus()}
+        fetchDoubanMovieInfo={fetchDoubanMovieInfo}
+      />,
+    );
+
+    const input = await screen.findByLabelText('Douban subject');
+    await userEvent.type(input, '1292052');
+    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
+    expect(await screen.findByText('肖申克的救赎')).toBeInTheDocument();
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '1291546');
+    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
+    expect(await screen.findByText('Login required')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('1291546')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
+    expect(await screen.findByText('霸王别姬')).toBeInTheDocument();
+    expect(screen.queryByText('肖申克的救赎')).not.toBeInTheDocument();
+  });
+
   test('renders task center with auth task badge and browser actions', async () => {
     const desktopApi = createDesktopApi();
     const fetchBrowserStatus = createFetchBrowserStatus();
@@ -641,3 +739,27 @@ describe('CthuDesktop shell', () => {
     ).toBeInTheDocument();
   });
 });
+
+function movieFixture(subjectId: string) {
+  return {
+    aliases: ['月黑高飞'],
+    capturedAt: '2026-06-15T10:00:00.000Z',
+    casts: [{ name: 'Tim Robbins' }],
+    countries: ['美国'],
+    directors: [{ name: 'Frank Darabont' }],
+    finalUrl: `https://movie.douban.com/subject/${subjectId}/`,
+    genres: ['剧情', '犯罪'],
+    imdbId: 'tt0111161',
+    languages: ['英语'],
+    rating: 9.7,
+    ratingCount: 3295591,
+    releaseDates: ['1994-09-10'],
+    runtime: '142分钟',
+    sourceUrl: `https://movie.douban.com/subject/${subjectId}/`,
+    subjectId,
+    summary: 'Two imprisoned men bond over a number of years.',
+    title: '肖申克的救赎',
+    writers: [{ name: 'Stephen King' }],
+    year: 1994,
+  };
+}

@@ -124,6 +124,38 @@ describe('AgentBrowserCaptureProvider', () => {
     ]);
   });
 
+  it('can suppress pending auth tasks for business lookups', async () => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserErrorMessage({
+        code: 'AUTH_PROFILE_REQUIRED',
+        command: 'browser.capturePage',
+        commandId: 'cmd-returned',
+        message: 'Required browser profile is not verified',
+        profileStatus: 'missing',
+      }),
+    );
+    const pendingAuthTasks = new AgentBrowserPendingAuthTaskService();
+    const provider = createProvider(gateway, pendingAuthTasks);
+
+    await expect(
+      provider.capturePage({
+        authPolicy: 'required',
+        profileName: 'douban-main',
+        siteId: 'douban',
+        suppressPendingAuthTask: true,
+        url: 'https://movie.douban.com/subject/1/',
+      }),
+    ).rejects.toMatchObject({ code: 'AUTH_PROFILE_REQUIRED' });
+
+    expect(gateway.sendBrowserCommand).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({ suppressPendingAuthTask: true }),
+      undefined,
+    );
+    expect(pendingAuthTasks.list()).toEqual([]);
+  });
+
   it('maps non-auth browser errors without recording pending auth', async () => {
     const gateway = createGatewayMock(
       createAgentStatus('agent-1'),
