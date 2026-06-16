@@ -38,9 +38,7 @@ dist
 data/browser/
 data/browser-diagnostics/
 data/secrets/browser-auth/
-apps/backend/data/browser/
-apps/backend/data/browser-diagnostics/
-apps/backend/data/secrets/browser-auth/
+apps/backend/data/
 apps/cli/data/
 output/
 
