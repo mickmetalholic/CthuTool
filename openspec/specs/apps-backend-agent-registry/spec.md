@@ -55,25 +55,6 @@ The backend SHALL expose an HTTP API for reading connected agent state.
 - **WHEN** the connected agent list is returned
 - **THEN** it does not include WebSocket objects, raw headers, private connection tokens, or implementation-specific socket internals
 
-### Requirement: Browser state snapshot WebSocket messages
-The backend agent WebSocket server SHALL accept browser state snapshot messages from registered desktop agents and route them to `AgentStateModule` without exposing raw WebSocket internals to browser automation services.
-
-#### Scenario: Registered agent sends browser state snapshot
-- **WHEN** a registered desktop agent sends a valid `browser.stateSnapshot` message over its active WebSocket connection
-- **THEN** the backend routes the snapshot to the agent state projection handler with the registered agent id and snapshot payload
-
-#### Scenario: Unregistered socket sends browser state snapshot
-- **WHEN** a socket sends a `browser.stateSnapshot` message before successful `agent.hello` registration
-- **THEN** the backend rejects or ignores the message without updating agent state, browser profile state, or pending-auth state
-
-#### Scenario: Replaced connection sends stale snapshot
-- **WHEN** an older connection for an agent id sends a `browser.stateSnapshot` after a newer connection has become authoritative
-- **THEN** the backend ignores the stale snapshot and keeps the authoritative connection's agent state projection
-
-#### Scenario: Invalid browser state snapshot is rejected
-- **WHEN** a registered agent sends a malformed `browser.stateSnapshot` payload
-- **THEN** the backend logs a validation summary and does not update agent state, browser profile state, or pending-auth state
-
 ### Requirement: Agent registry is capability-neutral
 The backend SHALL store agent capabilities generically without requiring browser-specific behavior in this change.
 
@@ -96,17 +77,6 @@ The backend SHALL expose enough diagnostics to troubleshoot registration without
 - **WHEN** a socket sends an invalid agent message
 - **THEN** the backend logs the validation failure summary without logging arbitrary large payload bodies
 
-### Requirement: Agent registry delegates capability state
-The backend agent registry SHALL own connection registration and online status, while capability-specific state projection is delegated to agent state modules.
-
-#### Scenario: Agent registers with browser capability
-- **WHEN** a desktop agent registers with browser capability
-- **THEN** the agent registry records the capability in online status without owning browser profile or pending-auth state storage
-
-#### Scenario: Agent state module is unavailable
-- **WHEN** an agent state handler is not registered for a capability-specific snapshot
-- **THEN** the agent registry keeps the agent connection healthy and logs the missing handler without storing capability state in the registry
-
 ### Requirement: Agent registry delegates command dispatch
 The backend agent registry SHALL provide connection lookup and online status to the command gateway without exposing command correlation or business command behavior as registry responsibilities.
 
@@ -117,3 +87,14 @@ The backend agent registry SHALL provide connection lookup and online status to 
 #### Scenario: Business module does not use registry directly
 - **WHEN** a browser module needs to execute a desktop command
 - **THEN** it uses the command gateway or a browser-facing provider instead of directly using the agent registry or raw WebSocket server
+
+### Requirement: Agent registry is transport-only
+The backend agent registry SHALL own only desktop client connection lifecycle, public client metadata, online status, heartbeat freshness, and capability advertisement.
+
+#### Scenario: Browser-capable agent registers
+- **WHEN** a desktop agent registers with browser capability
+- **THEN** the registry stores the browser capability string as public agent metadata without storing browser profiles, pending auth tasks, browser diagnostics, or browser page state
+
+#### Scenario: Capability-specific message arrives
+- **WHEN** a registered desktop agent sends a capability-specific message
+- **THEN** the registry delegates or ignores the message according to transport routing policy without mutating capability state in registry storage

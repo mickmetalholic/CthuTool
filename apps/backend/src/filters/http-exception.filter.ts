@@ -19,19 +19,26 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const exceptionBody =
       exception instanceof HttpException ? exception.getResponse() : undefined;
     const body =
-      exceptionBody && typeof exceptionBody === 'object'
+      status === HttpStatus.NOT_FOUND
         ? {
-            ...(exceptionBody as Record<string, unknown>),
+            code: 'NOT_FOUND',
+            message: 'Route not found',
             timestamp: new Date().toISOString(),
           }
-        : {
-            code: status === HttpStatus.NOT_FOUND ? 'NOT_FOUND' : 'HTTP_ERROR',
-            message:
-              status === HttpStatus.NOT_FOUND
-                ? 'Route not found'
-                : 'Request failed',
-            timestamp: new Date().toISOString(),
-          };
+        : exceptionBody && typeof exceptionBody === 'object'
+          ? {
+              ...(exceptionBody as Record<string, unknown>),
+              timestamp: new Date().toISOString(),
+            }
+          : {
+              code:
+                status === HttpStatus.NOT_FOUND ? 'NOT_FOUND' : 'HTTP_ERROR',
+              message:
+                status === HttpStatus.NOT_FOUND
+                  ? 'Route not found'
+                  : 'Request failed',
+              timestamp: new Date().toISOString(),
+            };
 
     response.status(status).json(body);
   }

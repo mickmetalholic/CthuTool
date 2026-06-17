@@ -18,21 +18,6 @@ The backend SHALL provide a `BrowserAuthModule` that owns browser login workflow
 - **WHEN** a browser login completes or expires on desktop
 - **THEN** desktop reports the resulting public profile state to backend rather than backend writing real login state
 
-### Requirement: Browser auth task coordination
-The backend SHALL coordinate pending browser auth tasks as workflow intent while storing public task state in agent state.
-
-#### Scenario: Backend creates login intent
-- **WHEN** backend needs a required-auth profile for a site and no verified profile is available
-- **THEN** `BrowserAuthModule` creates or updates a pending auth task for the selected agent, site id, and profile name
-
-#### Scenario: Duplicate login intent is coalesced
-- **WHEN** multiple backend requests need the same site profile on the same agent
-- **THEN** `BrowserAuthModule` updates the existing pending auth task rather than creating duplicates
-
-#### Scenario: Verified profile resolves task
-- **WHEN** desktop reports a verified profile for a pending site/profile
-- **THEN** backend resolves or hides the matching pending auth task from public status
-
 ### Requirement: Agent-backed auth provider
 The backend SHALL hide desktop login and profile verification commands behind a browser auth provider interface.
 
@@ -47,4 +32,26 @@ The backend SHALL hide desktop login and profile verification commands behind a 
 #### Scenario: Auth provider returns public result
 - **WHEN** desktop responds to a login or verification command
 - **THEN** the provider returns only public status metadata and does not return raw auth storage
+
+### Requirement: Browser auth uses desktop runtime on demand
+The backend browser auth workflow SHALL query desktop browser runtime status on demand and SHALL NOT depend on server-mirrored agent browser profile state.
+
+#### Scenario: Auth status is requested
+- **WHEN** a caller requests auth status for a configured browser site/profile
+- **THEN** `BrowserAuthModule` queries `DesktopBrowserRuntimeModule` and returns public profile status metadata
+
+#### Scenario: Profile status is unavailable
+- **WHEN** no eligible desktop browser runtime can answer the status query
+- **THEN** `BrowserAuthModule` returns a structured availability or capability error without reading agent state projections
+
+### Requirement: Browser auth returns interaction challenges
+The backend browser auth workflow SHALL return operation-scoped user interaction challenges when login or verification is required.
+
+#### Scenario: Login is required
+- **WHEN** a browser auth workflow detects a missing or expired required profile
+- **THEN** it returns a challenge with site id, profile name, action type, login URL when available, and verification URL when available
+
+#### Scenario: Login challenge is resolved
+- **WHEN** a caller asks desktop to open login or verify the profile for a challenge
+- **THEN** `BrowserAuthModule` dispatches the request through `DesktopBrowserRuntimeModule` and returns public verification status
 

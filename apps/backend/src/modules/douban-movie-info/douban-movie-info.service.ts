@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BrowserContentService } from '../browser/content/browser-content.service';
 import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
 import type { BrowserDetectionKind } from '../browser-automation/browser-automation.types';
-// biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserContentService } from '../browser-content/browser-content.service';
 import { doubanMovieInfoError } from './douban-movie-info.errors';
 import { parseDoubanMovieInfo } from './douban-movie-info.parser';
 import type { DoubanMovieInfoResponse } from './douban-movie-info.types';

@@ -1,0 +1,95 @@
+import { Injectable } from '@nestjs/common';
+import { BrowserAutomationError } from '../../browser-automation/browser-automation.errors';
+
+export type BrowserTaskRunnerOptions = {
+  readonly defaultDelayMs: number;
+  readonly defaultTimeoutMs: number;
+  readonly maxConcurrency: number;
+};
+
+type QueueItem<T> = {
+  readonly label: string;
+  readonly task: () => Promise<T>;
+  readonly timeoutMs: number;
+  readonly resolve: (value: T) => void;
+  readonly reject: (error: unknown) => void;
+};
+
+@Injectable()
+export class BrowserTaskRunner {
+  private active = 0;
+  private readonly queue: Array<QueueItem<unknown>> = [];
+
+  constructor(
+    private readonly options: BrowserTaskRunnerOptions = {
+      defaultDelayMs: 1000,
+      defaultTimeoutMs: 30000,
+      maxConcurrency: 1,
+    },
+  ) {}
+
+  run<T>(
+    label: string,
+    task: () => Promise<T>,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.queue.push({
+        label,
+        task,
+        timeoutMs: options.timeoutMs ?? this.options.defaultTimeoutMs,
+        resolve: resolve as (value: unknown) => void,
+        reject,
+      });
+      this.drain();
+    });
+  }
+
+  private drain(): void {
+    while (this.active < this.options.maxConcurrency && this.queue.length > 0) {
+      const item = this.queue.shift();
+      if (!item) {
+        return;
+      }
+      this.active += 1;
+      void this.execute(item).finally(() => {
+        this.active -= 1;
+        setTimeout(() => this.drain(), this.options.defaultDelayMs);
+      });
+    }
+  }
+
+  private async execute<T>(item: QueueItem<T>): Promise<void> {
+    try {
+      item.resolve(await withTimeout(item.task(), item.timeoutMs));
+    } catch (error) {
+      item.reject(error);
+    }
+  }
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          reject(
+            new BrowserAutomationError(
+              'NAVIGATION_TIMEOUT',
+              `Browser task timed out after ${timeoutMs}ms`,
+            ),
+          );
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}

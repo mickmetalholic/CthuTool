@@ -1,6 +1,6 @@
+import type { BrowserContentService } from '../browser/content/browser-content.service';
 import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
 import type { BrowserContentResult } from '../browser-automation/browser-automation.types';
-import type { BrowserContentService } from '../browser-content/browser-content.service';
 import { DoubanMovieInfoException } from './douban-movie-info.errors';
 import { DoubanMovieInfoService } from './douban-movie-info.service';
 
