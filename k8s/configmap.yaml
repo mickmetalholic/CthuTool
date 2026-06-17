@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cthutool-backend
+  namespace: cthutool
+  labels:
+    app.kubernetes.io/name: cthutool-backend
+    app.kubernetes.io/part-of: cthutool
+    app.kubernetes.io/managed-by: argocd
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+  BROWSER_PROVIDER: "local-playwright"
+  BROWSER_HEADLESS: "true"
+  BROWSER_MAX_CONCURRENCY: "1"
+  BROWSER_DEFAULT_TIMEOUT_MS: "30000"
+  BROWSER_DEFAULT_DELAY_MS: "1000"

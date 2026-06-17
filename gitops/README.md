@@ -50,7 +50,8 @@ Once applied, ArgoCD discovers the Application CRs from the cluster side and beg
 
 ### Expected Initial State
 
-PixelPlayground's `k8s/` directory does not exist yet. The Application will show **Missing** in ArgoCD — this is expected. Once manifests are added to `https://github.com/mickmetalholic/PixelPlayground/tree/main/k8s/`, the configured `retry` block ensures ArgoCD recovers automatically within ~30 seconds.
+- **CthuTool**: The `k8s/` directory exists (Deployment, Service, ConfigMap). The Application will sync and become **Healthy** after the container image is built and pushed.
+- **PixelPlayground**: The `k8s/` directory does not exist yet. The Application will show **Missing** in ArgoCD — this is expected. Once manifests are added to `https://github.com/mickmetalholic/PixelPlayground/tree/main/k8s/`, the configured `retry` block ensures ArgoCD recovers automatically within ~30 seconds.
 
 ### Adding a New App
 
@@ -63,4 +64,5 @@ PixelPlayground's `k8s/` directory does not exist yet. The Application will show
 
 | App | Namespace | Source Repo |
 |-----|-----------|-------------|
+| CthuTool | `cthutool` | [mickmetalholic/CthuTool](https://github.com/mickmetalholic/CthuTool) (self-hosted) |
 | PixelPlayground | `pixel-playground` | [mickmetalholic/PixelPlayground](https://github.com/mickmetalholic/PixelPlayground) |

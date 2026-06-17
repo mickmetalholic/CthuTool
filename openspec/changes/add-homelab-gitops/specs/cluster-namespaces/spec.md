@@ -10,6 +10,12 @@ The `gitops/namespaces/` directory SHALL contain a `Namespace` resource for each
 - **THEN** a namespace named `pixel-playground` is created
 - **AND** all PixelPlayground resources are scoped to this namespace
 
+#### Scenario: cthutool namespace exists
+
+- **WHEN** the manifests in `gitops/namespaces/` are applied
+- **THEN** a namespace named `cthutool` is created
+- **AND** all CthuTool backend resources are scoped to this namespace
+
 #### Scenario: Namespaces are organized by application
 
 - **WHEN** a developer lists `gitops/namespaces/`

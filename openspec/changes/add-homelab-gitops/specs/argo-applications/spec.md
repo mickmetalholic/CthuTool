@@ -12,6 +12,14 @@ The `gitops/apps/<app-name>/` directories SHALL each contain an ArgoCD `Applicat
 - **AND** `source.targetRevision` is `main`
 - **AND** `destination.namespace` is `pixel-playground`
 
+#### Scenario: cthutool Application CR points to this repository
+
+- **WHEN** the `cthutool` Application CR is inspected
+- **THEN** `source.repoURL` is `https://github.com/mickmetalholic/CthuTool`
+- **AND** `source.path` is `k8s/`
+- **AND** `source.targetRevision` is `main`
+- **AND** `destination.namespace` is `cthutool`
+
 #### Scenario: Auto-sync is enabled
 
 - **WHEN** the Application CR is applied

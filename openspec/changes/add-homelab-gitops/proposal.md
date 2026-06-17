@@ -7,9 +7,11 @@ This change creates the `gitops/` directory in CthuTool, establishing it as the 
 ## What Changes
 
 - Create `gitops/` directory — the cluster-level GitOps configuration root
-- Add namespace for `pixel-playground` (the first deployed app)
-- Add ArgoCD Application CR pointing to PixelPlayground's `k8s/` manifests for auto-sync
+- Add namespaces for `cthutool` and `pixel-playground`
+- Add ArgoCD Application CRs pointing to each app's `k8s/` manifests for auto-sync
 - Add `bootstrap/` scaffold — placeholder for future ArgoCD installation manifests
+- Add `k8s/` directory for CthuTool backend with Deployment, Service, and ConfigMap
+- Add `apps/backend/Dockerfile` — multi-stage container build for the backend
 - Add `README.md` — directory structure overview and setup instructions
 
 ## Capabilities
@@ -22,11 +24,13 @@ This change creates the `gitops/` directory in CthuTool, establishing it as the 
 
 ## Impact
 
-- **Code**: `gitops/` directory (new)
-  - `gitops/namespaces/pixel-playground.yaml`
-  - `gitops/apps/pixel-playground/application.yaml`
+- **Code**: new directories and files
+  - `gitops/namespaces/{cthutool,pixel-playground}.yaml`
+  - `gitops/apps/{cthutool,pixel-playground}/application.yaml`
   - `gitops/bootstrap/.gitkeep`
   - `gitops/README.md`
+  - `k8s/{deployment,service,configmap}.yaml`
+  - `apps/backend/Dockerfile`
 - **Dependencies**: ArgoCD must be installed on the k3s cluster (out of scope; manual bootstrap for now)
 - **Breaking**: None — purely additive
 
@@ -43,42 +47,59 @@ CthuTool/                           ┌── CthuTool is the app registry ─�
 ├── gitops/                        ← 🆕 app registry
 │   ├── README.md
 │   ├── namespaces/
+│   │   ├── cthutool.yaml
 │   │   └── pixel-playground.yaml
 │   ├── apps/
+│   │   ├── cthutool/
+│   │   │   └── application.yaml   ← "CthuTool Backend from our k8s/"
 │   │   └── pixel-playground/
-│   │       └── application.yaml   ← "PixelPlayground runs here,
-│   │                                  synced from its own k8s/ dir"
+│   │       └── application.yaml   ← "PixelPlayground from its k8s/"
 │   └── bootstrap/
 │       └── .gitkeep
 │
-└── k8s/                           ← (future) CthuTool backend manifests
+├── k8s/                            ← 🆕 CthuTool backend manifests
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   └── configmap.yaml
+│
+├── apps/backend/
+│   └── Dockerfile                  ← 🆕 container image build
 ```
 
-**Data flow**: The Application CRs are applied to the cluster manually (`kubectl apply -f gitops/apps/`). Once ArgoCD sees the CR, it pulls the app's own `k8s/` manifests from the source repo and syncs them to the cluster. The CthuTool repo itself is **not** an ArgoCD source — it holds the registry; each app repo holds the workload manifests.
+**Data flow**: The Application CRs are applied to the cluster manually (`kubectl apply -f gitops/apps/`). Once ArgoCD sees the CR, it pulls each app's `k8s/` manifests from the source repo and syncs them to the cluster. For CthuTool itself, the source repo is this repo — the backend's manifests live in `k8s/` and the container image is built from `apps/backend/Dockerfile`. For PixelPlayground, the manifests live in its own repository.
 
 ## Service Topology
 
 ```
                     ┌──────────────────────┐
-                    │   CthuTool/gitops/   │  ← app registry (this change)
-                    │  apps/pixel-playground│
-                    │    /application.yaml  │
+                    │   CthuTool/gitops/   │  ← app registry
+                    │  apps/{cthutool,     │
+                    │    pixel-playground}/ │
+                    │    application.yaml   │
                     └──────────┬───────────┘
                                │ kubectl apply (manual, once)
                                ▼
-    ┌──────────────────────────────────────────────┐
-    │                 ArgoCD (k3s)                  │
-    │                                              │
-    │   polls PixelPlayground every 3 min           │
-    │   syncs to namespace pixel-playground         │
-    └──────────────────────┬───────────────────────┘
-                           │ git pull
-                           ▼
-    ┌──────────────────────────────────────────┐
-    │   PixelPlayground/k8s/                   │  ← workload manifests
-    │   (Deployments, Services, etc.)          │     (future — does not
-    │                                          │      exist yet)
-    └──────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────┐
+    │                    ArgoCD (k3s)                      │
+    │                                                      │
+    │   cthutool:  polls CthuTool/k8s/ every 3 min         │
+    │   pixel-playground: polls PixelPlayground/k8s/       │
+    └────────┬───────────────────────────┬─────────────────┘
+             │                           │ git pull
+             ▼                           ▼
+    ┌──────────────────┐    ┌──────────────────────────────┐
+    │  CthuTool/k8s/   │    │   PixelPlayground/k8s/       │
+    │  deployment.yaml │    │   (future — does not         │
+    │  service.yaml    │    │    exist yet)                │
+    │  configmap.yaml  │    │                              │
+    │  (this change)   │    └──────────────────────────────┘
+    └──────────────────┘
+             │
+             │ docker build -f apps/backend/Dockerfile
+             ▼
+    ┌──────────────────────────┐
+    │  cthutool/backend:latest │  ← built on k3s host
+    └──────────────────────────┘
 ```
 
-N/A — this change is infrastructure-only. It creates the wiring that allows apps to be deployed. No services are deployed by this change itself.
+CthuTool backend is self-hosted — the container image is built from the same repo and runs on the same k3s cluster it manages. PixelPlayground is an external app with its manifests in a separate repo.

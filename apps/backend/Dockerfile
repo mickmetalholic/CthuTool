@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+
+# ── Builder stage ──────────────────────────────────────────────
+FROM node:24-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+
+# Install dependencies (cache layer)
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json ./
+COPY apps/backend/package.json apps/backend/
+COPY packages/agent-protocol/package.json packages/agent-protocol/
+COPY packages/config/package.json packages/config/
+RUN pnpm install --frozen-lockfile
+
+# Copy source and build workspace dependencies first, then backend
+COPY packages/agent-protocol/ packages/agent-protocol/
+COPY packages/config/ packages/config/
+COPY apps/backend/ apps/backend/
+RUN pnpm --filter @cthutool/agent-protocol build
+RUN pnpm --filter @cthutool/config build
+RUN pnpm --filter @cthutool/backend build
+
+# ── Production stage ───────────────────────────────────────────
+FROM node:24-alpine
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+
+# Install Playwright Chromium and its system dependencies
+RUN npx playwright install --with-deps chromium
+
+# Copy only what's needed at runtime
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
+
+# Workspace packages (built output + package.json for module resolution)
+COPY --from=builder /app/packages/agent-protocol/dist ./packages/agent-protocol/dist
+COPY --from=builder /app/packages/agent-protocol/package.json ./packages/agent-protocol/
+COPY --from=builder /app/packages/config/dist ./packages/config/dist
+COPY --from=builder /app/packages/config/package.json ./packages/config/
+
+# Backend built output (outDir: ./dist/apps/backend)
+COPY --from=builder /app/apps/backend/dist/apps/backend ./dist
+COPY --from=builder /app/apps/backend/package.json ./
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1
+
+CMD ["node", "dist/main.js"]
