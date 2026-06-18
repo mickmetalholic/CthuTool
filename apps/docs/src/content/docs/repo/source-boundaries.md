@@ -3,13 +3,14 @@ title: Source Boundaries
 description: How the docs site relates to README files, root docs, and OpenSpec requirements.
 ---
 
-The docs site is a curated reading surface. It should reduce discovery cost without creating a stale second copy of every document.
+The docs site is the primary user and operator reading surface. It should reduce discovery cost without creating a stale second copy of package development notes or OpenSpec requirements.
 
 ## Canonical Sources
 
+- User-facing deployment, installation, module usage, operations, and architecture docs live in `apps/docs/src/content/docs/`.
 - Repository setup and workspace conventions remain in `README.md`.
-- Cross-package runtime docs remain in `docs/`.
-- Package usage remains in package README files.
+- Legacy cross-package runtime source notes remain in `docs/` until migrated or retired.
+- Package-local development commands remain in package README files.
 - Normative requirements remain in `openspec/specs/`.
 - Active proposals and implementation tasks remain in `openspec/changes/`.
 

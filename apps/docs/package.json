@@ -5,18 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
+    "check:openspec-index": "node ./scripts/check-openspec-index.mjs",
     "build": "astro build",
     "preview": "astro preview",
     "test": "vitest run",
     "test:cov": "vitest run --coverage",
     "typecheck": "astro check",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "validate": "pnpm run check:openspec-index && pnpm run build && pnpm run typecheck"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@astrojs/starlight": "^0.40.0",
-    "astro": "^6.4.6",
     "@vitest/coverage-v8": "^2.1.9",
+    "astro": "^6.4.6",
     "typescript": "^6.0.3",
     "vitest": "^2.1.9"
   }

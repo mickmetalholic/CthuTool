@@ -3,7 +3,7 @@ title: Desktop
 description: Documentation route for CthuDesktop and agent console work.
 ---
 
-The desktop application lives in `apps/desktop`. Cross-package desktop behavior is documented in root docs because it touches backend, browser host, packaging, and agent-console contracts.
+The desktop application lives in `apps/desktop`. User-facing install docs now live in [Desktop App](/client/desktop/), module docs live in [Desktop](/modules/desktop/), and architecture notes live in [Desktop Runtime](/architecture/desktop-runtime/).
 
 Primary sources:
 

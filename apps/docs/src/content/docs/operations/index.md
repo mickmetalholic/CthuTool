@@ -1,0 +1,15 @@
+---
+title: Operations Overview
+description: Operational entry points for homelab services and client state.
+---
+
+Use operations pages once services and clients are installed.
+
+| Topic | Start here |
+| --- | --- |
+| Backend health and process checks | [Health and Logs](/operations/health-logs/) |
+| Browser profile ownership and sensitive data | [Data and Security](/operations/data-security/) |
+| Site policy configuration | [Configuration](/deployment/configuration/) |
+| Upgrade and first-response checks | [Upgrade and Troubleshooting](/deployment/upgrade-troubleshooting/) |
+
+Operational docs describe current behavior only. Requirements remain under OpenSpec.

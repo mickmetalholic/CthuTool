@@ -1,5 +1,9 @@
 # Web Sub-Application
 
+This README is the package-local backend development reference. For user-facing
+homelab deployment and operations documentation, see the docs site under
+`apps/docs/src/content/docs/deployment/`.
+
 ## Prerequisites
 - Node.js >= 20
 - pnpm >= 9

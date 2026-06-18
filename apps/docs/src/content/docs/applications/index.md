@@ -1,15 +1,17 @@
 ---
 title: Applications
-description: Application-level documentation entry points.
+description: Compatibility route for application-level documentation entry points.
 ---
 
-CthuTool applications live under `apps/*`. Each application should keep package-specific commands and usage in its own README.
+Application-oriented documentation has moved into user-facing module pages.
 
-| Application | Source | Purpose |
+| Application | Current docs | Source |
 | --- | --- | --- |
-| CLI | `apps/cli/README.md` | `chc` command, completions, bundled scripts, and Codex config workflows. |
-| Backend | `apps/backend/README.md` | Backend startup, health checks, and service notes. |
-| Desktop | `docs/desktop-agent-console.md` | CthuDesktop shell, agent console, browser host, APIs, and packaging notes. |
-| Web | `apps/web/README.md` | Next.js web project shell and frontend conventions. |
-| Docs | `apps/docs/README.md` | Astro Starlight documentation site and curated repository navigation. |
-| Browser auth | `docs/browser-auth.md` | Browser profile ownership and login-state boundaries. |
+| CLI | [CLI module](/modules/cli/) | `apps/cli/README.md` |
+| Backend | [Homelab deployment](/deployment/) and [Backend and Web](/architecture/backend-web/) | `apps/backend/README.md` |
+| Desktop | [Desktop module](/modules/desktop/) | `docs/desktop-agent-console.md` |
+| Web | [Web Console module](/modules/web-console/) | `apps/web/README.md` |
+| Docs | [System Overview](/architecture/) | `apps/docs/README.md` |
+| Browser auth | [Browser Auth module](/modules/browser-auth/) | `docs/browser-auth.md` |
+
+Use [Modules](/modules/) as the primary user-facing module index.

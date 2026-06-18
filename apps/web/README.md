@@ -1,6 +1,8 @@
 # CthuTool Web
 
 `apps/web` is the browser-hosted scaffold for the future CthuTool management console.
+This README is the package-local development reference. For user-facing module
+and architecture docs, see `apps/docs/src/content/docs/modules/web-console.md`.
 
 ## Getting Started
 
