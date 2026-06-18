@@ -3,7 +3,7 @@ title: CLI
 description: Documentation route for the CthuTool command-line application.
 ---
 
-The CLI package lives in `apps/cli` and exposes the `chc` command through the repository root package.
+The CLI package lives in `apps/cli` and exposes the `chc` command through the repository root package. User-facing install docs now live in [CLI Tool](/client/cli/), and module docs live in [CLI](/modules/cli/).
 
 Primary source:
 

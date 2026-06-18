@@ -10,7 +10,8 @@ The current docs site mostly acts as a repository map, which makes it hard for a
 - Convert application pages from source-file routing pages into module-oriented usage entry points.
 - Add an architecture section that explains the system topology and links back to authoritative OpenSpec specs instead of duplicating normative requirements.
 - Add or document a deterministic way to keep the OpenSpec capability index aligned with `openspec/specs/`.
-- Keep package README files focused on local development and package-specific commands.
+- Make `apps/docs/src/content/docs/` the most complete user, operator, module, and architecture documentation source.
+- Reduce root docs and package README files to entry points, package-local development commands, and source-boundary notes so long-form content is not duplicated.
 
 ## Capabilities
 
@@ -27,5 +28,6 @@ None.
 - Affects docs content and navigation under `apps/docs/`.
 - May move or split source material currently in `docs/browser-auth.md` and `docs/desktop-agent-console.md` into docs-site pages.
 - May require updating `docs/README.md`, root `README.md`, and package README files to clarify source boundaries.
+- May replace long-form source documents or package README sections with short pointers once the docs-site pages carry the complete user-facing content.
 - May add a small validation or generation script for the OpenSpec capability index.
 - No runtime service APIs or user data formats are expected to change.

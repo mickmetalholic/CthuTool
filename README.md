@@ -4,7 +4,13 @@
   <img src="docs/assets/cthutool-logo.png" alt="CthuTool logo" width="560" />
 </p>
 
-Turborepo monorepo for CthuTool. Workspace layout follows the official `create-turbo` baseline, trimmed to empty `apps/*` and `packages/*` skeletons plus shared `@cthutool/*` packages.
+CthuTool is a homelab-oriented Turborepo monorepo with backend/web services, desktop client workflows, CLI tooling, browser automation support, and Codex-facing assets.
+
+For user-facing deployment, installation, module usage, operations, and architecture docs, start with the docs site in `apps/docs/`:
+
+```bash
+pnpm --filter @cthutool/docs dev
+```
 
 ## Prerequisites
 
@@ -38,10 +44,9 @@ pnpm run build
 ## Personal CLI Install
 
 Target machines only need `git`, Node.js 24.x, and `npm` to install or update
-the global CLI. The installer uses the committed `apps/cli/dist/index.js`
-bundle and does not run `pnpm` or `bun` on the target machine.
-
-For personal use from GitHub, run the public installer directly:
+the global `chc` CLI. The installer uses the committed
+`apps/cli/dist/index.js` bundle and does not run `pnpm` or `bun` on the target
+machine.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash
@@ -93,6 +98,10 @@ chc update
 chc update --ref v0.1.0
 ```
 
+For full install, update, uninstall, and command usage docs, use the docs site
+under `apps/docs/src/content/docs/client/cli.md` and
+`apps/docs/src/content/docs/modules/cli.md`.
+
 When changing CLI source, refresh and commit the runtime bundle in the same
 change. The pre-commit hook automatically runs this refresh and stages
 `apps/cli/dist/index.js` when staged CLI bundle inputs change, but the commands
@@ -105,14 +114,14 @@ pnpm run check:cli-dist
 
 ## Common commands
 
-| Command           | Description                                      |
-| ----------------- | ------------------------------------------------ |
-| `pnpm run build`  | Runs `turbo run build` across workspace members. |
+| Command | Description |
+| --- | --- |
+| `pnpm run build` | Runs `turbo run build` across workspace members. |
 | `pnpm run check:cli-dist` | Verifies the committed CLI bundle matches source. |
-| `pnpm run lint`   | Runs `biome check .` at repo root.               |
-| `pnpm run lint:fix` | Runs `biome check --write .` at repo root.   |
+| `pnpm run lint` | Runs `biome check .` at repo root. |
+| `pnpm run lint:fix` | Runs `biome check --write .` at repo root. |
 | `pnpm run typecheck` | Runs `turbo run typecheck` across workspace members. |
-| `pnpm run test`   | Runs root Jest tests plus workspace tests via Turborepo. |
+| `pnpm run test` | Runs root Jest tests plus workspace tests via Turborepo. |
 
 ## Layout
 
@@ -159,10 +168,11 @@ The workflow triggers on `push` to `main` and on `pull_request`, so Biome and co
 
 ## More documentation
 
-- Docs site: `apps/docs/` (`pnpm --filter @cthutool/docs dev`).
-- Documentation index: `docs/README.md`.
-- Desktop app and agent console: `docs/desktop-agent-console.md`.
-- Browser login state and auth profile ownership: `docs/browser-auth.md`.
-- Package-level notes live in package `README.md` files such as `apps/cli/README.md` and `apps/backend/README.md`.
+- User and operator docs site: `apps/docs/` (`pnpm --filter @cthutool/docs dev`).
+- Homelab deployment and operations: `apps/docs/src/content/docs/deployment/` and `apps/docs/src/content/docs/operations/`.
+- Client installation: `apps/docs/src/content/docs/client/`.
+- Module usage: `apps/docs/src/content/docs/modules/`.
+- Architecture: `apps/docs/src/content/docs/architecture/`.
+- Documentation source boundaries: `docs/README.md`.
+- Package-local development notes live in package `README.md` files such as `apps/cli/README.md` and `apps/backend/README.md`.
 - OpenSpec requirements live under `openspec/specs/`.
-- CthuCodex plugin details live in `codex/plugins/cthu-codex/README.md`.

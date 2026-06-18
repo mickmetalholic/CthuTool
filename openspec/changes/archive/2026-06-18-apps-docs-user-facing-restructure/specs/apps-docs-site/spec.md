@@ -65,3 +65,19 @@ The docs site SHALL keep the browsable OpenSpec capability index aligned with cu
 #### Scenario: Docs validation runs
 - **WHEN** focused docs validation is run
 - **THEN** the validation includes the docs build and the OpenSpec capability index generation or drift check
+
+### Requirement: Documentation duplication control
+The docs site SHALL be the most complete prose source for user-facing deployment, installation, module usage, operations, and architecture documentation.
+
+#### Scenario: Reader opens package README files
+- **WHEN** a reader opens a package README file
+- **THEN** the README provides package-local development commands or a concise package overview
+- **AND** it links to the docs site for user-facing usage, installation, operations, or architecture content
+
+#### Scenario: Reader opens root docs source notes
+- **WHEN** a reader opens root `docs/` Markdown files that previously held long-form cross-package documentation
+- **THEN** the file either contains short source-boundary notes or points to the corresponding docs-site pages
+
+#### Scenario: User-facing content is maintained
+- **WHEN** user-facing content would otherwise be duplicated between the docs site and README or root docs files
+- **THEN** the docs site keeps the complete version and the other file keeps only the minimum local reference or navigation pointer

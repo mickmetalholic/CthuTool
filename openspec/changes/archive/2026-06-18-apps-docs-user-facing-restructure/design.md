@@ -13,7 +13,8 @@ The docs site should become the primary reading surface for users and operators.
 - Provide module-oriented usage pages for the major product areas.
 - Add an architecture section that summarizes implementation logic while linking back to authoritative OpenSpec specs.
 - Keep OpenSpec capability discovery synchronized with `openspec/specs/` or fail validation when it drifts.
-- Preserve package README files as local development references.
+- Make docs-site pages the complete user/operator/module/architecture documentation source.
+- Preserve README files as minimal entry points and local development references, not parallel user manuals.
 
 **Non-Goals:**
 
@@ -38,11 +39,13 @@ The docs sidebar will be reorganized around reader intent:
 
 This replaces the current repository-map-first navigation. Repository and source boundary pages can remain, but they move behind user and operator journeys. The alternative was to keep the existing `Applications` grouping and add more pages under it, but that continues to expose implementation folders before user tasks.
 
-### Content moves into docs-site pages incrementally
+### Docs-site pages are the canonical prose surface
 
-Existing source material in `docs/browser-auth.md` and `docs/desktop-agent-console.md` will be split or summarized into docs-site pages where it serves user or architecture flows. The original files can remain during migration as source references or redirects, but the docs site should become the preferred entry point.
+Existing source material in `docs/browser-auth.md`, `docs/desktop-agent-console.md`, package README files, and plugin README files will be moved or summarized into docs-site pages where it serves user, operator, module, or architecture flows. After that content is represented in the docs site, the original files should shrink to short pointers, package-local development commands, or source-boundary notes.
 
-Package README files will stay focused on package-local development commands, checks, and ownership notes. User-facing deployment and install instructions should not be duplicated in each package README.
+Package README files will stay focused on package-local development commands, checks, and ownership notes. User-facing deployment, installation, command usage, module behavior, and architecture explanations should not be duplicated in each package README.
+
+The trade-off is that source files become less useful as standalone manuals, but the docs site becomes the single place to maintain user-facing content.
 
 ### Architecture pages summarize, specs remain authoritative
 
@@ -75,10 +78,10 @@ Generation is preferred if it can fit the existing Astro/Starlight Markdown flow
 
 1. Update docs-site navigation to the new user-facing sections.
 2. Add skeletal landing pages for each section so navigation remains complete.
-3. Move or summarize existing browser auth and desktop agent console content into the new pages.
+3. Move or summarize existing browser auth, desktop agent console, CLI, Codex plugin, and relevant package README content into the new pages.
 4. Add architecture overview and topology pages with links to OpenSpec specs.
 5. Add deterministic OpenSpec index generation or validation.
-6. Update root and package README files to route users to the docs site and keep package README content local to development.
+6. Update root docs and package README files to route users to the docs site and keep only minimal local-development content.
 7. Run docs build/typecheck and the OpenSpec index check.
 
 Rollback is straightforward: revert docs-site content, sidebar changes, and any validation script. No runtime migrations are involved.

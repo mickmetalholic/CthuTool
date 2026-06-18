@@ -1,37 +1,41 @@
 # CthuTool Docs
 
-This directory contains cross-package product and runtime documentation. Keep
-package-specific usage in the nearest package `README.md`, and keep normative
-requirements in OpenSpec under `openspec/specs/`.
+This directory contains legacy cross-package source notes and shared assets.
+The primary user-facing documentation lives in `../apps/docs/`.
 
-The browsable documentation site lives in `../apps/docs/` and provides a
-curated navigation layer over these source documents.
+Keep package-local development commands in the nearest package `README.md`, and
+keep normative requirements in OpenSpec under `openspec/specs/`.
+
+The browsable documentation site lives in `../apps/docs/` and provides the
+user-facing deployment, installation, module usage, operations, architecture,
+and reference reading paths.
 
 ## Map
 
 | Document | Purpose |
 | --- | --- |
-| `../README.md` | Repository entry point: prerequisites, install, common commands, workspace layout, and documentation routing. |
-| `../apps/docs/` | Astro Starlight documentation site for browsing curated repository, app, Codex plugin, and OpenSpec material. |
-| `desktop-agent-console.md` | CthuDesktop product shell, backend agent connection, local browser host model, development, APIs, and packaging notes. |
-| `browser-auth.md` | Browser auth profile ownership across backend, desktop, and CLI. |
+| `../README.md` | Repository entry point: prerequisites, common commands, workspace layout, and documentation routing. |
+| `../apps/docs/` | Astro Starlight documentation site for users, operators, architecture readers, and OpenSpec browsing. |
+| `desktop-agent-console.md` | Source notes for CthuDesktop product shell, backend agent connection, local browser host model, APIs, and packaging. |
+| `browser-auth.md` | Source notes for browser auth profile ownership across backend, desktop, and CLI. |
 | `assets/cthutool-logo.png` | Repository logo used by the root README. |
 
 ## Related Docs
 
-- `../apps/cli/README.md` documents the `chc` global command, shell completion,
-  bundled scripts, and Codex config workflows.
-- `../apps/backend/README.md` documents backend startup and simple health
-  checks.
+- `../apps/cli/README.md` documents package-local CLI development and command
+  reference details.
+- `../apps/backend/README.md` documents backend package startup and simple
+  health checks.
 - `../codex/plugins/cthu-codex/README.md` documents the repository-managed
   CthuCodex plugin.
 - `../openspec/specs/` contains the current capability requirements.
 
 ## Reading Routes
 
+- User or operator: start with `../apps/docs/`.
 - New contributor: start with `../README.md`, then read the package README for
   the area you are changing.
-- Desktop or browser work: read `desktop-agent-console.md`,
+- Desktop or browser implementation work: read `desktop-agent-console.md`,
   `browser-auth.md`, and the relevant OpenSpec capability specs.
-- CLI and Codex config work: read `../apps/cli/README.md` and the
-  `apps-cli-*` OpenSpec specs.
+- CLI implementation work: read `../apps/cli/README.md` and the `apps-cli-*`
+  OpenSpec specs.

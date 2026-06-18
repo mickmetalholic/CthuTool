@@ -1,6 +1,8 @@
 # @cthutool/obsidian-enhancer
 
 `@cthutool/obsidian-enhancer` is an Obsidian desktop plugin package migrated from `.references/obsidian-enhancer` and refactored for this monorepo.
+This README is the package-local development reference. For module-level docs,
+see `apps/docs/src/content/docs/modules/obsidian-enhancer.md`.
 
 ## Features
 

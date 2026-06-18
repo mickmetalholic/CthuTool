@@ -3,7 +3,7 @@ title: Browser Auth
 description: Browser login-state and auth-profile ownership boundaries.
 ---
 
-Browser auth state spans backend, desktop, and CLI-facing workflows. Keep this material in root docs rather than inside a single package README.
+Browser auth state spans backend, desktop, and CLI-facing workflows. The primary user-facing page is now [Browser Auth](/modules/browser-auth/), with architecture notes in [Browser Auth Model](/architecture/browser-auth/).
 
 Primary source:
 

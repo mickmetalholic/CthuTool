@@ -3,7 +3,7 @@ title: CthuCodex Plugin
 description: Documentation route for repository-managed CthuCodex plugin assets.
 ---
 
-CthuCodex assets live under `codex/plugins/cthu-codex`. Keep project-specific portable Codex instructions in repo-owned assets, and regenerate platform-specific adapters instead of committing generated command or skill adapters.
+CthuCodex assets live under `codex/plugins/cthu-codex`. The primary user-facing module page is now [Codex Plugin](/modules/codex-plugin/).
 
 Primary source:
 
