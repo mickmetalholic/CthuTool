@@ -6,7 +6,7 @@ license: MIT
 compatibility: Requires git.
 metadata:
   author: project
-  version: "1.0"
+  version: "1.2"
 ---
 
 Commit the currently staged changes.
@@ -21,33 +21,33 @@ Commit the currently staged changes.
 
    If no changes are staged, stop and tell the user to stage files before running `/commit`.
 
-2. **Apply commit guidelines**
+2. **Load commit rules from repository config**
 
-   Follow these rules, which must stay aligned with `commitlint.config.cjs`:
+   Do not hardcode commit rules in this skill. Run:
 
-   - Use Conventional Commits: `type(scope): subject`.
-   - `scope` is optional; when present, use kebab-case.
-   - Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
-     `build`, `ci`, `chore`.
-   - Write the subject in English imperative mood, with a lowercase first letter and no
-     trailing period.
-   - If a body is needed, separate it from the subject with a blank line and write it in
-     English.
-   - Keep every body and footer line at or below 100 characters.
-   - If a footer is needed, write it in English.
-   - Do not include CJK characters in the subject, body, or footer.
-   - For breaking changes, use an English `BREAKING CHANGE:` footer.
-   - Do not rewrite exempt git-generated messages such as merge commits or `Revert "..."`
-     messages into Conventional Commit format.
+   ```bash
+   node .cursor/skills/commit/scripts/print-rules.mjs
+   ```
+
+   The script reads `commitlint.config.cjs` and the resolved commitlint configuration,
+   then prints the enforced rules and exempt message patterns.
+
+   Apply every enforced rule when generating the commit message.
 
 3. **Generate the commit message**
 
    Based on the staged changes, generate a precise, descriptive, well-structured commit
-   message in English.
+   message in English that satisfies the loaded rules.
 
-   Ensure the message satisfies the repository commitlint configuration.
+4. **Validate before committing**
 
-4. **Create the commit**
+   Validate the proposed message and fix any violations before proceeding:
+
+   ```bash
+   node .cursor/skills/commit/scripts/print-rules.mjs validate "<generated_commit_message>"
+   ```
+
+5. **Create the commit**
 
    Run:
 
@@ -57,6 +57,6 @@ Commit the currently staged changes.
 
    Use additional `-m` arguments for a body or footer when needed.
 
-5. **Final output**
+6. **Final output**
 
    Return the created commit hash and the commit subject.
