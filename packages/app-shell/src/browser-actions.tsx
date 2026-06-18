@@ -1,5 +1,4 @@
 import { Button } from '@cthutool/ui';
-import * as React from 'react';
 import { useAppRuntime } from './runtime';
 
 export function BrowserProfileActions({

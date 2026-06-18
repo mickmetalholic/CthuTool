@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -23,9 +23,10 @@ describe('codex config paths', () => {
     try {
       process.chdir(nested);
       const paths = createCodexConfigPaths({ homeRoot: parent });
+      const realRepoRoot = await realpath(repoRoot);
 
-      expect(paths.repoRoot).toBe(resolve(repoRoot));
-      expect(paths.repoCodexRoot).toBe(resolve(repoRoot, 'codex'));
+      expect(paths.repoRoot).toBe(realRepoRoot);
+      expect(paths.repoCodexRoot).toBe(resolve(realRepoRoot, 'codex'));
     } finally {
       process.chdir(previousCwd);
     }

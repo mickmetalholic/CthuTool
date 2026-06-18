@@ -25,6 +25,16 @@ From the repository root:
 pnpm install
 ```
 
+After installing dependencies, use the root commands as the canonical check
+surface for the root-managed workspace:
+
+```bash
+pnpm run lint
+pnpm run typecheck
+pnpm run test
+pnpm run build
+```
+
 ## Private CLI Install
 
 For personal use from GitHub, run the public installer directly:
@@ -67,12 +77,14 @@ chc self-update --ref v0.1.0
 | `pnpm run build`  | Runs `turbo run build` across workspace members. |
 | `pnpm run lint`   | Runs `biome check .` at repo root.               |
 | `pnpm run lint:fix` | Runs `biome check --write .` at repo root.   |
+| `pnpm run typecheck` | Runs `turbo run typecheck` across workspace members. |
 | `pnpm run test`   | Runs root Jest tests plus workspace tests via Turborepo. |
 
 ## Layout
 
 - **`apps/`** — application packages (`apps/*` are matched by `pnpm-workspace.yaml`), including backend, CLI, and desktop apps.
 - **`packages/`** — libraries and tooling packages (`packages/*`), including shared protocol and package tooling.
+- **`scratches/collection-hub/`** — experimental nested workspace. It is intentionally outside the root `pnpm-workspace.yaml`; verify it from that directory with its own workspace commands such as `pnpm run check`.
 - **Package names** — use the `@cthutool/*` scope (see **Naming** below).
 
 ### Naming and directories
@@ -87,6 +99,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs:
 
 - Commitlint (on `pull_request` and `push`)
 - `pnpm run lint` (Biome)
+- `pnpm run typecheck` (Turborepo)
 - `pnpm run test` (with `SKIP_ROOT_WORKSPACE_CHECK=true`)
 
 The workflow triggers on `push` to `main` and on `pull_request`, so Biome and commit message gates stay consistent between local and CI.

@@ -1,8 +1,8 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BrowserAuthStateStore } from './browser-auth-state.store';
 import { createBrowserExtensionAuthBundle } from './browser-auth-extension';
+import { BrowserAuthStateStore } from './browser-auth-state.store';
 
 describe('browser extension auth conversion', () => {
   let root: string;

@@ -1,5 +1,4 @@
 import { Badge, cn } from '@cthutool/ui';
-import * as React from 'react';
 import { CapabilityGate } from './shell';
 
 export type OverviewMetric = {

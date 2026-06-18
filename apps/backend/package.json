@@ -12,7 +12,9 @@
     "test": "pnpm run build:deps && jest",
     "test:watch": "jest --watch",
     "test:debug": "node --inspect-brk node_modules/jest/bin/jest.js --runInBand",
-    "test:cov": "jest --coverage"
+    "test:cov": "jest --coverage",
+    "typecheck": "tsc -p tsconfig.spec.json --noEmit",
+    "lint": "biome check ."
   },
   "dependencies": {
     "@cthutool/agent-protocol": "workspace:*",

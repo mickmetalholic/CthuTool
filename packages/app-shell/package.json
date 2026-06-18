@@ -14,7 +14,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.test.json --noEmit",
-    "typecheck": "tsc -p tsconfig.test.json --noEmit"
+    "test:cov": "node -e \"console.log('No coverage configured for @cthutool/app-shell')\"",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "lint": "biome check ."
   },
   "dependencies": {
     "@cthutool/ui": "workspace:*"

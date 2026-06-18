@@ -1,8 +1,6 @@
 ## Purpose
 Define the isolated Collection Hub prototype workspace, package boundaries, shared contracts package, and local development commands.
-
 ## Requirements
-
 ### Requirement: Isolated nested workspace
 The system SHALL create an isolated pnpm workspace at `scratches/collection-hub` for the Collection Hub prototype.
 
@@ -47,3 +45,16 @@ The nested workspace SHALL document and expose default local development command
 - **THEN** `pnpm dev:web` starts the Next.js app on the documented web dev port
 - **AND** `pnpm dev:server` starts the NestJS API server on the documented API dev port unless `PORT` overrides it
 - **AND** `pnpm dev:extension` starts the Plasmo extension dev process
+
+### Requirement: Experimental workspace boundary
+The `scratches/collection-hub` workspace SHALL remain an experimental nested workspace outside root `@cthutool/*` orchestration until a future change explicitly promotes or integrates it.
+
+#### Scenario: Root checks preserve experimental isolation
+- **WHEN** root workspace lint, typecheck, build, or test commands are inspected
+- **THEN** they do not require `scratches/collection-hub` package scripts to pass
+- **AND** `scratches/collection-hub` continues to provide its own nested workspace verification entrypoint
+
+#### Scenario: Experimental status is documented
+- **WHEN** a developer reads repository workspace guidance
+- **THEN** it identifies `scratches/collection-hub` as an experimental nested workspace
+- **AND** it directs verification for that workspace to commands run from `scratches/collection-hub`

@@ -128,7 +128,9 @@ body {
   *,
   ::before,
   ::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion overrides component-level animation styles. */
     scroll-behavior: auto !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion overrides component-level animation styles. */
     transition-duration: 0.01ms !important;
   }
 }

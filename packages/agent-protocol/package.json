@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "jest --config jest.config.cjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "test:cov": "jest --coverage --config jest.config.cjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check ."
   },
   "dependencies": {
     "valibot": "^1.0.0"

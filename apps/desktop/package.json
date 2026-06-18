@@ -10,7 +10,9 @@
     "package:win": "pnpm run build && electron-builder --win",
     "package:mac": "pnpm run build && electron-builder --mac",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "test:cov": "node -e \"console.log('No coverage configured for @cthutool/desktop')\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check ."
   },
   "dependencies": {
     "@cthutool/agent-protocol": "workspace:*",

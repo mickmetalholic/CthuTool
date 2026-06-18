@@ -7,6 +7,11 @@
       "!**/node_modules",
       "!**/dist",
       "!**/build",
+      "!**/out",
+      "!**/.next",
+      "!**/.astro",
+      "!**/release",
+      "!**/next-env.d.ts",
       "!**/coverage"
     ]
   },
@@ -21,6 +26,11 @@
     },
     "formatter": {
       "quoteStyle": "single"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   },
   "linter": {
