@@ -59,14 +59,18 @@ Thumbs.db
 # Keep documented env samples
 !.env.example
 
-# Cursor: ignore local cache, but keep shared Project Rules and non-generated commands.
+# Cursor: ignore local cache, but keep shared Project Rules, skills, and non-generated commands.
 .cursor/*
 !.cursor/rules/
 !.cursor/rules/**
+!.cursor/skills/
+!.cursor/skills/**
 !.cursor/commands/
 !.cursor/commands/**
 
 # References codes for agents
 .references/
+
+.reasonix/
 
 .superpowers
