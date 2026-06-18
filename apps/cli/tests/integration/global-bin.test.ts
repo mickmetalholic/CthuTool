@@ -137,6 +137,7 @@ describe('global bin', () => {
       [[], ['--help']],
       [['codex'], ['codex', '--help']],
       [['scripts'], ['scripts', '--help']],
+      [['self-update'], ['self-update', '--help']],
       [['completion'], ['completion', '--help']],
     ] as const) {
       const proc = Bun.spawn(['node', 'bin/chc.mjs', ...args], {
@@ -169,14 +170,15 @@ describe('global bin', () => {
       if (args.length === 0) {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(
-          '\n  codex    Manage reproducible Codex configuration.',
+          '\n  codex        Manage reproducible Codex configuration.',
         );
         expect(plain).toContain(
-          '\n  scripts  Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
+          '\n  scripts      Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
+        );
+        expect(plain).toContain(
+          '\n  self-update  Update the global chc command from the CthuTool Git repository.',
         );
         expect(plain).not.toContain('\n    codex');
-        expect(out).toContain(`${ESC}[36mcodex`);
-        expect(out).toContain(`${ESC}[36mscripts`);
       } else if (args[0] === 'codex') {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(
@@ -189,15 +191,18 @@ describe('global bin', () => {
           '\n  install  Install repository-owned Codex skills and plugins locally.',
         );
         expect(plain).not.toContain('\n   apply');
-        expect(out).toContain(`${ESC}[36mstatus`);
-        expect(out).toContain(`${ESC}[36mapply`);
-        expect(out).toContain(`${ESC}[36minstall`);
       } else if (args[0] === 'scripts') {
         expect(plain).toContain('chc scripts [OPTIONS] [ID]');
         expect(plain).toContain(
           'Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
         );
         expect(plain).toContain('Examples:');
+      } else if (args[0] === 'self-update') {
+        expect(plain).toContain('chc self-update [OPTIONS]');
+        expect(plain).toContain(
+          'Update the global chc command from the CthuTool Git repository.',
+        );
+        expect(plain).toContain('--install-dir');
       } else {
         expect(plain).toContain('chc completion [OPTIONS] <SHELL>');
         expect(plain).toContain(

@@ -15,6 +15,7 @@ Turborepo monorepo for CthuTool. Workspace layout follows the official `create-t
   corepack enable
   corepack prepare pnpm@9.15.4 --activate
   ```
+- **Bun** for CLI build and tests (`apps/cli` uses `bun build` and `bun test`).
 
 ## Install
 
@@ -22,6 +23,41 @@ From the repository root:
 
 ```bash
 pnpm install
+```
+
+## Private CLI Install
+
+For personal use from GitHub, run the public installer directly:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash
+chc --help
+```
+
+Or run the installer from a checkout:
+
+```bash
+scripts/install-chc.sh
+chc --help
+```
+
+The installer clones or updates `https://github.com/mickmetalholic/CthuTool.git`
+into `~/.cthutool/source/CthuTool`, installs workspace dependencies, builds the
+CLI, and runs `npm install -g` for the root package that exposes `chc`.
+
+Use environment variables to install a different source or version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | CHC_REF=v0.1.0 bash
+CHC_REF=v0.1.0 scripts/install-chc.sh
+CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_INSTALL_DIR="$HOME/.cthutool/source/CthuTool" scripts/install-chc.sh
+```
+
+After the first install, update from the CLI:
+
+```bash
+chc self-update
+chc self-update --ref v0.1.0
 ```
 
 ## Common commands

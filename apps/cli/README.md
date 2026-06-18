@@ -11,6 +11,37 @@ chc codex status
 
 The global command runs the built JavaScript bundle with Node. Bun is only used by this repository's build and test scripts.
 
+For personal installation from the public GitHub repository, run the installer
+directly:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash
+```
+
+Or run the repository installer from a checkout:
+
+```bash
+scripts/install-chc.sh
+```
+
+The installer keeps a source checkout at `~/.cthutool/source/CthuTool`, builds
+`@cthutool/cli`, and installs the root package globally so `chc` is on `PATH`.
+Override defaults with environment variables:
+
+```bash
+CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_REF=main scripts/install-chc.sh
+curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | CHC_REF=v0.1.0 bash
+CHC_REF=v0.1.0 scripts/install-chc.sh
+CHC_INSTALL_DIR="$HOME/dev/CthuTool" scripts/install-chc.sh
+```
+
+Update an installed CLI in place:
+
+```bash
+chc self-update
+chc self-update --ref v0.1.0
+```
+
 ## Local Development
 
 For linked local development, install the repository once and keep the built CLI updated:

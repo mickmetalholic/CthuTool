@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { homedir, platform } from 'node:os';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { type CommandDef, defineCommand } from 'citty';
 import { getCompletionCandidates } from '../domain/completion-candidates';
@@ -21,7 +22,7 @@ ${powershellCompletionLoadLine}
 ${powershellCompletionEndMarker}`;
 const execFileAsync = promisify(execFile);
 
-const powershellScript = String.raw`Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
+const powershellScript = `Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
   $words = @($commandAst.CommandElements | Select-Object -Skip 1 | ForEach-Object { $_.Extent.Text })
   if ($words.Count -eq 0 -or $words[-1] -ne $wordToComplete) {
@@ -124,8 +125,20 @@ async function resolvePowerShellProfilePath(): Promise<string> {
     } catch {}
   }
 
-  throw new Error(
-    `unable to resolve PowerShell profile path; load completion manually with "${powershellCompletionLoadLine}"`,
+  if (platform() === 'win32') {
+    return join(
+      process.env.USERPROFILE || homedir(),
+      'Documents',
+      'PowerShell',
+      'Microsoft.PowerShell_profile.ps1',
+    );
+  }
+
+  return join(
+    homedir(),
+    '.config',
+    'powershell',
+    'Microsoft.PowerShell_profile.ps1',
   );
 }
 
