@@ -1,13 +1,17 @@
 ---
-name: /opsx-continue
-id: opsx-continue
-category: Workflow
-description: Continue working on a change - create the next artifact (Experimental)
+name: openspec-continue-change
+description: Continue working on an OpenSpec change by creating the next artifact. Use when the user wants to progress their change, create the next artifact, or continue their workflow.
+license: MIT
+compatibility: Requires openspec CLI.
+metadata:
+  author: openspec
+  version: "1.0"
+  generatedBy: "1.4.1"
 ---
 
 Continue working on a change by creating the next artifact.
 
-**Input**: Optionally specify a change name after `/opsx:continue` (e.g., `/opsx:continue add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
 
@@ -33,6 +37,7 @@ Continue working on a change by creating the next artifact.
    - `schemaName`: The workflow schema being used (e.g., "spec-driven")
    - `artifacts`: Array of artifacts with their status ("done", "ready", "blocked")
    - `isComplete`: Boolean indicating if all artifacts are complete
+   - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context. Use these instead of assuming repo-local paths.
 
 3. **Act based on status**:
 
@@ -41,7 +46,7 @@ Continue working on a change by creating the next artifact.
    **If all artifacts are complete (`isComplete: true`)**:
    - Congratulate the user
    - Show final status including the schema used
-   - Suggest: "All artifacts created! You can now implement this change with `/opsx:apply` or archive it with `/opsx:archive`."
+   - Suggest: "All artifacts created! You can now implement this change or archive it."
    - STOP
 
    ---
@@ -57,13 +62,13 @@ Continue working on a change by creating the next artifact.
      - `rules`: Artifact-specific rules (constraints for you - do NOT include in output)
      - `template`: The structure to use for your output file
      - `instruction`: Schema-specific guidance
-     - `outputPath`: Where to write the artifact
+     - `resolvedOutputPath`: Resolved path or pattern to write the artifact
      - `dependencies`: Completed artifacts to read for context
    - **Create the artifact file**:
      - Read any completed dependency files for context
      - Use `template` as the structure - fill in its sections
      - Apply `context` and `rules` as constraints when writing - but do NOT copy them into the file
-     - Write to the output path specified in instructions
+     - Write to the `resolvedOutputPath` specified in instructions. If it is a glob pattern, choose the concrete file path using the schema instruction and workspace planning context
    - Show what was created and what's now unlocked
    - STOP after creating ONE artifact
 
@@ -85,7 +90,7 @@ After each invocation, show:
 - Schema workflow being used
 - Current progress (N/M complete)
 - What artifacts are now unlocked
-- Prompt: "Run `/opsx:continue` to create the next artifact"
+- Prompt: "Want to continue? Just ask me to continue or tell me what to do next."
 
 **Artifact Creation Guidelines**
 

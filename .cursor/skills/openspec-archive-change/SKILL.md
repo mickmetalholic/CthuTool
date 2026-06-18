@@ -1,13 +1,17 @@
 ---
-name: "OPSX: Archive"
-description: Archive a completed change in the experimental workflow
-category: Workflow
-tags: [workflow, archive, experimental]
+name: openspec-archive-change
+description: Archive a completed change in the experimental workflow. Use when the user wants to finalize and archive a change after implementation is complete.
+license: MIT
+compatibility: Requires openspec CLI.
+metadata:
+  author: openspec
+  version: "1.0"
+  generatedBy: "1.4.1"
 ---
 
 Archive a completed change in the experimental workflow.
 
-**Input**: Optionally specify a change name after `/opsx:archive` (e.g., `/opsx:archive add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
 
@@ -26,11 +30,14 @@ Archive a completed change in the experimental workflow.
 
    Parse the JSON to understand:
    - `schemaName`: The workflow being used
+   - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context
    - `artifacts`: List of artifacts with their status (`done` or other)
+
+   If status reports `actionContext.mode: "workspace-planning"`, explain that workspace archive is not supported in this slice and STOP. Do not move workspace changes into repo-local archives or edit linked repos.
 
    **If any artifacts are not `done`:**
    - Display warning listing incomplete artifacts
-   - Prompt user for confirmation to continue
+   - Use **AskUserQuestion tool** to confirm user wants to proceed
    - Proceed if user confirms
 
 3. **Check task completion status**
@@ -41,14 +48,14 @@ Archive a completed change in the experimental workflow.
 
    **If incomplete tasks found:**
    - Display warning showing count of incomplete tasks
-   - Prompt user for confirmation to continue
+   - Use **AskUserQuestion tool** to confirm user wants to proceed
    - Proceed if user confirms
 
    **If no tasks file exists:** Proceed without task-related warning.
 
 4. **Assess delta spec sync state**
 
-   Check for delta specs at `openspec/changes/<name>/specs/`. If none exist, proceed without sync prompt.
+   Use `artifactPaths.specs.existingOutputPaths` from status JSON to check for delta specs. If none exist, proceed without sync prompt.
 
    **If delta specs exist:**
    - Compare each delta spec with its corresponding main spec at `openspec/specs/<capability>/spec.md`
@@ -63,19 +70,19 @@ Archive a completed change in the experimental workflow.
 
 5. **Perform the archive**
 
-   Create the archive directory if it doesn't exist:
+   Create an `archive` directory under `planningHome.changesDir` if it doesn't exist:
    ```bash
-   mkdir -p openspec/changes/archive
+   mkdir -p "<planningHome.changesDir>/archive"
    ```
 
    Generate target name using current date: `YYYY-MM-DD-<change-name>`
 
    **Check if target already exists:**
    - If yes: Fail with error, suggest renaming existing archive or using different date
-   - If no: Move the change directory to archive
+   - If no: Move `changeRoot` to the archive directory
 
    ```bash
-   mv openspec/changes/<name> openspec/changes/archive/YYYY-MM-DD-<name>
+   mv "<changeRoot>" "<planningHome.changesDir>/archive/YYYY-MM-DD-<name>"
    ```
 
 6. **Display summary**
@@ -84,7 +91,7 @@ Archive a completed change in the experimental workflow.
    - Change name
    - Schema that was used
    - Archive location
-   - Spec sync status (synced / sync skipped / no delta specs)
+   - Whether specs were synced (if applicable)
    - Note about any warnings (incomplete artifacts/tasks)
 
 **Output On Success**
@@ -94,57 +101,10 @@ Archive a completed change in the experimental workflow.
 
 **Change:** <change-name>
 **Schema:** <schema-name>
-**Archived to:** openspec/changes/archive/YYYY-MM-DD-<name>/
-**Specs:** ✓ Synced to main specs
+**Archived to:** the archive path derived from `planningHome.changesDir`/YYYY-MM-DD-<name>/
+**Specs:** ✓ Synced to main specs (or "No delta specs" or "Sync skipped")
 
 All artifacts complete. All tasks complete.
-```
-
-**Output On Success (No Delta Specs)**
-
-```
-## Archive Complete
-
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Archived to:** openspec/changes/archive/YYYY-MM-DD-<name>/
-**Specs:** No delta specs
-
-All artifacts complete. All tasks complete.
-```
-
-**Output On Success With Warnings**
-
-```
-## Archive Complete (with warnings)
-
-**Change:** <change-name>
-**Schema:** <schema-name>
-**Archived to:** openspec/changes/archive/YYYY-MM-DD-<name>/
-**Specs:** Sync skipped (user chose to skip)
-
-**Warnings:**
-- Archived with 2 incomplete artifacts
-- Archived with 3 incomplete tasks
-- Delta spec sync was skipped (user chose to skip)
-
-Review the archive if this was not intentional.
-```
-
-**Output On Error (Archive Exists)**
-
-```
-## Archive Failed
-
-**Change:** <change-name>
-**Target:** openspec/changes/archive/YYYY-MM-DD-<name>/
-
-Target archive directory already exists.
-
-**Options:**
-1. Rename the existing archive
-2. Delete the existing archive if it's a duplicate
-3. Wait until a different date to archive
 ```
 
 **Guardrails**
@@ -153,5 +113,5 @@ Target archive directory already exists.
 - Don't block archive on warnings - just inform and confirm
 - Preserve .openspec.yaml when moving to archive (it moves with the directory)
 - Show clear summary of what happened
-- If sync is requested, use the Skill tool to invoke `openspec-sync-specs` (agent-driven)
+- If sync is requested, use openspec-sync-specs approach (agent-driven)
 - If delta specs exist, always run the sync assessment and show the combined summary before prompting
