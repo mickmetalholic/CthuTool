@@ -19,14 +19,17 @@
   - `syncPolicy.automated.prune: true`, `selfHeal: true`
   - `syncPolicy.retry` with exponential backoff (5 attempts, max 3m)
 
-## 4. CthuTool backend manifests
+## 4. CthuTool backend manifests and image
 
-- [x] 4.1 Create `apps/backend/Dockerfile` — multi-stage build (pnpm monorepo + NestJS + Playwright Chromium)
-- [x] 4.2 Create `k8s/deployment.yaml` — Deployment with health probes, resource limits, emptyDir for browser data
+- [x] 4.1 Create `apps/backend/Dockerfile` — multi-stage build (pnpm monorepo + NestJS)
+- [x] 4.2 Create `k8s/deployment.yaml` — Deployment with GHCR image reference, health probes, and resource limits
 - [x] 4.3 Create `k8s/service.yaml` — ClusterIP on port 3000
 - [x] 4.4 Create `k8s/configmap.yaml` — non-sensitive environment variables
 - [x] 4.5 Create `gitops/namespaces/cthutool.yaml` — Namespace resource with `app.kubernetes.io/*` labels
 - [x] 4.6 Create `gitops/apps/cthutool/application.yaml` — Application CR pointing to CthuTool/k8s/ with auto-sync and retry
+- [x] 4.7 Remove unused backend Playwright dependency and browser runtime environment variables
+- [x] 4.8 Create `.github/workflows/backend-image.yml` — build and push `ghcr.io/mickmetalholic/cthutool-backend` on `main`
+- [x] 4.9 Update backend image workflow to pin `k8s/deployment.yaml` to the built commit SHA after publishing
 
 ## 5. Verification
 

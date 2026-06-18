@@ -23,7 +23,6 @@
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "neverthrow": "^8.2.0",
-    "playwright": "^1.60.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "valibot": "^1.0.0",

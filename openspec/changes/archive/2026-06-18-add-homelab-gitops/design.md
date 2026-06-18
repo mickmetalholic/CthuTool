@@ -13,6 +13,7 @@ This design covers the `gitops/` directory: what goes in it, how it's structured
 - ArgoCD Application CRs pointing to each app's `k8s/` manifests
 - `k8s/` directory for CthuTool backend with Deployment, Service, and ConfigMap
 - `apps/backend/Dockerfile` — multi-stage container image build
+- GitHub Actions workflow that builds and pushes the backend image to GHCR on `main`
 - Bootstrap scaffold for future ArgoCD installation manifests
 - Clear README documenting the directory structure and conventions
 
@@ -21,7 +22,6 @@ This design covers the `gitops/` directory: what goes in it, how it's structured
 - ArgoCD ApplicationSet or app-of-apps pattern (single Application CR for now)
 - ResourceQuota, LimitRange, NetworkPolicy (future additions)
 - Secret management (API keys, database passwords, etc.) — apps like PixelPlayground will need secrets; the specific approach is deferred
-- CI/CD pipeline for building and pushing the `cthutool/backend` container image
 
 ## Decisions
 
@@ -135,32 +135,28 @@ gitops/apps/                    ← root Application syncs this entire directory
 
 The root Application itself is subject to the same chicken-and-egg problem (who applies the root?). The answer is: a **one-time manual `kubectl apply`** during initial bootstrap. This is the standard ArgoCD bootstrapping pattern and is not expected to be automated until ArgoCD self-management is implemented.
 
-### Decision 7: CthuTool backend self-hosting — k8s/ manifests + Dockerfile
+### Decision 7: CthuTool backend self-hosting — k8s/ manifests + Dockerfile + GHCR image
 
-The CthuTool backend is deployed from this same repository — its Application CR points back to `CthuTool/k8s/`. The container image is built locally from `apps/backend/Dockerfile`:
+The CthuTool backend is deployed from this same repository — its Application CR points back to `CthuTool/k8s/`. The container image is built from `apps/backend/Dockerfile` and pushed to GHCR by `.github/workflows/backend-image.yml` on pushes to `main`.
 
-```bash
-# Build on the k3s machine (or build elsewhere and push to a registry):
-docker build -f apps/backend/Dockerfile -t cthutool/backend:latest .
-```
-
-The Deployment references `cthutool/backend:latest` with `imagePullPolicy: IfNotPresent` — suitable for a single-node homelab where images are built locally on the k3s host. For multi-node clusters, the image must be pushed to a registry and the Deployment updated with the registry path.
+The workflow publishes both a mutable `main` tag and an immutable `${{ github.sha }}` tag. After the image is pushed, the workflow updates `k8s/deployment.yaml` to reference the immutable commit tag and commits that manifest update back to `main` with `[skip ci]` in the message. This makes the Deployment spec change on every backend image build, so ArgoCD can roll out the new image through normal GitOps reconciliation instead of relying on Kubernetes to repull a mutable tag.
 
 The Dockerfile uses a multi-stage build:
 1. **Builder** — `pnpm install` in monorepo context, build workspace dependencies, `nest build`
-2. **Production** — Node.js 24 Alpine + `playwright install --with-deps chromium` + built output
+2. **Production** — Node.js 24 Alpine + built output
 
 Key design choices:
-- `emptyDir` for browser data — no persistent storage yet; browser state is ephemeral
-- `BROWSER_HEADLESS: true` — no display needed in-cluster
+- GHCR image name is `ghcr.io/mickmetalholic/cthutool-backend` to avoid uppercase repository path issues in container image references.
+- `main` remains a convenience tag, but deployment uses immutable commit tags after the workflow writes back the manifest update.
+- The deployment write-back commit uses `[skip ci]` to avoid a recursive workflow run caused by the `k8s/**` path trigger.
 - `replicas: 1` — single replica for homelab; the backend is not stateless enough for horizontal scaling (browser state, in-memory sessions)
 - `resources.requests: 100m CPU / 256Mi` — conservative floor for scheduling
-- `resources.limits: 500m CPU / 512Mi` — caps one Playwright instance's memory usage
+- `resources.limits: 500m CPU / 512Mi` — caps backend resource use on the homelab node
 
 ## Known Gaps
 
 - **PixelPlayground `k8s/` directory does not exist yet** (verified 2026-06-17). The Application will initially show **Missing** in ArgoCD — this is expected. The configured `retry` block ensures it self-recovers once manifests are added.
-- **CthuTool backend requires a container image build before first deploy**. The `apps/backend/Dockerfile` blueprint exists, but the image must be built locally on the k3s host (`docker build -f apps/backend/Dockerfile -t cthutool/backend:latest .`). CI/CD for automated image builds is deferred.
+- **CthuTool backend image publication and manifest write-back depend on GitHub Actions permissions**. The workflow uses `GITHUB_TOKEN` with `packages: write` and `contents: write`; repository Actions settings must allow workflow write permissions, and GHCR package visibility plus cluster image pull access must be configured before first deploy.
 - **Secret management is not addressed yet**. PixelPlayground (an automated content creation pipeline) will almost certainly need API keys, database credentials, or similar secrets. Possible approaches for a future change:
   - **External Secrets Operator (ESO)** — syncs from 1Password / Vault / AWS Secrets Manager into k8s Secrets
   - **Sealed Secrets** — encrypted Secrets committed to git, decrypted by a cluster-side controller
@@ -170,6 +166,7 @@ Key design choices:
 ## Future Work
 
 - **CI path filtering**: Pushes to `gitops/` currently trigger the full monorepo CI pipeline (backend build, web build, tests) despite containing only static YAML. Add `paths-ignore: ['gitops/**']` to existing workflows, or add a lightweight YAML-lint-only workflow. Not done in this change to keep scope minimal.
+- **Image updater hardening**: If the repository later requires protected-branch PR-only updates, replace direct manifest write-back with ArgoCD Image Updater or a PR-based deployment promotion flow.
 
 ## Risks / Trade-offs
 

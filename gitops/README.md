@@ -50,7 +50,7 @@ Once applied, ArgoCD discovers the Application CRs from the cluster side and beg
 
 ### Expected Initial State
 
-- **CthuTool**: The `k8s/` directory exists (Deployment, Service, ConfigMap). The Application will sync and become **Healthy** after the container image is built and pushed.
+- **CthuTool**: The `k8s/` directory exists (Deployment, Service, ConfigMap). The backend image is built by GitHub Actions and pushed to `ghcr.io/mickmetalholic/cthutool-backend:main` plus an immutable commit tag. After the image is pushed, the workflow writes the commit tag back to `k8s/deployment.yaml`; ArgoCD syncs that manifest change and rolls out the Deployment once the image is available to the cluster.
 - **PixelPlayground**: The `k8s/` directory does not exist yet. The Application will show **Missing** in ArgoCD — this is expected. Once manifests are added to `https://github.com/mickmetalholic/PixelPlayground/tree/main/k8s/`, the configured `retry` block ensures ArgoCD recovers automatically within ~30 seconds.
 
 ### Adding a New App

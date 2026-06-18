@@ -25,9 +25,6 @@ FROM node:24-alpine
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
-# Install Playwright Chromium and its system dependencies
-RUN npx playwright install --with-deps chromium
-
 # Copy only what's needed at runtime
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./

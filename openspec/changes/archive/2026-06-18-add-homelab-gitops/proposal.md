@@ -12,15 +12,17 @@ This change creates the `gitops/` directory in CthuTool, establishing it as the 
 - Add `bootstrap/` scaffold — placeholder for future ArgoCD installation manifests
 - Add `k8s/` directory for CthuTool backend with Deployment, Service, and ConfigMap
 - Add `apps/backend/Dockerfile` — multi-stage container build for the backend
+- Add `.github/workflows/backend-image.yml` — GHCR build/push workflow for the backend image on `main`, with manifest write-back to pin the Deployment to the built commit image
 - Add `README.md` — directory structure overview and setup instructions
 
 ## Capabilities
 
 ### New Capabilities
 
-- `cluster-namespaces`: Namespace resources for all deployed applications, starting with `pixel-playground`
-- `argo-applications`: ArgoCD Application CRs that wire app repos to cluster namespaces for auto-sync
+- `gitops-cluster-namespaces`: Namespace resources for all deployed applications, starting with `pixel-playground`
+- `gitops-argo-applications`: ArgoCD Application CRs that wire app repos to cluster namespaces for auto-sync
 - `gitops-bootstrap`: Scaffold for ArgoCD installation and self-management manifests
+- `apps-backend-image-delivery`: GHCR image publication for the CthuTool backend deployment
 
 ## Impact
 
@@ -31,6 +33,7 @@ This change creates the `gitops/` directory in CthuTool, establishing it as the 
   - `gitops/README.md`
   - `k8s/{deployment,service,configmap}.yaml`
   - `apps/backend/Dockerfile`
+  - `.github/workflows/backend-image.yml`
 - **Dependencies**: ArgoCD must be installed on the k3s cluster (out of scope; manual bootstrap for now)
 - **Breaking**: None — purely additive
 
@@ -95,11 +98,20 @@ CthuTool/                           ┌── CthuTool is the app registry ─�
     │  (this change)   │    └──────────────────────────────┘
     └──────────────────┘
              │
-             │ docker build -f apps/backend/Dockerfile
+             │ GitHub Actions build + push + manifest write-back
              ▼
-    ┌──────────────────────────┐
-    │  cthutool/backend:latest │  ← built on k3s host
-    └──────────────────────────┘
+    ┌─────────────────────────────────────────┐
+    │ ghcr.io/mickmetalholic/cthutool-backend │
+    │ tags: main, <commit-sha>                │
+    └─────────────────────────────────────────┘
+             │
+             │ commit k8s/deployment.yaml image: <commit-sha>
+             ▼
+    ┌──────────────────┐
+    │  CthuTool/k8s/   │
+    │  deployment.yaml │
+    │  pinned SHA tag  │
+    └──────────────────┘
 ```
 
-CthuTool backend is self-hosted — the container image is built from the same repo and runs on the same k3s cluster it manages. PixelPlayground is an external app with its manifests in a separate repo.
+CthuTool backend is self-hosted — the container image is built from the same repo, pushed to GHCR, then the Deployment manifest is pinned to that commit image so ArgoCD can roll it out from git. PixelPlayground is an external app with its manifests in a separate repo.
