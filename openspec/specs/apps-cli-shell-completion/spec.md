@@ -45,7 +45,7 @@ Completion SHALL derive command and flag candidates from the shared CLI command 
 
 #### Scenario: Root command candidates
 - **WHEN** a shell adapter requests completion for the root command position
-- **THEN** candidates include `codex`, `scripts`, and `completion`
+- **THEN** candidates include `codex`, `scripts`, `self-update`, and `completion`
 
 #### Scenario: Codex subcommand candidates
 - **WHEN** a shell adapter requests completion after `chc codex`
