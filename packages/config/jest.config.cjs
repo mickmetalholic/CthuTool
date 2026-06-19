@@ -4,7 +4,7 @@ const preset = require('../../jest.preset.cjs');
 module.exports = {
   ...preset,
   rootDir: '.',
-  testMatch: ['<rootDir>/src/**/*.spec.ts'],
+  testMatch: ['**/src/**/*.spec.ts'],
   transform: {
     '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
   },

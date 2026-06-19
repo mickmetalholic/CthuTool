@@ -5,12 +5,13 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "pnpm --filter @cthutool/agent-protocol build && electron-vite build",
+    "build:deps": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/app-shell build",
+    "build": "pnpm run build:deps && electron-vite build",
     "package": "pnpm run build && electron-builder --dir",
     "package:win": "pnpm run build && electron-builder --win",
     "package:mac": "pnpm run build && electron-builder --mac",
-    "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "test": "pnpm run build:deps && vitest run",
+    "typecheck": "pnpm run build:deps && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@cthutool/agent-protocol": "workspace:*",
