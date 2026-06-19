@@ -1,9 +1,10 @@
 import { type ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import type { Mock } from 'vitest';
 import { HttpExceptionFilter } from './http-exception.filter';
 
 type MockResponse = {
-  status: jest.Mock;
-  json: jest.Mock;
+  status: Mock;
+  json: Mock;
 };
 
 const createMockHost = (response: MockResponse): ArgumentsHost =>
@@ -16,8 +17,8 @@ const createMockHost = (response: MockResponse): ArgumentsHost =>
 describe('HttpExceptionFilter', () => {
   it('maps not found to contract error payload', () => {
     const response: MockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
     };
     const filter = new HttpExceptionFilter();
     const exception = new HttpException('not found', HttpStatus.NOT_FOUND);
@@ -35,8 +36,8 @@ describe('HttpExceptionFilter', () => {
 
   it('maps unknown errors to HTTP_ERROR payload', () => {
     const response: MockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
     };
     const filter = new HttpExceptionFilter();
 
@@ -53,8 +54,8 @@ describe('HttpExceptionFilter', () => {
 
   it('preserves structured HttpException response bodies', () => {
     const response: MockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
     };
     const filter = new HttpExceptionFilter();
     const exception = new HttpException(

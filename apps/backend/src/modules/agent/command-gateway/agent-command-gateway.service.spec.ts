@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { AgentRegistryService } from '../registry/agent-registry.service';
 import type { AgentWebSocketServer } from '../websocket/agent-websocket.server';
 import {
@@ -57,7 +58,7 @@ describe('AgentCommandGateway', () => {
 });
 
 type SocketMock = {
-  readonly sendCommand: jest.Mock;
+  readonly sendCommand: Mock;
 };
 
 function createGateway(
@@ -96,7 +97,7 @@ function createSocketMockWithImplementation(
   implementation: () => Promise<AgentCommandResponse>,
 ): SocketMock {
   return {
-    sendCommand: jest.fn(implementation),
+    sendCommand: vi.fn(implementation),
   };
 }
 

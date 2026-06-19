@@ -89,12 +89,9 @@ jobs:
         with:
           name: repository-coverage-report
           path: |
-            coverage/lcov.info
-            coverage/coverage-summary.json
-            coverage/lcov-report
-            apps/backend/coverage/lcov.info
-            apps/backend/coverage/coverage-summary.json
-            apps/backend/coverage/lcov-report
+            coverage/**
+            apps/*/coverage/**
+            packages/*/coverage/**
           if-no-files-found: error
 
       - name: Comment coverage summary on PR
@@ -103,10 +100,18 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
-            const rootSummaryPath = 'coverage/coverage-summary.json';
-            const backendSummaryPath = 'apps/backend/coverage/coverage-summary.json';
-            const rootTotal = JSON.parse(fs.readFileSync(rootSummaryPath, 'utf8')).total;
-            const backendTotal = JSON.parse(fs.readFileSync(backendSummaryPath, 'utf8')).total;
+            const summaries = [
+              ['Root tests', 'coverage/coverage-summary.json'],
+              ['apps/backend', 'apps/backend/coverage/coverage-summary.json'],
+              ['apps/desktop', 'apps/desktop/coverage/coverage-summary.json'],
+              ['apps/docs', 'apps/docs/coverage/coverage-summary.json'],
+              ['apps/web', 'apps/web/coverage/coverage-summary.json'],
+              ['packages/agent-protocol', 'packages/agent-protocol/coverage/coverage-summary.json'],
+              ['packages/app-shell', 'packages/app-shell/coverage/coverage-summary.json'],
+              ['packages/config', 'packages/config/coverage/coverage-summary.json'],
+              ['packages/obsidian-enhancer', 'packages/obsidian-enhancer/coverage/coverage-summary.json'],
+              ['packages/ui', 'packages/ui/coverage/coverage-summary.json'],
+            ].filter(([, summaryPath]) => fs.existsSync(summaryPath));
             const metric = (value) =>
               value?.pct === 'Unknown'
                 ? `Unknown (${value.covered}/${value.total})`
@@ -114,18 +119,17 @@ jobs:
             const body = [
               '## Repository Coverage',
               '',
-              '### Root tests',
-              '- Note: root suite is contract/integration checks and may be non-instrumented.',
-              `- Lines: ${metric(rootTotal.lines)}`,
-              `- Statements: ${metric(rootTotal.statements)}`,
-              `- Functions: ${metric(rootTotal.functions)}`,
-              `- Branches: ${metric(rootTotal.branches)}`,
-              '',
-              '### apps/backend',
-              `- Lines: ${metric(backendTotal.lines)}`,
-              `- Statements: ${metric(backendTotal.statements)}`,
-              `- Functions: ${metric(backendTotal.functions)}`,
-              `- Branches: ${metric(backendTotal.branches)}`,
+              ...summaries.flatMap(([label, summaryPath]) => {
+                const total = JSON.parse(fs.readFileSync(summaryPath, 'utf8')).total;
+                return [
+                  `### ${label}`,
+                  `- Lines: ${metric(total.lines)}`,
+                  `- Statements: ${metric(total.statements)}`,
+                  `- Functions: ${metric(total.functions)}`,
+                  `- Branches: ${metric(total.branches)}`,
+                  '',
+                ];
+              }),
             ].join('\n');
 
             const marker = '<!-- repository-coverage-comment -->';
@@ -157,7 +161,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: coverage/lcov.info,apps/backend/coverage/lcov.info
-          flags: root,backend
+          files: coverage/lcov.info,apps/*/coverage/lcov.info,packages/*/coverage/lcov.info
+          flags: root-workspace
           fail_ci_if_error: false
           use_oidc: true

@@ -132,8 +132,8 @@ function createServer(
     {
       httpAdapter: {
         getHttpServer: () => ({
-          off: jest.fn(),
-          on: jest.fn(),
+          off: vi.fn(),
+          on: vi.fn(),
         }),
       },
     } as never,
@@ -144,8 +144,8 @@ function createServer(
 
 function createLogger(): Pick<AgentRegistryLogger, 'log' | 'warn'> {
   return {
-    log: jest.fn(),
-    warn: jest.fn(),
+    log: vi.fn(),
+    warn: vi.fn(),
   };
 }
 

@@ -4,7 +4,7 @@ import { HealthService } from './health.service';
 
 describe('HealthController', () => {
   it('delegates to HealthService.getStatus', async () => {
-    const getStatus = jest.fn().mockReturnValue({
+    const getStatus = vi.fn().mockReturnValue({
       status: 'ok' as const,
       service: 'backend',
       timestamp: '2026-01-01T00:00:00.000Z',

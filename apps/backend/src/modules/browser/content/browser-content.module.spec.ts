@@ -14,7 +14,7 @@ describe('BrowserContentModule', () => {
       .overrideProvider(HttpAdapterHost)
       .useValue({
         httpAdapter: {
-          getHttpServer: () => ({ off: jest.fn(), on: jest.fn() }),
+          getHttpServer: () => ({ off: vi.fn(), on: vi.fn() }),
         },
       })
       .compile();

@@ -5,8 +5,8 @@ import { AgentModule } from '../agent.module';
 describe('AgentModule', () => {
   it('wires websocket dependencies with Nest runtime tokens', async () => {
     const httpServer = {
-      off: jest.fn(),
-      on: jest.fn(),
+      off: vi.fn(),
+      on: vi.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({

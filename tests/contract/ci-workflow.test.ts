@@ -15,6 +15,19 @@ describe("CI workflow contract", () => {
     expect(yml).toMatch(/pnpm\s+run\s+test/);
   });
 
+  it("publishes coverage for root-managed package workspaces", () => {
+    const yml = readFileSync(
+      join(root, ".github", "workflows", "ci.yml"),
+      "utf8",
+    );
+
+    expect(yml).toMatch(/pnpm\s+run\s+test:cov/);
+    expect(yml).toContain("apps/*/coverage/**");
+    expect(yml).toContain("packages/*/coverage/**");
+    expect(yml).toContain("apps/*/coverage/lcov.info");
+    expect(yml).toContain("packages/*/coverage/lcov.info");
+  });
+
   it("packages desktop artifacts for macOS and Windows", () => {
     const yml = readFileSync(
       join(root, ".github", "workflows", "desktop-artifacts.yml"),

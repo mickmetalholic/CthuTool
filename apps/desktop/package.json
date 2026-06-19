@@ -10,7 +10,7 @@
     "package:win": "pnpm run build && electron-builder --win",
     "package:mac": "pnpm run build && electron-builder --mac",
     "test": "vitest run",
-    "test:cov": "node -e \"console.log('No coverage configured for @cthutool/desktop')\"",
+    "test:cov": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check ."
   },
@@ -34,6 +34,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^2.1.9",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.0.0",

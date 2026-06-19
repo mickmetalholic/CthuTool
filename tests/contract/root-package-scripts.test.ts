@@ -22,6 +22,10 @@ function rootWorkspacePackageJsonPaths(): string[] {
   );
 }
 
+function normalizeScript(script: string | undefined): string {
+  return script?.toLowerCase() ?? "";
+}
+
 describe("root package.json scripts contract", () => {
   it("exposes build that delegates to turbo run build", () => {
     const pkg = readJson(join(root, "package.json")) as {
@@ -52,6 +56,47 @@ describe("root package.json scripts contract", () => {
       for (const script of standardWorkspaceScripts) {
         expect(pkg.scripts?.[script]).toEqual(expect.any(String));
       }
+    }
+  });
+
+  it("rejects placeholder validation scripts", () => {
+    for (const packageJsonPath of rootWorkspacePackageJsonPaths()) {
+      const pkg = readJson(packageJsonPath) as {
+        name?: string;
+        scripts?: Record<string, string>;
+      };
+      for (const script of ["test", "test:cov"] as const) {
+        const command = normalizeScript(pkg.scripts?.[script]);
+        expect(command).not.toContain("no tests configured");
+        expect(command).not.toContain("no coverage configured");
+        expect(command).not.toMatch(/\b(exit\s+0|true)\b/);
+      }
+    }
+  });
+
+  it("keeps CLI on Bun test and uses Vitest for other package runtime tests", () => {
+    for (const packageJsonPath of rootWorkspacePackageJsonPaths()) {
+      const pkg = readJson(packageJsonPath) as {
+        name?: string;
+        scripts?: Record<string, string>;
+      };
+      const test = normalizeScript(pkg.scripts?.test);
+      if (pkg.name === "@cthutool/cli") {
+        expect(test).toContain("bun test");
+      } else {
+        expect(test).toContain("vitest");
+      }
+    }
+  });
+
+  it("keeps type-only validation in typecheck instead of test", () => {
+    for (const packageJsonPath of rootWorkspacePackageJsonPaths()) {
+      const pkg = readJson(packageJsonPath) as {
+        name?: string;
+        scripts?: Record<string, string>;
+      };
+      const test = normalizeScript(pkg.scripts?.test);
+      expect(test).not.toMatch(/\btsc\b.*--noemit/);
     }
   });
 });
