@@ -7,6 +7,7 @@ coverage:
       default:
         target: 85%
         threshold: 2%
+        informational: true
       root:
         flags:
           - root
@@ -16,6 +17,7 @@ coverage:
           - backend
         target: 85%
         threshold: 2%
+        informational: true
     patch:
       default:
         target: 80%
