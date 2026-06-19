@@ -77,7 +77,10 @@ p {
     linear-gradient(to right, rgb(0 213 255 / 7%) 1px, transparent 1px),
     linear-gradient(to bottom, rgb(161 107 255 / 6%) 1px, transparent 1px),
     linear-gradient(180deg, #020615 0%, #071127 62%, #040814 100%);
-  background-size: 44px 44px, 44px 44px, auto;
+  background-size:
+    44px 44px,
+    44px 44px,
+    auto;
   pointer-events: none;
   animation: startup-intro-out 1280ms cubic-bezier(0.22, 1, 0.36, 1) 420ms both;
 }
@@ -91,8 +94,18 @@ p {
 
 .startup-intro::before {
   background:
-    linear-gradient(115deg, transparent 0 36%, rgb(0 213 255 / 14%) 47%, transparent 58%),
-    linear-gradient(245deg, transparent 0 42%, rgb(255 98 212 / 12%) 50%, transparent 60%);
+    linear-gradient(
+      115deg,
+      transparent 0 36%,
+      rgb(0 213 255 / 14%) 47%,
+      transparent 58%
+    ),
+    linear-gradient(
+      245deg,
+      transparent 0 42%,
+      rgb(255 98 212 / 12%) 50%,
+      transparent 60%
+    );
   transform: translateX(-18%);
   animation: startup-scan 1280ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
 }
@@ -120,8 +133,7 @@ p {
   height: 100%;
   object-fit: contain;
   user-select: none;
-  filter:
-    drop-shadow(0 0 18px rgb(0 213 255 / 70%))
+  filter: drop-shadow(0 0 18px rgb(0 213 255 / 70%))
     drop-shadow(0 0 32px rgb(161 107 255 / 36%));
 }
 
