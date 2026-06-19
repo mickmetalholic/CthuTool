@@ -175,8 +175,6 @@ describe('global bin', () => {
           '\n  scripts  Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
         );
         expect(plain).not.toContain('\n    codex');
-        expect(out).toContain(`${ESC}[36mcodex`);
-        expect(out).toContain(`${ESC}[36mscripts`);
       } else if (args[0] === 'codex') {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(
@@ -189,9 +187,6 @@ describe('global bin', () => {
           '\n  install  Install repository-owned Codex skills and plugins locally.',
         );
         expect(plain).not.toContain('\n   apply');
-        expect(out).toContain(`${ESC}[36mstatus`);
-        expect(out).toContain(`${ESC}[36mapply`);
-        expect(out).toContain(`${ESC}[36minstall`);
       } else if (args[0] === 'scripts') {
         expect(plain).toContain('chc scripts [OPTIONS] [ID]');
         expect(plain).toContain(

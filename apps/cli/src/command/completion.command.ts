@@ -21,7 +21,7 @@ ${powershellCompletionLoadLine}
 ${powershellCompletionEndMarker}`;
 const execFileAsync = promisify(execFile);
 
-const powershellScript = String.raw`Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
+const powershellScript = `Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
   $words = @($commandAst.CommandElements | Select-Object -Skip 1 | ForEach-Object { $_.Extent.Text })
   if ($words.Count -eq 0 -or $words[-1] -ne $wordToComplete) {
