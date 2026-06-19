@@ -1,20 +1,36 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  CthuTool is a monorepo with root-managed apps and packages plus some
+  intentionally separate experimental workspaces.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Name main specs under openspec/specs/<capability> with a monorepo area prefix
+  so ownership is visible. Prefer prefixes such as apps-cli-*, apps-backend-*,
+  apps-desktop-*, apps-web-*, packages-<package>-*, or
+  scratches-collection-hub-* instead of generic names. Keep existing clear area
+  prefixes, such as collection-hub-*, unless a broader rename is explicitly
+  requested.
+
+  Keep each OpenSpec change scoped to one task or one change. Do not archive,
+  sync, or commit neighboring OpenSpec changes unless explicitly requested.
+
+  Treat generated agent adapter instructions under .claude/, .codex/, and
+  .cursor/ as generated outputs. Do not hand-edit them for project policy;
+  regenerate adapters per tool or platform instead.
+
+rules:
+  proposal:
+    - Keep the change scoped to one task or one OpenSpec change.
+    - List only capabilities whose requirements are introduced or changed.
+    - Use monorepo area-prefixed capability names for new main specs.
+  specs:
+    - Name new specs with an ownership-visible area prefix.
+    - Preserve existing clear prefixes unless a rename is explicitly requested.
+    - Do not sync unrelated neighboring changes or specs into the current change.
+  design:
+    - Describe why project policy belongs in OpenSpec config instead of generated adapter files when relevant.
+    - Keep generated agent adapter files out of the implementation plan unless regeneration is the explicit change.
+  tasks:
+    - Keep implementation tasks scoped to the selected change only.
+    - Include verification steps for OpenSpec validation and affected repository policy.
+    - Confirm generated agent adapter files remain unchanged unless the change explicitly regenerates them.
