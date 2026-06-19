@@ -56,27 +56,27 @@ export function parseDoubanMovieInfo(
     parseYear(extractByClass(input.html, 'year')) ?? parseYear(h1Title);
 
   const movie: DoubanMovieInfo = {
-    aliases: splitList(info['又名']),
+    aliases: splitList(info.又名),
     capturedAt: input.capturedAt,
     casts: mergePeople(
       peopleFromJsonLd(jsonLd?.actor),
       peopleFromMeta(input.html, 'video:actor'),
-      peopleFromInfo(info['主演']),
+      peopleFromInfo(info.主演),
     ),
     countries: splitList(info['制片国家/地区']),
     directors: mergePeople(
       peopleFromJsonLd(jsonLd?.director),
       peopleFromMeta(input.html, 'video:director'),
-      peopleFromInfo(info['导演']),
+      peopleFromInfo(info.导演),
     ),
     finalUrl: input.finalUrl,
     genres: unique([
       ...toArray(jsonLd?.genre).map(String),
       ...extractAllPropertyText(input.html, 'v:genre'),
-      ...splitList(info['类型']),
+      ...splitList(info.类型),
     ]),
     imdbId: normalizeImdbId(info.IMDb),
-    languages: splitList(info['语言']),
+    languages: splitList(info.语言),
     posterUrl:
       firstNonEmpty(jsonLd?.image, metaContent(input.html, 'og:image')) ??
       extractMainPoster(input.html),
@@ -89,18 +89,18 @@ export function parseDoubanMovieInfo(
     releaseDates: unique([
       ...stringToOptionalArray(jsonLd?.datePublished),
       ...extractAllPropertyText(input.html, 'v:initialReleaseDate'),
-      ...splitList(info['上映日期']),
+      ...splitList(info.上映日期),
     ]),
     runtime:
       normalizeRuntime(jsonLd?.duration) ??
       normalizeRuntime(metaContent(input.html, 'video:duration')) ??
       normalizeRuntime(extractPropertyText(input.html, 'v:runtime')) ??
-      normalizeRuntime(info['片长']),
+      normalizeRuntime(info.片长),
     runtimeMinutes: runtimeMinutes(
       jsonLd?.duration ??
         metaContent(input.html, 'video:duration') ??
         extractPropertyText(input.html, 'v:runtime') ??
-        info['片长'],
+        info.片长,
     ),
     sourceUrl: input.sourceUrl,
     subjectId: input.subjectId,
@@ -112,7 +112,7 @@ export function parseDoubanMovieInfo(
     originalTitle: extractOriginalTitle(h1Title ?? titleText, year),
     writers: mergePeople(
       peopleFromJsonLd(jsonLd?.author),
-      peopleFromInfo(info['编剧']),
+      peopleFromInfo(info.编剧),
     ),
     year,
   };
