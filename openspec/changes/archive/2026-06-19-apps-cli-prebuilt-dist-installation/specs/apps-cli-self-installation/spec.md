@@ -1,7 +1,5 @@
-## Purpose
-Define GitHub-based personal installation, lifecycle status, and update behavior for the `chc` CLI.
+## MODIFIED Requirements
 
-## Requirements
 ### Requirement: Public GitHub Installer
 The repository SHALL provide a shell installer that can be executed from the public GitHub raw URL or from a local checkout to install the `chc` CLI globally from committed prebuilt output.
 

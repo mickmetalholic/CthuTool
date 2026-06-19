@@ -86,6 +86,9 @@ describe('shell completion command', () => {
       'completion',
       'scripts',
       'self-update',
+      'status',
+      'update',
+      'version',
     ]);
     expect(lines((await runCli(['__complete', 'co'])).out)).toEqual([
       'codex',

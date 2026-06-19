@@ -30,6 +30,8 @@ coverage
 out/
 build
 dist
+!apps/cli/dist/
+!apps/cli/dist/index.js
 !apps/desktop/build/
 !apps/desktop/build/icon.svg
 !apps/desktop/build/icon.png

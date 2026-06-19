@@ -5,7 +5,12 @@ import {
   createInternalCompleteCommand,
 } from './completion.command';
 import { scriptsCommand } from './run-scripts.command';
-import { selfUpdateCommand } from './self-update.command';
+import {
+  selfUpdateCommand,
+  statusCommand,
+  updateCommand,
+  versionCommand,
+} from './self-update.command';
 
 let rootCommand: CommandDef;
 
@@ -16,6 +21,9 @@ rootCommand = defineCommand({
   },
   subCommands: {
     codex: codexCommand,
+    version: versionCommand,
+    status: statusCommand,
+    update: updateCommand,
     'self-update': selfUpdateCommand,
     completion: createCompletionCommand(),
     __complete: createInternalCompleteCommand(() => rootCommand),

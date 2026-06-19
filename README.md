@@ -35,7 +35,11 @@ pnpm run test
 pnpm run build
 ```
 
-## Private CLI Install
+## Personal CLI Install
+
+Target machines only need `git`, Node.js 24.x, and `npm` to install or update
+the global CLI. The installer uses the committed `apps/cli/dist/index.js`
+bundle and does not run `pnpm` or `bun` on the target machine.
 
 For personal use from GitHub, run the public installer directly:
 
@@ -52,8 +56,8 @@ chc --help
 ```
 
 The installer clones or updates `https://github.com/mickmetalholic/CthuTool.git`
-into `~/.cthutool/source/CthuTool`, installs workspace dependencies, builds the
-CLI, and runs `npm install -g` for the root package that exposes `chc`.
+into `~/.cthutool/source/CthuTool`, verifies the committed CLI bundle, and runs
+`npm install -g --ignore-scripts` for the root package that exposes `chc`.
 
 Use environment variables to install a different source or version:
 
@@ -66,8 +70,18 @@ CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_INSTALL_DIR="$HO
 After the first install, update from the CLI:
 
 ```bash
-chc self-update
-chc self-update --ref v0.1.0
+chc version
+chc status
+chc update
+chc update --ref v0.1.0
+```
+
+When changing CLI source, refresh and commit the runtime bundle in the same
+change:
+
+```bash
+pnpm --filter @cthutool/cli build
+pnpm run check:cli-dist
 ```
 
 ## Common commands
@@ -75,6 +89,7 @@ chc self-update --ref v0.1.0
 | Command           | Description                                      |
 | ----------------- | ------------------------------------------------ |
 | `pnpm run build`  | Runs `turbo run build` across workspace members. |
+| `pnpm run check:cli-dist` | Verifies the committed CLI bundle matches source. |
 | `pnpm run lint`   | Runs `biome check .` at repo root.               |
 | `pnpm run lint:fix` | Runs `biome check --write .` at repo root.   |
 | `pnpm run typecheck` | Runs `turbo run typecheck` across workspace members. |

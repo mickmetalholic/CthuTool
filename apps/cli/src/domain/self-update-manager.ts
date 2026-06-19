@@ -1,12 +1,14 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const defaultSelfUpdateRepo =
   'https://github.com/mickmetalholic/CthuTool.git';
 export const defaultSelfUpdateRef = 'main';
+export const committedCliBundlePath = 'apps/cli/dist/index.js';
 
 export type SelfUpdateOptions = {
   readonly repo?: string;
@@ -19,8 +21,7 @@ export type SelfUpdateStep =
   | 'fetch'
   | 'checkout'
   | 'pull'
-  | 'install-dependencies'
-  | 'build'
+  | 'verify-bundle'
   | 'install-global';
 
 export type SelfUpdateCommandResult = {
@@ -37,6 +38,16 @@ export type SelfUpdateResult = {
   readonly ref: string;
   readonly installDir: string;
   readonly steps: readonly SelfUpdateStep[];
+};
+
+export type CliInstallationStatus = {
+  readonly version: string;
+  readonly installDir: string;
+  readonly repo: string;
+  readonly ref: string;
+  readonly commit?: string;
+  readonly bundlePath: string;
+  readonly bundlePresent: boolean;
 };
 
 export type SelfUpdateDeps = {
@@ -81,7 +92,11 @@ export function createSelfUpdateDeps(
   };
 }
 
-function resolveOptions(
+export function getCliVersion(): string {
+  return readPackageVersion(findRepoRootFromModule());
+}
+
+export function resolveSelfUpdateOptions(
   options: SelfUpdateOptions,
   deps: SelfUpdateDeps,
 ): Required<SelfUpdateOptions> {
@@ -136,7 +151,7 @@ export async function runSelfUpdate(
   options: SelfUpdateOptions = {},
   deps = createSelfUpdateDeps(),
 ): Promise<SelfUpdateResult> {
-  const resolved = resolveOptions(options, deps);
+  const resolved = resolveSelfUpdateOptions(options, deps);
   const completedSteps: SelfUpdateStep[] = [];
   const recordStep = (step: SelfUpdateStep) => {
     completedSteps.push(step);
@@ -183,18 +198,16 @@ export async function runSelfUpdate(
     );
   }
 
-  recordStep('install-dependencies');
-  await runRequired(deps, 'pnpm', ['install', '--frozen-lockfile'], {
-    cwd: resolved.installDir,
-  });
-
-  recordStep('build');
-  await runRequired(deps, 'pnpm', ['--filter', '@cthutool/cli', 'build'], {
-    cwd: resolved.installDir,
-  });
+  recordStep('verify-bundle');
+  verifyCommittedBundle(deps, resolved.installDir);
 
   recordStep('install-global');
-  await runRequired(deps, 'npm', ['install', '-g', resolved.installDir]);
+  await runRequired(deps, 'npm', [
+    'install',
+    '-g',
+    '--ignore-scripts',
+    resolved.installDir,
+  ]);
 
   return {
     repo: resolved.repo,
@@ -202,6 +215,66 @@ export async function runSelfUpdate(
     installDir: resolved.installDir,
     steps: completedSteps,
   };
+}
+
+export async function getCliInstallationStatus(
+  options: SelfUpdateOptions = {},
+  deps = createSelfUpdateDeps(),
+): Promise<CliInstallationStatus> {
+  const resolved = resolveSelfUpdateOptions(options, deps);
+  const bundlePath = join(resolved.installDir, committedCliBundlePath);
+  const gitRoot = join(resolved.installDir, '.git');
+  const repo = deps.exists(gitRoot)
+    ? ((await runOptional(deps, 'git', ['remote', 'get-url', 'origin'], {
+        cwd: resolved.installDir,
+      })) ?? resolved.repo)
+    : resolved.repo;
+  const ref = deps.exists(gitRoot)
+    ? ((await runOptional(deps, 'git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: resolved.installDir,
+      })) ?? resolved.ref)
+    : resolved.ref;
+  const commit = deps.exists(gitRoot)
+    ? await runOptional(deps, 'git', ['rev-parse', '--short', 'HEAD'], {
+        cwd: resolved.installDir,
+      })
+    : undefined;
+
+  return {
+    version: getCliVersion(),
+    installDir: resolved.installDir,
+    repo,
+    ref,
+    commit,
+    bundlePath,
+    bundlePresent: deps.exists(bundlePath),
+  };
+}
+
+async function runOptional(
+  deps: SelfUpdateDeps,
+  command: string,
+  args: readonly string[],
+  options?: { readonly cwd?: string },
+): Promise<string | undefined> {
+  const result = await deps.run(command, args, {
+    ...options,
+    allowFailure: true,
+  });
+  if (result.code !== 0) {
+    return undefined;
+  }
+  const value = result.stdout.trim();
+  return value.length > 0 ? value : undefined;
+}
+
+function verifyCommittedBundle(deps: SelfUpdateDeps, installDir: string): void {
+  const bundlePath = join(installDir, committedCliBundlePath);
+  if (!deps.exists(bundlePath)) {
+    throw new Error(
+      `missing committed CLI bundle: ${bundlePath}; the selected ref must include ${committedCliBundlePath}`,
+    );
+  }
 }
 
 function formatFailedCommand(result: SelfUpdateCommandResult): string {
@@ -246,4 +319,44 @@ function runCommand(
       });
     });
   });
+}
+
+function findRepoRootFromModule(): string {
+  let current = dirname(fileURLToPath(import.meta.url));
+  while (true) {
+    if (isCthuToolRoot(current)) {
+      return current;
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      throw new Error('Unable to locate CthuTool package root.');
+    }
+    current = parent;
+  }
+}
+
+function isCthuToolRoot(path: string): boolean {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(path, 'package.json'), 'utf8'),
+    ) as {
+      name?: unknown;
+    };
+    return pkg.name === 'cthutool';
+  } catch {
+    return false;
+  }
+}
+
+function readPackageVersion(root: string): string {
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+    version?: unknown;
+  };
+  if (typeof pkg.version !== 'string' || pkg.version.trim().length === 0) {
+    throw new Error(
+      `Package version is missing: ${join(root, 'package.json')}`,
+    );
+  }
+  return pkg.version;
 }

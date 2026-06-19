@@ -11,6 +11,10 @@ chc codex status
 
 The global command runs the built JavaScript bundle with Node. Bun is only used by this repository's build and test scripts.
 
+Target machines only need `git`, Node.js 24.x, and `npm` for the GitHub
+installer and update flow. They do not need `pnpm` or `bun` because the runtime
+bundle is committed at `apps/cli/dist/index.js`.
+
 For personal installation from the public GitHub repository, run the installer
 directly:
 
@@ -24,8 +28,9 @@ Or run the repository installer from a checkout:
 scripts/install-chc.sh
 ```
 
-The installer keeps a source checkout at `~/.cthutool/source/CthuTool`, builds
-`@cthutool/cli`, and installs the root package globally so `chc` is on `PATH`.
+The installer keeps a source checkout at `~/.cthutool/source/CthuTool`,
+verifies the committed CLI bundle, and installs the root package globally so
+`chc` is on `PATH`.
 Override defaults with environment variables:
 
 ```bash
@@ -38,9 +43,14 @@ CHC_INSTALL_DIR="$HOME/dev/CthuTool" scripts/install-chc.sh
 Update an installed CLI in place:
 
 ```bash
-chc self-update
-chc self-update --ref v0.1.0
+chc version
+chc status
+chc update
+chc update --ref v0.1.0
 ```
+
+`chc self-update` remains available as a backward-compatible alias for
+`chc update`.
 
 ## Local Development
 
@@ -59,9 +69,18 @@ chc codex status
 
 The `dev` script watches the TypeScript source and rebuilds `apps/cli/dist/index.js`. The linked `chc` command runs that built JavaScript with Node, matching the production runtime while still picking up local changes after each rebuild.
 
+For release changes to CLI source, refresh and commit the runtime bundle in the
+same change:
+
+```bash
+pnpm --filter @cthutool/cli build
+pnpm run check:cli-dist
+```
+
 ## Shared CLI Contract
 
-For global installation, `npm install -g .` builds `dist/index.js` during packaging and the installed `chc` command runs that built JavaScript with Node.
+For global installation, the installed `chc` command runs the committed
+`apps/cli/dist/index.js` JavaScript bundle with Node.
 
 Commands that support the agent contract accept these common flags:
 
