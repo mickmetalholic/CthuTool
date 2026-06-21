@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { Injectable } from '@nestjs/common';
 import { BrowserAutomationError } from './browser-automation.errors';
 import type {
   BrowserAuthBundle,
@@ -58,10 +58,7 @@ export class BrowserAuthStateStore {
       if (error instanceof BrowserAutomationError) {
         throw error.code === 'INVALID_AUTH_BUNDLE'
           ? error
-          : new BrowserAutomationError(
-              'INVALID_AUTH_BUNDLE',
-              error.message,
-            );
+          : new BrowserAutomationError('INVALID_AUTH_BUNDLE', error.message);
       }
       throw error;
     }
@@ -120,7 +117,10 @@ export class BrowserAuthStateStore {
     fileName: string,
   ): Promise<string> {
     try {
-      return await readFile(join(this.profilePath(profileName), fileName), 'utf8');
+      return await readFile(
+        join(this.profilePath(profileName), fileName),
+        'utf8',
+      );
     } catch (error) {
       if (isNodeError(error) && error.code === 'ENOENT') {
         throw new BrowserAutomationError(

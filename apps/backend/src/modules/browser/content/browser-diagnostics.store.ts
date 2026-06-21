@@ -1,7 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { BrowserDiagnosticsSummary } from '../../browser-automation/browser-automation.types';
+
+export const BROWSER_DIAGNOSTICS_STORE_OPTIONS =
+  'BROWSER_DIAGNOSTICS_STORE_OPTIONS';
 
 export type BrowserDiagnosticsStoreOptions = {
   readonly diagnosticsDir: string;
@@ -16,14 +19,23 @@ export type BrowserDiagnosticsInput = {
   readonly summary: string;
 };
 
+const DEFAULT_BROWSER_DIAGNOSTICS_STORE_OPTIONS: BrowserDiagnosticsStoreOptions =
+  {
+    diagnosticsDir: './data/browser-diagnostics',
+    enabled: true,
+  };
+
 @Injectable()
 export class BrowserDiagnosticsStore {
+  private readonly options: BrowserDiagnosticsStoreOptions;
+
   constructor(
-    private readonly options: BrowserDiagnosticsStoreOptions = {
-      diagnosticsDir: './data/browser-diagnostics',
-      enabled: true,
-    },
-  ) {}
+    @Optional()
+    @Inject(BROWSER_DIAGNOSTICS_STORE_OPTIONS)
+    options?: BrowserDiagnosticsStoreOptions,
+  ) {
+    this.options = options ?? DEFAULT_BROWSER_DIAGNOSTICS_STORE_OPTIONS;
+  }
 
   async save(
     input: BrowserDiagnosticsInput,

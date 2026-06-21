@@ -7,13 +7,16 @@
       "!**/node_modules",
       "!**/dist",
       "!**/build",
-      "!**/coverage"
+      "!**/coverage",
+      "!**/out",
+      "!**/release"
     ]
   },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
-    "indentWidth": 2
+    "indentWidth": 2,
+    "lineEnding": "auto"
   },
   "javascript": {
     "parser": {
@@ -21,6 +24,11 @@
     },
     "formatter": {
       "quoteStyle": "single"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   },
   "linter": {

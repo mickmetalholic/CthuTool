@@ -1,5 +1,5 @@
-import { BrowserAutomationError } from './browser-automation.errors';
 import { assertProfileName } from './browser-auth-state.store';
+import { BrowserAutomationError } from './browser-automation.errors';
 import type { BrowserAuthBundle } from './browser-automation.types';
 
 export type BrowserExtensionOriginStorage = {
@@ -47,9 +47,7 @@ export function createBrowserExtensionAuthBundle(
   };
 }
 
-function assertExtensionSnapshot(
-  snapshot: BrowserExtensionAuthSnapshot,
-): void {
+function assertExtensionSnapshot(snapshot: BrowserExtensionAuthSnapshot): void {
   assertProfileName(snapshot.profileName);
   if (!Array.isArray(snapshot.cookies)) {
     throwInvalidExtensionSnapshot('cookies must be an array');

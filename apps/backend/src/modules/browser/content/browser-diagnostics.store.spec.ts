@@ -14,6 +14,33 @@ describe('BrowserDiagnosticsStore', () => {
     await rm(root, { force: true, recursive: true });
   });
 
+  it('uses the default diagnostics directory when options are omitted', async () => {
+    const store = new BrowserDiagnosticsStore();
+
+    const previousCwd = process.cwd();
+    process.chdir(root);
+    try {
+      const result = await store.save({
+        errorCode: 'BLOCKED',
+        summary: 'Blocked by site',
+      });
+
+      expect(result).toEqual({
+        id: expect.any(String),
+        summary: 'Blocked by site',
+      });
+      const saved = result as NonNullable<typeof result>;
+      await expect(
+        readFile(
+          join(root, 'data', 'browser-diagnostics', saved.id, 'metadata.json'),
+          'utf8',
+        ),
+      ).resolves.toContain('Blocked by site');
+    } finally {
+      process.chdir(previousCwd);
+    }
+  });
+
   it('stores diagnostics behind an identifier without returning raw artifacts', async () => {
     const store = new BrowserDiagnosticsStore({
       diagnosticsDir: root,
