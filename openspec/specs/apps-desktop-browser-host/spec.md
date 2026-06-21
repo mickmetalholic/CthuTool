@@ -15,15 +15,15 @@ CthuDesktop SHALL advertise a browser capability after it can receive controlled
 - **THEN** its agent registration does not advertise browser capability
 
 ### Requirement: Controlled browser command handling
-CthuDesktop SHALL handle only structured browser commands from the backend and SHALL NOT execute arbitrary Playwright scripts received over the agent connection.
+CthuDesktop SHALL handle only structured browser JSON-RPC runtime commands from the backend and SHALL NOT execute arbitrary Playwright scripts received over the agent connection.
 
 #### Scenario: Capture page command
-- **WHEN** CthuDesktop receives a `browser.capturePage` command for a configured site and valid URL
-- **THEN** it opens the page with the requested profile or anonymous context, captures only requested fields, and returns a correlated result
+- **WHEN** CthuDesktop receives a JSON-RPC `browser.capturePage` command for a configured site and valid URL
+- **THEN** it opens the page with the requested profile or anonymous context, captures only requested fields, and returns a correlated JSON-RPC success result
 
 #### Scenario: Unknown browser command
-- **WHEN** CthuDesktop receives an unsupported browser command type
-- **THEN** it returns a structured command error without executing browser work
+- **WHEN** CthuDesktop receives an unsupported browser runtime method
+- **THEN** it returns a correlated JSON-RPC error without executing browser work
 
 #### Scenario: Arbitrary script is rejected
 - **WHEN** a browser command payload attempts to provide executable script text as the browser task
@@ -38,7 +38,7 @@ CthuDesktop SHALL store required-auth site profiles locally using persistent bro
 
 #### Scenario: Required profile is missing
 - **WHEN** a required site profile does not exist locally
-- **THEN** CthuDesktop reports the profile as missing and creates or updates a pending auth task
+- **THEN** CthuDesktop reports the profile as missing through the active browser runtime result or challenge without creating or updating a pending auth task
 
 #### Scenario: Raw profile data remains local
 - **WHEN** CthuDesktop reports profile status to the backend
@@ -48,24 +48,24 @@ CthuDesktop SHALL store required-auth site profiles locally using persistent bro
 CthuDesktop SHALL provide a user-driven login and verification flow for required-auth site profiles while keeping only interactive login windows visible to the user.
 
 #### Scenario: User starts login
-- **WHEN** the user starts login for a pending required site profile
+- **WHEN** the user starts login for a required site profile from an active workflow or browser profile surface
 - **THEN** CthuDesktop opens a headed browser window at the site's configured login URL using that profile's persistent context
 
 #### Scenario: User verifies login
 - **WHEN** the user requests verification after completing login
-- **THEN** CthuDesktop navigates to the configured verification URL, determines profile status, and reports a public profile summary to the backend
+- **THEN** CthuDesktop navigates to the configured verification URL, determines profile status, and returns a public profile summary through the active browser runtime operation
 
 #### Scenario: Login verification succeeds
 - **WHEN** verification confirms the user is logged in
-- **THEN** CthuDesktop marks the profile `verified`, resolves matching pending auth tasks, and reports the verified profile to the backend
+- **THEN** CthuDesktop marks the profile `verified` locally and returns the verified public profile to the caller without resolving any pending auth task
 
 #### Scenario: Login window closes after user login
 - **WHEN** the user closes a headed login browser window for a required site profile
-- **THEN** CthuDesktop automatically verifies the profile using the configured verification URL and updates local profile and pending auth state
+- **THEN** CthuDesktop can verify the profile using the configured verification URL and update local profile state without publishing a browser state snapshot
 
 #### Scenario: Login verification fails
 - **WHEN** verification cannot confirm logged-in status
-- **THEN** CthuDesktop marks the profile `login_required` or `blocked` and keeps a pending auth task open
+- **THEN** CthuDesktop marks the profile `login_required` or `blocked` and returns a structured challenge or verification result without opening a pending auth task
 
 ### Requirement: Browser launch visibility
 CthuDesktop SHALL run non-interactive browser automation without showing a Chrome window while preserving headed windows for user-driven login.
@@ -85,56 +85,6 @@ CthuDesktop SHALL run non-interactive browser automation without showing a Chrom
 #### Scenario: Hidden capture does not bypass access controls
 - **WHEN** hidden browser execution encounters login-required, captcha, abnormal access, rate limiting, or blocked content
 - **THEN** CthuDesktop returns the structured detection state instead of automatically switching to a visible window or attempting to bypass the restriction
-
-### Requirement: Desktop browser state projection
-CthuDesktop SHALL publish non-sensitive local browser state snapshots to the backend over the agent WebSocket after connection and after local profile or pending-auth state changes.
-
-#### Scenario: Agent connects with local browser state
-- **WHEN** CthuDesktop is registered with the backend and its browser host is ready
-- **THEN** it publishes a `browser.stateSnapshot` message containing local profile summaries and pending auth tasks without including cookies, storage-state contents, localStorage values, or profile paths
-
-#### Scenario: Local browser state changes
-- **WHEN** profile verification, login expiry detection, login window auto-verification, or profile clearing changes local browser state
-- **THEN** CthuDesktop publishes an updated `browser.stateSnapshot` message over the active agent WebSocket connection
-
-#### Scenario: Backend reconnect succeeds
-- **WHEN** CthuDesktop reconnects to the backend after a backend restart or network interruption
-- **THEN** it sends a fresh full browser state snapshot after successful registration acknowledgement
-
-#### Scenario: Agent WebSocket is unavailable
-- **WHEN** local browser state changes while CthuDesktop is disconnected from the backend
-- **THEN** CthuDesktop keeps the local state and sends the latest full snapshot after the next successful registration
-
-#### Scenario: Raw profile data remains local
-- **WHEN** CthuDesktop reports browser state to the backend
-- **THEN** it does not include raw cookies, localStorage values, storage-state contents, or profile directory paths
-
-### Requirement: Pending auth task UI
-CthuDesktop SHALL display pending browser-auth attention generated from local preflight, backend requests, or runtime failures in Home and Browser Host without requiring a separate top-level Tasks workspace.
-
-#### Scenario: Local preflight finds missing required profile
-- **WHEN** CthuDesktop loads backend site configuration and a required site has no verified local profile
-- **THEN** it displays browser-auth attention for that site profile in Home and Browser Host
-
-#### Scenario: Backend requests missing auth
-- **WHEN** the backend sends or exposes a pending auth task for a required profile
-- **THEN** CthuDesktop displays or updates the matching browser-auth attention without creating duplicates
-
-#### Scenario: Runtime failure expires profile
-- **WHEN** browser access with a verified profile reaches a login page or receives an expired-auth detection
-- **THEN** CthuDesktop marks the profile `expired`, stops using it for required tasks, and displays re-login browser-auth attention
-
-#### Scenario: Browser-auth attention is summarized on Browser Host
-- **WHEN** Browser Host has one or more pending browser-auth attention items
-- **THEN** the page shows an attention summary with affected site/profile names, reason, source, and available next actions
-
-#### Scenario: Browser-auth attention has an empty state
-- **WHEN** Browser Host has no pending browser-auth attention
-- **THEN** the page shows a concise ready state instead of a blank task or attention area
-
-#### Scenario: Browser-auth attention resolves from Browser Host
-- **WHEN** the user resolves browser-auth attention by opening login, verifying, or clearing a profile from Browser Host
-- **THEN** CthuDesktop refreshes backend and local browser state and updates Home and Browser Host attention state
 
 ### Requirement: Anonymous browser access
 CthuDesktop SHALL use isolated temporary browser contexts for anonymous site access.
@@ -161,21 +111,6 @@ CthuDesktop SHALL enforce browser task timeout, concurrency, payload size, and r
 #### Scenario: Large artifacts are bounded
 - **WHEN** captured HTML or screenshot data exceeds configured response limits
 - **THEN** CthuDesktop returns a structured size-limit result or diagnostic reference rather than an unbounded WebSocket payload
-
-### Requirement: Backend-owned site config consumption
-CthuDesktop SHALL consume effective browser site configuration through backend APIs and SHALL NOT read backend browser site JSON files directly.
-
-#### Scenario: Desktop displays effective backend sites
-- **WHEN** CthuDesktop loads browser site configuration for its browser management UI
-- **THEN** it reads `/api/browser/sites` from the configured backend and displays the effective site definitions returned by backend
-
-#### Scenario: Desktop starts login from backend site config
-- **WHEN** a user starts login for a required site shown in CthuDesktop
-- **THEN** CthuDesktop uses the login URL, verification URL, site id, and profile name returned by backend APIs
-
-#### Scenario: Desktop does not own site JSON
-- **WHEN** backend browser site JSON is changed or mounted differently
-- **THEN** CthuDesktop observes the change only through backend API responses and does not attempt to read, validate, or merge the JSON file locally
 
 ### Requirement: Desktop host Chrome runtime
 CthuDesktop SHALL use the host Google Chrome binary for local browser automation.
@@ -239,84 +174,52 @@ CthuDesktop SHALL verify Douban profiles by using Douban first-party page signal
 
 #### Scenario: Douban abnormal access is blocked
 - **WHEN** CthuDesktop verifies the `douban` profile and the Douban home or mine page indicates captcha, abnormal access verification, or rate limiting
-- **THEN** CthuDesktop marks the verification result as blocked and keeps or creates a pending auth task instead of marking the profile verified
+- **THEN** CthuDesktop marks the verification result as blocked and returns a structured browser runtime challenge or detection instead of marking the profile verified
 
 #### Scenario: Douban account menu succeeds but mine detail is unavailable
 - **WHEN** the Douban account menu confirms login but the mine page does not resolve to a current-user `/people/<externalUserId>/` URL
 - **THEN** CthuDesktop still marks the profile `verified` with the display name and without an external user id
 
 ### Requirement: Douban login status display
-CthuDesktop SHALL display Douban login status in its Browser Host UI using public profile summaries and pending auth tasks.
+CthuDesktop SHALL display Douban login status in its browser/auth UI using public profile summaries, explicit runtime status responses, and operation-scoped browser challenges.
 
 #### Scenario: Douban verified account is shown
 - **WHEN** the browser status data contains a verified `douban` profile with a display name
-- **THEN** the Browser Host UI shows Douban as verified and displays the account display name
+- **THEN** the Desktop UI shows Douban as verified and displays the account display name
 
 #### Scenario: Douban user id is shown when available
 - **WHEN** the browser status data contains a verified `douban` profile with an external user id
-- **THEN** the Browser Host UI displays that external user id with the Douban account status
+- **THEN** the Desktop UI displays that external user id with the Douban account status
 
-#### Scenario: Douban pending login is shown
-- **WHEN** no verified `douban` profile exists and a pending auth task exists for the Douban profile
-- **THEN** the Browser Host UI shows that Douban requires login and displays the pending reason
+#### Scenario: Douban challenge is shown
+- **WHEN** a Douban lookup, status, or verification operation returns a browser runtime challenge for the Douban profile
+- **THEN** the Desktop UI shows that Douban requires user action and offers the relevant runtime action without reading pending auth task state
 
 #### Scenario: Douban status uses public state only
-- **WHEN** the Browser Host UI renders Douban login status
-- **THEN** it uses public profile summaries and pending auth task summaries without reading cookies, localStorage, storage-state contents, or local profile directory internals
-
-### Requirement: Browser Host management workspace
-CthuDesktop SHALL provide a Browser Host workspace for managing the current host machine's browser capability with scannable runtime, attention, profile, and action-feedback sections.
-
-#### Scenario: Browser Host workspace is available
-- **WHEN** the desktop renderer shell is loaded
-- **THEN** the activity bar includes a Browser Host workspace entry for local browser capability management
-
-#### Scenario: Runtime readiness is the first page signal
-- **WHEN** the user opens Browser Host
-- **THEN** the page shows the configured browser runtime status, diagnostic message, and whether the host browser capability is ready before listing managed profiles
-
-#### Scenario: Managed profiles are grouped for scanning
-- **WHEN** backend browser profile summaries are available
-- **THEN** Browser Host shows managed site profiles with site name, profile name, verification state, public account metadata, and required action availability in a row or section optimized for repeated scanning
-
-#### Scenario: Browser actions stay explicit
-- **WHEN** Browser Host shows a required-auth site
-- **THEN** login, verification, and clear-profile actions remain explicit user actions and do not run automatically
-
-#### Scenario: Action feedback is associated with the affected profile
-- **WHEN** the user opens login, verifies, or clears a site profile from Browser Host
-- **THEN** Browser Host shows running, success, or error feedback next to the affected site/profile while preserving page-level recovery feedback for unexpected failures
-
-#### Scenario: Browser status loading is visible
-- **WHEN** Browser Host is refreshing backend browser status
-- **THEN** the page indicates that browser status is loading without hiding existing local pending-auth attention
-
-#### Scenario: Backend browser status failure is recoverable
-- **WHEN** Browser Host cannot load backend browser status
-- **THEN** the page shows a recoverable error and keeps local browser-auth attention visible when local pending-auth state is available
+- **WHEN** the Desktop UI renders Douban login status
+- **THEN** it uses public profile summaries and interaction challenge summaries without reading cookies, localStorage, storage-state contents, local profile directory internals, or pending auth task records
 
 ### Requirement: Browser host protocol correlation
-CthuDesktop browser host SHALL consume protocol observability metadata from browser commands and include compatible metadata in browser results and errors.
+CthuDesktop browser host SHALL consume compatible observability metadata from browser JSON-RPC runtime requests and include compatible metadata in browser JSON-RPC responses.
 
 #### Scenario: Command metadata reaches browser host
-- **WHEN** CthuDesktop receives a browser command with observability metadata
+- **WHEN** CthuDesktop receives a browser runtime request with observability metadata
 - **THEN** the browser host makes that metadata available to local diagnostics without using it to change browser execution permissions
 
 #### Scenario: Error preserves command correlation
-- **WHEN** CthuDesktop returns a browser error
-- **THEN** the error message preserves the command id and compatible observability metadata so backend diagnostics can correlate the failure
+- **WHEN** CthuDesktop returns a browser runtime error response
+- **THEN** the error response preserves the JSON-RPC id and compatible observability metadata so backend diagnostics can correlate the failure
 
 ### Requirement: Browser host command observability
-The desktop browser host SHALL emit command lifecycle diagnostics for supported browser commands while preserving the existing controlled-command and access-control behavior.
+The desktop browser host SHALL emit command lifecycle diagnostics for supported browser runtime methods while preserving the existing controlled-command and access-control behavior.
 
 #### Scenario: Command failure is observable
-- **WHEN** a browser command fails because the host is not ready, the command is invalid, or runtime execution fails
-- **THEN** the browser host returns the existing structured error and records a diagnostic event with command id, command type, reason code, and safe context
+- **WHEN** a browser runtime request fails because the host is not ready, the request is invalid, or runtime execution fails
+- **THEN** the browser host returns the existing structured JSON-RPC error and records a diagnostic event with command id, method, reason code, and safe context
 
 #### Scenario: Access detection is observable
 - **WHEN** browser execution detects login-required, captcha, rate-limited, or blocked content
 - **THEN** the browser host records the detection kind and safe site/profile context without attempting to bypass the access control
-
 ### Requirement: Desktop-owned browser sessions
 CthuDesktop SHALL own Playwright browser session state for backend-created
 public browser sessions.
