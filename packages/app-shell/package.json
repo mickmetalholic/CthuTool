@@ -12,10 +12,11 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.test.json --noEmit",
+    "build:deps": "pnpm --filter @cthutool/ui build",
+    "build": "pnpm run build:deps && tsc -p tsconfig.json",
+    "test": "pnpm run build:deps && tsc -p tsconfig.test.json --noEmit",
     "test:cov": "node -e \"console.log('No coverage configured for @cthutool/app-shell')\"",
-    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "typecheck": "pnpm run build:deps && tsc -p tsconfig.test.json --noEmit",
     "lint": "biome check ."
   },
   "dependencies": {

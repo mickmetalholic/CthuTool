@@ -2,6 +2,14 @@ import { BrowserAutomationError } from '../../browser-automation/browser-automat
 import { BrowserTaskRunner } from './browser-task-runner';
 
 describe('BrowserTaskRunner', () => {
+  it('runs tasks when options are omitted', async () => {
+    const runner = new BrowserTaskRunner();
+
+    await expect(
+      runner.run('default-options', async () => 'done', { timeoutMs: 50 }),
+    ).resolves.toBe('done');
+  });
+
   it('runs tasks within the configured concurrency limit', async () => {
     const runner = new BrowserTaskRunner({
       defaultDelayMs: 0,

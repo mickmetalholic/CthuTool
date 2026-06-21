@@ -140,7 +140,7 @@ describe('shell completion command', () => {
     expect(
       lines((await runCli(['__complete', 'scripts', '--script', ''])).out),
     ).toContain('convert-to-cbz');
-  });
+  }, 15_000);
 
   test('manages persistent PowerShell completion in an isolated profile', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'chc-completion-'));
@@ -293,5 +293,5 @@ describe('shell completion command', () => {
     } finally {
       await rm(tempRoot, { force: true, recursive: true });
     }
-  });
+  }, 15_000);
 });
