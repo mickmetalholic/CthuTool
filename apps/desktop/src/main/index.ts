@@ -3,10 +3,9 @@ import { join } from 'node:path';
 import { platform } from 'node:process';
 import {
   BROWSER_CAPABILITY,
-  type BrowserCommandPayload,
-  type BrowserPendingAuthTaskSummary,
-  type BrowserStateSnapshotPayload,
-} from '@cthutool/agent-protocol';
+  type BrowserRuntimeMethod,
+  createBrowserRuntimeRequest,
+} from '@cthutool/browser-runtime-protocol';
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import WebSocket from 'ws';
 import {
@@ -21,7 +20,6 @@ import {
   JsonDesktopConfigStorage,
 } from './config';
 import { DesktopObservabilityRecorder } from './observability';
-import { PendingAuthTaskStore } from './pending-auth-task-store';
 import { PlaywrightHost } from './playwright-host';
 import { resolveDesktopWindowBounds } from './window-bounds';
 
@@ -31,9 +29,7 @@ app.setAppUserModelId('dev.cthutool.desktop');
 let mainWindow: BrowserWindow | undefined;
 let agentClient: AgentClient | undefined;
 let configStore: DesktopConfigStore | undefined;
-let browserProfileStore: BrowserProfileStore | undefined;
 let playwrightHost: PlaywrightHost | undefined;
-let pendingAuthTasks: PendingAuthTaskStore | undefined;
 const desktopObservability = new DesktopObservabilityRecorder();
 
 type BrowserSiteActionInput = {
@@ -97,10 +93,6 @@ function emitConnectionState(state: AgentConnectionState): void {
 function setupIpc(store: DesktopConfigStore): void {
   ipcMain.handle('desktop:getConfig', () => store.load());
   ipcMain.handle('desktop:getConnectionState', () => agentClient?.getState());
-  ipcMain.handle(
-    'browser:getLocalPendingAuthTasks',
-    () => pendingAuthTasks?.list() ?? [],
-  );
   ipcMain.handle('browser:openLogin', (_event, input: BrowserSiteActionInput) =>
     executeBrowserAction(input, 'browser.openLogin'),
   );
@@ -131,7 +123,6 @@ function setupIpc(store: DesktopConfigStore): void {
     const config = store.savePatch(patch);
     playwrightHost?.setBrowserRuntime(config.browserRuntime);
     void playwrightHost?.initialize().then(() => {
-      void publishLocalBrowserState();
       agentClient?.refreshConfig();
     });
     return config;
@@ -159,77 +150,33 @@ function setupIpc(store: DesktopConfigStore): void {
 
 async function executeBrowserAction(
   input: BrowserSiteActionInput,
-  command: BrowserCommandPayload['command'],
+  command: Extract<
+    BrowserRuntimeMethod,
+    'browser.openLogin' | 'browser.verifyProfile' | 'browser.clearProfile'
+  >,
 ) {
   if (!playwrightHost) {
     throw new Error('Browser host is not initialized');
   }
   const profileName = input.profileName;
-  const commandId = randomUUID();
-  const payload: BrowserCommandPayload = {
-    authPolicy: 'required',
-    command,
-    commandId,
+  const payload = {
+    authPolicy: 'required' as const,
     loginUrl: input.loginUrl,
-    observability: {
-      commandId,
-      operation: command,
-    },
     profileName,
     siteId: input.siteId,
     timeoutMs: 120_000,
     verifyUrl: input.verifyUrl,
   };
-  const result = await playwrightHost.execute(payload);
-  await publishLocalBrowserState();
-  return result;
-}
-
-async function publishLocalBrowserState(): Promise<void> {
-  desktopObservability.emit({
-    event: 'browser.state_changed',
-    message: 'Publishing local browser state snapshot',
-  });
-  await agentClient?.sendBrowserStateSnapshot();
-}
-
-async function buildBrowserStateSnapshot(): Promise<BrowserStateSnapshotPayload> {
-  const agentId = configStore?.load().agentId;
-  if (!agentId) {
-    throw new Error('Desktop agent id is not configured');
-  }
-  const profileStore = browserProfileStore;
-
-  return {
-    agentId,
-    pendingAuthTasks:
-      pendingAuthTasks
-        ?.list()
-        .filter(
-          (task) => task.status === 'open' || task.status === 'in_progress',
-        )
-        .map(
-          (task): BrowserPendingAuthTaskSummary => ({
-            agentId,
-            createdAt: task.createdAt,
-            id: `${agentId}:${task.siteId}:${task.profileName}`,
-            loginUrl: task.loginUrl,
-            profileName: task.profileName,
-            reason:
-              task.reason === 'access_failed'
-                ? 'verification_failed'
-                : task.reason,
-            siteId: task.siteId,
-            updatedAt: task.updatedAt,
-            verifyUrl: task.verifyUrl,
-          }),
-        ) ?? [],
-    profiles: profileStore
-      ? (await profileStore.listProfiles()).map((profile) =>
-          profileStore.toPublicProfile(agentId, profile),
-        )
-      : [],
-  };
+  const commandId = randomUUID();
+  return playwrightHost.executeRequest(
+    {
+      ...createBrowserRuntimeRequest(commandId, command, payload),
+      observability: {
+        commandId,
+        operation: command,
+      },
+    },
+  );
 }
 
 function persistWindowState(): void {
@@ -255,15 +202,11 @@ app.whenReady().then(async () => {
   const profileStore = new BrowserProfileStore(
     join(userDataDir, 'browser-profiles'),
   );
-  browserProfileStore = profileStore;
-  pendingAuthTasks = new PendingAuthTaskStore();
   const config = store.load();
   playwrightHost = new PlaywrightHost({
     agentId: config.agentId,
     browserRuntime: config.browserRuntime,
     observability: desktopObservability,
-    onStateChanged: () => publishLocalBrowserState(),
-    pendingAuthTasks,
     profileStore,
   });
   await playwrightHost.initialize();
@@ -279,13 +222,12 @@ app.whenReady().then(async () => {
     version: appVersion,
     getCapabilities: () =>
       playwrightHost?.isReady() ? [BROWSER_CAPABILITY] : [],
-    handleBrowserCommand: (command) => {
+    handleBrowserRequest: (request) => {
       if (!playwrightHost) {
         throw new Error('Browser host is not initialized');
       }
-      return playwrightHost.execute(command);
+      return playwrightHost.executeRequest(request);
     },
-    getBrowserStateSnapshot: buildBrowserStateSnapshot,
     onStateChange: emitConnectionState,
     observability: desktopObservability,
   });

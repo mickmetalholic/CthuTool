@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build:deps": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/config build",
+    "build:deps": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/browser-runtime-protocol build && pnpm --filter @cthutool/config build",
     "dev": "pnpm run build:deps && nest start --watch",
     "start": "pnpm run build:deps && nest start",
     "start:debug": "pnpm run build:deps && nest start --debug --watch",
@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@cthutool/agent-protocol": "workspace:*",
+    "@cthutool/browser-runtime-protocol": "workspace:*",
     "@cthutool/config": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",

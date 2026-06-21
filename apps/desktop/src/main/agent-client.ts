@@ -2,15 +2,18 @@ import type {
   AgentClientMessage,
   AgentHelloPayload,
   AgentPlatform,
-  BrowserCommandPayload,
-  BrowserErrorMessage,
-  BrowserResultMessage,
-  BrowserStateSnapshotPayload,
 } from '@cthutool/agent-protocol';
 import {
-  createBrowserStateSnapshotMessage,
+  createJsonRpcErrorResponse,
+  JSON_RPC_INVALID_PARAMS,
+  JSON_RPC_METHOD_NOT_FOUND,
   parseAgentServerMessageJson,
 } from '@cthutool/agent-protocol';
+import type {
+  BrowserRuntimeRequest,
+  BrowserRuntimeResponse,
+} from '@cthutool/browser-runtime-protocol';
+import { validateBrowserRuntimeRequest } from '@cthutool/browser-runtime-protocol';
 import type { DesktopConfig } from './config';
 import {
   createDesktopObservabilityEvent,
@@ -78,12 +81,9 @@ export type AgentClientOptions = {
   readonly observability?: DesktopObservabilitySink;
   readonly now?: () => Date;
   readonly getCapabilities?: () => readonly string[];
-  readonly handleBrowserCommand?: (
-    command: BrowserCommandPayload,
-  ) => Promise<BrowserResultMessage | BrowserErrorMessage>;
-  readonly getBrowserStateSnapshot?: () =>
-    | BrowserStateSnapshotPayload
-    | Promise<BrowserStateSnapshotPayload>;
+  readonly handleBrowserRequest?: (
+    request: BrowserRuntimeRequest,
+  ) => Promise<BrowserRuntimeResponse>;
 };
 
 export class AgentClient {
@@ -175,22 +175,6 @@ export class AgentClient {
     };
   }
 
-  async sendBrowserStateSnapshot(): Promise<void> {
-    if (
-      this.state.status !== 'connected' ||
-      this.socket?.readyState !== 1 ||
-      !this.options.getBrowserStateSnapshot
-    ) {
-      return;
-    }
-
-    this.send(
-      createBrowserStateSnapshotMessage(
-        await this.options.getBrowserStateSnapshot(),
-      ),
-    );
-  }
-
   private connect(): void {
     const config = this.options.getConfig();
     if (!config.connectionEnabled) {
@@ -269,6 +253,20 @@ export class AgentClient {
       return;
     }
 
+    if (!('type' in parsed.value)) {
+      this.recordObservability({
+        details: {
+          commandId: String(parsed.value.id),
+          operation: parsed.value.method,
+          ...observabilityDetailsFromMetadata(parsed.value.observability),
+        },
+        event: 'browser.command_received',
+        message: 'Received browser runtime request from backend',
+      });
+      void this.handleJsonRpcRequest(parsed.value);
+      return;
+    }
+
     if (parsed.value.type === 'agent.registered') {
       this.recordObservability({
         details: {
@@ -283,7 +281,6 @@ export class AgentClient {
       this.setState('connected', undefined, this.now().toISOString());
       this.options.onRegistered?.(this.state);
       this.startHeartbeat();
-      void this.sendBrowserStateSnapshot();
       return;
     }
 
@@ -302,57 +299,62 @@ export class AgentClient {
       this.setState(this.state.status, 'Backend rejected agent message');
       return;
     }
-
-    if (parsed.value.type === 'browser.command') {
-      this.recordObservability({
-        details: {
-          command: parsed.value.payload.command,
-          commandId: parsed.value.payload.commandId,
-          profileName: parsed.value.payload.profileName,
-          siteId: parsed.value.payload.siteId,
-          ...observabilityDetailsFromMetadata(
-            parsed.value.payload.observability,
-          ),
-        },
-        event: 'browser.command_received',
-        message: 'Received browser command from backend',
-      });
-      void this.handleBrowserCommand(parsed.value.payload);
-    }
   }
 
-  private async handleBrowserCommand(
-    command: BrowserCommandPayload,
-  ): Promise<void> {
-    if (!this.options.handleBrowserCommand) {
+  private async handleJsonRpcRequest(request: unknown): Promise<void> {
+    const parsed = validateBrowserRuntimeRequest(request);
+    if (!parsed.ok) {
+      const id =
+        typeof request === 'object' &&
+        request !== null &&
+        'id' in request &&
+        (typeof request.id === 'string' || typeof request.id === 'number')
+          ? request.id
+          : 'unknown';
       this.recordObservability({
         details: {
-          command: command.command,
-          commandId: command.commandId,
+          commandId: String(id),
+          outcome: 'invalid',
+          reasonCode: 'INVALID_BROWSER_RUNTIME_REQUEST',
+        },
+        event: 'browser.command_failed',
+        level: 'warn',
+        message: 'Browser runtime request is invalid',
+      });
+      this.send(
+        createJsonRpcErrorResponse(id, {
+          code: JSON_RPC_INVALID_PARAMS,
+          message: parsed.message,
+        }),
+      );
+      return;
+    }
+
+    if (!this.options.handleBrowserRequest) {
+      this.recordObservability({
+        details: {
+          command: parsed.value.method,
+          commandId: String(parsed.value.id),
           outcome: 'unavailable',
           reasonCode: 'BROWSER_CAPABILITY_UNAVAILABLE',
-          siteId: command.siteId,
-          ...observabilityDetailsFromMetadata(command.observability),
+          ...observabilityDetailsFromMetadata(parsed.value.observability),
         },
         event: 'browser.command_failed',
         level: 'warn',
         message: 'Browser capability is not available',
       });
-      this.send({
-        type: 'browser.error',
-        payload: {
-          code: 'BROWSER_CAPABILITY_UNAVAILABLE',
-          command: command.command,
-          commandId: command.commandId,
+      this.send(
+        createJsonRpcErrorResponse(parsed.value.id, {
+          code: JSON_RPC_METHOD_NOT_FOUND,
           message: 'Browser capability is not available',
-          ...(command.observability
-            ? { observability: command.observability }
-            : {}),
-        },
-      });
+          data: {
+            code: 'BROWSER_CAPABILITY_UNAVAILABLE',
+          },
+        }, parsed.value.observability),
+      );
       return;
     }
-    this.send(await this.options.handleBrowserCommand(command));
+    this.send(await this.options.handleBrowserRequest(parsed.value));
   }
 
   private startHeartbeat(): void {

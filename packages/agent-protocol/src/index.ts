@@ -2,63 +2,30 @@ import * as v from 'valibot';
 
 const AGENT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 const CAPABILITY_PATTERN = /^[a-z][a-z0-9._:-]{0,63}$/;
-const SITE_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
-const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
 const OBSERVABILITY_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 const OPERATION_NAME_PATTERN = /^[a-z][a-zA-Z0-9._:-]{0,127}$/;
 
+export const JSON_RPC_VERSION = '2.0';
+export const JSON_RPC_PARSE_ERROR = -32700;
+export const JSON_RPC_INVALID_REQUEST = -32600;
+export const JSON_RPC_METHOD_NOT_FOUND = -32601;
+export const JSON_RPC_INVALID_PARAMS = -32602;
+export const JSON_RPC_INTERNAL_ERROR = -32603;
+
 export const AGENT_PLATFORMS = ['darwin', 'win32', 'linux', 'unknown'] as const;
-export const BROWSER_CAPABILITY = 'browser';
-export const BROWSER_AUTH_POLICIES = ['anonymous', 'required'] as const;
-export const BROWSER_COMMANDS = [
-  'browser.capturePage',
-  'browser.verifyProfile',
-  'browser.openLogin',
-  'browser.clearProfile',
-  'browser.createSession',
-  'browser.runActions',
-  'browser.closeSession',
+export const AGENT_LIFECYCLE_MESSAGE_TYPES = [
+  'agent.hello',
+  'agent.heartbeat',
+  'agent.registered',
+  'agent.error',
 ] as const;
-export const BROWSER_ACTION_TYPES = [
-  'goto',
-  'waitForSelector',
-  'click',
-  'fill',
-  'textContent',
-  'content',
-  'title',
-  'screenshot',
+export const AGENT_CLIENT_LIFECYCLE_MESSAGE_TYPES = [
+  'agent.hello',
+  'agent.heartbeat',
 ] as const;
-export const BROWSER_RESOURCE_TYPES = [
-  'document',
-  'font',
-  'image',
-  'media',
-  'script',
-  'stylesheet',
-  'xhr',
-  'fetch',
-] as const;
-export const BROWSER_DETECTION_KINDS = [
-  'ok',
-  'login_required',
-  'rate_limited',
-  'captcha_required',
-  'blocked',
-] as const;
-export const BROWSER_PROFILE_STATUSES = [
-  'missing',
-  'login_required',
-  'verifying',
-  'verified',
-  'expired',
-  'blocked',
-] as const;
-export const BROWSER_PENDING_AUTH_REASONS = [
-  'missing',
-  'expired',
-  'blocked',
-  'verification_failed',
+export const AGENT_SERVER_LIFECYCLE_MESSAGE_TYPES = [
+  'agent.registered',
+  'agent.error',
 ] as const;
 
 const AgentIdSchema = v.pipe(
@@ -91,117 +58,19 @@ const CapabilitySchema = v.pipe(
   v.regex(CAPABILITY_PATTERN),
 );
 
-const CommandIdSchema = v.pipe(
-  v.string(),
-  v.trim(),
-  v.minLength(1),
-  v.maxLength(128),
-);
-
-const BrowserSessionIdSchema = v.pipe(
-  v.string(),
-  v.trim(),
-  v.minLength(1),
-  v.maxLength(128),
-);
-
-const SiteIdSchema = v.pipe(
-  v.string(),
-  v.trim(),
-  v.minLength(1),
-  v.maxLength(64),
-  v.regex(SITE_ID_PATTERN),
-);
-
-const ProfileNameSchema = v.pipe(
-  v.string(),
-  v.trim(),
-  v.minLength(1),
-  v.maxLength(64),
-  v.regex(PROFILE_NAME_PATTERN),
-);
-
-const HttpUrlSchema = v.pipe(v.string(), v.url());
-
-const PositiveIntegerSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
-const WaitUntilSchema = v.picklist(['domcontentloaded', 'load', 'networkidle']);
-const BrowserActionIdSchema = v.pipe(
-  v.string(),
-  v.trim(),
-  v.minLength(1),
-  v.maxLength(128),
-);
-const BrowserSelectorSchema = v.pipe(
-  v.string(),
-  v.trim(),
-  v.minLength(1),
-  v.maxLength(2048),
-);
-const BrowserActionBaseSchema = v.object({
-  actionId: v.optional(BrowserActionIdSchema),
-  timeoutMs: v.optional(PositiveIntegerSchema),
-});
-export const BrowserActionSchema = v.variant('type', [
-  v.object({
-    ...BrowserActionBaseSchema.entries,
-    type: v.literal('goto'),
-    url: HttpUrlSchema,
-    waitUntil: v.optional(WaitUntilSchema),
-  }),
-  v.object({
-    ...BrowserActionBaseSchema.entries,
-    type: v.literal('waitForSelector'),
-    selector: BrowserSelectorSchema,
-  }),
-  v.object({
-    ...BrowserActionBaseSchema.entries,
-    type: v.literal('click'),
-    selector: BrowserSelectorSchema,
-  }),
-  v.object({
-    ...BrowserActionBaseSchema.entries,
-    type: v.literal('fill'),
-    selector: BrowserSelectorSchema,
-    value: v.pipe(v.string(), v.maxLength(100_000)),
-  }),
-  v.object({
-    ...BrowserActionBaseSchema.entries,
-    type: v.literal('textContent'),
-    selector: BrowserSelectorSchema,
-  }),
-  v.object({
-    ...BrowserActionBaseSchema.entries,
-    type: v.literal('content'),
-  }),
-  v.object({
-    ...BrowserActionBaseSchema.entries,
-    type: v.literal('title'),
-  }),
-  v.object({
-    ...BrowserActionBaseSchema.entries,
-    type: v.literal('screenshot'),
-    fullPage: v.optional(v.boolean()),
-  }),
+const JsonRpcIdSchema = v.union([
+  v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  v.pipe(v.number(), v.integer()),
 ]);
 
-export const BrowserActionResultSchema = v.object({
-  actionId: v.optional(BrowserActionIdSchema),
-  type: v.picklist(BROWSER_ACTION_TYPES),
-  finalUrl: v.optional(HttpUrlSchema),
-  status: v.optional(v.pipe(v.number(), v.integer())),
-  title: v.optional(v.string()),
-  html: v.optional(v.string()),
-  text: v.optional(v.string()),
-  screenshotBase64: v.optional(v.string()),
-});
+const JsonRpcMethodSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(128),
+);
 
-export const BrowserSessionMetadataSchema = v.object({
-  sessionId: BrowserSessionIdSchema,
-  siteId: SiteIdSchema,
-  profileName: v.optional(ProfileNameSchema),
-  createdAt: v.pipe(v.string(), v.isoTimestamp()),
-  expiresAt: v.pipe(v.string(), v.isoTimestamp()),
-});
+const JsonRpcVersionSchema = v.literal(JSON_RPC_VERSION);
 
 const ObservabilityIdSchema = v.pipe(
   v.string(),
@@ -224,7 +93,7 @@ export const AgentObservabilityMetadataSchema = v.object({
   traceId: v.optional(ObservabilityIdSchema),
   parentId: v.optional(ObservabilityIdSchema),
   operation: v.optional(OperationNameSchema),
-  commandId: v.optional(CommandIdSchema),
+  commandId: v.optional(JsonRpcIdSchema),
 });
 
 export const AgentHelloPayloadSchema = v.object({
@@ -252,130 +121,6 @@ export const AgentHeartbeatMessageSchema = v.object({
   payload: AgentHeartbeatPayloadSchema,
 });
 
-export const BrowserProfileSummarySchema = v.object({
-  agentId: AgentIdSchema,
-  siteId: SiteIdSchema,
-  profileName: ProfileNameSchema,
-  status: v.picklist(BROWSER_PROFILE_STATUSES),
-  displayName: v.optional(NonEmptyDisplayStringSchema),
-  externalUserId: v.optional(NonEmptyDisplayStringSchema),
-  verifiedAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
-  updatedAt: v.pipe(v.string(), v.isoTimestamp()),
-});
-
-export const BrowserProfileStatusMessageSchema = v.object({
-  type: v.literal('browser.profileStatus'),
-  payload: BrowserProfileSummarySchema,
-});
-
-export const BrowserPendingAuthTaskSummarySchema = v.object({
-  agentId: AgentIdSchema,
-  id: NonEmptyDisplayStringSchema,
-  siteId: SiteIdSchema,
-  profileName: ProfileNameSchema,
-  reason: v.picklist(BROWSER_PENDING_AUTH_REASONS),
-  loginUrl: v.optional(HttpUrlSchema),
-  verifyUrl: v.optional(HttpUrlSchema),
-  createdAt: v.pipe(v.string(), v.isoTimestamp()),
-  updatedAt: v.pipe(v.string(), v.isoTimestamp()),
-});
-
-export const BrowserStateSnapshotPayloadSchema = v.object({
-  agentId: AgentIdSchema,
-  profiles: v.array(BrowserProfileSummarySchema),
-  pendingAuthTasks: v.array(BrowserPendingAuthTaskSummarySchema),
-  observability: v.optional(AgentObservabilityMetadataSchema),
-});
-
-export const BrowserStateSnapshotMessageSchema = v.object({
-  type: v.literal('browser.stateSnapshot'),
-  payload: BrowserStateSnapshotPayloadSchema,
-});
-
-export const BrowserCommandPayloadSchema = v.object({
-  commandId: CommandIdSchema,
-  command: v.picklist(BROWSER_COMMANDS),
-  siteId: SiteIdSchema,
-  sessionId: v.optional(BrowserSessionIdSchema),
-  url: v.optional(HttpUrlSchema),
-  profileName: v.optional(ProfileNameSchema),
-  authPolicy: v.picklist(BROWSER_AUTH_POLICIES),
-  loginUrl: v.optional(HttpUrlSchema),
-  verifyUrl: v.optional(HttpUrlSchema),
-  includeHtml: v.optional(v.boolean()),
-  includeText: v.optional(v.boolean()),
-  includeScreenshot: v.optional(v.boolean()),
-  waitUntil: v.optional(
-    v.picklist(['domcontentloaded', 'load', 'networkidle']),
-  ),
-  timeoutMs: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
-  blockResources: v.optional(v.array(v.picklist(BROWSER_RESOURCE_TYPES))),
-  suppressPendingAuthTask: v.optional(v.boolean()),
-  expiresAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
-  actions: v.optional(v.array(BrowserActionSchema)),
-  observability: v.optional(AgentObservabilityMetadataSchema),
-});
-
-export const BrowserCommandMessageSchema = v.object({
-  type: v.literal('browser.command'),
-  payload: BrowserCommandPayloadSchema,
-});
-
-export const BrowserDetectionSchema = v.object({
-  kind: v.picklist(BROWSER_DETECTION_KINDS),
-  reason: v.optional(v.string()),
-});
-
-export const BrowserResultPayloadSchema = v.object({
-  commandId: CommandIdSchema,
-  command: v.picklist(BROWSER_COMMANDS),
-  sessionId: v.optional(BrowserSessionIdSchema),
-  finalUrl: v.optional(HttpUrlSchema),
-  status: v.optional(v.pipe(v.number(), v.integer())),
-  title: v.optional(v.string()),
-  html: v.optional(v.string()),
-  text: v.optional(v.string()),
-  screenshotBase64: v.optional(v.string()),
-  capturedAt: v.pipe(v.string(), v.isoTimestamp()),
-  detection: BrowserDetectionSchema,
-  profile: v.optional(BrowserProfileSummarySchema),
-  session: v.optional(BrowserSessionMetadataSchema),
-  actionResults: v.optional(v.array(BrowserActionResultSchema)),
-  observability: v.optional(AgentObservabilityMetadataSchema),
-});
-
-export const BrowserResultMessageSchema = v.object({
-  type: v.literal('browser.result'),
-  payload: BrowserResultPayloadSchema,
-});
-
-export const BrowserErrorPayloadSchema = v.object({
-  commandId: CommandIdSchema,
-  command: v.picklist(BROWSER_COMMANDS),
-  code: NonEmptyDisplayStringSchema,
-  message: NonEmptyDisplayStringSchema,
-  profileStatus: v.optional(v.picklist(BROWSER_PROFILE_STATUSES)),
-  retryable: v.optional(v.boolean()),
-  sessionId: v.optional(BrowserSessionIdSchema),
-  failedActionIndex: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
-  failedActionType: v.optional(v.picklist(BROWSER_ACTION_TYPES)),
-  observability: v.optional(AgentObservabilityMetadataSchema),
-});
-
-export const BrowserErrorMessageSchema = v.object({
-  type: v.literal('browser.error'),
-  payload: BrowserErrorPayloadSchema,
-});
-
-export const AgentClientMessageSchema = v.variant('type', [
-  AgentHelloMessageSchema,
-  AgentHeartbeatMessageSchema,
-  BrowserResultMessageSchema,
-  BrowserErrorMessageSchema,
-  BrowserProfileStatusMessageSchema,
-  BrowserStateSnapshotMessageSchema,
-]);
-
 export const AgentRegisteredMessageSchema = v.object({
   type: v.literal('agent.registered'),
   payload: v.object({
@@ -394,10 +139,64 @@ export const AgentErrorMessageSchema = v.object({
   }),
 });
 
-export const AgentServerMessageSchema = v.variant('type', [
+export const AgentClientLifecycleMessageSchema = v.variant('type', [
+  AgentHelloMessageSchema,
+  AgentHeartbeatMessageSchema,
+]);
+
+export const AgentServerLifecycleMessageSchema = v.variant('type', [
   AgentRegisteredMessageSchema,
   AgentErrorMessageSchema,
-  BrowserCommandMessageSchema,
+]);
+
+export const AgentLifecycleMessageSchema = v.variant('type', [
+  AgentHelloMessageSchema,
+  AgentHeartbeatMessageSchema,
+  AgentRegisteredMessageSchema,
+  AgentErrorMessageSchema,
+]);
+
+export const JsonRpcRequestSchema = v.object({
+  jsonrpc: JsonRpcVersionSchema,
+  id: JsonRpcIdSchema,
+  method: JsonRpcMethodSchema,
+  params: v.optional(v.unknown()),
+  observability: v.optional(AgentObservabilityMetadataSchema),
+});
+
+export const JsonRpcErrorObjectSchema = v.object({
+  code: v.pipe(v.number(), v.integer()),
+  message: NonEmptyDisplayStringSchema,
+  data: v.optional(v.unknown()),
+});
+
+export const JsonRpcSuccessResponseSchema = v.object({
+  jsonrpc: JsonRpcVersionSchema,
+  id: JsonRpcIdSchema,
+  result: v.unknown(),
+  observability: v.optional(AgentObservabilityMetadataSchema),
+});
+
+export const JsonRpcErrorResponseSchema = v.object({
+  jsonrpc: JsonRpcVersionSchema,
+  id: JsonRpcIdSchema,
+  error: JsonRpcErrorObjectSchema,
+  observability: v.optional(AgentObservabilityMetadataSchema),
+});
+
+export const JsonRpcResponseSchema = v.union([
+  JsonRpcSuccessResponseSchema,
+  JsonRpcErrorResponseSchema,
+]);
+
+export const AgentClientMessageSchema = v.union([
+  AgentClientLifecycleMessageSchema,
+  JsonRpcResponseSchema,
+]);
+
+export const AgentServerMessageSchema = v.union([
+  AgentServerLifecycleMessageSchema,
+  JsonRpcRequestSchema,
 ]);
 
 export const PublicAgentStatusSchema = v.object({
@@ -415,6 +214,12 @@ export const PublicAgentStatusSchema = v.object({
 export type AgentPlatform = v.InferOutput<
   typeof AgentHelloPayloadSchema
 >['platform'];
+export type AgentLifecycleMessageType =
+  (typeof AGENT_LIFECYCLE_MESSAGE_TYPES)[number];
+export type AgentClientLifecycleMessageType =
+  (typeof AGENT_CLIENT_LIFECYCLE_MESSAGE_TYPES)[number];
+export type AgentServerLifecycleMessageType =
+  (typeof AGENT_SERVER_LIFECYCLE_MESSAGE_TYPES)[number];
 export type AgentHelloPayload = v.InferOutput<typeof AgentHelloPayloadSchema>;
 export type AgentHelloMessage = v.InferOutput<typeof AgentHelloMessageSchema>;
 export type AgentHeartbeatPayload = v.InferOutput<
@@ -426,62 +231,49 @@ export type AgentHeartbeatMessage = v.InferOutput<
 export type AgentObservabilityMetadata = v.InferOutput<
   typeof AgentObservabilityMetadataSchema
 >;
-export type AgentClientMessage = v.InferOutput<typeof AgentClientMessageSchema>;
 export type AgentRegisteredMessage = v.InferOutput<
   typeof AgentRegisteredMessageSchema
 >;
 export type AgentErrorMessage = v.InferOutput<typeof AgentErrorMessageSchema>;
+export type AgentClientLifecycleMessage = v.InferOutput<
+  typeof AgentClientLifecycleMessageSchema
+>;
+export type AgentServerLifecycleMessage = v.InferOutput<
+  typeof AgentServerLifecycleMessageSchema
+>;
+export type AgentLifecycleMessage = v.InferOutput<
+  typeof AgentLifecycleMessageSchema
+>;
+export type JsonRpcId = v.InferOutput<typeof JsonRpcRequestSchema>['id'];
+export type JsonRpcRequest<TParams = unknown> = {
+  readonly jsonrpc: typeof JSON_RPC_VERSION;
+  readonly id: JsonRpcId;
+  readonly method: string;
+  readonly params?: TParams;
+  readonly observability?: AgentObservabilityMetadata;
+};
+export type JsonRpcErrorObject<TData = unknown> = {
+  readonly code: number;
+  readonly message: string;
+  readonly data?: TData;
+};
+export type JsonRpcSuccessResponse<TResult = unknown> = {
+  readonly jsonrpc: typeof JSON_RPC_VERSION;
+  readonly id: JsonRpcId;
+  readonly result: TResult;
+  readonly observability?: AgentObservabilityMetadata;
+};
+export type JsonRpcErrorResponse<TData = unknown> = {
+  readonly jsonrpc: typeof JSON_RPC_VERSION;
+  readonly id: JsonRpcId;
+  readonly error: JsonRpcErrorObject<TData>;
+  readonly observability?: AgentObservabilityMetadata;
+};
+export type JsonRpcResponse<TResult = unknown, TErrorData = unknown> =
+  | JsonRpcSuccessResponse<TResult>
+  | JsonRpcErrorResponse<TErrorData>;
+export type AgentClientMessage = v.InferOutput<typeof AgentClientMessageSchema>;
 export type AgentServerMessage = v.InferOutput<typeof AgentServerMessageSchema>;
-export type BrowserAuthPolicy = v.InferOutput<
-  typeof BrowserCommandPayloadSchema
->['authPolicy'];
-export type BrowserCommandName = v.InferOutput<
-  typeof BrowserCommandPayloadSchema
->['command'];
-export type BrowserActionType = v.InferOutput<
-  typeof BrowserActionSchema
->['type'];
-export type BrowserAction = v.InferOutput<typeof BrowserActionSchema>;
-export type BrowserActionResult = v.InferOutput<
-  typeof BrowserActionResultSchema
->;
-export type BrowserSessionMetadata = v.InferOutput<
-  typeof BrowserSessionMetadataSchema
->;
-export type BrowserCommandPayload = v.InferOutput<
-  typeof BrowserCommandPayloadSchema
->;
-export type BrowserCommandMessage = v.InferOutput<
-  typeof BrowserCommandMessageSchema
->;
-export type BrowserDetection = v.InferOutput<typeof BrowserDetectionSchema>;
-export type BrowserResultPayload = v.InferOutput<
-  typeof BrowserResultPayloadSchema
->;
-export type BrowserResultMessage = v.InferOutput<
-  typeof BrowserResultMessageSchema
->;
-export type BrowserErrorPayload = v.InferOutput<
-  typeof BrowserErrorPayloadSchema
->;
-export type BrowserErrorMessage = v.InferOutput<
-  typeof BrowserErrorMessageSchema
->;
-export type BrowserProfileSummary = v.InferOutput<
-  typeof BrowserProfileSummarySchema
->;
-export type BrowserProfileStatusMessage = v.InferOutput<
-  typeof BrowserProfileStatusMessageSchema
->;
-export type BrowserPendingAuthTaskSummary = v.InferOutput<
-  typeof BrowserPendingAuthTaskSummarySchema
->;
-export type BrowserStateSnapshotPayload = v.InferOutput<
-  typeof BrowserStateSnapshotPayloadSchema
->;
-export type BrowserStateSnapshotMessage = v.InferOutput<
-  typeof BrowserStateSnapshotMessageSchema
->;
 export type PublicAgentStatus = v.InferOutput<typeof PublicAgentStatusSchema>;
 
 export type ValidationResult<T> =
@@ -500,15 +292,45 @@ export function validateAgentHeartbeatMessage(
   return parseSchema(AgentHeartbeatMessageSchema, input);
 }
 
+export function validateAgentClientLifecycleMessage(
+  input: unknown,
+): ValidationResult<AgentClientLifecycleMessage> {
+  return parseSchema(AgentClientLifecycleMessageSchema, input);
+}
+
+export function validateAgentServerLifecycleMessage(
+  input: unknown,
+): ValidationResult<AgentServerLifecycleMessage> {
+  return parseSchema(AgentServerLifecycleMessageSchema, input);
+}
+
+export function validateAgentLifecycleMessage(
+  input: unknown,
+): ValidationResult<AgentLifecycleMessage> {
+  return parseSchema(AgentLifecycleMessageSchema, input);
+}
+
+export function validateJsonRpcRequest(
+  input: unknown,
+): ValidationResult<JsonRpcRequest> {
+  return parseSchema(
+    JsonRpcRequestSchema,
+    input,
+  ) as ValidationResult<JsonRpcRequest>;
+}
+
+export function validateJsonRpcResponse(
+  input: unknown,
+): ValidationResult<JsonRpcResponse> {
+  return parseSchema(
+    JsonRpcResponseSchema,
+    input,
+  ) as ValidationResult<JsonRpcResponse>;
+}
+
 export function validateAgentClientMessage(
   input: unknown,
 ): ValidationResult<AgentClientMessage> {
-  if (isBrowserStateSnapshotInput(input) && containsRawAuthState(input)) {
-    return {
-      ok: false,
-      message: 'browser state snapshot must not include raw auth state',
-    };
-  }
   return parseSchema(AgentClientMessageSchema, input);
 }
 
@@ -516,36 +338,6 @@ export function validateAgentServerMessage(
   input: unknown,
 ): ValidationResult<AgentServerMessage> {
   return parseSchema(AgentServerMessageSchema, input);
-}
-
-export function validateBrowserCommandMessage(
-  input: unknown,
-): ValidationResult<BrowserCommandMessage> {
-  return parseSchema(BrowserCommandMessageSchema, input);
-}
-
-export function validateBrowserResultMessage(
-  input: unknown,
-): ValidationResult<BrowserResultMessage> {
-  return parseSchema(BrowserResultMessageSchema, input);
-}
-
-export function validateBrowserErrorMessage(
-  input: unknown,
-): ValidationResult<BrowserErrorMessage> {
-  return parseSchema(BrowserErrorMessageSchema, input);
-}
-
-export function validateBrowserStateSnapshotMessage(
-  input: unknown,
-): ValidationResult<BrowserStateSnapshotMessage> {
-  if (containsRawAuthState(input)) {
-    return {
-      ok: false,
-      message: 'browser state snapshot must not include raw auth state',
-    };
-  }
-  return parseSchema(BrowserStateSnapshotMessageSchema, input);
 }
 
 export function parseAgentClientMessageJson(
@@ -566,6 +358,32 @@ export function parseAgentServerMessageJson(
   } catch {
     return { ok: false, message: 'agent server message must be valid JSON' };
   }
+}
+
+export function parseAgentLifecycleMessage(
+  input: unknown,
+): ValidationResult<AgentLifecycleMessage> {
+  return validateAgentLifecycleMessage(input);
+}
+
+export function isAgentLifecycleMessage(
+  input: unknown,
+): input is AgentLifecycleMessage {
+  return validateAgentLifecycleMessage(input).ok;
+}
+
+export function isJsonRpcRequest(input: unknown): input is JsonRpcRequest {
+  return validateJsonRpcRequest(input).ok;
+}
+
+export function isJsonRpcResponse(input: unknown): input is JsonRpcResponse {
+  return validateJsonRpcResponse(input).ok;
+}
+
+export function isJsonRpcErrorResponse(
+  input: JsonRpcResponse,
+): input is JsonRpcErrorResponse {
+  return 'error' in input;
 }
 
 export function createAgentRegisteredMessage(
@@ -594,48 +412,44 @@ export function createAgentErrorMessage(
   };
 }
 
-export function createBrowserCommandMessage(
-  payload: BrowserCommandPayload,
-): BrowserCommandMessage {
+export function createJsonRpcRequest<TParams = unknown>(input: {
+  readonly id: JsonRpcId;
+  readonly method: string;
+  readonly params?: TParams;
+  readonly observability?: AgentObservabilityMetadata;
+}): JsonRpcRequest<TParams> {
   return {
-    type: 'browser.command',
-    payload,
+    jsonrpc: JSON_RPC_VERSION,
+    id: input.id,
+    method: input.method,
+    ...(input.params === undefined ? {} : { params: input.params }),
+    ...(input.observability ? { observability: input.observability } : {}),
   };
 }
 
-export function createBrowserResultMessage(
-  payload: BrowserResultPayload,
-): BrowserResultMessage {
+export function createJsonRpcSuccessResponse<TResult = unknown>(
+  id: JsonRpcId,
+  result: TResult,
+  observability?: AgentObservabilityMetadata,
+): JsonRpcSuccessResponse<TResult> {
   return {
-    type: 'browser.result',
-    payload,
+    jsonrpc: JSON_RPC_VERSION,
+    id,
+    result,
+    ...(observability ? { observability } : {}),
   };
 }
 
-export function createBrowserErrorMessage(
-  payload: BrowserErrorPayload,
-): BrowserErrorMessage {
+export function createJsonRpcErrorResponse<TData = unknown>(
+  id: JsonRpcId,
+  error: JsonRpcErrorObject<TData>,
+  observability?: AgentObservabilityMetadata,
+): JsonRpcErrorResponse<TData> {
   return {
-    type: 'browser.error',
-    payload,
-  };
-}
-
-export function createBrowserProfileStatusMessage(
-  payload: BrowserProfileSummary,
-): BrowserProfileStatusMessage {
-  return {
-    type: 'browser.profileStatus',
-    payload,
-  };
-}
-
-export function createBrowserStateSnapshotMessage(
-  payload: BrowserStateSnapshotPayload,
-): BrowserStateSnapshotMessage {
-  return {
-    type: 'browser.stateSnapshot',
-    payload,
+    jsonrpc: JSON_RPC_VERSION,
+    id,
+    error,
+    ...(observability ? { observability } : {}),
   };
 }
 
@@ -666,16 +480,6 @@ function summarizeIssues(issues: readonly v.BaseIssue<unknown>[]): string {
     .join('; ');
 }
 
-const RAW_AUTH_STATE_KEYS = new Set([
-  'cookies',
-  'origins',
-  'storageState',
-  'localStorage',
-  'sessionStorage',
-  'profilePath',
-  'userDataDir',
-]);
-
 const OBSERVABILITY_METADATA_KEYS = new Set([
   'requestId',
   'traceId',
@@ -683,33 +487,6 @@ const OBSERVABILITY_METADATA_KEYS = new Set([
   'operation',
   'commandId',
 ]);
-
-function isBrowserStateSnapshotInput(input: unknown): boolean {
-  return (
-    typeof input === 'object' &&
-    input !== null &&
-    'type' in input &&
-    input.type === 'browser.stateSnapshot'
-  );
-}
-
-function containsRawAuthState(input: unknown): boolean {
-  if (Array.isArray(input)) {
-    return input.some((item) => containsRawAuthState(item));
-  }
-  if (!input || typeof input !== 'object') {
-    return false;
-  }
-  for (const [key, value] of Object.entries(input)) {
-    if (RAW_AUTH_STATE_KEYS.has(key)) {
-      return true;
-    }
-    if (containsRawAuthState(value)) {
-      return true;
-    }
-  }
-  return false;
-}
 
 function containsUnsafeObservabilityMetadata(input: unknown): boolean {
   if (Array.isArray(input)) {

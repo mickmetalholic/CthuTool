@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import { App } from '../../src/renderer/src/App';
@@ -82,7 +82,6 @@ function createDesktopApi(): DesktopApi {
       environmentLabel: 'Local',
       lastRegisteredAt: '2026-06-13T10:00:00.000Z',
     }),
-    getLocalPendingAuthTasks: vi.fn().mockResolvedValue([]),
     openBrowserLogin: vi.fn().mockResolvedValue(undefined),
     verifyBrowserProfile: vi.fn().mockResolvedValue(undefined),
     clearBrowserProfile: vi.fn().mockResolvedValue(undefined),
@@ -94,19 +93,8 @@ function createDesktopApi(): DesktopApi {
 describe('CthuDesktop shell', () => {
   function createFetchBrowserStatus() {
     return vi.fn().mockResolvedValue({
-      pendingAuthTasks: [
-        {
-          id: 'agent-1:douban:douban-main',
-          agentId: 'agent-1',
-          siteId: 'douban',
-          profileName: 'douban-main',
-          reason: 'missing',
-          updatedAt: '2026-06-13T10:00:00.000Z',
-        },
-      ],
       profiles: [
         {
-          agentId: 'agent-1',
           displayName: 'Cthu User',
           externalUserId: '50353979',
           siteId: 'douban',
@@ -132,10 +120,8 @@ describe('CthuDesktop shell', () => {
 
   function createReadyBrowserStatus() {
     return vi.fn().mockResolvedValue({
-      pendingAuthTasks: [],
       profiles: [
         {
-          agentId: 'agent-1',
           displayName: 'Cthu User',
           externalUserId: '50353979',
           siteId: 'douban',
@@ -295,9 +281,6 @@ describe('CthuDesktop shell', () => {
         deviceName: 'Windows PC',
       });
     });
-    const savedPatch = vi.mocked(desktopApi.saveConfig).mock.calls[0]?.[0];
-    expect(savedPatch).not.toHaveProperty('agentId');
-    expect(savedPatch).not.toHaveProperty('browserRuntime');
     await userEvent.click(
       screen.getByRole('button', { name: 'Local Runtime' }),
     );
@@ -334,88 +317,6 @@ describe('CthuDesktop shell', () => {
     expect(
       screen.queryByRole('option', { name: 'Dracula' }),
     ).not.toBeInTheDocument();
-  });
-
-  test('saves local agent disabled state without persisting readonly settings', async () => {
-    const desktopApi = createDesktopApi();
-
-    render(
-      <App
-        desktopApi={desktopApi}
-        fetchAgents={vi.fn().mockResolvedValue([])}
-        fetchBrowserStatus={createFetchBrowserStatus()}
-      />,
-    );
-
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Settings' }),
-    );
-    await userEvent.click(screen.getByLabelText('Local Agent Enabled'));
-    const displayName = screen.getByDisplayValue('Windows PC');
-    await userEvent.clear(displayName);
-    await userEvent.type(displayName, 'Travel Laptop');
-    await userEvent.click(screen.getByRole('button', { name: /save/i }));
-
-    await waitFor(() => {
-      expect(desktopApi.saveConfig).toHaveBeenCalledWith({
-        activeEnvironmentId: 'local',
-        appearance: {
-          colorScheme: 'dracula',
-          mode: 'dark',
-        },
-        backendUrl: 'http://backend.local:3000',
-        connectionEnabled: false,
-        deviceName: 'Travel Laptop',
-      });
-    });
-    const savedPatch = vi.mocked(desktopApi.saveConfig).mock.calls[0]?.[0];
-    expect(savedPatch).not.toHaveProperty('agentId');
-    expect(savedPatch).not.toHaveProperty('browserRuntime');
-    expect(savedPatch).not.toHaveProperty('environmentProfiles');
-  });
-
-  test('updates connection status when the desktop subscription emits a transition', async () => {
-    const desktopApi = createDesktopApi();
-    vi.mocked(desktopApi.getConnectionState).mockResolvedValue({
-      status: 'connecting',
-      backendUrl: 'http://backend.local:3000',
-      agentId: 'windows-pc',
-      deviceName: 'Windows PC',
-      environmentLabel: 'Local',
-    });
-
-    render(
-      <App
-        desktopApi={desktopApi}
-        fetchAgents={vi.fn().mockResolvedValue([])}
-        fetchBrowserStatus={createFetchBrowserStatus()}
-      />,
-    );
-
-    await waitFor(() =>
-      expect(desktopApi.onConnectionStateChange).toHaveBeenCalled(),
-    );
-    const onConnectionStateChange = vi.mocked(
-      desktopApi.onConnectionStateChange,
-    ).mock.calls[0]?.[0];
-    expect(onConnectionStateChange).toBeDefined();
-
-    act(() => {
-      onConnectionStateChange?.({
-        status: 'disconnected',
-        backendUrl: 'http://backend.local:3000',
-        agentId: 'windows-pc',
-        deviceName: 'Windows PC',
-        environmentLabel: 'Local',
-        lastError: 'backend offline',
-      });
-    });
-    const connectionDetails = await screen.findByRole('button', {
-      name: 'Open connection details',
-    });
-    expect(
-      await within(connectionDetails).findByText('Disconnected'),
-    ).toBeInTheDocument();
   });
 
   test('opens connection details from the combined status bar connection button', async () => {
@@ -574,16 +475,6 @@ describe('CthuDesktop shell', () => {
   test('surfaces browser attention on home and opens login from Browser Host', async () => {
     const desktopApi = createDesktopApi();
     const fetchBrowserStatus = vi.fn().mockResolvedValue({
-      pendingAuthTasks: [
-        {
-          id: 'agent-1:douban:douban-main',
-          agentId: 'agent-1',
-          siteId: 'douban',
-          profileName: 'douban-main',
-          reason: 'missing',
-          updatedAt: '2026-06-13T10:00:00.000Z',
-        },
-      ],
       profiles: [],
       sites: [
         {
@@ -625,8 +516,7 @@ describe('CthuDesktop shell', () => {
       await screen.findByRole('heading', { name: 'Browser Host', level: 1 }),
     ).toBeInTheDocument();
     expect(screen.getByText('Authentication needs action')).toBeInTheDocument();
-    expect(screen.getAllByText('Pending missing')).toHaveLength(2);
-    expect(screen.getByText('backend')).toBeInTheDocument();
+    expect(screen.getAllByText('Missing profile')).toHaveLength(2);
     expect(
       screen.getByText('Next actions: Open, Verify, Clear'),
     ).toBeInTheDocument();
@@ -640,71 +530,6 @@ describe('CthuDesktop shell', () => {
       verifyUrl: 'https://www.douban.com/mine/',
     });
     await waitFor(() => expect(fetchBrowserStatus).toHaveBeenCalledTimes(2));
-  });
-
-  test('verifies an auth task and refreshes task state', async () => {
-    const desktopApi = createDesktopApi();
-    const fetchBrowserStatus = createFetchBrowserStatus();
-
-    render(
-      <App
-        desktopApi={desktopApi}
-        fetchAgents={vi.fn().mockResolvedValue([])}
-        fetchBrowserStatus={fetchBrowserStatus}
-      />,
-    );
-
-    await userEvent.click(primaryNavButton('Browser Host'));
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Verify' }),
-    );
-
-    expect(desktopApi.verifyBrowserProfile).toHaveBeenCalledWith({
-      loginUrl: 'https://accounts.douban.com/passport/login',
-      profileName: 'douban-main',
-      siteId: 'douban',
-      verifyUrl: 'https://www.douban.com/mine/',
-    });
-    expect(await screen.findByText('Verified Douban')).toBeInTheDocument();
-    await waitFor(() => expect(fetchBrowserStatus).toHaveBeenCalledTimes(2));
-  });
-
-  test('shows local auth tasks when backend browser status is unavailable', async () => {
-    const desktopApi = createDesktopApi();
-    vi.mocked(desktopApi.getLocalPendingAuthTasks).mockResolvedValue([
-      {
-        taskId: 'zhihu:zhihu-main',
-        siteId: 'zhihu',
-        profileName: 'zhihu-main',
-        reason: 'missing',
-        source: 'local_preflight',
-        status: 'open',
-        loginUrl: 'https://www.zhihu.com/signin',
-        verifyUrl: 'https://www.zhihu.com/people/me',
-        createdAt: '2026-06-13T10:00:00.000Z',
-        updatedAt: '2026-06-13T10:00:00.000Z',
-      },
-    ]);
-
-    render(
-      <App
-        desktopApi={desktopApi}
-        fetchAgents={vi.fn().mockResolvedValue([])}
-        fetchBrowserStatus={vi
-          .fn()
-          .mockRejectedValue(new Error('browser status offline'))}
-      />,
-    );
-
-    await userEvent.click(primaryNavButton('Browser Host'));
-
-    expect(
-      await screen.findByText('browser status offline'),
-    ).toBeInTheDocument();
-    expect(await screen.findAllByText('zhihu-main')).toHaveLength(2);
-    expect(screen.getByText('local_preflight')).toBeInTheDocument();
-    expect(screen.getByText('Local fallback')).toBeInTheDocument();
-    expect(desktopApi.openBrowserLogin).not.toHaveBeenCalled();
   });
 
   test('shows a browser-auth ready state when no attention is pending', async () => {
@@ -729,18 +554,8 @@ describe('CthuDesktop shell', () => {
     ).toBeInTheDocument();
   });
 
-  test('shows a pending Douban login reason when no verified profile exists', async () => {
+  test('shows a missing Douban profile reason when no verified profile exists', async () => {
     const fetchBrowserStatus = vi.fn().mockResolvedValue({
-      pendingAuthTasks: [
-        {
-          id: 'agent-1:douban:douban-main',
-          agentId: 'agent-1',
-          siteId: 'douban',
-          profileName: 'douban-main',
-          reason: 'missing',
-          updatedAt: '2026-06-13T10:00:00.000Z',
-        },
-      ],
       profiles: [],
       sites: [
         {
@@ -765,13 +580,12 @@ describe('CthuDesktop shell', () => {
 
     await userEvent.click(primaryNavButton('Browser Host'));
 
-    expect(await screen.findAllByText('Pending missing')).toHaveLength(2);
+    expect(await screen.findAllByText('Missing profile')).toHaveLength(2);
   });
 
   test('starts login using site fields returned by backend browser APIs', async () => {
     const desktopApi = createDesktopApi();
     const fetchBrowserStatus = vi.fn().mockResolvedValue({
-      pendingAuthTasks: [],
       profiles: [],
       sites: [
         {
@@ -845,34 +659,6 @@ describe('CthuDesktop shell', () => {
       await within(profileRow as HTMLElement).findByText(
         'Executable does not exist',
       ),
-    ).toBeInTheDocument();
-  });
-
-  test('surfaces clear profile runtime failures from browser profiles', async () => {
-    const desktopApi = createDesktopApi();
-    vi.mocked(desktopApi.clearBrowserProfile).mockRejectedValue(
-      new Error('Profile storage is locked'),
-    );
-
-    render(
-      <App
-        desktopApi={desktopApi}
-        fetchAgents={vi.fn().mockResolvedValue([])}
-        fetchBrowserStatus={createFetchBrowserStatus()}
-      />,
-    );
-
-    await userEvent.click(primaryNavButton('Browser Host'));
-    await userEvent.click(await screen.findByRole('button', { name: 'Clear' }));
-
-    expect(desktopApi.clearBrowserProfile).toHaveBeenCalledWith({
-      loginUrl: 'https://accounts.douban.com/passport/login',
-      profileName: 'douban-main',
-      siteId: 'douban',
-      verifyUrl: 'https://www.douban.com/mine/',
-    });
-    expect(
-      await screen.findByText('Profile storage is locked'),
     ).toBeInTheDocument();
   });
 

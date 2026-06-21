@@ -2,7 +2,7 @@ import type {
   BrowserAction,
   BrowserActionResult,
   BrowserDetection,
-} from '@cthutool/agent-protocol';
+} from '@cthutool/browser-runtime-protocol';
 
 export type DesktopBrowserRuntimeOperation =
   | 'capturePage'
@@ -18,7 +18,10 @@ export type InteractionChallengeReason =
   | 'login_required'
   | 'profile_expired'
   | 'profile_missing'
-  | 'verification_failed';
+  | 'verification_failed'
+  | 'captcha_required'
+  | 'blocked'
+  | 'rate_limited';
 
 export type InteractionChallenge = {
   readonly siteId: string;

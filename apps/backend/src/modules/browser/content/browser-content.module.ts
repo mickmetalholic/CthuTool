@@ -4,14 +4,8 @@ import { SitesConfigModule } from '../../sites-config/sites-config.module';
 import { DesktopBrowserRuntimeModule } from '../desktop-runtime/desktop-browser-runtime.module';
 import { BrowserBlockDetector } from './browser-block-detector';
 import { BrowserContentService } from './browser-content.service';
-import {
-  BROWSER_DIAGNOSTICS_STORE_OPTIONS,
-  BrowserDiagnosticsStore,
-} from './browser-diagnostics.store';
-import {
-  BROWSER_TASK_RUNNER_OPTIONS,
-  BrowserTaskRunner,
-} from './browser-task-runner';
+import { BrowserDiagnosticsStore } from './browser-diagnostics.store';
+import { BrowserTaskRunner } from './browser-task-runner';
 
 @Module({
   imports: [
@@ -21,25 +15,25 @@ import {
   ],
   exports: [BrowserContentService, BrowserDiagnosticsStore],
   providers: [
-    {
-      provide: BROWSER_DIAGNOSTICS_STORE_OPTIONS,
-      useValue: {
-        diagnosticsDir: './data/browser-diagnostics',
-        enabled: true,
-      },
-    },
-    {
-      provide: BROWSER_TASK_RUNNER_OPTIONS,
-      useValue: {
-        defaultDelayMs: 1000,
-        defaultTimeoutMs: 30000,
-        maxConcurrency: 1,
-      },
-    },
     BrowserBlockDetector,
     BrowserContentService,
-    BrowserDiagnosticsStore,
-    BrowserTaskRunner,
+    {
+      provide: BrowserDiagnosticsStore,
+      useFactory: () =>
+        new BrowserDiagnosticsStore({
+          diagnosticsDir: './data/browser-diagnostics',
+          enabled: true,
+        }),
+    },
+    {
+      provide: BrowserTaskRunner,
+      useFactory: () =>
+        new BrowserTaskRunner({
+          defaultDelayMs: 1000,
+          defaultTimeoutMs: 30000,
+          maxConcurrency: 1,
+        }),
+    },
   ],
 })
 export class BrowserContentModule {}

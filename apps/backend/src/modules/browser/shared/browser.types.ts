@@ -1,4 +1,4 @@
-import type { BrowserProfileSummary } from '@cthutool/agent-protocol';
+import type { BrowserProfileSummary } from '@cthutool/browser-runtime-protocol';
 import type { BrowserResourceType } from '@cthutool/config';
 
 export type { BrowserResourceType, BrowserSiteConfig } from '@cthutool/config';
@@ -41,7 +41,6 @@ export type BrowserContentRequest = {
   readonly blockResources?: readonly BrowserResourceType[];
   readonly timeoutMs?: number;
   readonly waitUntil?: 'domcontentloaded' | 'load' | 'networkidle';
-  readonly suppressPendingAuthTask?: boolean;
 };
 
 export type BrowserCaptureRequest = BrowserContentRequest;
@@ -98,24 +97,6 @@ export type BrowserProfileStatus = {
   readonly status: 'available' | 'missing' | 'invalid';
   readonly source?: BrowserAuthBundleMeta['source'];
   readonly updatedAt?: string;
-};
-
-export type BrowserPendingAuthReason =
-  | 'missing'
-  | 'expired'
-  | 'blocked'
-  | 'verification_failed';
-
-export type BrowserPendingAuthTask = {
-  readonly id: string;
-  readonly agentId: string;
-  readonly siteId: string;
-  readonly profileName: string;
-  readonly reason: BrowserPendingAuthReason;
-  readonly loginUrl?: string;
-  readonly verifyUrl?: string;
-  readonly createdAt: string;
-  readonly updatedAt: string;
 };
 
 export type BrowserProfileRegistryEntry = BrowserProfileSummary;

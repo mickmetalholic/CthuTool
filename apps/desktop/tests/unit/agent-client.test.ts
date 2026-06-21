@@ -1,3 +1,4 @@
+import { createBrowserRuntimeSuccessResponse } from '@cthutool/browser-runtime-protocol';
 import { describe, expect, test, vi } from 'vitest';
 import { AgentClient, toAgentWsUrl } from '../../src/main/agent-client';
 import { normalizeConfig } from '../../src/main/config';
@@ -186,24 +187,9 @@ describe('AgentClient', () => {
     );
   });
 
-  test('sends browser state snapshot after backend registration is accepted', async () => {
+  test('does not publish browser state snapshots after registration', async () => {
     FakeWebSocket.instances = [];
     const client = new AgentClient({
-      getBrowserStateSnapshot: () => ({
-        agentId: 'windows-pc',
-        pendingAuthTasks: [
-          {
-            agentId: 'windows-pc',
-            createdAt: '2026-06-13T10:00:00.000Z',
-            id: 'windows-pc:douban:douban-main',
-            profileName: 'douban-main',
-            reason: 'missing',
-            siteId: 'douban',
-            updatedAt: '2026-06-13T10:00:00.000Z',
-          },
-        ],
-        profiles: [],
-      }),
       getConfig: () => config,
       WebSocketImpl: FakeWebSocket,
       platform: 'win32',
@@ -224,39 +210,13 @@ describe('AgentClient', () => {
     );
     await Promise.resolve();
 
-    expect(JSON.parse(socket.sent[1])).toEqual({
-      type: 'browser.stateSnapshot',
-      payload: expect.objectContaining({
-        agentId: 'windows-pc',
-        pendingAuthTasks: [
-          expect.objectContaining({
-            id: 'windows-pc:douban:douban-main',
-            reason: 'missing',
-          }),
-        ],
-        profiles: [],
-      }),
-    });
+    expect(socket.sent).toHaveLength(1);
   });
 
-  test('publishes the latest browser state on reconnect registration', async () => {
+  test('does not publish browser state snapshots on reconnect registration', async () => {
     vi.useFakeTimers();
     FakeWebSocket.instances = [];
-    let profileStatus: 'missing' | 'verified' = 'missing';
     const client = new AgentClient({
-      getBrowserStateSnapshot: () => ({
-        agentId: 'windows-pc',
-        pendingAuthTasks: [],
-        profiles: [
-          {
-            agentId: 'windows-pc',
-            profileName: 'douban-main',
-            siteId: 'douban',
-            status: profileStatus,
-            updatedAt: '2026-06-13T10:00:00.000Z',
-          },
-        ],
-      }),
       getConfig: () => config,
       WebSocketImpl: FakeWebSocket,
       platform: 'win32',
@@ -278,7 +238,6 @@ describe('AgentClient', () => {
     );
     await Promise.resolve();
 
-    profileStatus = 'verified';
     firstSocket.close();
     vi.advanceTimersByTime(500);
     const secondSocket = FakeWebSocket.instances[1];
@@ -294,17 +253,7 @@ describe('AgentClient', () => {
     );
     await Promise.resolve();
 
-    expect(JSON.parse(secondSocket.sent[1])).toEqual({
-      type: 'browser.stateSnapshot',
-      payload: expect.objectContaining({
-        profiles: [
-          expect.objectContaining({
-            profileName: 'douban-main',
-            status: 'verified',
-          }),
-        ],
-      }),
-    });
+    expect(secondSocket.sent).toHaveLength(1);
     client.stop();
     vi.useRealTimers();
   });
@@ -377,27 +326,23 @@ describe('AgentClient', () => {
       WebSocketImpl: FakeWebSocket,
       platform: 'win32',
       version: '0.1.0',
-      handleBrowserCommand: async (command) => ({
-        type: 'browser.result',
-        payload: {
+      handleBrowserRequest: async (request) =>
+        createBrowserRuntimeSuccessResponse(request.id, {
           capturedAt: '2026-06-13T10:00:00.000Z',
-          command: command.command,
-          commandId: command.commandId,
           detection: { kind: 'ok' },
-          finalUrl: command.url,
-        },
-      }),
+          finalUrl: 'https://example.com/',
+        }),
     });
 
     client.start();
     const socket = FakeWebSocket.instances[0];
     socket.receive(
       JSON.stringify({
-        type: 'browser.command',
-        payload: {
+        jsonrpc: '2.0',
+        id: 'cmd-1',
+        method: 'browser.capturePage',
+        params: {
           authPolicy: 'anonymous',
-          command: 'browser.capturePage',
-          commandId: 'cmd-1',
           siteId: 'example',
           url: 'https://example.com/',
         },
@@ -406,11 +351,10 @@ describe('AgentClient', () => {
     await Promise.resolve();
 
     expect(JSON.parse(socket.sent[0])).toEqual({
-      type: 'browser.result',
-      payload: {
+      jsonrpc: '2.0',
+      id: 'cmd-1',
+      result: {
         capturedAt: '2026-06-13T10:00:00.000Z',
-        command: 'browser.capturePage',
-        commandId: 'cmd-1',
         detection: { kind: 'ok' },
         finalUrl: 'https://example.com/',
       },

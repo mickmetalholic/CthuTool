@@ -1,3 +1,9 @@
+import {
+  createJsonRpcErrorResponse,
+  createJsonRpcRequest,
+  createJsonRpcSuccessResponse,
+  JSON_RPC_INVALID_PARAMS,
+} from '@cthutool/agent-protocol';
 import type { Mock } from 'vitest';
 import { AgentRegistryService } from '../registry/agent-registry.service';
 import type { AgentWebSocketServer } from '../websocket/agent-websocket.server';
@@ -18,10 +24,10 @@ describe('AgentCommandGateway', () => {
 
     expect(socket.sendCommand).toHaveBeenCalledWith(
       'agent-1',
-      expect.objectContaining({ commandId: 'cmd-1' }),
+      expect.objectContaining({ id: 'cmd-1', method: 'test.echo' }),
       undefined,
     );
-    expect(result.payload.commandId).toBe('cmd-1');
+    expect(result.id).toBe('cmd-1');
   });
 
   it('returns structured errors when a capability is missing', async () => {
@@ -33,7 +39,11 @@ describe('AgentCommandGateway', () => {
   });
 
   it('passes command errors through as correlated command results', async () => {
-    const response = createCommandResponse('cmd-1', 'agent.commandError');
+    const response = createJsonRpcErrorResponse('cmd-1', {
+      code: JSON_RPC_INVALID_PARAMS,
+      message: 'Invalid params',
+      data: { code: 'ANY_APPLICATION_ERROR' },
+    });
     const gateway = createGateway(createSocketMock(response));
 
     await expect(
@@ -57,15 +67,13 @@ describe('AgentCommandGateway', () => {
     expect(socket.sendCommand).toHaveBeenCalledWith(
       'agent-1',
       expect.objectContaining({
-        message: expect.objectContaining({
-          payload: expect.objectContaining({
-            observability: {
-              commandId: 'cmd-1',
-              operation: 'browser.capturePage',
-              requestId: 'req-1',
-            },
-          }),
-        }),
+        id: 'cmd-1',
+        method: 'test.echo',
+        observability: {
+          commandId: 'cmd-1',
+          operation: 'browser.capturePage',
+          requestId: 'req-1',
+        },
       }),
       undefined,
     );
@@ -82,13 +90,19 @@ describe('AgentCommandGateway', () => {
     expect(observability.record).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'agent.command_dispatched',
-        details: expect.objectContaining({ commandId: 'cmd-1' }),
+        details: expect.objectContaining({
+          commandId: 'cmd-1',
+          commandType: 'test.echo',
+        }),
       }),
     );
     expect(observability.record).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'agent.command_completed',
-        details: expect.objectContaining({ commandId: 'cmd-1' }),
+        details: expect.objectContaining({
+          commandId: 'cmd-1',
+          responseType: 'jsonrpc.result',
+        }),
       }),
     );
     expect(metrics.recordAgentCommandDispatched).toHaveBeenCalledWith({
@@ -132,38 +146,6 @@ describe('AgentCommandGateway', () => {
         commandType: undefined,
         errorCode: 'AGENT_NOT_AVAILABLE',
       }),
-    );
-  });
-
-  it('preserves existing message observability metadata', async () => {
-    const socket = createSocketMock();
-    const gateway = createGateway(socket);
-
-    await gateway.sendCommand('agent-1', {
-      ...createCommandRequest('cmd-1', {
-        commandId: 'cmd-1',
-        operation: 'browser.capturePage',
-        requestId: 'payload-req',
-      }),
-      observability: {
-        commandId: 'cmd-1',
-        operation: 'browser.capturePage',
-        requestId: 'outer-req',
-      },
-    });
-
-    expect(socket.sendCommand).toHaveBeenCalledWith(
-      'agent-1',
-      expect.objectContaining({
-        message: expect.objectContaining({
-          payload: expect.objectContaining({
-            observability: expect.objectContaining({
-              requestId: 'payload-req',
-            }),
-          }),
-        }),
-      }),
-      undefined,
     );
   });
 
@@ -223,10 +205,7 @@ function createMetricsMock() {
 }
 
 function createSocketMock(
-  response: AgentCommandResponse = createCommandResponse(
-    'cmd-1',
-    'agent.commandResult',
-  ),
+  response: AgentCommandResponse = createCommandResponse('cmd-1'),
 ): SocketMock {
   return createSocketMockWithImplementation(async () => response);
 }
@@ -239,25 +218,14 @@ function createSocketMockWithImplementation(
   };
 }
 
-function createCommandRequest(
-  commandId: string,
-  observability?: NonNullable<AgentCommandRequest['observability']>,
-): AgentCommandRequest {
-  return {
-    commandId,
-    message: {
-      payload: { commandId, ...(observability ? { observability } : {}) },
-      type: 'agent.command',
-    } as unknown as AgentCommandRequest['message'],
-  };
+function createCommandRequest(commandId: string): AgentCommandRequest {
+  return createJsonRpcRequest({
+    id: commandId,
+    method: 'test.echo',
+    params: { ok: true },
+  });
 }
 
-function createCommandResponse(
-  commandId: string,
-  type: string,
-): AgentCommandResponse {
-  return {
-    payload: { commandId },
-    type,
-  } as AgentCommandResponse;
+function createCommandResponse(commandId: string): AgentCommandResponse {
+  return createJsonRpcSuccessResponse(commandId, { ok: true });
 }

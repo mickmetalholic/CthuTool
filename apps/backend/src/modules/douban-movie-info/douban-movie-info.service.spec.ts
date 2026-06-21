@@ -1,7 +1,7 @@
 import type { Mock } from 'vitest';
-import type { BrowserContentService } from '../browser/content/browser-content.service';
-import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
-import type { BrowserContentResult } from '../browser-automation/browser-automation.types';
+import type { BrowserService } from '../browser/browser.service';
+import { BrowserWorkflowError } from '../browser/shared/browser.errors';
+import type { BrowserContentResult } from '../browser/shared/browser.types';
 import { DoubanMovieInfoException } from './douban-movie-info.errors';
 import { DoubanMovieInfoService } from './douban-movie-info.service';
 
@@ -20,7 +20,6 @@ describe('DoubanMovieInfoService', () => {
       includeScreenshot: false,
       includeText: true,
       siteId: 'douban',
-      suppressPendingAuthTask: true,
       url: 'https://movie.douban.com/subject/1292052/',
       waitUntil: 'domcontentloaded',
     });
@@ -51,12 +50,12 @@ describe('DoubanMovieInfoService', () => {
   it('maps browser provider errors into Douban errors', async () => {
     const browserContent = {
       getPageContent: vi.fn(async () => {
-        throw new BrowserAutomationError(
+        throw new BrowserWorkflowError(
           'AGENT_NOT_AVAILABLE',
           'No browser agent',
         );
       }),
-    } as unknown as BrowserContentService & {
+    } as unknown as BrowserService & {
       getPageContent: Mock;
     };
     const service = createService(browserContent);
@@ -64,34 +63,6 @@ describe('DoubanMovieInfoService', () => {
     await expect(service.getMovie('1292052')).rejects.toMatchObject({
       code: 'BROWSER_UNAVAILABLE',
     });
-  });
-
-  it('emits observable success and failure events', async () => {
-    const observability = { record: vi.fn() };
-    const service = createService(createBrowserContent(), observability);
-
-    await service.getMovie('1292052');
-
-    expect(observability.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'douban_movie.lookup_completed',
-        details: expect.objectContaining({ subjectId: '1292052' }),
-      }),
-    );
-
-    const failing = createService(
-      createBrowserContent({ detection: { kind: 'rate_limited' } }),
-      observability,
-    );
-    await expect(failing.getMovie('1292052')).rejects.toMatchObject({
-      code: 'RATE_LIMITED',
-    });
-    expect(observability.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'douban_movie.lookup_failed',
-        details: expect.objectContaining({ subjectId: '1292052' }),
-      }),
-    );
   });
 
   it('returns not found for a missing subject snapshot', async () => {
@@ -112,7 +83,7 @@ describe('DoubanMovieInfoService', () => {
 
 function createBrowserContent(
   patch: Partial<BrowserContentResult> = {},
-): BrowserContentService & { getPageContent: Mock } {
+): BrowserService & { getPageContent: Mock } {
   return {
     getPageContent: vi.fn(
       async (): Promise<BrowserContentResult> => ({
@@ -127,12 +98,11 @@ function createBrowserContent(
         ...patch,
       }),
     ),
-  } as unknown as BrowserContentService & { getPageContent: Mock };
+  } as unknown as BrowserService & { getPageContent: Mock };
 }
 
 function createService(
-  browserContent: BrowserContentService & { getPageContent: Mock },
-  observability?: { readonly record: Mock },
+  browserContent: BrowserService & { getPageContent: Mock },
 ): DoubanMovieInfoService {
-  return new DoubanMovieInfoService(browserContent, observability as never);
+  return new DoubanMovieInfoService(browserContent);
 }

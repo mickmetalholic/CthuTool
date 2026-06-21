@@ -5,7 +5,7 @@ import { BackendMetricsService } from '../../../metrics';
 // Nest DI needs runtime class reference; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BackendObservabilityService } from '../../../observability';
-import { BrowserAutomationError } from '../../browser-automation/browser-automation.errors';
+import { BrowserWorkflowError } from '../shared/browser.errors';
 
 export const BROWSER_TASK_RUNNER_OPTIONS = 'BROWSER_TASK_RUNNER_OPTIONS';
 
@@ -127,7 +127,7 @@ export class BrowserTaskRunner {
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       const errorCode =
-        error instanceof BrowserAutomationError
+        error instanceof BrowserWorkflowError
           ? error.code
           : 'BROWSER_TASK_FAILED';
       this.observability?.record({
@@ -161,7 +161,7 @@ async function withTimeout<T>(
       new Promise<T>((_resolve, reject) => {
         timeout = setTimeout(() => {
           reject(
-            new BrowserAutomationError(
+            new BrowserWorkflowError(
               'NAVIGATION_TIMEOUT',
               `Browser task timed out after ${timeoutMs}ms`,
             ),

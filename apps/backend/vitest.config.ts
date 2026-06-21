@@ -64,6 +64,12 @@ export default defineConfig({
       '@cthutool/agent-protocol': fileURLToPath(
         new URL('../../packages/agent-protocol/src/index.ts', import.meta.url),
       ),
+      '@cthutool/browser-runtime-protocol': fileURLToPath(
+        new URL(
+          '../../packages/browser-runtime-protocol/src/index.ts',
+          import.meta.url,
+        ),
+      ),
       '@cthutool/config': fileURLToPath(
         new URL('../../packages/config/src/index.ts', import.meta.url),
       ),

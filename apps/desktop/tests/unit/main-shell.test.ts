@@ -57,15 +57,12 @@ describe('desktop main shell contract', () => {
     expect(mainSource).toContain("userDataDir: app.getPath('userData')");
   });
 
-  test('publishes local browser state through the agent snapshot channel', () => {
-    expect(mainSource).toContain('publishLocalBrowserState');
-    expect(mainSource).toContain('agentClient?.sendBrowserStateSnapshot()');
-    expect(mainSource).toContain(
-      'getBrowserStateSnapshot: buildBrowserStateSnapshot',
-    );
-    expect(mainSource).toContain('profileStore.listProfiles()');
-    expect(mainSource).toContain(
-      "task.status === 'open' || task.status === 'in_progress'",
-    );
+  test('does not publish local browser state snapshots or pending auth tasks', () => {
+    expect(mainSource).not.toContain('publishLocalBrowserState');
+    expect(mainSource).not.toContain('sendBrowserStateSnapshot');
+    expect(mainSource).not.toContain('getBrowserStateSnapshot');
+    expect(mainSource).not.toContain('buildBrowserStateSnapshot');
+    expect(mainSource).not.toContain('PendingAuthTaskStore');
+    expect(mainSource).not.toContain('browser:getLocalPendingAuthTasks');
   });
 });
