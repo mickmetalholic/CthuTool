@@ -3,9 +3,9 @@ import { Injectable, Optional } from '@nestjs/common';
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BackendObservabilityService } from '../../observability';
 // biome-ignore lint/style/useImportType: constructor injection token
-import { BrowserContentService } from '../browser/content/browser-content.service';
-import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
-import type { BrowserDetectionKind } from '../browser-automation/browser-automation.types';
+import { BrowserService } from '../browser/browser.service';
+import { BrowserWorkflowError } from '../browser/shared/browser.errors';
+import type { BrowserDetectionKind } from '../browser/shared/browser.types';
 import { doubanMovieInfoError } from './douban-movie-info.errors';
 import { parseDoubanMovieInfo } from './douban-movie-info.parser';
 import type { DoubanMovieInfoResponse } from './douban-movie-info.types';
@@ -17,7 +17,7 @@ import {
 @Injectable()
 export class DoubanMovieInfoService {
   constructor(
-    private readonly browserContent: BrowserContentService,
+    private readonly browser: BrowserService,
     @Optional()
     private readonly observability?: BackendObservabilityService,
   ) {}
@@ -83,17 +83,16 @@ export class DoubanMovieInfoService {
 
   private async fetchPage(subjectId: string, sourceUrl: string) {
     try {
-      return await this.browserContent.getPageContent({
+      return await this.browser.getPageContent({
         includeHtml: true,
         includeScreenshot: false,
         includeText: true,
         siteId: 'douban',
-        suppressPendingAuthTask: true,
         url: sourceUrl,
         waitUntil: 'domcontentloaded',
       });
     } catch (error) {
-      if (error instanceof BrowserAutomationError) {
+      if (error instanceof BrowserWorkflowError) {
         throw browserErrorToDomainError(error, subjectId);
       }
       throw error;
@@ -127,7 +126,7 @@ function detectionToError(kind: BrowserDetectionKind, subjectId: string) {
 }
 
 function browserErrorToDomainError(
-  error: BrowserAutomationError,
+  error: BrowserWorkflowError,
   subjectId: string,
 ) {
   if (

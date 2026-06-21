@@ -5,7 +5,7 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build:deps": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/app-shell build",
+    "build:deps": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/browser-runtime-protocol build && pnpm --filter @cthutool/app-shell build",
     "build": "pnpm run build:deps && electron-vite build",
     "package": "pnpm run build && electron-builder --dir",
     "package:win": "pnpm run build && electron-builder --win",
@@ -20,6 +20,7 @@
   "dependencies": {
     "@cthutool/agent-protocol": "workspace:*",
     "@cthutool/app-shell": "workspace:^",
+    "@cthutool/browser-runtime-protocol": "workspace:*",
     "@cthutool/ui": "workspace:^",
     "lucide-react": "^0.468.0",
     "playwright": "^1.60.0",

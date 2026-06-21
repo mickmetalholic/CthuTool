@@ -1,7 +1,7 @@
 import type {
-  AgentClientMessage,
   AgentObservabilityMetadata,
-  AgentServerMessage,
+  JsonRpcRequest,
+  JsonRpcResponse,
   PublicAgentStatus,
 } from '@cthutool/agent-protocol';
 import { Injectable, Optional } from '@nestjs/common';
@@ -18,21 +18,11 @@ import { AgentRegistryService } from '../registry/agent-registry.service';
 // biome-ignore lint/style/useImportType: constructor injection token
 import { AgentWebSocketServer } from '../websocket/agent-websocket.server';
 
-export type AgentCommandMessage = Extract<
-  AgentServerMessage,
-  { readonly payload: { readonly commandId: string } }
->;
-export type AgentCommandResponse = Extract<
-  AgentClientMessage,
-  { readonly payload: { readonly commandId: string } }
->;
-export type AgentCommandRequest<
-  TMessage extends AgentCommandMessage = AgentCommandMessage,
-> = {
-  readonly commandId: string;
-  readonly message: TMessage;
-  readonly observability?: AgentObservabilityMetadata;
-};
+export type AgentCommandRequest<TParams = unknown> = JsonRpcRequest<TParams>;
+export type AgentCommandResponse<
+  TResult = unknown,
+  TErrorData = unknown,
+> = JsonRpcResponse<TResult, TErrorData>;
 
 export class AgentCommandGatewayError extends Error {
   constructor(
@@ -69,12 +59,12 @@ export class AgentCommandGateway {
     timeoutMs?: number,
   ): Promise<TResponse> {
     const startedAt = Date.now();
-    const commandType = commandTypeOf(command);
+    const commandType = command.method;
     this.observability?.record({
       event: 'agent.command_dispatched',
       details: {
         agentId,
-        commandId: command.commandId,
+        commandId: String(command.id),
         commandType,
         timeoutMs,
       },
@@ -87,20 +77,22 @@ export class AgentCommandGateway {
         timeoutMs,
       );
       const durationMs = Date.now() - startedAt;
+      const responseType =
+        'error' in response ? 'jsonrpc.error' : 'jsonrpc.result';
       this.observability?.record({
         event: 'agent.command_completed',
         details: {
           agentId,
-          commandId: command.commandId,
+          commandId: String(command.id),
           commandType,
           durationMs,
-          responseType: response.type,
+          responseType,
         },
       });
       this.metrics?.recordAgentCommandCompleted({
         commandType,
         durationMs,
-        responseType: response.type,
+        responseType,
       });
       return response;
     } catch (error) {
@@ -113,7 +105,7 @@ export class AgentCommandGateway {
         level: 'warn',
         details: {
           agentId,
-          commandId: command.commandId,
+          commandId: String(command.id),
           commandType,
           durationMs,
           errorCode,
@@ -155,29 +147,18 @@ export class AgentCommandGateway {
   }
 }
 
-function commandTypeOf(command: AgentCommandRequest): string | undefined {
-  const payload = command.message.payload as { readonly command?: unknown };
-  return typeof payload.command === 'string' ? payload.command : undefined;
-}
-
-function attachObservability<TMessage extends AgentCommandMessage>(
-  command: AgentCommandRequest<TMessage>,
-): AgentCommandRequest<TMessage> {
-  if (!command.observability) {
-    return command;
-  }
-  if ('observability' in command.message.payload) {
+function attachObservability<TParams>(
+  command: AgentCommandRequest<TParams>,
+): AgentCommandRequest<TParams> {
+  const observability = command.observability as
+    | AgentObservabilityMetadata
+    | undefined;
+  if (!observability) {
     return command;
   }
   return {
     ...command,
-    message: {
-      ...command.message,
-      payload: {
-        ...command.message.payload,
-        observability: command.observability,
-      },
-    } as TMessage,
+    observability,
   };
 }
 

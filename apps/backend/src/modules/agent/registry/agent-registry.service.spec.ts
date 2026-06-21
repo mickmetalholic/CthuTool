@@ -33,6 +33,25 @@ describe('AgentRegistryService', () => {
     expect(registry.listOnlineAgents()).toEqual([result.status]);
   });
 
+  it('keeps browser capability as metadata without browser state', () => {
+    const registry = new AgentRegistryService();
+
+    const result = registry.register({
+      connectionId: 'conn-browser',
+      hello: {
+        ...baseHello,
+        capabilities: ['browser'],
+      },
+      now: new Date('2026-06-13T10:00:00.000Z'),
+    });
+
+    expect(result.status.capabilities).toEqual(['browser']);
+    expect(result.status).not.toHaveProperty('profiles');
+    expect(result.status).not.toHaveProperty('pendingAuthTasks');
+    expect(result.status).not.toHaveProperty('browserState');
+    expect(result.status).not.toHaveProperty('stateSnapshot');
+  });
+
   it('replaces duplicate agent ids with the newest connection', () => {
     const registry = new AgentRegistryService();
 

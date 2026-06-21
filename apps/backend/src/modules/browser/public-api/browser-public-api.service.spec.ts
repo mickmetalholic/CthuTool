@@ -1,4 +1,4 @@
-import type { BrowserAction } from '@cthutool/agent-protocol';
+import type { BrowserAction } from '@cthutool/browser-runtime-protocol';
 import type { Mock } from 'vitest';
 import { BrowserPublicApiService } from './browser-public-api.service';
 import { BrowserSessionRoutingStore } from './browser-session-routing.store';

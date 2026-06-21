@@ -1,16 +1,21 @@
 import { mkdir } from 'node:fs/promises';
+import type { AgentObservabilityMetadata } from '@cthutool/agent-protocol';
 import type {
   BrowserAction,
   BrowserActionResult,
-  BrowserCommandPayload,
+  BrowserChallenge,
   BrowserDetection,
-  BrowserErrorMessage,
-  BrowserResultMessage,
-} from '@cthutool/agent-protocol';
+  BrowserRuntimeErrorCode,
+  BrowserRuntimeMethod,
+  BrowserRuntimeParamsByMethod,
+  BrowserRuntimeRequest,
+  BrowserRuntimeResponse,
+  BrowserProfileStatus as RuntimeBrowserProfileStatus,
+} from '@cthutool/browser-runtime-protocol';
 import {
-  createBrowserErrorMessage,
-  createBrowserResultMessage,
-} from '@cthutool/agent-protocol';
+  createBrowserRuntimeErrorResponse,
+  createBrowserRuntimeSuccessResponse,
+} from '@cthutool/browser-runtime-protocol';
 import type { Route } from 'playwright';
 import { chromium } from 'playwright';
 import type {
@@ -25,7 +30,6 @@ import {
   type DesktopObservabilitySink,
   observabilityDetailsFromMetadata,
 } from './observability';
-import type { PendingAuthTaskStore } from './pending-auth-task-store';
 
 type RuntimeResponse = {
   readonly status: () => number;
@@ -120,7 +124,7 @@ type ProfileVerificationResult = {
 };
 
 type ProfileVerifier = (input: {
-  readonly command: BrowserCommandPayload;
+  readonly command: BrowserHostCommand;
   readonly context: RuntimeContext;
 }) => Promise<ProfileVerificationResult>;
 
@@ -146,12 +150,22 @@ export type PlaywrightHostOptions = {
   readonly headless?: boolean;
   readonly maxPayloadBytes?: number;
   readonly profileStore: BrowserProfileStore;
-  readonly pendingAuthTasks: PendingAuthTaskStore;
   readonly runtime?: ChromiumRuntime;
   readonly runtimeValidator?: RuntimeValidator;
   readonly now?: () => Date;
   readonly observability?: DesktopObservabilitySink;
   readonly onStateChanged?: () => void | Promise<void>;
+};
+
+type BrowserHostCommand<
+  TMethod extends BrowserRuntimeMethod = BrowserRuntimeMethod,
+> = BrowserRuntimeParamsByMethod[TMethod] & {
+  readonly command: TMethod;
+  readonly commandId: string | number;
+  readonly loginUrl?: string;
+  readonly verifyUrl?: string;
+  readonly waitUntil?: 'domcontentloaded' | 'load' | 'networkidle';
+  readonly observability?: AgentObservabilityMetadata;
 };
 
 export class PlaywrightHost {
@@ -210,20 +224,24 @@ export class PlaywrightHost {
     );
   }
 
-  async execute(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+  async executeRequest(
+    request: BrowserRuntimeRequest,
+  ): Promise<BrowserRuntimeResponse> {
+    return this.execute(toHostCommand(request));
+  }
+
+  async execute(command: BrowserHostCommand): Promise<BrowserRuntimeResponse> {
     return this.runQueued(() => this.executeObserved(command));
   }
 
   private async executeObserved(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    command: BrowserHostCommand,
+  ): Promise<BrowserRuntimeResponse> {
     const startedAt = Date.now();
     this.recordObservability({
       details: {
         command: command.command,
-        commandId: command.commandId,
+        commandId: String(command.commandId),
         profileName: command.profileName,
         siteId: command.siteId,
         ...observabilityDetailsFromMetadata(command.observability),
@@ -232,17 +250,20 @@ export class PlaywrightHost {
       message: 'Browser host received command',
     });
 
-    const result = await this.executeUnqueued(command);
+    const result = withCommandObservability(
+      command,
+      await this.executeUnqueued(command),
+    );
     const durationMs = Math.max(0, Date.now() - startedAt);
-    if (result.type === 'browser.error') {
+    if ('error' in result) {
       this.recordObservability({
         details: {
           command: command.command,
-          commandId: command.commandId,
+          commandId: String(command.commandId),
           durationMs,
           outcome: 'error',
           profileName: command.profileName,
-          reasonCode: result.payload.code,
+          reasonCode: result.error.data?.code,
           siteId: command.siteId,
           ...observabilityDetailsFromMetadata(command.observability),
         },
@@ -253,11 +274,11 @@ export class PlaywrightHost {
       return result;
     }
 
-    const detectionKind = result.payload.detection.kind;
+    const detectionKind = result.result.detection.kind;
     this.recordObservability({
       details: {
         command: command.command,
-        commandId: command.commandId,
+        commandId: String(command.commandId),
         detectionKind,
         durationMs,
         outcome: detectionKind === 'ok' ? 'success' : 'blocked',
@@ -273,7 +294,7 @@ export class PlaywrightHost {
       this.recordObservability({
         details: {
           command: command.command,
-          commandId: command.commandId,
+          commandId: String(command.commandId),
           detectionKind,
           profileName: command.profileName,
           siteId: command.siteId,
@@ -288,8 +309,8 @@ export class PlaywrightHost {
   }
 
   private async executeUnqueued(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    command: BrowserHostCommand,
+  ): Promise<BrowserRuntimeResponse> {
     try {
       await this.cleanupExpiredSessions();
       await this.ensureRuntimeReady();
@@ -323,28 +344,38 @@ export class PlaywrightHost {
   }
 
   private async executeOrThrow(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    command: BrowserHostCommand,
+  ): Promise<BrowserRuntimeResponse> {
     if (command.command === 'browser.capturePage') {
-      return this.capturePage(command);
+      return this.capturePage(
+        command as BrowserHostCommand<'browser.capturePage'>,
+      );
     }
     if (command.command === 'browser.verifyProfile') {
-      return this.verifyProfile(command);
+      return this.verifyProfile(
+        command as BrowserHostCommand<'browser.verifyProfile'>,
+      );
     }
     if (command.command === 'browser.openLogin') {
-      return this.openLogin(command);
+      return this.openLogin(command as BrowserHostCommand<'browser.openLogin'>);
     }
     if (command.command === 'browser.clearProfile') {
-      return this.clearProfile(command);
+      return this.clearProfile(
+        command as BrowserHostCommand<'browser.clearProfile'>,
+      );
     }
     if (command.command === 'browser.createSession') {
-      return this.createSession(command);
+      return this.createSession(
+        command as BrowserHostCommand<'browser.createSession'>,
+      );
     }
     if (command.command === 'browser.runActions') {
-      return this.runActions(command);
+      return this.runActions(command as BrowserHostCommand<'browser.runActions'>);
     }
     if (command.command === 'browser.closeSession') {
-      return this.closeSession(command);
+      return this.closeSession(
+        command as BrowserHostCommand<'browser.closeSession'>,
+      );
     }
     return this.error(
       command,
@@ -354,15 +385,8 @@ export class PlaywrightHost {
   }
 
   private async createSession(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
-    if (!command.sessionId) {
-      return this.error(
-        command,
-        'INVALID_BROWSER_COMMAND',
-        'Create session command requires sessionId',
-      );
-    }
+    command: BrowserHostCommand<'browser.createSession'>,
+  ): Promise<BrowserRuntimeResponse> {
     if (this.browserSessions.has(command.sessionId)) {
       return this.error(
         command,
@@ -373,7 +397,7 @@ export class PlaywrightHost {
     }
     const profileCheck = await this.requireProfileIfNeeded(command);
     if (profileCheck) {
-      return profileCheck;
+      return profileCheck as BrowserRuntimeResponse<'browser.createSession'>;
     }
 
     const createdAt = this.now().toISOString();
@@ -391,10 +415,10 @@ export class PlaywrightHost {
       siteId: command.siteId,
     });
 
-    return createBrowserResultMessage({
+    return createBrowserRuntimeSuccessResponse<'browser.createSession'>(
+      command.commandId,
+      {
       capturedAt: createdAt,
-      command: command.command,
-      commandId: command.commandId,
       detection: { kind: 'ok' },
       session: {
         createdAt,
@@ -404,27 +428,13 @@ export class PlaywrightHost {
         siteId: command.siteId,
       },
       sessionId: command.sessionId,
-    });
+      },
+    );
   }
 
   private async runActions(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
-    if (!command.sessionId) {
-      return this.error(
-        command,
-        'INVALID_BROWSER_COMMAND',
-        'Run actions command requires sessionId',
-      );
-    }
-    if (!command.actions?.length) {
-      return this.error(
-        command,
-        'INVALID_BROWSER_COMMAND',
-        'Run actions command requires at least one action',
-        { sessionId: command.sessionId },
-      );
-    }
+    command: BrowserHostCommand<'browser.runActions'>,
+  ): Promise<BrowserRuntimeResponse> {
     const session = this.browserSessions.get(command.sessionId);
     if (!session) {
       return this.error(
@@ -466,39 +476,34 @@ export class PlaywrightHost {
     }
     session.lastUsedAt = this.now().toISOString();
 
-    return createBrowserResultMessage({
-      actionResults,
-      capturedAt: session.lastUsedAt,
-      command: command.command,
-      commandId: command.commandId,
-      detection: { kind: 'ok' },
-      sessionId: command.sessionId,
-    });
+    return createBrowserRuntimeSuccessResponse<'browser.runActions'>(
+      command.commandId,
+      {
+        actionResults,
+        capturedAt: session.lastUsedAt,
+        detection: { kind: 'ok' },
+        sessionId: command.sessionId,
+      },
+    );
   }
 
   private async closeSession(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
-    if (!command.sessionId) {
-      return this.error(
-        command,
-        'INVALID_BROWSER_COMMAND',
-        'Close session command requires sessionId',
-      );
-    }
+    command: BrowserHostCommand<'browser.closeSession'>,
+  ): Promise<BrowserRuntimeResponse> {
     await this.closeBrowserSession(command.sessionId);
-    return createBrowserResultMessage({
-      capturedAt: this.now().toISOString(),
-      command: command.command,
-      commandId: command.commandId,
-      detection: { kind: 'ok' },
-      sessionId: command.sessionId,
-    });
+    return createBrowserRuntimeSuccessResponse<'browser.closeSession'>(
+      command.commandId,
+      {
+        capturedAt: this.now().toISOString(),
+        detection: { kind: 'ok' },
+        sessionId: command.sessionId,
+      },
+    );
   }
 
   private async capturePage(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    command: BrowserHostCommand<'browser.capturePage'>,
+  ): Promise<BrowserRuntimeResponse<'browser.capturePage'>> {
     if (!command.url) {
       return this.error(
         command,
@@ -533,25 +538,17 @@ export class PlaywrightHost {
       if (
         command.authPolicy === 'required' &&
         command.profileName &&
-        detection.kind === 'login_required' &&
-        !command.suppressPendingAuthTask
+        detection.kind === 'login_required'
       ) {
         await this.options.profileStore.markStatus(
           command.siteId,
           command.profileName,
           'expired',
         );
-        this.options.pendingAuthTasks.upsert({
-          profileName: command.profileName,
-          reason: 'expired',
-          siteId: command.siteId,
-          source: 'runtime_failure',
-        });
         this.notifyStateChanged();
       }
-      return createBrowserResultMessage({
+      return createBrowserRuntimeSuccessResponse(command.commandId, {
         capturedAt: this.now().toISOString(),
-        ...commandResponseContext(command),
         detection,
         finalUrl: page.url(),
         ...(html !== undefined
@@ -577,8 +574,8 @@ export class PlaywrightHost {
   }
 
   private async verifyProfile(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    command: BrowserHostCommand<'browser.verifyProfile'>,
+  ): Promise<BrowserRuntimeResponse<'browser.verifyProfile'>> {
     if (!command.profileName || !command.verifyUrl) {
       return this.error(
         command,
@@ -602,29 +599,12 @@ export class PlaywrightHost {
               : undefined,
         },
       );
-      if (verification.status === 'verified') {
-        this.options.pendingAuthTasks.resolve(command.siteId, profileName);
-      } else {
-        this.options.pendingAuthTasks.upsert({
-          profileName,
-          reason:
-            verification.status === 'blocked'
-              ? 'blocked'
-              : 'verification_failed',
-          siteId: command.siteId,
-          source: 'runtime_failure',
-        });
-      }
       this.notifyStateChanged();
-      return createBrowserResultMessage({
+      return createBrowserRuntimeSuccessResponse(command.commandId, {
         capturedAt: this.now().toISOString(),
-        ...commandResponseContext(command),
         detection: verification.detection,
         finalUrl: verification.finalUrl,
-        profile: this.options.profileStore.toPublicProfile(
-          this.options.agentId,
-          profile,
-        ),
+        profile: this.options.profileStore.toPublicProfile(profile),
         ...(verification.response?.status() !== undefined
           ? { status: verification.response.status() }
           : {}),
@@ -634,8 +614,8 @@ export class PlaywrightHost {
   }
 
   private async openLogin(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    command: BrowserHostCommand<'browser.openLogin'>,
+  ): Promise<BrowserRuntimeResponse<'browser.openLogin'>> {
     if (!command.profileName || !command.loginUrl) {
       return this.error(
         command,
@@ -665,18 +645,9 @@ export class PlaywrightHost {
         verifiedAt: undefined,
       },
     );
-    this.options.pendingAuthTasks.upsert({
-      loginUrl: command.loginUrl,
-      profileName: command.profileName,
-      reason: 'missing',
-      siteId: command.siteId,
-      source: 'backend_request',
-      verifyUrl: command.verifyUrl,
-    });
     this.notifyStateChanged();
-    return createBrowserResultMessage({
+    return createBrowserRuntimeSuccessResponse(command.commandId, {
       capturedAt: this.now().toISOString(),
-      ...commandResponseContext(command),
       detection: navigation.error
         ? { kind: 'blocked', reason: navigation.error }
         : { kind: 'login_required' },
@@ -689,7 +660,7 @@ export class PlaywrightHost {
   }
 
   private async launchPersistentContext(
-    command: BrowserCommandPayload,
+    command: BrowserHostCommand,
     options: { readonly headless?: boolean } = {},
   ): Promise<RuntimeContext> {
     if (!command.profileName) {
@@ -706,7 +677,9 @@ export class PlaywrightHost {
     });
   }
 
-  private async createSessionContext(command: BrowserCommandPayload): Promise<{
+  private async createSessionContext(
+    command: BrowserHostCommand<'browser.createSession'>,
+  ): Promise<{
     readonly context: RuntimeContext;
     readonly page: RuntimePage;
     readonly close: () => Promise<void>;
@@ -758,8 +731,8 @@ export class PlaywrightHost {
   }
 
   private async clearProfile(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    command: BrowserHostCommand<'browser.clearProfile'>,
+  ): Promise<BrowserRuntimeResponse<'browser.clearProfile'>> {
     if (!command.profileName) {
       return this.error(
         command,
@@ -774,23 +747,16 @@ export class PlaywrightHost {
       command.siteId,
       command.profileName,
     );
-    this.options.pendingAuthTasks.upsert({
-      profileName: command.profileName,
-      reason: 'missing',
-      siteId: command.siteId,
-      source: 'backend_request',
-    });
     this.notifyStateChanged();
-    return createBrowserResultMessage({
+    return createBrowserRuntimeSuccessResponse(command.commandId, {
       capturedAt: this.now().toISOString(),
-      ...commandResponseContext(command),
       detection: { kind: 'login_required' },
     });
   }
 
   private async requireProfileIfNeeded(
-    command: BrowserCommandPayload,
-  ): Promise<BrowserErrorMessage | undefined> {
+    command: BrowserHostCommand,
+  ): Promise<BrowserRuntimeResponse | undefined> {
     if (command.authPolicy !== 'required') {
       return undefined;
     }
@@ -802,41 +768,11 @@ export class PlaywrightHost {
         'missing',
       );
     }
-    if (command.suppressPendingAuthTask) {
-      return undefined;
-    }
     const profile = await this.options.profileStore.getProfile(
       command.siteId,
       command.profileName,
     );
     if (!profile || profile.status !== 'verified') {
-      this.recordObservability({
-        details: {
-          command: command.command,
-          commandId: command.commandId,
-          outcome: 'error',
-          profileName: command.profileName,
-          reasonCode:
-            profile?.status === 'expired'
-              ? 'AUTH_PROFILE_EXPIRED'
-              : 'AUTH_PROFILE_REQUIRED',
-          siteId: command.siteId,
-          ...observabilityDetailsFromMetadata(command.observability),
-        },
-        event: 'browser.profile_check',
-        level: 'warn',
-        message: 'Required browser profile is not verified',
-      });
-      if (!command.suppressPendingAuthTask) {
-        this.options.pendingAuthTasks.upsert({
-          loginUrl: command.loginUrl,
-          profileName: command.profileName,
-          reason: profile?.status === 'expired' ? 'expired' : 'missing',
-          siteId: command.siteId,
-          source: 'backend_request',
-          verifyUrl: command.verifyUrl,
-        });
-      }
       return this.error(
         command,
         profile?.status === 'expired'
@@ -850,7 +786,7 @@ export class PlaywrightHost {
   }
 
   private async withContext<T>(
-    command: BrowserCommandPayload,
+    command: BrowserHostCommand,
     callback: (context: RuntimeContext) => Promise<T>,
   ): Promise<T> {
     if (command.authPolicy === 'required') {
@@ -871,7 +807,7 @@ export class PlaywrightHost {
   }
 
   private async withPersistentContext<T>(
-    command: BrowserCommandPayload,
+    command: BrowserHostCommand,
     callback: (context: RuntimeContext) => Promise<T>,
   ): Promise<T> {
     await this.closeLoginContext(
@@ -886,38 +822,34 @@ export class PlaywrightHost {
   }
 
   private error(
-    command: BrowserCommandPayload,
-    code: string,
+    command: BrowserHostCommand,
+    code: BrowserRuntimeErrorCode,
     message: string,
     details?:
-      | BrowserErrorMessage['payload']['profileStatus']
+      | RuntimeBrowserProfileStatus
       | {
           readonly failedActionIndex?: number;
-          readonly failedActionType?: BrowserErrorMessage['payload']['failedActionType'];
-          readonly profileStatus?: BrowserErrorMessage['payload']['profileStatus'];
+          readonly failedActionType?: BrowserAction['type'];
+          readonly profileStatus?: RuntimeBrowserProfileStatus;
           readonly sessionId?: string;
         },
-  ): BrowserErrorMessage {
+  ): BrowserRuntimeResponse {
     const profileStatus =
       typeof details === 'string' ? details : details?.profileStatus;
-    return createBrowserErrorMessage({
+    return createBrowserRuntimeErrorResponse(command.commandId, {
       code,
-      command: command.command,
-      commandId: command.commandId,
+      message,
+      ...(profileStatus ? { profileStatus } : {}),
       ...(typeof details === 'object' && details.failedActionIndex !== undefined
         ? { failedActionIndex: details.failedActionIndex }
         : {}),
       ...(typeof details === 'object' && details.failedActionType
         ? { failedActionType: details.failedActionType }
         : {}),
-      message,
-      ...(command.observability
-        ? { observability: command.observability }
-        : {}),
-      ...(profileStatus ? { profileStatus } : {}),
       ...(typeof details === 'object' && details.sessionId
         ? { sessionId: details.sessionId }
         : {}),
+      challenge: toChallenge(command, code, message, profileStatus),
     });
   }
 
@@ -1015,7 +947,7 @@ export class PlaywrightHost {
 
   private watchLoginContextClose(
     key: string,
-    command: BrowserCommandPayload,
+    command: BrowserHostCommand,
     context: RuntimeContext,
   ): void {
     if (!context.on || !command.profileName || !command.verifyUrl) {
@@ -1033,13 +965,6 @@ export class PlaywrightHost {
           ...command,
           command: 'browser.verifyProfile',
           commandId: `${command.commandId}:verify-on-close`,
-          observability: command.observability
-            ? {
-                ...command.observability,
-                commandId: `${command.commandId}:verify-on-close`,
-                operation: 'browser.verifyProfile',
-              }
-            : undefined,
         }),
       );
     });
@@ -1151,14 +1076,6 @@ export class PlaywrightHost {
   }
 }
 
-function commandResponseContext(command: BrowserCommandPayload) {
-  return {
-    command: command.command,
-    commandId: command.commandId,
-    ...(command.observability ? { observability: command.observability } : {}),
-  };
-}
-
 async function validateRuntimeLaunch({
   launchOptions,
   runtime,
@@ -1186,8 +1103,68 @@ function profileKey(siteId: string, profileName: string | undefined): string {
   return `${siteId}:${profileName ?? ''}`;
 }
 
+function toHostCommand(request: BrowserRuntimeRequest): BrowserHostCommand {
+  return {
+    ...(request.params as BrowserRuntimeParamsByMethod[BrowserRuntimeMethod]),
+    command: request.method,
+    commandId: request.id,
+    observability: request.observability,
+  } as BrowserHostCommand;
+}
+
+function withCommandObservability(
+  command: BrowserHostCommand,
+  response: BrowserRuntimeResponse,
+): BrowserRuntimeResponse {
+  return command.observability
+    ? { ...response, observability: command.observability }
+    : response;
+}
+
+function toChallenge(
+  command: BrowserHostCommand,
+  code: BrowserRuntimeErrorCode,
+  message: string,
+  profileStatus?: RuntimeBrowserProfileStatus,
+): BrowserChallenge | undefined {
+  if (code === 'AUTH_PROFILE_REQUIRED' || profileStatus === 'missing') {
+    return {
+      kind: 'login_required',
+      siteId: command.siteId,
+      profileName: command.profileName,
+      loginUrl: command.loginUrl,
+      verifyUrl: command.verifyUrl,
+      message,
+      retryable: true,
+    };
+  }
+  if (code === 'AUTH_PROFILE_EXPIRED' || profileStatus === 'expired') {
+    return {
+      kind: 'login_expired',
+      siteId: command.siteId,
+      profileName: command.profileName,
+      loginUrl: command.loginUrl,
+      verifyUrl: command.verifyUrl,
+      message,
+      retryable: true,
+    };
+  }
+  if (profileStatus === 'blocked') {
+    return {
+      kind: 'blocked',
+      siteId: command.siteId,
+      profileName: command.profileName,
+      loginUrl: command.loginUrl,
+      verifyUrl: command.verifyUrl,
+      message,
+      retryable: false,
+    };
+  }
+  return undefined;
+}
+
 async function verifyProfileInContext(
-  command: BrowserCommandPayload,
+  command: BrowserHostCommand,
   context: RuntimeContext,
 ): Promise<ProfileVerificationResult> {
   const verifier = profileVerifiers.get(command.siteId);
@@ -1200,7 +1177,7 @@ async function verifyGenericProfile({
   command,
   context,
 }: {
-  readonly command: BrowserCommandPayload;
+  readonly command: BrowserHostCommand;
   readonly context: RuntimeContext;
 }): Promise<ProfileVerificationResult> {
   const page = await context.newPage();
@@ -1232,7 +1209,7 @@ async function verifyDoubanProfile({
   command,
   context,
 }: {
-  readonly command: BrowserCommandPayload;
+  readonly command: BrowserHostCommand;
   readonly context: RuntimeContext;
 }): Promise<ProfileVerificationResult> {
   const page = await context.newPage();

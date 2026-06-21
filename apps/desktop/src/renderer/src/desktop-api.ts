@@ -74,7 +74,6 @@ const webPreviewDesktopApi: DesktopApi = {
   }),
   getConfig: async () => webPreviewConfig,
   getConnectionState: async () => webPreviewConnection,
-  getLocalPendingAuthTasks: async () => [],
   onConnectionStateChange: () => () => undefined,
   openBrowserLogin: async () => undefined,
   saveConfig: async (patch) => ({

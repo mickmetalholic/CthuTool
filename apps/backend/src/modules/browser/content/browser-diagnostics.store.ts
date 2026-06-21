@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { getCurrentRequestContext } from '../../../observability';
-import type { BrowserDiagnosticsSummary } from '../../browser-automation/browser-automation.types';
+import type { BrowserDiagnosticsSummary } from '../shared/browser.types';
 
 export const BROWSER_DIAGNOSTICS_STORE_OPTIONS =
   'BROWSER_DIAGNOSTICS_STORE_OPTIONS';

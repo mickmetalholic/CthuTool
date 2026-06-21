@@ -1,4 +1,4 @@
-import { BrowserAutomationError } from '../../browser-automation/browser-automation.errors';
+import { BrowserWorkflowError } from '../shared/browser.errors';
 import { BrowserTaskRunner } from './browser-task-runner';
 
 describe('BrowserTaskRunner', () => {
@@ -48,7 +48,7 @@ describe('BrowserTaskRunner', () => {
         await new Promise((resolve) => setTimeout(resolve, 30));
       }),
     ).rejects.toEqual(
-      new BrowserAutomationError(
+      new BrowserWorkflowError(
         'NAVIGATION_TIMEOUT',
         'Browser task timed out after 5ms',
       ),

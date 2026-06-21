@@ -1,6 +1,6 @@
+import { BrowserWorkflowError } from './browser.errors';
+import type { BrowserAuthBundle } from './browser.types';
 import { assertProfileName } from './browser-auth-state.store';
-import { BrowserAutomationError } from './browser-automation.errors';
-import type { BrowserAuthBundle } from './browser-automation.types';
 
 export type BrowserExtensionOriginStorage = {
   readonly localStorage: readonly {
@@ -69,5 +69,5 @@ function assertExtensionSnapshot(snapshot: BrowserExtensionAuthSnapshot): void {
 }
 
 function throwInvalidExtensionSnapshot(message: string): never {
-  throw new BrowserAutomationError('INVALID_AUTH_BUNDLE', message);
+  throw new BrowserWorkflowError('INVALID_AUTH_BUNDLE', message);
 }

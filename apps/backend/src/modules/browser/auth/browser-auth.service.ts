@@ -52,11 +52,6 @@ export class BrowserAuthService {
     return [];
   }
 
-  async listPendingAuthTasks(): Promise<[]> {
-    // Pending auth tasks are replaced by operation-scoped interaction challenges.
-    return [];
-  }
-
   async getRuntimeStatus(): Promise<{
     readonly available: boolean;
     readonly agentId?: string;

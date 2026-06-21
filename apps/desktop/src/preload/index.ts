@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { AgentConnectionState } from '../main/agent-client';
 import type { DesktopConfig, DesktopConfigPatch } from '../main/config';
 import type { DesktopDiagnosticsSnapshot } from '../main/observability';
-import type { PendingAuthTask } from '../main/pending-auth-task-store';
 import type { BrowserRuntimeDiagnostic } from '../main/playwright-host';
 
 type BrowserSiteActionInput = {
@@ -29,8 +28,6 @@ const api = {
     ipcRenderer.invoke('desktop:saveConfig', patch),
   getConnectionState: (): Promise<AgentConnectionState> =>
     ipcRenderer.invoke('desktop:getConnectionState'),
-  getLocalPendingAuthTasks: (): Promise<PendingAuthTask[]> =>
-    ipcRenderer.invoke('browser:getLocalPendingAuthTasks'),
   openBrowserLogin: (input: BrowserSiteActionInput): Promise<unknown> =>
     ipcRenderer.invoke('browser:openLogin', input),
   verifyBrowserProfile: (input: BrowserSiteActionInput): Promise<unknown> =>

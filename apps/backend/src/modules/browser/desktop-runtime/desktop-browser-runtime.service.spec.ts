@@ -1,9 +1,8 @@
 import {
-  type BrowserErrorMessage,
-  type BrowserResultMessage,
-  createBrowserErrorMessage,
-  createBrowserResultMessage,
-} from '@cthutool/agent-protocol';
+  type BrowserRuntimeResponse,
+  createBrowserRuntimeErrorResponse,
+  createBrowserRuntimeSuccessResponse,
+} from '@cthutool/browser-runtime-protocol';
 import type { Mock } from 'vitest';
 import type { AgentCommandGateway } from '../../agent/command-gateway/agent-command-gateway.service';
 import { DesktopBrowserRuntimeService } from './desktop-browser-runtime.service';
@@ -25,13 +24,11 @@ describe('DesktopBrowserRuntimeService', () => {
     expect(gateway.sendCommand).toHaveBeenCalledWith(
       'agent-1',
       expect.objectContaining({
-        commandId: expect.any(String),
-        message: expect.objectContaining({
-          payload: expect.objectContaining({
-            command: 'browser.capturePage',
-            url: 'https://example.com/',
-          }),
-          type: 'browser.command',
+        id: expect.any(String),
+        jsonrpc: '2.0',
+        method: 'browser.capturePage',
+        params: expect.objectContaining({
+          url: 'https://example.com/',
         }),
       }),
       undefined,
@@ -68,13 +65,6 @@ describe('DesktopBrowserRuntimeService', () => {
         observability: expect.objectContaining({
           operation: 'browser.capturePage',
         }),
-        message: expect.objectContaining({
-          payload: expect.objectContaining({
-            observability: expect.objectContaining({
-              operation: 'browser.capturePage',
-            }),
-          }),
-        }),
       }),
       undefined,
     );
@@ -83,10 +73,8 @@ describe('DesktopBrowserRuntimeService', () => {
   it('returns interaction challenge when auth is required', async () => {
     const gateway = createGatewayMock(
       createAgentStatus('agent-1'),
-      createBrowserErrorMessage({
+      createBrowserRuntimeErrorResponse('cmd-1', {
         code: 'AUTH_PROFILE_REQUIRED',
-        command: 'browser.capturePage',
-        commandId: 'cmd-1',
         message: 'Required browser profile is not verified',
         profileStatus: 'missing',
       }),
@@ -116,10 +104,8 @@ describe('DesktopBrowserRuntimeService', () => {
   it('returns interaction challenge when profile is expired', async () => {
     const gateway = createGatewayMock(
       createAgentStatus('agent-1'),
-      createBrowserErrorMessage({
+      createBrowserRuntimeErrorResponse('cmd-1', {
         code: 'AUTH_PROFILE_EXPIRED',
-        command: 'browser.capturePage',
-        commandId: 'cmd-1',
         message: 'Required browser profile expired',
         profileStatus: 'expired',
       }),
@@ -209,10 +195,8 @@ describe('DesktopBrowserRuntimeService', () => {
   it('creates browser sessions on a selected browser agent', async () => {
     const gateway = createGatewayMock(
       createAgentStatus('agent-1'),
-      createBrowserResultMessage({
+      createBrowserRuntimeSuccessResponse('cmd-returned', {
         capturedAt: '2026-06-13T10:00:00.000Z',
-        command: 'browser.createSession',
-        commandId: 'cmd-returned',
         detection: { kind: 'ok' },
         session: {
           createdAt: '2026-06-13T10:00:00.000Z',
@@ -248,11 +232,9 @@ describe('DesktopBrowserRuntimeService', () => {
     expect(gateway.sendCommand).toHaveBeenCalledWith(
       'agent-1',
       expect.objectContaining({
-        message: expect.objectContaining({
-          payload: expect.objectContaining({
-            command: 'browser.createSession',
-            sessionId: 'session-1',
-          }),
+        method: 'browser.createSession',
+        params: expect.objectContaining({
+          sessionId: 'session-1',
         }),
       }),
       undefined,
@@ -262,7 +244,7 @@ describe('DesktopBrowserRuntimeService', () => {
   it('runs browser session actions on the owning agent', async () => {
     const gateway = createGatewayMock(
       createAgentStatus('agent-1'),
-      createBrowserResultMessage({
+      createBrowserRuntimeSuccessResponse('cmd-returned', {
         actionResults: [
           {
             actionId: 'a1',
@@ -271,8 +253,6 @@ describe('DesktopBrowserRuntimeService', () => {
           },
         ],
         capturedAt: '2026-06-13T10:00:01.000Z',
-        command: 'browser.runActions',
-        commandId: 'cmd-returned',
         detection: { kind: 'ok' },
         sessionId: 'session-1',
       }),
@@ -304,11 +284,9 @@ describe('DesktopBrowserRuntimeService', () => {
     expect(gateway.sendCommand).toHaveBeenCalledWith(
       'agent-owner',
       expect.objectContaining({
-        message: expect.objectContaining({
-          payload: expect.objectContaining({
-            command: 'browser.runActions',
-            sessionId: 'session-1',
-          }),
+        method: 'browser.runActions',
+        params: expect.objectContaining({
+          sessionId: 'session-1',
         }),
       }),
       undefined,
@@ -318,10 +296,8 @@ describe('DesktopBrowserRuntimeService', () => {
   it('closes browser sessions on the owning agent', async () => {
     const gateway = createGatewayMock(
       createAgentStatus('agent-1'),
-      createBrowserResultMessage({
+      createBrowserRuntimeSuccessResponse('cmd-returned', {
         capturedAt: '2026-06-13T10:00:02.000Z',
-        command: 'browser.closeSession',
-        commandId: 'cmd-returned',
         detection: { kind: 'ok' },
         sessionId: 'session-1',
       }),
@@ -342,11 +318,9 @@ describe('DesktopBrowserRuntimeService', () => {
     expect(gateway.sendCommand).toHaveBeenCalledWith(
       'agent-owner',
       expect.objectContaining({
-        message: expect.objectContaining({
-          payload: expect.objectContaining({
-            command: 'browser.closeSession',
-            sessionId: 'session-1',
-          }),
+        method: 'browser.closeSession',
+        params: expect.objectContaining({
+          sessionId: 'session-1',
         }),
       }),
       undefined,
@@ -356,10 +330,8 @@ describe('DesktopBrowserRuntimeService', () => {
   it('maps session action failures without exposing transport internals', async () => {
     const gateway = createGatewayMock(
       createAgentStatus('agent-1'),
-      createBrowserErrorMessage({
+      createBrowserRuntimeErrorResponse('cmd-returned', {
         code: 'BROWSER_ACTION_FAILED',
-        command: 'browser.runActions',
-        commandId: 'cmd-returned',
         failedActionIndex: 0,
         failedActionType: 'click',
         message: 'Selector was not found',
@@ -412,17 +384,22 @@ function createGatewayMock(
     'agent-1',
   ),
   response:
-    | BrowserResultMessage
-    | BrowserErrorMessage = createBrowserResultMessage({
-    capturedAt: new Date().toISOString(),
-    command: 'browser.capturePage',
-    commandId: 'cmd-returned',
-    detection: { kind: 'ok' },
-    finalUrl: 'https://example.com/',
-    html: '<html>ok</html>',
-    status: 200,
-    title: 'Example',
-  }),
+    | BrowserRuntimeResponse<'browser.capturePage'>
+    | BrowserRuntimeResponse<'browser.openLogin'>
+    | BrowserRuntimeResponse<'browser.verifyProfile'>
+    | BrowserRuntimeResponse<'browser.createSession'>
+    | BrowserRuntimeResponse<'browser.runActions'>
+    | BrowserRuntimeResponse<'browser.closeSession'> = createBrowserRuntimeSuccessResponse(
+    'cmd-returned',
+    {
+      capturedAt: new Date().toISOString(),
+      detection: { kind: 'ok' },
+      finalUrl: 'https://example.com/',
+      html: '<html>ok</html>',
+      status: 200,
+      title: 'Example',
+    },
+  ),
 ): GatewayMock {
   return {
     selectAgentByCapability: vi.fn(() => agent ?? undefined),

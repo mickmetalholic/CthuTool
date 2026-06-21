@@ -2,9 +2,12 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { parse as parseUrl } from 'node:url';
 import {
-  type AgentClientMessage,
+  type AgentHeartbeatMessage,
+  type AgentHelloMessage,
   createAgentErrorMessage,
   createAgentRegisteredMessage,
+  isJsonRpcResponse,
+  type JsonRpcId,
   parseAgentClientMessageJson,
 } from '@cthutool/agent-protocol';
 import {
@@ -111,24 +114,24 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.pendingCommands.delete(command.commandId);
-        reject(new Error(`Command "${command.commandId}" timed out`));
+        this.pendingCommands.delete(String(command.id));
+        reject(new Error(`Command "${String(command.id)}" timed out`));
       }, timeoutMs);
       timer.unref();
 
-      this.pendingCommands.set(command.commandId, {
+      this.pendingCommands.set(String(command.id), {
         agentId,
         reject,
         resolve: (message) => resolve(message as TResponse),
         timer,
       });
 
-      socket.send(JSON.stringify(command.message), (error) => {
+      socket.send(JSON.stringify(command), (error) => {
         if (!error) {
           return;
         }
         clearTimeout(timer);
-        this.pendingCommands.delete(command.commandId);
+        this.pendingCommands.delete(String(command.id));
         reject(error);
       });
     });
@@ -187,6 +190,13 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    if (!('type' in parsed.value)) {
+      if (isJsonRpcResponse(parsed.value)) {
+        this.handleCommandResponse(socket, state, parsed.value);
+      }
+      return;
+    }
+
     switch (parsed.value.type) {
       case 'agent.hello':
         this.handleHello(socket, state, parsed.value);
@@ -194,19 +204,13 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       case 'agent.heartbeat':
         this.handleHeartbeat(socket, state, parsed.value);
         return;
-      default:
-        if (!isCommandResponseMessage(parsed.value)) {
-          return;
-        }
-        this.handleCommandResponse(socket, state, parsed.value);
-        return;
     }
   }
 
   private handleHello(
     socket: WebSocket,
     state: SocketState,
-    message: Extract<AgentClientMessage, { type: 'agent.hello' }>,
+    message: AgentHelloMessage,
   ): void {
     const result = this.registry.register({
       connectionId: state.connectionId,
@@ -249,7 +253,7 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
   private handleHeartbeat(
     socket: WebSocket,
     state: SocketState,
-    message: Extract<AgentClientMessage, { type: 'agent.heartbeat' }>,
+    message: AgentHeartbeatMessage,
   ): void {
     if (!state.agentId || state.agentId !== message.payload.agentId) {
       this.reject(socket, state, 'heartbeat must match registered agent');
@@ -274,7 +278,8 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
     state: SocketState,
     message: AgentCommandResponse,
   ): void {
-    const pending = this.pendingCommands.get(message.payload.commandId);
+    const commandId = getCommandId(message.id);
+    const pending = this.pendingCommands.get(commandId);
     if (!pending) {
       this.reject(
         socket,
@@ -292,7 +297,7 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       return;
     }
     clearTimeout(pending.timer);
-    this.pendingCommands.delete(message.payload.commandId);
+    this.pendingCommands.delete(commandId);
     pending.resolve(message);
   }
 
@@ -325,12 +330,6 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
   }
 }
 
-function isCommandResponseMessage(
-  message: AgentClientMessage,
-): message is AgentCommandResponse {
-  if (!('payload' in message)) {
-    return false;
-  }
-  const payload = message.payload as { readonly commandId?: unknown };
-  return typeof payload.commandId === 'string';
+function getCommandId(id: JsonRpcId): string {
+  return String(id);
 }

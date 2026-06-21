@@ -1,13 +1,13 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
-import { BrowserAutomationError } from './browser-automation.errors';
+import { BrowserWorkflowError } from './browser.errors';
 import type {
   BrowserAuthBundle,
   BrowserAuthBundleMeta,
   BrowserProfileStatus,
   BrowserStorageState,
-} from './browser-automation.types';
+} from './browser.types';
 
 export type BrowserAuthStateStoreOptions = {
   readonly authStateDir: string;
@@ -27,7 +27,7 @@ export class BrowserAuthStateStore {
       return true;
     } catch (error) {
       if (
-        error instanceof BrowserAutomationError &&
+        error instanceof BrowserWorkflowError &&
         error.code === 'AUTH_STATE_MISSING'
       ) {
         return false;
@@ -55,10 +55,10 @@ export class BrowserAuthStateStore {
       parseStorageState(JSON.stringify(bundle.storageState));
       parseMeta(JSON.stringify(bundle.meta));
     } catch (error) {
-      if (error instanceof BrowserAutomationError) {
+      if (error instanceof BrowserWorkflowError) {
         throw error.code === 'INVALID_AUTH_BUNDLE'
           ? error
-          : new BrowserAutomationError('INVALID_AUTH_BUNDLE', error.message);
+          : new BrowserWorkflowError('INVALID_AUTH_BUNDLE', error.message);
       }
       throw error;
     }
@@ -97,13 +97,13 @@ export class BrowserAuthStateStore {
       };
     } catch (error) {
       if (
-        error instanceof BrowserAutomationError &&
+        error instanceof BrowserWorkflowError &&
         error.code === 'AUTH_STATE_MISSING'
       ) {
         return { profileName, status: 'missing' };
       }
       if (
-        error instanceof BrowserAutomationError &&
+        error instanceof BrowserWorkflowError &&
         error.code === 'INVALID_AUTH_BUNDLE'
       ) {
         return { profileName, status: 'invalid' };
@@ -123,7 +123,7 @@ export class BrowserAuthStateStore {
       );
     } catch (error) {
       if (isNodeError(error) && error.code === 'ENOENT') {
-        throw new BrowserAutomationError(
+        throw new BrowserWorkflowError(
           'AUTH_STATE_MISSING',
           `Browser auth profile "${profileName}" does not exist`,
         );
@@ -202,7 +202,7 @@ function parseMeta(raw: string): BrowserAuthBundleMeta {
 }
 
 function throwInvalidBundle(message: string): never {
-  throw new BrowserAutomationError('INVALID_AUTH_BUNDLE', message);
+  throw new BrowserWorkflowError('INVALID_AUTH_BUNDLE', message);
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
