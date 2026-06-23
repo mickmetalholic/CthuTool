@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { BrowserAutomationError } from '../../browser-automation/browser-automation.errors';
+
+export const BROWSER_TASK_RUNNER_OPTIONS = 'BROWSER_TASK_RUNNER_OPTIONS';
 
 export type BrowserTaskRunnerOptions = {
   readonly defaultDelayMs: number;
@@ -15,18 +17,25 @@ type QueueItem<T> = {
   readonly reject: (error: unknown) => void;
 };
 
+const DEFAULT_BROWSER_TASK_RUNNER_OPTIONS: BrowserTaskRunnerOptions = {
+  defaultDelayMs: 1000,
+  defaultTimeoutMs: 30000,
+  maxConcurrency: 1,
+};
+
 @Injectable()
 export class BrowserTaskRunner {
   private active = 0;
+  private readonly options: BrowserTaskRunnerOptions;
   private readonly queue: Array<QueueItem<unknown>> = [];
 
   constructor(
-    private readonly options: BrowserTaskRunnerOptions = {
-      defaultDelayMs: 1000,
-      defaultTimeoutMs: 30000,
-      maxConcurrency: 1,
-    },
-  ) {}
+    @Optional()
+    @Inject(BROWSER_TASK_RUNNER_OPTIONS)
+    options?: BrowserTaskRunnerOptions,
+  ) {
+    this.options = options ?? DEFAULT_BROWSER_TASK_RUNNER_OPTIONS;
+  }
 
   run<T>(
     label: string,

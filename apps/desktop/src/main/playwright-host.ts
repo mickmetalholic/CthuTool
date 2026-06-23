@@ -261,7 +261,7 @@ export class PlaywrightHost {
 
     return this.withContext(command, async (context) => {
       if (command.blockResources?.length) {
-        const blocked = new Set(command.blockResources);
+        const blocked = new Set<string>(command.blockResources);
         await context.route('**/*', (route) => routeResource(route, blocked));
       }
       const page = await context.newPage();

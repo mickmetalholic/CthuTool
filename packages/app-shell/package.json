@@ -12,10 +12,11 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
-    "test:cov": "vitest run --coverage",
-    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "build:deps": "pnpm --filter @cthutool/ui build",
+    "build": "pnpm run build:deps && tsc -p tsconfig.json",
+    "test": "pnpm run build:deps && vitest run",
+    "test:cov": "pnpm run build:deps && vitest run --coverage",
+    "typecheck": "pnpm run build:deps && tsc -p tsconfig.test.json --noEmit",
     "lint": "biome check ."
   },
   "dependencies": {

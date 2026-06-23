@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cthutool-backend
+  namespace: cthutool
+  labels:
+    app.kubernetes.io/name: cthutool-backend
+    app.kubernetes.io/part-of: cthutool
+    app.kubernetes.io/managed-by: argocd
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"

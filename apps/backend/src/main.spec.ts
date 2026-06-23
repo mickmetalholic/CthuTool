@@ -11,16 +11,6 @@ describe('bootstrap', () => {
     const log = vi.fn();
     const error = vi.fn();
     const config: ServiceConfiguration = {
-      browser: {
-        authStateDir: './data/secrets/browser-auth',
-        dataDir: './data/browser',
-        defaultDelayMs: 1000,
-        defaultTimeoutMs: 30000,
-        diagnosticsDir: './data/browser-diagnostics',
-        headless: true,
-        maxConcurrency: 1,
-        provider: 'local-playwright',
-      },
       logLevel: 'info',
       nodeEnv: 'development',
       port: 3000,
