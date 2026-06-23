@@ -6,7 +6,12 @@ import { runBundledScript } from '../flow/run-bundled-script';
 import { getBundledScriptsRoot } from '../infra/bundled-scripts-root';
 import { discoverScripts } from '../infra/discover-scripts';
 import { cliContractArgs, createCliContext } from '../runtime/cli-context';
-import { createCliError } from '../runtime/cli-error';
+import { type CliError, createCliError } from '../runtime/cli-error';
+import {
+  createCliCommandDiagnostics,
+  createCliDiagnostics,
+  summarizeScriptArgs,
+} from '../runtime/observability';
 import {
   processOutput,
   writeCommandError,
@@ -94,6 +99,19 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
     },
     async run({ args }) {
       const context = createCliContext(args, { isTty: deps.isInteractive });
+      const commandDiagnostics = createCliCommandDiagnostics(
+        context,
+        processOutput,
+        { command: 'scripts' },
+      );
+      const diagnostics = createCliDiagnostics(context, processOutput, {
+        command: 'scripts',
+      });
+      const fail = (error: CliError, details?: Record<string, unknown>) => {
+        commandDiagnostics.fail(error, { details });
+        writeCommandError(context, processOutput, error);
+        process.exitCode = error.exitCode;
+      };
       const root = getBundledScriptsRoot();
       const discovered = await discoverScripts(root);
       if (discovered.isErr()) {
@@ -101,14 +119,31 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
           'discovery_failed',
           discovered.error.message,
         );
-        writeCommandError(context, processOutput, error);
-        process.exitCode = error.exitCode;
+        fail(error, { phase: 'discovery', scriptsRoot: root });
         return;
       }
 
       const catalog = discovered.value;
+      diagnostics.emit({
+        level: 'debug',
+        event: 'cli.scripts_discovered',
+        phase: 'discovery',
+        details: {
+          packageCount: catalog.packages.length,
+          warningCount: catalog.warnings.length,
+        },
+      });
       for (const w of catalog.warnings) {
         writeWarning(processOutput, pc.yellow(`${w.path}: ${w.message}`));
+        diagnostics.emit({
+          level: 'warn',
+          event: 'cli.script_discovery_warning',
+          phase: 'discovery',
+          details: {
+            message: w.message,
+            path: w.path,
+          },
+        });
       }
 
       if (catalog.packages.length === 0) {
@@ -116,8 +151,7 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
           'discovery_failed',
           'no valid bundled script packages found (see apps/cli/src/scripts/)',
         );
-        writeCommandError(context, processOutput, error);
-        process.exitCode = error.exitCode;
+        fail(error, { phase: 'discovery', scriptsRoot: root });
         return;
       }
 
@@ -130,8 +164,7 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
             'missing_required_argument',
             'script id is required in non-interactive mode (use: chc scripts <id> or --script <id>)',
           );
-          writeCommandError(context, processOutput, error);
-          process.exitCode = error.exitCode;
+          fail(error, { phase: 'selection' });
           return;
         }
 
@@ -139,6 +172,13 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
         if (options.length === 1) {
           const [only] = options;
           targetId = only.id;
+          diagnostics.emit({
+            level: 'info',
+            event: 'cli.script_selected',
+            phase: 'selection',
+            scriptId: targetId,
+            details: { selectionMode: 'single-option' },
+          });
         } else {
           const choice = await deps.pickScriptId(options);
           if (choice === undefined) {
@@ -146,12 +186,28 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
               'invalid_option',
               'selection cancelled',
             );
-            writeCommandError(context, processOutput, error);
-            process.exitCode = error.exitCode;
+            fail(error, { phase: 'selection' });
             return;
           }
           targetId = choice;
+          diagnostics.emit({
+            level: 'info',
+            event: 'cli.script_selected',
+            phase: 'selection',
+            scriptId: targetId,
+            details: { selectionMode: 'interactive' },
+          });
         }
+      } else {
+        diagnostics.emit({
+          level: 'info',
+          event: 'cli.script_selected',
+          phase: 'selection',
+          scriptId: targetId,
+          details: {
+            selectionMode: explicitId === args.script ? 'flag' : 'positional',
+          },
+        });
       }
 
       const resolved = resolvePackage(catalog, targetId);
@@ -166,8 +222,10 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
                 'ambiguous_selection',
                 `ambiguous script id: ${resolved.error.id}`,
               );
-        writeCommandError(context, processOutput, error);
-        process.exitCode = error.exitCode;
+        fail(error, {
+          phase: 'selection',
+          requestedScriptId: resolved.error.id,
+        });
         return;
       }
 
@@ -176,6 +234,9 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
         toScriptArgs(args),
         {
           cli: context,
+          diagnostics: diagnostics.child({
+            scriptId: resolved.value.id,
+          }),
         },
       );
       if (executed.isErr()) {
@@ -187,11 +248,20 @@ export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) =>
               ? createCliError('script_load_failed', e.message)
               : (e.cliError ??
                 createCliError('script_execution_failed', e.message));
-        writeCommandError(context, processOutput, error);
-        process.exitCode = error.exitCode;
+        fail(error, {
+          phase: e.kind,
+          scriptId: resolved.value.id,
+          scriptArgs: summarizeScriptArgs(toScriptArgs(args)),
+        });
         return;
       }
 
+      commandDiagnostics.complete({
+        details: {
+          scriptId: resolved.value.id,
+          scriptArgs: summarizeScriptArgs(toScriptArgs(args)),
+        },
+      });
       process.exitCode = 0;
     },
   });

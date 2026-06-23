@@ -37,6 +37,60 @@ const silentProgressLogger = (): ProgressLogger => ({
   stop: () => undefined,
 });
 
+const createDiagnosticsProgressLogger = (
+  context: BundledScriptContext,
+): ProgressLogger => {
+  const emit = (
+    level: 'debug' | 'info' | 'warn' | 'error',
+    phase: string,
+    message: string,
+    details?: Record<string, unknown>,
+  ) => {
+    context.diagnostics?.emit({
+      level,
+      event: 'cli.script_progress',
+      phase,
+      scriptId: 'convert-to-cbz',
+      message,
+      details,
+    });
+  };
+  return {
+    start: (totalFiles, fileConcurrency) =>
+      emit('info', 'progress', 'conversion started', {
+        fileConcurrency,
+        totalFiles,
+      }),
+    beginFile: (taskId, displayName) =>
+      emit('debug', 'progress', 'file started', { displayName, taskId }),
+    updateFile: (taskId, current, total, message) =>
+      emit('debug', 'progress', message ?? 'file progress', {
+        current,
+        taskId,
+        total,
+      }),
+    finishFile: (taskId, failed) =>
+      emit(failed ? 'warn' : 'debug', 'progress', 'file finished', {
+        failed: failed === true,
+        taskId,
+      }),
+    info: (message) => emit('info', 'progress', message),
+    success: (message) => emit('info', 'progress', message),
+    warn: (message) => emit('warn', 'progress', message),
+    error: (message) => emit('error', 'progress', message),
+    summary: (summary) =>
+      emit('info', 'summary', 'conversion summary', {
+        failureCount: summary.failureCount,
+        outputRoot: summary.outputRoot,
+        successCount: summary.successCount,
+        totalFiles: summary.totalFiles,
+      }),
+    incrementTotal: () => emit('debug', 'progress', 'total incremented'),
+    flush: async () => undefined,
+    stop: () => undefined,
+  };
+};
+
 const renderCompletionCard = (input: {
   totalFiles: number;
   successCount: number;
@@ -99,7 +153,12 @@ export default async function run(
     optionsResult.value,
     [pdfConverter, epubConverter],
     context.cli.json
-      ? { createProgressLogger: silentProgressLogger }
+      ? {
+          createProgressLogger: () =>
+            context.diagnostics?.isEnabled()
+              ? createDiagnosticsProgressLogger(context)
+              : silentProgressLogger(),
+        }
       : undefined,
   );
   if (context.cli.json) {

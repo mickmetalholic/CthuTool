@@ -2,6 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import { createCliContext } from '../../src/runtime/cli-context';
 import { createCliError } from '../../src/runtime/cli-error';
 import {
+  createCliCommandDiagnostics,
+  createCliDiagnostics,
+} from '../../src/runtime/observability';
+import {
   type CliOutput,
   writeCommandError,
   writeHumanStatus,
@@ -99,5 +103,98 @@ describe('CLI runtime contract', () => {
     writeHumanStatus(context, output, 'hello');
 
     expect(stdout.join('')).toBe('');
+  });
+
+  test('writes structured diagnostics to stderr without corrupting JSON stdout', () => {
+    const { output, stdout, stderr } = captureOutput();
+    const context = createCliContext({ json: true }, { isTty: () => false });
+    const diagnostics = createCliDiagnostics(
+      context,
+      output,
+      { command: 'test' },
+      {
+        isEnabled: () => true,
+        now: () => new Date('2026-06-23T00:00:00.000Z'),
+      },
+    );
+
+    diagnostics.emit({
+      level: 'info',
+      event: 'cli.test_event',
+      message: 'failed with token=secret-value',
+      details: {
+        inputPath: '/tmp/private/sample.cbz',
+        password: 'secret-value',
+      },
+    });
+    writeJsonValue(output, { ok: true, command: 'test' });
+
+    expect(JSON.parse(stdout.join(''))).toEqual({ ok: true, command: 'test' });
+    const diagnostic = JSON.parse(stderr.join(''));
+    expect(diagnostic).toEqual(
+      expect.objectContaining({
+        command: 'test',
+        event: 'cli.test_event',
+        level: 'info',
+        message: 'failed with token=[redacted]',
+        source: 'cthutool.cli',
+        timestamp: '2026-06-23T00:00:00.000Z',
+      }),
+    );
+    expect(diagnostic.details.password).toBe('[redacted]');
+    expect(diagnostic.details.inputPath).toBe('private/sample.cbz');
+  });
+
+  test('quiet mode suppresses nonessential diagnostics but preserves errors', () => {
+    const { output, stderr } = captureOutput();
+    const context = createCliContext({ quiet: true }, { isTty: () => false });
+    const diagnostics = createCliDiagnostics(context, output, undefined, {
+      isEnabled: () => true,
+      now: () => new Date('2026-06-23T00:00:00.000Z'),
+    });
+
+    diagnostics.emit({ level: 'info', event: 'cli.info' });
+    diagnostics.emit({ level: 'error', event: 'cli.error' });
+
+    const lines = stderr.join('').trim().split('\n');
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).event).toBe('cli.error');
+  });
+
+  test('records command completion diagnostics with duration and modes', () => {
+    const { output, stderr } = captureOutput();
+    const context = createCliContext({ json: true }, { isTty: () => false });
+    let nowMs = 100;
+    const command = createCliCommandDiagnostics(
+      context,
+      output,
+      { command: 'scripts' },
+      {
+        isEnabled: () => true,
+        now: () => new Date('2026-06-23T00:00:00.000Z'),
+        nowMs: () => nowMs,
+      },
+    );
+
+    nowMs = 145;
+    command.complete();
+
+    const lines = stderr
+      .join('')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(lines.map((line) => line.event)).toEqual([
+      'cli.command_started',
+      'cli.command_completed',
+    ]);
+    expect(lines[1]).toEqual(
+      expect.objectContaining({
+        command: 'scripts',
+        durationMs: 45,
+        exitCode: 0,
+      }),
+    );
+    expect(lines[1].details.json).toBe(true);
   });
 });
