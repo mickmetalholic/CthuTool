@@ -1,5 +1,6 @@
 import type { AgentConnectionState } from '../../main/agent-client';
 import type { DesktopConfig } from '../../main/config';
+import type { DesktopDiagnosticsSnapshot } from '../../main/observability';
 import type { BrowserRuntimeDiagnostic } from '../../main/playwright-host';
 import type { CthuToolDesktopApi } from '../../preload';
 
@@ -7,6 +8,7 @@ export type DesktopAppInfo = Awaited<
   ReturnType<CthuToolDesktopApi['getAppInfo']>
 > & {
   readonly browserRuntime?: BrowserRuntimeDiagnostic;
+  readonly diagnostics?: DesktopDiagnosticsSnapshot;
 };
 
 export type DesktopApi = Omit<CthuToolDesktopApi, 'getAppInfo'> & {
@@ -62,6 +64,9 @@ const webPreviewDesktopApi: DesktopApi = {
       status: 'pending',
     },
     configPath: '',
+    diagnostics: {
+      recentEvents: [],
+    },
     isPackaged: false,
     platform: 'web',
     userDataDir: '',

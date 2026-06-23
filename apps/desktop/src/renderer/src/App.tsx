@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import appIcon from '../../../build/icon.png';
 import type { AgentConnectionState } from '../../main/agent-client';
 import type { DesktopConfig } from '../../main/config';
+import type { DesktopDiagnosticsSnapshot } from '../../main/observability';
 import {
   type BrowserStatus,
   fetchBrowserStatus as fetchBrowserStatusFromBackend,
@@ -172,6 +173,9 @@ export function App({
       status: 'pending',
     },
     configPath: '',
+    diagnostics: {
+      recentEvents: [],
+    },
     userDataDir: '',
     version: '0.0.0',
     platform: 'unknown',
@@ -208,6 +212,10 @@ export function App({
       mounted = false;
       unsubscribe();
     };
+  }, [desktopApi]);
+
+  const refreshAppInfo = useCallback(async () => {
+    setAppInfo(await desktopApi.getAppInfo());
   }, [desktopApi]);
 
   useEffect(() => {
@@ -280,6 +288,7 @@ export function App({
         const runAction = resolveBrowserAction(runtime.actions, action);
         const result = await runAction(input);
         assertBrowserActionResult(result);
+        await refreshAppInfo();
         setBrowserActionState({
           action,
           message:
@@ -289,6 +298,7 @@ export function App({
           targetKey,
         });
       } catch (error) {
+        await refreshAppInfo();
         setBrowserActionState({
           action,
           message:
@@ -302,7 +312,12 @@ export function App({
       await refreshLocalPendingAuthTasks();
       await refreshBrowserStatus();
     },
-    [refreshBrowserStatus, refreshLocalPendingAuthTasks, runtime.actions],
+    [
+      refreshAppInfo,
+      refreshBrowserStatus,
+      refreshLocalPendingAuthTasks,
+      runtime.actions,
+    ],
   );
 
   useEffect(() => {
@@ -433,6 +448,7 @@ export function App({
                   view: mainView,
                   agents,
                   agentsError,
+                  appInfo,
                   browserStatus,
                   browserStatusError,
                   browserStatusLoading,
@@ -444,7 +460,6 @@ export function App({
                   runBrowserSiteAction,
                   config,
                   connection,
-                  appInfo,
                   statusLabel,
                   onOpenBrowserHost: () => setMainView('browser'),
                 })
@@ -482,6 +497,7 @@ function renderMainWorkspace({
   view,
   agents,
   agentsError,
+  appInfo,
   browserStatus,
   browserStatusError,
   browserStatusLoading,
@@ -493,13 +509,13 @@ function renderMainWorkspace({
   runBrowserSiteAction,
   config,
   connection,
-  appInfo,
   statusLabel,
   onOpenBrowserHost,
 }: {
   readonly view: MainView;
   readonly agents: readonly PublicAgentStatus[];
   readonly agentsError: string | undefined;
+  readonly appInfo: DesktopAppInfo;
   readonly browserStatus: BrowserStatus;
   readonly browserStatusError: string | undefined;
   readonly browserStatusLoading: boolean;
@@ -514,7 +530,6 @@ function renderMainWorkspace({
   ) => Promise<void>;
   readonly config: DesktopConfig | undefined;
   readonly connection: AgentConnectionState;
-  readonly appInfo: DesktopAppInfo;
   readonly statusLabel: string;
   readonly onOpenBrowserHost: () => void;
 }) {
@@ -539,6 +554,8 @@ function renderMainWorkspace({
       <AgentsPanel
         agents={agents}
         agentsError={agentsError}
+        appInfo={appInfo}
+        connection={connection}
         refreshAgents={refreshAgents}
         refreshBrowserStatus={refreshBrowserStatus}
       />
@@ -823,6 +840,7 @@ function renderSettingsWorkspace({
   const browserRuntimeStatus = appInfo.browserRuntime?.status ?? 'unknown';
   const browserRuntimeDetail =
     appInfo.browserRuntime?.message ?? 'Not available';
+  const diagnostics = diagnosticsSnapshot(appInfo);
 
   if (view === 'local-runtime') {
     return (
@@ -860,10 +878,25 @@ function renderSettingsWorkspace({
               'Last Registered',
               connection.lastRegisteredAt ?? 'Not registered',
             ],
+            ['Last Heartbeat', connection.lastHeartbeatAt ?? 'No heartbeat'],
+            [
+              'Last State Change',
+              connection.lastStateChangedAt ?? 'No state change',
+            ],
             ['Last Error', connection.lastError ?? 'None'],
             ['Browser Runtime', browserRuntimeKind],
             ['Runtime Status', browserRuntimeStatus],
             ['Runtime Detail', browserRuntimeDetail],
+            [
+              'Last Diagnostic',
+              diagnostics.lastEvent
+                ? `${diagnostics.lastEvent.event} (${diagnostics.lastEvent.level})`
+                : 'None',
+            ],
+            [
+              'Last Diagnostic Detail',
+              diagnostics.lastEvent?.message ?? 'None',
+            ],
           ]}
           localRows={[
             ['User Data', localPathValue(appInfo.userDataDir)],
@@ -999,14 +1032,19 @@ function WorkspacePanel({
 function AgentsPanel({
   agents,
   agentsError,
+  appInfo,
+  connection,
   refreshAgents,
   refreshBrowserStatus,
 }: {
   readonly agents: readonly PublicAgentStatus[];
   readonly agentsError: string | undefined;
+  readonly appInfo: DesktopAppInfo;
+  readonly connection: AgentConnectionState;
   readonly refreshAgents: () => Promise<void>;
   readonly refreshBrowserStatus: () => Promise<void>;
 }) {
+  const diagnostics = diagnosticsSnapshot(appInfo);
   return (
     <WorkspacePanel title="Agents" eyebrow="Main">
       <div className="panel-toolbar">
@@ -1024,6 +1062,26 @@ function AgentsPanel({
         </button>
       </div>
       {agentsError ? <p className="error-text">{agentsError}</p> : null}
+      <section className="mini-status">
+        <h2>Local Agent</h2>
+        <div className="mini-status-list">
+          <div className="mini-status-row">
+            <strong>{connection.deviceName || 'Local device'}</strong>
+            <span>{connection.status}</span>
+            <small>{connection.lastHeartbeatAt ?? 'No heartbeat'}</small>
+          </div>
+          <div className="mini-status-row">
+            <strong>Browser Runtime</strong>
+            <span>{appInfo.browserRuntime?.status ?? 'unknown'}</span>
+            <small>{appInfo.browserRuntime?.message ?? 'Not available'}</small>
+          </div>
+          <div className="mini-status-row">
+            <strong>Last Diagnostic</strong>
+            <span>{diagnostics.lastEvent?.event ?? 'No diagnostics'}</span>
+            <small>{diagnostics.lastEvent?.message ?? 'No events'}</small>
+          </div>
+        </div>
+      </section>
       <table className="agent-table">
         <thead>
           <tr className="agent-row header">
@@ -1453,6 +1511,12 @@ function browserActionDone(action: BrowserProfileActionName): string {
 
 function localPathValue(value: string): string {
   return value || 'Restart CthuDesktop to load path info';
+}
+
+function diagnosticsSnapshot(
+  appInfo: DesktopAppInfo,
+): DesktopDiagnosticsSnapshot {
+  return appInfo.diagnostics ?? { recentEvents: [] };
 }
 
 function SaveButton({
