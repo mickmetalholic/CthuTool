@@ -1,5 +1,6 @@
 import type {
   AgentClientMessage,
+  AgentObservabilityMetadata,
   AgentServerMessage,
   PublicAgentStatus,
 } from '@cthutool/agent-protocol';
@@ -24,6 +25,7 @@ export type AgentCommandRequest<
 > = {
   readonly commandId: string;
   readonly message: TMessage;
+  readonly observability?: AgentObservabilityMetadata;
 };
 
 export class AgentCommandGatewayError extends Error {
@@ -59,7 +61,7 @@ export class AgentCommandGateway {
     try {
       return await this.agentSocketServer.sendCommand<TResponse>(
         agentId,
-        command,
+        attachObservability(command),
         timeoutMs,
       );
     } catch (error) {
@@ -88,4 +90,25 @@ export class AgentCommandGateway {
     }
     return this.sendCommand<TResponse>(agent.agentId, command, timeoutMs);
   }
+}
+
+function attachObservability<TMessage extends AgentCommandMessage>(
+  command: AgentCommandRequest<TMessage>,
+): AgentCommandRequest<TMessage> {
+  if (!command.observability) {
+    return command;
+  }
+  if ('observability' in command.message.payload) {
+    return command;
+  }
+  return {
+    ...command,
+    message: {
+      ...command.message,
+      payload: {
+        ...command.message.payload,
+        observability: command.observability,
+      },
+    } as TMessage,
+  };
 }

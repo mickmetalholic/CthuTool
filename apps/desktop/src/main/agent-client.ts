@@ -238,6 +238,9 @@ export class AgentClient {
           command: command.command,
           commandId: command.commandId,
           message: 'Browser capability is not available',
+          ...(command.observability
+            ? { observability: command.observability }
+            : {}),
         },
       });
       return;

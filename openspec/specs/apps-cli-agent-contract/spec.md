@@ -90,3 +90,14 @@ The CLI SHALL render native help for a top-level command when the user invokes t
 #### Scenario: Complete command still runs
 - **WHEN** the user runs a complete command such as `chc codex status`, `chc scripts hello-world`, or `chc self-update --json`
 - **THEN** the CLI executes that command instead of printing help
+
+### Requirement: CLI agent correlation metadata
+CLI-facing agent contracts SHALL treat protocol observability metadata as structured correlation context rather than human output.
+
+#### Scenario: CLI JSON output excludes protocol metadata by default
+- **WHEN** a CLI workflow surfaces an agent protocol result in JSON mode
+- **THEN** observability metadata is omitted unless the command contract explicitly includes diagnostic metadata fields
+
+#### Scenario: CLI diagnostics can reference command correlation
+- **WHEN** a CLI workflow reports an agent command failure
+- **THEN** diagnostics may include bounded command id or request id fields without printing raw protocol payloads

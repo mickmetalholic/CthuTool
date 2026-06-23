@@ -287,8 +287,16 @@ export class DesktopBrowserRuntimeService {
 }
 
 function createBrowserCommand(payload: BrowserCommandPayload) {
+  const observability = payload.observability ?? {
+    commandId: payload.commandId,
+    operation: payload.command,
+  };
   return {
     commandId: payload.commandId,
-    message: createBrowserCommandMessage(payload),
+    observability,
+    message: createBrowserCommandMessage({
+      ...payload,
+      observability,
+    }),
   };
 }
