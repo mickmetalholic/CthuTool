@@ -12,5 +12,14 @@
     "outDir": "./dist/apps/backend"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "e2e/**/*", "**/*.spec.ts"]
+  "exclude": [
+    "node_modules",
+    "coverage",
+    "dist",
+    "out",
+    "build",
+    "release",
+    "e2e/**/*",
+    "**/*.spec.ts"
+  ]
 }

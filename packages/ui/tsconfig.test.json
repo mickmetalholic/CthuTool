@@ -5,5 +5,5 @@
     "rootDir": "."
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.tsx"],
-  "exclude": ["dist"]
+  "exclude": ["coverage", "dist", "out", "build", "release"]
 }

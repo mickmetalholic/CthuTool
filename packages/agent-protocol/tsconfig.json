@@ -9,5 +9,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["dist", "**/*.spec.ts"]
+  "exclude": ["coverage", "dist", "out", "build", "release", "**/*.spec.ts"]
 }
