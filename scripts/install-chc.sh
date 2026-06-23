@@ -15,8 +15,6 @@ require_command() {
 require_command git
 require_command node
 require_command npm
-require_command pnpm
-require_command bun
 
 node -e 'const major = Number(process.versions.node.split(".")[0]); if (major !== 24) { console.error(`Node 24 is required; found ${process.version}`); process.exit(1); }'
 
@@ -43,14 +41,15 @@ if git -C "$install_dir" rev-parse --verify "origin/$ref" >/dev/null 2>&1; then
   git -C "$install_dir" pull --ff-only origin "$ref"
 fi
 
-printf '%s\n' '- installing dependencies'
-pnpm -C "$install_dir" install --frozen-lockfile
-
-printf '%s\n' '- building CLI'
-pnpm -C "$install_dir" --filter @cthutool/cli build
+bundle_path="$install_dir/apps/cli/dist/index.js"
+if [ ! -f "$bundle_path" ]; then
+  printf 'Missing committed CLI bundle: %s\n' "$bundle_path" >&2
+  printf 'The selected ref must include apps/cli/dist/index.js.\n' >&2
+  exit 1
+fi
 
 printf '%s\n' '- installing global command'
-npm install -g "$install_dir"
+npm install -g --ignore-scripts "$install_dir"
 
 printf 'Installed: '
 command -v chc

@@ -17,6 +17,7 @@
     "test": "jest && turbo run test",
     "test:cov": "jest --coverage && turbo run test:cov",
     "typecheck": "turbo run typecheck",
+    "check:cli-dist": "scripts/check-cli-dist.sh",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "prepare": "husky",

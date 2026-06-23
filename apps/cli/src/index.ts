@@ -7,6 +7,7 @@ import {
 } from 'citty';
 import pc from 'picocolors';
 import { rootCommand } from './command/root.command';
+import { getCliVersion } from './domain/self-update-manager';
 
 function formatUsageForStdout(value: string): string {
   return normalizeCommandRows(
@@ -106,6 +107,9 @@ async function resolveOmittedTopLevelCommand(
   if (!name || name.startsWith('-') || name === '__complete') {
     return undefined;
   }
+  if (!new Set(['codex', 'scripts', 'completion']).has(name)) {
+    return undefined;
+  }
 
   const subCommands = await resolveValue(rootCommand.subCommands);
   return await resolveValue(subCommands?.[name]);
@@ -113,7 +117,10 @@ async function resolveOmittedTopLevelCommand(
 
 const rawArgs = process.argv.slice(2);
 const omittedTopLevelCommand = await resolveOmittedTopLevelCommand(rawArgs);
-if (rawArgs.length === 0) {
+if (rawArgs.length === 1 && rawArgs[0] === '--version') {
+  process.stdout.write(`chc ${getCliVersion()}\n`);
+  process.exitCode = 0;
+} else if (rawArgs.length === 0) {
   await showNativeUsage(rootCommand);
   process.exitCode = 0;
 } else if (omittedTopLevelCommand) {

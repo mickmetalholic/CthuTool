@@ -57,6 +57,9 @@ describe('global bin', () => {
     expect(rootPackage.scripts.prepack).toBe(
       'pnpm --filter @cthutool/cli build',
     );
+    expect(rootPackage.scripts['check:cli-dist']).toBe(
+      'scripts/check-cli-dist.sh',
+    );
     expect(rootPackage.scripts.start).toBeUndefined();
     expect(cliPackage.scripts.prepare).toBeUndefined();
     expect(cliPackage.scripts.prepack).toBeUndefined();
@@ -108,6 +111,53 @@ describe('global bin', () => {
     });
   });
 
+  test('bin shim prints version and installation status', async () => {
+    const rootPackage = JSON.parse(
+      await readFile(join(repoRoot, 'package.json'), 'utf8'),
+    );
+    for (const args of [['version'], ['--version']] as const) {
+      const proc = Bun.spawn(['node', 'bin/chc.mjs', ...args], {
+        cwd: cliRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      });
+      const out = await new Response(proc.stdout).text();
+      const err = await new Response(proc.stderr).text();
+      const code = await proc.exited;
+
+      expect(code).toBe(0);
+      expect(err).toBe('');
+      expect(out).toBe(`chc ${rootPackage.version}\n`);
+    }
+
+    const installDir = await mkdtemp(join(tmpdir(), 'cthutool-status-'));
+    const status = Bun.spawn(
+      ['node', 'bin/chc.mjs', 'status', '--install-dir', installDir, '--json'],
+      {
+        cwd: cliRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      },
+    );
+    const statusOut = await new Response(status.stdout).text();
+    const statusErr = await new Response(status.stderr).text();
+    const statusCode = await status.exited;
+
+    expect(statusCode).toBe(0);
+    expect(statusErr).toBe('');
+    expect(JSON.parse(statusOut)).toMatchObject({
+      ok: true,
+      command: 'status',
+      status: {
+        version: rootPackage.version,
+        installDir,
+        bundlePresent: false,
+      },
+    });
+  });
+
   test('bin shim discovers bundled scripts from the source scripts directory', async () => {
     const proc = Bun.spawn(['node', 'bin/chc.mjs', 'scripts', '--json'], {
       cwd: cliRoot,
@@ -137,7 +187,6 @@ describe('global bin', () => {
       [[], ['--help']],
       [['codex'], ['codex', '--help']],
       [['scripts'], ['scripts', '--help']],
-      [['self-update'], ['self-update', '--help']],
       [['completion'], ['completion', '--help']],
     ] as const) {
       const proc = Bun.spawn(['node', 'bin/chc.mjs', ...args], {
@@ -178,6 +227,15 @@ describe('global bin', () => {
         expect(plain).toContain(
           '\n  self-update  Update the global chc command from the CthuTool Git repository.',
         );
+        expect(plain).toContain(
+          '\n  update       Update the global chc command from the CthuTool Git repository.',
+        );
+        expect(plain).toContain(
+          '\n  version      Print the current chc CLI version.',
+        );
+        expect(plain).toContain(
+          '\n  status       Show chc CLI installation status.',
+        );
         expect(plain).not.toContain('\n    codex');
       } else if (args[0] === 'codex') {
         expect(out).toContain('COMMANDS');
@@ -197,12 +255,6 @@ describe('global bin', () => {
           'Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
         );
         expect(plain).toContain('Examples:');
-      } else if (args[0] === 'self-update') {
-        expect(plain).toContain('chc self-update [OPTIONS]');
-        expect(plain).toContain(
-          'Update the global chc command from the CthuTool Git repository.',
-        );
-        expect(plain).toContain('--install-dir');
       } else {
         expect(plain).toContain('chc completion [OPTIONS] <SHELL>');
         expect(plain).toContain(

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import {
+  committedCliBundlePath,
   defaultSelfUpdateRepo,
+  getCliInstallationStatus,
   runSelfUpdate,
   type SelfUpdateCommandResult,
   type SelfUpdateDeps,
@@ -11,6 +13,7 @@ import {
 function createDeps(options: {
   readonly existingCheckout: boolean;
   readonly remoteRefExists?: boolean;
+  readonly bundlePresent?: boolean;
 }) {
   const commands: Array<{
     readonly command: string;
@@ -23,7 +26,13 @@ function createDeps(options: {
 
   const deps: SelfUpdateDeps = {
     exists(path) {
-      return path === join(installDir, '.git') && options.existingCheckout;
+      if (path === join(installDir, '.git')) {
+        return options.existingCheckout;
+      }
+      if (path === join(installDir, committedCliBundlePath)) {
+        return options.bundlePresent ?? true;
+      }
+      return false;
     },
     async mkdir(path) {
       mkdirs.push(path);
@@ -36,12 +45,24 @@ function createDeps(options: {
       commands.push({ command, args, cwd: runOptions.cwd });
       const isRemoteRefCheck =
         command === 'git' && args[0] === 'rev-parse' && args[1] === '--verify';
+      const stdout =
+        command === 'git' && args[0] === 'remote' && args[1] === 'get-url'
+          ? 'git@github.com:me/CthuTool.git\n'
+          : command === 'git' &&
+              args[0] === 'rev-parse' &&
+              args[1] === '--abbrev-ref'
+            ? 'main\n'
+            : command === 'git' &&
+                args[0] === 'rev-parse' &&
+                args[1] === '--short'
+              ? 'abc1234\n'
+              : '';
       return {
         command,
         args,
         cwd: runOptions.cwd,
         code: isRemoteRefCheck && options.remoteRefExists === false ? 1 : 0,
-        stdout: '',
+        stdout,
         stderr: '',
       };
     },
@@ -62,7 +83,7 @@ describe('self-update manager', () => {
     );
   });
 
-  test('clones, builds, and installs the CLI when no checkout exists', async () => {
+  test('clones, verifies bundle, and installs the CLI when no checkout exists', async () => {
     const { commands, deps, installDir, mkdirs, steps } = createDeps({
       existingCheckout: false,
     });
@@ -85,8 +106,7 @@ describe('self-update manager', () => {
       'clone',
       'checkout',
       'pull',
-      'install-dependencies',
-      'build',
+      'verify-bundle',
       'install-global',
     ]);
     expect(mkdirs).toEqual(['/tmp/cthutool/source']);
@@ -112,18 +132,8 @@ describe('self-update manager', () => {
         cwd: installDir,
       },
       {
-        command: 'pnpm',
-        args: ['install', '--frozen-lockfile'],
-        cwd: installDir,
-      },
-      {
-        command: 'pnpm',
-        args: ['--filter', '@cthutool/cli', 'build'],
-        cwd: installDir,
-      },
-      {
         command: 'npm',
-        args: ['install', '-g', installDir],
+        args: ['install', '-g', '--ignore-scripts', installDir],
         cwd: undefined,
       },
     ]);
@@ -147,8 +157,7 @@ describe('self-update manager', () => {
     expect(steps).toEqual([
       'fetch',
       'checkout',
-      'install-dependencies',
-      'build',
+      'verify-bundle',
       'install-global',
     ]);
     expect(commands.slice(0, 4)).toEqual([
@@ -177,6 +186,48 @@ describe('self-update manager', () => {
       command: 'git',
       args: ['pull', '--ff-only', 'origin', 'v0.1.0'],
       cwd: installDir,
+    });
+  });
+
+  test('fails before global install when the committed bundle is missing', async () => {
+    const { commands, deps, installDir } = createDeps({
+      existingCheckout: true,
+      bundlePresent: false,
+    });
+
+    await expect(
+      runSelfUpdate(
+        {
+          repo: 'git@github.com:me/CthuTool.git',
+          ref: 'main',
+          installDir,
+        },
+        deps,
+      ),
+    ).rejects.toThrow('missing committed CLI bundle');
+    expect(commands).not.toContainEqual({
+      command: 'npm',
+      args: ['install', '-g', '--ignore-scripts', installDir],
+      cwd: undefined,
+    });
+  });
+
+  test('reports installation status from the managed checkout', async () => {
+    const { deps, installDir } = createDeps({
+      existingCheckout: true,
+      bundlePresent: true,
+    });
+
+    await expect(
+      getCliInstallationStatus({ installDir }, deps),
+    ).resolves.toMatchObject({
+      version: '0.0.0',
+      installDir,
+      repo: 'git@github.com:me/CthuTool.git',
+      ref: 'main',
+      commit: 'abc1234',
+      bundlePath: join(installDir, committedCliBundlePath),
+      bundlePresent: true,
     });
   });
 });
