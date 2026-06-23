@@ -44,6 +44,52 @@ describe('scripts convert-to-cbz JSON mode', () => {
     expect(parsed.summary.outputRoot).toBe(join(inputRoot, '.output'));
   });
 
+  test('keeps JSON stdout parseable when diagnostics are enabled', async () => {
+    const inputRoot = await mkdtemp(join(tmpdir(), 'cthutool-empty-input-'));
+    await mkdir(inputRoot, { recursive: true });
+
+    const proc = Bun.spawn(
+      [
+        'bun',
+        'run',
+        'src/index.ts',
+        'scripts',
+        'convert-to-cbz',
+        '--input',
+        inputRoot,
+        '--json',
+      ],
+      {
+        cwd: cliRoot,
+        env: { ...Bun.env, CHC_CLI_DIAGNOSTICS: '1' },
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      },
+    );
+
+    const out = await new Response(proc.stdout).text();
+    const err = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+    const parsed = JSON.parse(out);
+    const diagnostics = err
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+
+    expect(code).toBe(0);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.script).toBe('convert-to-cbz');
+    expect(diagnostics.map((event) => event.event)).toContain(
+      'cli.script_started',
+    );
+    expect(diagnostics.map((event) => event.event)).toContain(
+      'cli.command_completed',
+    );
+    expect(err).not.toContain(inputRoot);
+  });
+
   test('fails without prompting when input is missing non-interactively', async () => {
     const proc = Bun.spawn(
       ['bun', 'run', 'src/index.ts', 'scripts', 'convert-to-cbz', '--json'],

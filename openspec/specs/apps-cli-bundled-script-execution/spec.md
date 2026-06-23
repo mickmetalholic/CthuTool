@@ -73,3 +73,14 @@ The `convert-to-cbz` bundled script SHALL emit a conversion summary object when 
 #### Scenario: JSON conversion failure
 - **WHEN** `convert-to-cbz` fails in JSON mode with a deliberate command error
 - **THEN** stdout contains one JSON object with `ok: false` and no human completion card
+
+### Requirement: Bundled script lifecycle observability
+Bundled script execution SHALL emit safe lifecycle diagnostics through the shared CLI diagnostics contract.
+
+#### Scenario: Script start is observable
+- **WHEN** a bundled script starts executing
+- **THEN** diagnostics identify the script id, execution mode, and safe argument summary without printing unbounded argument payloads
+
+#### Scenario: Script progress stays JSON-safe
+- **WHEN** a bundled script reports progress while JSON mode is enabled
+- **THEN** progress diagnostics are kept off JSON stdout and do not prevent the final JSON result from being parseable
