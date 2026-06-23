@@ -9,6 +9,15 @@ const standardWorkspaceScripts = [
   "typecheck",
   "lint",
 ] as const;
+const approvedTestSubscripts = new Set([
+  "cov",
+  "debug",
+  "e2e",
+  "integration",
+  "unit",
+  "watch",
+]);
+const testLayerScripts = ["test:unit", "test:integration", "test:e2e"] as const;
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, "utf8")) as unknown;
@@ -46,6 +55,22 @@ function normalizeScript(script: string | undefined): string {
   return script?.toLowerCase() ?? "";
 }
 
+function packageTestCommandSurface(pkg: {
+  scripts?: Record<string, string>;
+}): string {
+  return ["test", ...testLayerScripts]
+    .map((script) => pkg.scripts?.[script])
+    .filter(Boolean)
+    .map((script) => normalizeScript(script))
+    .join(" && ");
+}
+
+function packageTestLayers(pkg: {
+  scripts?: Record<string, string>;
+}): typeof testLayerScripts[number][] {
+  return testLayerScripts.filter((script) => pkg.scripts?.[script]);
+}
+
 describe("root package.json scripts contract", () => {
   it("exposes build that delegates to turbo run build", () => {
     const pkg = readJson(join(root, "package.json")) as {
@@ -79,8 +104,11 @@ describe("root package.json scripts contract", () => {
 
   it("rejects placeholder standard validation scripts", () => {
     for (const pkg of rootWorkspacePackages()) {
-      for (const script of standardWorkspaceScripts) {
+      for (const script of [...standardWorkspaceScripts, ...testLayerScripts]) {
         const command = normalizeScript(pkg.scripts?.[script]);
+        if (!command) {
+          continue;
+        }
         expect(command).not.toContain("no tests configured");
         expect(command).not.toContain("no coverage configured");
         expect(command).not.toContain("not configured");
@@ -91,7 +119,7 @@ describe("root package.json scripts contract", () => {
 
   it("keeps CLI on Bun test and uses Vitest for other package runtime tests", () => {
     for (const pkg of rootWorkspacePackages()) {
-      const test = normalizeScript(pkg.scripts?.test);
+      const test = packageTestCommandSurface(pkg);
       if (pkg.name === "@cthutool/cli") {
         expect(test).toMatch(/(bun|run-bun\.sh)\s+test/);
       } else {
@@ -102,9 +130,64 @@ describe("root package.json scripts contract", () => {
 
   it("keeps type-only validation in typecheck instead of test", () => {
     for (const pkg of rootWorkspacePackages()) {
-      const test = normalizeScript(pkg.scripts?.test);
+      const test = packageTestCommandSurface(pkg);
       expect(test).not.toMatch(/\btsc\b.*--noemit/);
     }
+  });
+
+  it("uses the approved test layer script vocabulary", () => {
+    for (const pkg of rootWorkspacePackages()) {
+      const packageLabel = relative(root, pkg.dir);
+      for (const script of Object.keys(pkg.scripts ?? {})) {
+        if (!script.startsWith("test:")) {
+          continue;
+        }
+
+        const subscript = script.slice("test:".length);
+        expect(approvedTestSubscripts.has(subscript), packageLabel).toBe(true);
+      }
+    }
+  });
+
+  it("preserves runner policy for test layer scripts", () => {
+    for (const pkg of rootWorkspacePackages()) {
+      for (const script of packageTestLayers(pkg)) {
+        const command = normalizeScript(pkg.scripts?.[script]);
+        if (pkg.name === "@cthutool/cli") {
+          expect(command).toMatch(/(bun|run-bun\.sh)\s+test/);
+          expect(command).not.toContain("vitest");
+        } else {
+          expect(command).toContain("vitest");
+        }
+      }
+    }
+  });
+
+  it("keeps layered package test scripts as the full package default", () => {
+    for (const pkg of rootWorkspacePackages()) {
+      const layers = packageTestLayers(pkg);
+      if (layers.length === 0) {
+        continue;
+      }
+
+      const test = normalizeScript(pkg.scripts?.test);
+      for (const layer of layers) {
+        expect(test, pkg.name).toContain(layer);
+      }
+    }
+  });
+
+  it("documents the initial CLI and backend test layer split", () => {
+    const packages = new Map(rootWorkspacePackages().map((pkg) => [pkg.name, pkg]));
+
+    expect(packageTestLayers(packages.get("@cthutool/cli") ?? {})).toEqual([
+      "test:unit",
+      "test:integration",
+    ]);
+    expect(packageTestLayers(packages.get("@cthutool/backend") ?? {})).toEqual([
+      "test:unit",
+      "test:e2e",
+    ]);
   });
 
   it("requires coverage scripts to use real package-local coverage runners", () => {
@@ -112,7 +195,7 @@ describe("root package.json scripts contract", () => {
       const testCoverage = normalizeScript(pkg.scripts?.["test:cov"]);
 
       if (pkg.name === "@cthutool/cli") {
-        expect(testCoverage).toContain("bun test");
+        expect(testCoverage).toMatch(/(bun|run-bun\.sh)\s+test/);
         expect(testCoverage).toContain("--coverage");
         expect(testCoverage).toContain("--coverage-reporter=lcov");
         expect(testCoverage).toContain("--coverage-dir=coverage");
