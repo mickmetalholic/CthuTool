@@ -38,6 +38,31 @@ describe('DesktopBrowserRuntimeService', () => {
     );
   });
 
+  it('attaches command observability metadata to browser commands', async () => {
+    const { runtime, gateway } = createHarness();
+
+    await runtime.capturePage({
+      url: 'https://example.com/',
+    });
+
+    expect(gateway.sendCommand).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({
+        observability: expect.objectContaining({
+          operation: 'browser.capturePage',
+        }),
+        message: expect.objectContaining({
+          payload: expect.objectContaining({
+            observability: expect.objectContaining({
+              operation: 'browser.capturePage',
+            }),
+          }),
+        }),
+      }),
+      undefined,
+    );
+  });
+
   it('returns interaction challenge when auth is required', async () => {
     const gateway = createGatewayMock(
       createAgentStatus('agent-1'),

@@ -298,8 +298,7 @@ export class PlaywrightHost {
       }
       return createBrowserResultMessage({
         capturedAt: this.now().toISOString(),
-        command: command.command,
-        commandId: command.commandId,
+        ...commandResponseContext(command),
         detection,
         finalUrl: page.url(),
         ...(html !== undefined
@@ -366,8 +365,7 @@ export class PlaywrightHost {
       this.notifyStateChanged();
       return createBrowserResultMessage({
         capturedAt: this.now().toISOString(),
-        command: command.command,
-        commandId: command.commandId,
+        ...commandResponseContext(command),
         detection: verification.detection,
         finalUrl: verification.finalUrl,
         profile: this.options.profileStore.toPublicProfile(
@@ -425,8 +423,7 @@ export class PlaywrightHost {
     this.notifyStateChanged();
     return createBrowserResultMessage({
       capturedAt: this.now().toISOString(),
-      command: command.command,
-      commandId: command.commandId,
+      ...commandResponseContext(command),
       detection: navigation.error
         ? { kind: 'blocked', reason: navigation.error }
         : { kind: 'login_required' },
@@ -496,8 +493,7 @@ export class PlaywrightHost {
     this.notifyStateChanged();
     return createBrowserResultMessage({
       capturedAt: this.now().toISOString(),
-      command: command.command,
-      commandId: command.commandId,
+      ...commandResponseContext(command),
       detection: { kind: 'login_required' },
     });
   }
@@ -593,6 +589,9 @@ export class PlaywrightHost {
       command: command.command,
       commandId: command.commandId,
       message,
+      ...(command.observability
+        ? { observability: command.observability }
+        : {}),
       ...(profileStatus ? { profileStatus } : {}),
     });
   }
@@ -617,6 +616,13 @@ export class PlaywrightHost {
           ...command,
           command: 'browser.verifyProfile',
           commandId: `${command.commandId}:verify-on-close`,
+          observability: command.observability
+            ? {
+                ...command.observability,
+                commandId: `${command.commandId}:verify-on-close`,
+                operation: 'browser.verifyProfile',
+              }
+            : undefined,
         }),
       );
     });
@@ -684,6 +690,14 @@ export class PlaywrightHost {
     }
     return this.resolvedRuntime.launchOptions;
   }
+}
+
+function commandResponseContext(command: BrowserCommandPayload) {
+  return {
+    command: command.command,
+    commandId: command.commandId,
+    ...(command.observability ? { observability: command.observability } : {}),
+  };
 }
 
 async function validateRuntimeLaunch({

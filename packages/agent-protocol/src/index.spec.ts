@@ -122,6 +122,32 @@ describe('agent protocol validation', () => {
     });
   });
 
+  it('accepts optional observability metadata on browser commands', () => {
+    const command = createBrowserCommandMessage({
+      authPolicy: 'anonymous',
+      command: 'browser.capturePage',
+      commandId: 'cmd-1',
+      observability: {
+        commandId: 'cmd-1',
+        operation: 'browser.capturePage',
+        parentId: 'parent-1',
+        requestId: 'req-1',
+        traceId: 'trace-1',
+      },
+      siteId: 'example',
+      url: 'https://example.com/',
+    });
+
+    expect(validateBrowserCommandMessage(command)).toEqual({
+      ok: true,
+      value: command,
+    });
+    expect(parseAgentServerMessageJson(JSON.stringify(command))).toEqual({
+      ok: true,
+      value: command,
+    });
+  });
+
   it('accepts controlled profile management commands', () => {
     const commands = [
       createBrowserCommandMessage({
@@ -194,6 +220,47 @@ describe('agent protocol validation', () => {
     });
   });
 
+  it('preserves observability metadata on browser results and errors', () => {
+    const observability = {
+      commandId: 'cmd-1',
+      operation: 'browser.capturePage',
+      requestId: 'req-1',
+      traceId: 'trace-1',
+    };
+    const result = createBrowserResultMessage({
+      capturedAt: '2026-06-13T12:00:00.000Z',
+      command: 'browser.capturePage',
+      commandId: 'cmd-1',
+      detection: { kind: 'ok' },
+      finalUrl: 'https://example.com/',
+      observability,
+    });
+    const error = createBrowserErrorMessage({
+      code: 'BROWSER_COMMAND_FAILED',
+      command: 'browser.capturePage',
+      commandId: 'cmd-1',
+      message: 'Browser command failed',
+      observability,
+    });
+
+    expect(validateBrowserResultMessage(result)).toEqual({
+      ok: true,
+      value: result,
+    });
+    expect(validateBrowserErrorMessage(error)).toEqual({
+      ok: true,
+      value: error,
+    });
+    expect(parseAgentClientMessageJson(JSON.stringify(result))).toEqual({
+      ok: true,
+      value: result,
+    });
+    expect(parseAgentClientMessageJson(JSON.stringify(error))).toEqual({
+      ok: true,
+      value: error,
+    });
+  });
+
   it('accepts public browser profile status reports', () => {
     const message = createBrowserProfileStatusMessage({
       agentId: 'homelab-mac',
@@ -252,6 +319,27 @@ describe('agent protocol validation', () => {
     });
   });
 
+  it('accepts observability metadata on browser state snapshots', () => {
+    const message = createBrowserStateSnapshotMessage({
+      agentId: 'homelab-mac',
+      observability: {
+        operation: 'browser.stateSnapshot',
+        requestId: 'req-1',
+      },
+      pendingAuthTasks: [],
+      profiles: [],
+    });
+
+    expect(validateBrowserStateSnapshotMessage(message)).toEqual({
+      ok: true,
+      value: message,
+    });
+    expect(validateAgentClientMessage(message)).toEqual({
+      ok: true,
+      value: message,
+    });
+  });
+
   it('rejects malformed or raw browser state snapshots', () => {
     const rawSnapshot = {
       type: 'browser.stateSnapshot',
@@ -291,5 +379,57 @@ describe('agent protocol validation', () => {
     expect(validateBrowserStateSnapshotMessage(malformedSnapshot).ok).toBe(
       false,
     );
+  });
+
+  it('accepts messages without observability metadata for compatibility', () => {
+    const command = createBrowserCommandMessage({
+      authPolicy: 'anonymous',
+      command: 'browser.capturePage',
+      commandId: 'cmd-1',
+      siteId: 'example',
+      url: 'https://example.com/',
+    });
+
+    expect(validateAgentServerMessage(command)).toEqual({
+      ok: true,
+      value: command,
+    });
+  });
+
+  it('rejects unsupported observability metadata fields', () => {
+    const command = createBrowserCommandMessage({
+      authPolicy: 'anonymous',
+      command: 'browser.capturePage',
+      commandId: 'cmd-1',
+      observability: {
+        commandId: 'cmd-1',
+        details: { cookie: 'secret' },
+        operation: 'browser.capturePage',
+      } as never,
+      siteId: 'example',
+      url: 'https://example.com/',
+    });
+
+    expect(validateBrowserCommandMessage(command)).toEqual({
+      ok: false,
+      message: 'observability metadata contains unsupported fields',
+    });
+  });
+
+  it('rejects malformed observability metadata values', () => {
+    const command = createBrowserCommandMessage({
+      authPolicy: 'anonymous',
+      command: 'browser.capturePage',
+      commandId: 'cmd-1',
+      observability: {
+        commandId: 'cmd-1',
+        operation: 'Browser Capture',
+        requestId: 'req-1',
+      },
+      siteId: 'example',
+      url: 'https://example.com/',
+    });
+
+    expect(validateBrowserCommandMessage(command).ok).toBe(false);
   });
 });

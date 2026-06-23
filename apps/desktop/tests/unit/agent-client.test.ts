@@ -359,6 +359,51 @@ describe('AgentClient', () => {
     });
   });
 
+  test('preserves observability metadata on browser capability errors', async () => {
+    FakeWebSocket.instances = [];
+    const client = new AgentClient({
+      getCapabilities: () => [],
+      getConfig: () => config,
+      WebSocketImpl: FakeWebSocket,
+      platform: 'win32',
+      version: '0.1.0',
+    });
+
+    client.start();
+    const socket = FakeWebSocket.instances[0];
+    socket.receive(
+      JSON.stringify({
+        type: 'browser.command',
+        payload: {
+          authPolicy: 'anonymous',
+          command: 'browser.capturePage',
+          commandId: 'cmd-1',
+          observability: {
+            commandId: 'cmd-1',
+            operation: 'browser.capturePage',
+            requestId: 'req-1',
+          },
+          siteId: 'example',
+          url: 'https://example.com/',
+        },
+      }),
+    );
+    await Promise.resolve();
+
+    expect(JSON.parse(socket.sent[0])).toEqual({
+      type: 'browser.error',
+      payload: expect.objectContaining({
+        code: 'BROWSER_CAPABILITY_UNAVAILABLE',
+        commandId: 'cmd-1',
+        observability: {
+          commandId: 'cmd-1',
+          operation: 'browser.capturePage',
+          requestId: 'req-1',
+        },
+      }),
+    });
+  });
+
   test('reconnects after close while enabled', () => {
     vi.useFakeTimers();
     FakeWebSocket.instances = [];

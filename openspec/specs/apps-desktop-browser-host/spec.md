@@ -294,3 +294,14 @@ CthuDesktop SHALL provide a Browser Host workspace for managing the current host
 #### Scenario: Backend browser status failure is recoverable
 - **WHEN** Browser Host cannot load backend browser status
 - **THEN** the page shows a recoverable error and keeps local browser-auth attention visible when local pending-auth state is available
+
+### Requirement: Browser host protocol correlation
+CthuDesktop browser host SHALL consume protocol observability metadata from browser commands and include compatible metadata in browser results and errors.
+
+#### Scenario: Command metadata reaches browser host
+- **WHEN** CthuDesktop receives a browser command with observability metadata
+- **THEN** the browser host makes that metadata available to local diagnostics without using it to change browser execution permissions
+
+#### Scenario: Error preserves command correlation
+- **WHEN** CthuDesktop returns a browser error
+- **THEN** the error message preserves the command id and compatible observability metadata so backend diagnostics can correlate the failure

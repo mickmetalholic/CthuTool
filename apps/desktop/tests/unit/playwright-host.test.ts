@@ -135,6 +135,31 @@ describe('PlaywrightHost', () => {
     expect(pendingAuthTasks.list()).toHaveLength(1);
   });
 
+  test('preserves observability metadata on browser errors', async () => {
+    const { host } = await createHost();
+
+    const result = await host.execute({
+      ...captureCommand,
+      observability: {
+        commandId: 'cmd-1',
+        operation: 'browser.capturePage',
+        requestId: 'req-1',
+      },
+    });
+
+    expect(result).toEqual({
+      type: 'browser.error',
+      payload: expect.objectContaining({
+        commandId: 'cmd-1',
+        observability: {
+          commandId: 'cmd-1',
+          operation: 'browser.capturePage',
+          requestId: 'req-1',
+        },
+      }),
+    });
+  });
+
   test('can suppress local pending auth preflight for business lookups', async () => {
     const { host, pendingAuthTasks, runtime } = await createHost();
 
@@ -244,6 +269,35 @@ describe('PlaywrightHost', () => {
     expect(runtime.launch).toHaveBeenCalledWith({
       channel: 'chrome',
       headless: true,
+    });
+  });
+
+  test('preserves observability metadata on browser results', async () => {
+    const { host } = await createHost();
+
+    const result = await host.execute({
+      authPolicy: 'anonymous',
+      command: 'browser.capturePage',
+      commandId: 'cmd-1',
+      observability: {
+        commandId: 'cmd-1',
+        operation: 'browser.capturePage',
+        requestId: 'req-1',
+      },
+      siteId: 'example',
+      url: 'https://example.com/',
+    });
+
+    expect(result).toEqual({
+      type: 'browser.result',
+      payload: expect.objectContaining({
+        commandId: 'cmd-1',
+        observability: {
+          commandId: 'cmd-1',
+          operation: 'browser.capturePage',
+          requestId: 'req-1',
+        },
+      }),
     });
   });
 

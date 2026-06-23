@@ -4,6 +4,8 @@ const AGENT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 const CAPABILITY_PATTERN = /^[a-z][a-z0-9._:-]{0,63}$/;
 const SITE_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
+const OBSERVABILITY_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
+const OPERATION_NAME_PATTERN = /^[a-z][a-zA-Z0-9._:-]{0,127}$/;
 
 export const AGENT_PLATFORMS = ['darwin', 'win32', 'linux', 'unknown'] as const;
 export const BROWSER_CAPABILITY = 'browser';
@@ -101,12 +103,37 @@ const ProfileNameSchema = v.pipe(
 
 const HttpUrlSchema = v.pipe(v.string(), v.url());
 
+const ObservabilityIdSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(128),
+  v.regex(OBSERVABILITY_ID_PATTERN),
+);
+
+const OperationNameSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(128),
+  v.regex(OPERATION_NAME_PATTERN),
+);
+
+export const AgentObservabilityMetadataSchema = v.object({
+  requestId: v.optional(ObservabilityIdSchema),
+  traceId: v.optional(ObservabilityIdSchema),
+  parentId: v.optional(ObservabilityIdSchema),
+  operation: v.optional(OperationNameSchema),
+  commandId: v.optional(CommandIdSchema),
+});
+
 export const AgentHelloPayloadSchema = v.object({
   agentId: AgentIdSchema,
   deviceName: NonEmptyDisplayStringSchema,
   platform: v.picklist(AGENT_PLATFORMS),
   version: VersionSchema,
   capabilities: v.array(CapabilitySchema),
+  observability: v.optional(AgentObservabilityMetadataSchema),
 });
 
 export const AgentHelloMessageSchema = v.object({
@@ -117,6 +144,7 @@ export const AgentHelloMessageSchema = v.object({
 export const AgentHeartbeatPayloadSchema = v.object({
   agentId: AgentIdSchema,
   sentAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  observability: v.optional(AgentObservabilityMetadataSchema),
 });
 
 export const AgentHeartbeatMessageSchema = v.object({
@@ -156,6 +184,7 @@ export const BrowserStateSnapshotPayloadSchema = v.object({
   agentId: AgentIdSchema,
   profiles: v.array(BrowserProfileSummarySchema),
   pendingAuthTasks: v.array(BrowserPendingAuthTaskSummarySchema),
+  observability: v.optional(AgentObservabilityMetadataSchema),
 });
 
 export const BrowserStateSnapshotMessageSchema = v.object({
@@ -181,6 +210,7 @@ export const BrowserCommandPayloadSchema = v.object({
   timeoutMs: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   blockResources: v.optional(v.array(v.picklist(BROWSER_RESOURCE_TYPES))),
   suppressPendingAuthTask: v.optional(v.boolean()),
+  observability: v.optional(AgentObservabilityMetadataSchema),
 });
 
 export const BrowserCommandMessageSchema = v.object({
@@ -205,6 +235,7 @@ export const BrowserResultPayloadSchema = v.object({
   capturedAt: v.pipe(v.string(), v.isoTimestamp()),
   detection: BrowserDetectionSchema,
   profile: v.optional(BrowserProfileSummarySchema),
+  observability: v.optional(AgentObservabilityMetadataSchema),
 });
 
 export const BrowserResultMessageSchema = v.object({
@@ -219,6 +250,7 @@ export const BrowserErrorPayloadSchema = v.object({
   message: NonEmptyDisplayStringSchema,
   profileStatus: v.optional(v.picklist(BROWSER_PROFILE_STATUSES)),
   retryable: v.optional(v.boolean()),
+  observability: v.optional(AgentObservabilityMetadataSchema),
 });
 
 export const BrowserErrorMessageSchema = v.object({
@@ -240,6 +272,7 @@ export const AgentRegisteredMessageSchema = v.object({
   payload: v.object({
     agentId: AgentIdSchema,
     serverTime: v.pipe(v.string(), v.isoTimestamp()),
+    observability: v.optional(AgentObservabilityMetadataSchema),
   }),
 });
 
@@ -248,6 +281,7 @@ export const AgentErrorMessageSchema = v.object({
   payload: v.object({
     code: NonEmptyDisplayStringSchema,
     message: NonEmptyDisplayStringSchema,
+    observability: v.optional(AgentObservabilityMetadataSchema),
   }),
 });
 
@@ -279,6 +313,9 @@ export type AgentHeartbeatPayload = v.InferOutput<
 >;
 export type AgentHeartbeatMessage = v.InferOutput<
   typeof AgentHeartbeatMessageSchema
+>;
+export type AgentObservabilityMetadata = v.InferOutput<
+  typeof AgentObservabilityMetadataSchema
 >;
 export type AgentClientMessage = v.InferOutput<typeof AgentClientMessageSchema>;
 export type AgentRegisteredMessage = v.InferOutput<
@@ -487,6 +524,12 @@ function parseSchema<TSchema extends v.GenericSchema>(
   schema: TSchema,
   input: unknown,
 ): ValidationResult<v.InferOutput<TSchema>> {
+  if (containsUnsafeObservabilityMetadata(input)) {
+    return {
+      ok: false,
+      message: 'observability metadata contains unsupported fields',
+    };
+  }
   const result = v.safeParse(schema, input);
   if (result.success) {
     return { ok: true, value: result.output };
@@ -514,6 +557,14 @@ const RAW_AUTH_STATE_KEYS = new Set([
   'userDataDir',
 ]);
 
+const OBSERVABILITY_METADATA_KEYS = new Set([
+  'requestId',
+  'traceId',
+  'parentId',
+  'operation',
+  'commandId',
+]);
+
 function isBrowserStateSnapshotInput(input: unknown): boolean {
   return (
     typeof input === 'object' &&
@@ -535,6 +586,33 @@ function containsRawAuthState(input: unknown): boolean {
       return true;
     }
     if (containsRawAuthState(value)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function containsUnsafeObservabilityMetadata(input: unknown): boolean {
+  if (Array.isArray(input)) {
+    return input.some((item) => containsUnsafeObservabilityMetadata(item));
+  }
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+  for (const [key, value] of Object.entries(input)) {
+    if (key === 'observability') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        continue;
+      }
+      if (
+        Object.keys(value).some(
+          (metadataKey) => !OBSERVABILITY_METADATA_KEYS.has(metadataKey),
+        )
+      ) {
+        return true;
+      }
+    }
+    if (containsUnsafeObservabilityMetadata(value)) {
       return true;
     }
   }

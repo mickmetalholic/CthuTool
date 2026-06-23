@@ -41,6 +41,68 @@ describe('AgentCommandGateway', () => {
     ).resolves.toEqual(response);
   });
 
+  it('attaches observability metadata before dispatching commands', async () => {
+    const socket = createSocketMock();
+    const gateway = createGateway(socket);
+
+    await gateway.sendCommand('agent-1', {
+      ...createCommandRequest('cmd-1'),
+      observability: {
+        commandId: 'cmd-1',
+        operation: 'browser.capturePage',
+        requestId: 'req-1',
+      },
+    });
+
+    expect(socket.sendCommand).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({
+        message: expect.objectContaining({
+          payload: expect.objectContaining({
+            observability: {
+              commandId: 'cmd-1',
+              operation: 'browser.capturePage',
+              requestId: 'req-1',
+            },
+          }),
+        }),
+      }),
+      undefined,
+    );
+  });
+
+  it('preserves existing message observability metadata', async () => {
+    const socket = createSocketMock();
+    const gateway = createGateway(socket);
+
+    await gateway.sendCommand('agent-1', {
+      ...createCommandRequest('cmd-1', {
+        commandId: 'cmd-1',
+        operation: 'browser.capturePage',
+        requestId: 'payload-req',
+      }),
+      observability: {
+        commandId: 'cmd-1',
+        operation: 'browser.capturePage',
+        requestId: 'outer-req',
+      },
+    });
+
+    expect(socket.sendCommand).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({
+        message: expect.objectContaining({
+          payload: expect.objectContaining({
+            observability: expect.objectContaining({
+              requestId: 'payload-req',
+            }),
+          }),
+        }),
+      }),
+      undefined,
+    );
+  });
+
   it('maps transport failures to gateway availability errors', async () => {
     const gateway = createGateway(
       createSocketMockWithImplementation(async () => {
@@ -101,11 +163,14 @@ function createSocketMockWithImplementation(
   };
 }
 
-function createCommandRequest(commandId: string): AgentCommandRequest {
+function createCommandRequest(
+  commandId: string,
+  observability?: NonNullable<AgentCommandRequest['observability']>,
+): AgentCommandRequest {
   return {
     commandId,
     message: {
-      payload: { commandId },
+      payload: { commandId, ...(observability ? { observability } : {}) },
       type: 'agent.command',
     } as unknown as AgentCommandRequest['message'],
   };
