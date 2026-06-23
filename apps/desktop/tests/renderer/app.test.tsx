@@ -151,10 +151,10 @@ describe('CthuDesktop shell', () => {
       expect.stringContaining('build/icon.png'),
     );
     expect(await screen.findByText('CthuDesktop')).toBeInTheDocument();
-    expect(screen.getAllByText('Overview')).not.toHaveLength(0);
+    expect(screen.getAllByText('Home')).not.toHaveLength(0);
   });
 
-  test('renders app shell overview and connected agents', async () => {
+  test('renders home readiness and connected agents', async () => {
     const desktopApi = createDesktopApi();
     const fetchAgents = vi.fn().mockResolvedValue([
       {
@@ -215,7 +215,16 @@ describe('CthuDesktop shell', () => {
     ).toHaveLength(2);
     expect(document.documentElement.dataset.mode).toBe('dark');
     expect(document.documentElement.dataset.theme).toBe('dracula');
-    expect(screen.getAllByText('Overview')).not.toHaveLength(0);
+    expect(screen.getAllByText('Home')).not.toHaveLength(0);
+    expect(screen.getByText('Local Readiness')).toBeInTheDocument();
+    expect(screen.getByText('Current Host')).toBeInTheDocument();
+    expect(screen.getByText('Browser Attention')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Douban subject')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText('Primary')).queryByRole('button', {
+        name: 'Tasks',
+      }),
+    ).not.toBeInTheDocument();
     await userEvent.click(primaryNavButton('Agents'));
     expect(await screen.findByText('windows-pc')).toBeInTheDocument();
     expect(screen.getByText('None')).toBeInTheDocument();
@@ -267,6 +276,9 @@ describe('CthuDesktop shell', () => {
     expect(settingsLogsButton).toBeDefined();
     await userEvent.click(settingsLogsButton as HTMLButtonElement);
     expect(screen.getByRole('heading', { name: 'Logs' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Log viewing is not connected yet'),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Appearance' }),
     ).not.toBeInTheDocument();
@@ -386,7 +398,7 @@ describe('CthuDesktop shell', () => {
     expect(await screen.findByText('backend offline')).toBeInTheDocument();
   });
 
-  test('renders browser profiles and login state in one tab', async () => {
+  test('renders browser host capability and login state in one tab', async () => {
     render(
       <App
         desktopApi={createDesktopApi()}
@@ -395,9 +407,13 @@ describe('CthuDesktop shell', () => {
       />,
     );
 
-    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(primaryNavButton('Browser Host'));
     expect(
-      screen.getByRole('heading', { name: 'Browser Profiles', level: 1 }),
+      screen.getByRole('heading', { name: 'Browser Host', level: 1 }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Host browser runtime')).toBeInTheDocument();
+    expect(
+      screen.getByText('Using host Google Chrome for browser automation'),
     ).toBeInTheDocument();
     expect(await screen.findByText('Browser Sites')).toBeInTheDocument();
     expect(screen.getAllByText('douban-main')).not.toHaveLength(0);
@@ -407,107 +423,32 @@ describe('CthuDesktop shell', () => {
     expect(screen.getAllByText(/2026/)).not.toHaveLength(0);
   });
 
-  test('looks up a Douban movie from the overview panel', async () => {
-    let resolveLookup: (value: ReturnType<typeof movieFixture>) => void = () =>
-      undefined;
-    const lookup = new Promise<ReturnType<typeof movieFixture>>((resolve) => {
-      resolveLookup = resolve;
-    });
-    const fetchDoubanMovieInfo = vi.fn().mockReturnValue(lookup);
-
-    render(
-      <App
-        desktopApi={createDesktopApi()}
-        fetchAgents={vi.fn().mockResolvedValue([])}
-        fetchBrowserStatus={createFetchBrowserStatus()}
-        fetchDoubanMovieInfo={fetchDoubanMovieInfo}
-      />,
-    );
-
-    await userEvent.type(
-      await screen.findByLabelText('Douban subject'),
-      '1292052',
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
-
-    expect(await screen.findByText('Fetching movie data')).toBeInTheDocument();
-    expect(fetchDoubanMovieInfo).toHaveBeenCalledWith(
-      'http://backend.local:3000',
-      '1292052',
-    );
-    expect(screen.getByRole('button', { name: 'Fetching' })).toBeDisabled();
-    resolveLookup(movieFixture('1292052'));
-    expect(await screen.findByText('肖申克的救赎')).toBeInTheDocument();
-    expect(screen.getByText('9.7')).toBeInTheDocument();
-    expect(screen.getByText('Frank Darabont')).toBeInTheDocument();
-    expect(screen.getByText('tt0111161')).toBeInTheDocument();
-  });
-
-  test('validates Douban lookup input without calling backend', async () => {
-    const fetchDoubanMovieInfo = vi.fn();
-
-    render(
-      <App
-        desktopApi={createDesktopApi()}
-        fetchAgents={vi.fn().mockResolvedValue([])}
-        fetchBrowserStatus={createFetchBrowserStatus()}
-        fetchDoubanMovieInfo={fetchDoubanMovieInfo}
-      />,
-    );
-
-    await userEvent.type(
-      await screen.findByLabelText('Douban subject'),
-      'nope',
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
-
-    expect(
-      await screen.findByText(
-        'Enter a numeric Douban subject id or subject URL',
-      ),
-    ).toBeInTheDocument();
-    expect(fetchDoubanMovieInfo).not.toHaveBeenCalled();
-  });
-
-  test('shows Douban lookup backend errors and replaces prior results', async () => {
-    const fetchDoubanMovieInfo = vi
-      .fn()
-      .mockResolvedValueOnce(movieFixture('1292052'))
-      .mockRejectedValueOnce(new Error('Login required'))
-      .mockResolvedValueOnce({
-        ...movieFixture('1291546'),
-        title: '霸王别姬',
-        rating: 9.6,
-      });
-
-    render(
-      <App
-        desktopApi={createDesktopApi()}
-        fetchAgents={vi.fn().mockResolvedValue([])}
-        fetchBrowserStatus={createFetchBrowserStatus()}
-        fetchDoubanMovieInfo={fetchDoubanMovieInfo}
-      />,
-    );
-
-    const input = await screen.findByLabelText('Douban subject');
-    await userEvent.type(input, '1292052');
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
-    expect(await screen.findByText('肖申克的救赎')).toBeInTheDocument();
-
-    await userEvent.clear(input);
-    await userEvent.type(input, '1291546');
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
-    expect(await screen.findByText('Login required')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('1291546')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch' }));
-    expect(await screen.findByText('霸王别姬')).toBeInTheDocument();
-    expect(screen.queryByText('肖申克的救赎')).not.toBeInTheDocument();
-  });
-
-  test('renders task center with auth task badge and browser actions', async () => {
+  test('surfaces browser attention on home and opens login from Browser Host', async () => {
     const desktopApi = createDesktopApi();
-    const fetchBrowserStatus = createFetchBrowserStatus();
+    const fetchBrowserStatus = vi.fn().mockResolvedValue({
+      pendingAuthTasks: [
+        {
+          id: 'agent-1:douban:douban-main',
+          agentId: 'agent-1',
+          siteId: 'douban',
+          profileName: 'douban-main',
+          reason: 'missing',
+          updatedAt: '2026-06-13T10:00:00.000Z',
+        },
+      ],
+      profiles: [],
+      sites: [
+        {
+          siteId: 'douban',
+          displayName: 'Douban',
+          allowedOrigins: ['https://movie.douban.com'],
+          authPolicy: 'required',
+          profileName: 'douban-main',
+          loginUrl: 'https://accounts.douban.com/passport/login',
+          verifyUrl: 'https://www.douban.com/mine/',
+        },
+      ],
+    });
 
     render(
       <App
@@ -519,21 +460,25 @@ describe('CthuDesktop shell', () => {
 
     await waitFor(() => expect(fetchBrowserStatus).toHaveBeenCalledTimes(1));
     expect(
-      within(screen.getByLabelText('Primary')).getByText('1'),
+      await screen.findByText('Browser auth needs attention'),
     ).toBeInTheDocument();
-
-    await userEvent.click(primaryNavButton('Tasks'));
-
+    expect(screen.getByText(/1 browser auth item/)).toBeInTheDocument();
     expect(
-      await screen.findByRole('heading', { name: 'Tasks', level: 1 }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Douban login required')).toBeInTheDocument();
-    expect(screen.getByText('backend')).toBeInTheDocument();
-    expect(screen.getByText('missing')).toBeInTheDocument();
+      within(screen.getByLabelText('Primary')).queryByRole('button', {
+        name: 'Tasks',
+      }),
+    ).not.toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole('button', { name: 'Open Login Douban' }),
+      screen.getByRole('button', { name: 'Open Browser Host' }),
     );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Browser Host', level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Pending missing')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }));
 
     expect(desktopApi.openBrowserLogin).toHaveBeenCalledWith({
       loginUrl: 'https://accounts.douban.com/passport/login',
@@ -571,13 +516,13 @@ describe('CthuDesktop shell', () => {
       />,
     );
 
-    await userEvent.click(primaryNavButton('Tasks'));
+    await userEvent.click(primaryNavButton('Browser Host'));
 
     expect(
       await screen.findByText('browser status offline'),
     ).toBeInTheDocument();
-    expect(await screen.findByText('zhihu login required')).toBeInTheDocument();
-    expect(screen.getByText('local')).toBeInTheDocument();
+    expect(await screen.findByText('zhihu-main')).toBeInTheDocument();
+    expect(screen.getByText('local_preflight')).toBeInTheDocument();
     expect(desktopApi.openBrowserLogin).not.toHaveBeenCalled();
   });
 
@@ -615,7 +560,7 @@ describe('CthuDesktop shell', () => {
       />,
     );
 
-    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(primaryNavButton('Browser Host'));
 
     expect(await screen.findByText('Pending missing')).toBeInTheDocument();
   });
@@ -646,7 +591,7 @@ describe('CthuDesktop shell', () => {
       />,
     );
 
-    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(primaryNavButton('Browser Host'));
     await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
 
     expect(desktopApi.openBrowserLogin).toHaveBeenCalledWith({
@@ -677,7 +622,7 @@ describe('CthuDesktop shell', () => {
       />,
     );
 
-    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(primaryNavButton('Browser Host'));
     await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
 
     expect(
@@ -710,7 +655,7 @@ describe('CthuDesktop shell', () => {
       />,
     );
 
-    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(primaryNavButton('Browser Host'));
     await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
 
     expect(
@@ -731,7 +676,7 @@ describe('CthuDesktop shell', () => {
       />,
     );
 
-    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(primaryNavButton('Browser Host'));
     await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
 
     expect(
@@ -739,27 +684,3 @@ describe('CthuDesktop shell', () => {
     ).toBeInTheDocument();
   });
 });
-
-function movieFixture(subjectId: string) {
-  return {
-    aliases: ['月黑高飞'],
-    capturedAt: '2026-06-15T10:00:00.000Z',
-    casts: [{ name: 'Tim Robbins' }],
-    countries: ['美国'],
-    directors: [{ name: 'Frank Darabont' }],
-    finalUrl: `https://movie.douban.com/subject/${subjectId}/`,
-    genres: ['剧情', '犯罪'],
-    imdbId: 'tt0111161',
-    languages: ['英语'],
-    rating: 9.7,
-    ratingCount: 3295591,
-    releaseDates: ['1994-09-10'],
-    runtime: '142分钟',
-    sourceUrl: `https://movie.douban.com/subject/${subjectId}/`,
-    subjectId,
-    summary: 'Two imprisoned men bond over a number of years.',
-    title: '肖申克的救赎',
-    writers: [{ name: 'Stephen King' }],
-    year: 1994,
-  };
-}

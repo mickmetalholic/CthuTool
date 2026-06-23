@@ -497,8 +497,9 @@ p {
 .capability-card,
 .placeholder-panel,
 .agent-table,
-.douban-lookup-panel,
-.douban-movie-result,
+.readiness-hero,
+.browser-attention-panel,
+.browser-runtime-panel,
 .settings-form,
 .status-list,
 .log-view {
@@ -533,6 +534,90 @@ dt,
   overflow-wrap: anywhere;
   color: var(--color-text);
   font-size: 0.98rem;
+}
+
+.home-readiness,
+.browser-host {
+  display: grid;
+  gap: 14px;
+}
+
+.readiness-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  padding: 16px;
+}
+
+.readiness-hero span {
+  color: var(--color-accent-2);
+  font-size: 0.78rem;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.readiness-hero h2,
+.browser-attention-panel h2,
+.browser-runtime-panel h2 {
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font-size: 1.05rem;
+}
+
+.readiness-hero p,
+.browser-attention-panel p,
+.browser-runtime-panel p {
+  margin-top: 6px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.readiness-hero > strong {
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 6px 10px;
+  background: var(--color-panel-soft);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.readiness-hero > strong.ready {
+  border-color: rgb(80 250 123 / 45%);
+  color: var(--color-success);
+}
+
+.readiness-hero > strong.attention {
+  border-color: rgb(241 250 140 / 45%);
+  color: var(--color-warning);
+}
+
+.readiness-grid,
+.browser-host-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.readiness-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.browser-host-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.browser-attention-panel,
+.browser-runtime-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.browser-attention-panel.attention {
+  border-color: rgb(241 250 140 / 45%);
 }
 
 .capability-card {
@@ -619,87 +704,6 @@ dt,
   opacity: 0.62;
 }
 
-.douban-lookup-panel {
-  display: grid;
-  gap: 14px;
-  padding: 16px;
-}
-
-.douban-lookup-header h2 {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--color-text);
-  font-size: 1rem;
-}
-
-.douban-lookup-header svg {
-  color: var(--color-accent-2);
-}
-
-.douban-lookup-form {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
-  align-items: end;
-  gap: 12px;
-  max-width: 680px;
-}
-
-.douban-lookup-status {
-  color: var(--color-text-muted);
-  font-weight: 700;
-}
-
-.douban-movie-result {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-}
-
-.douban-movie-title {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.douban-movie-title h3 {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--color-text);
-  font-size: 1.08rem;
-  line-height: 1.35;
-}
-
-.douban-movie-title h3 span,
-.douban-movie-title strong span {
-  color: var(--color-text-muted);
-  font-weight: 720;
-}
-
-.douban-movie-title strong {
-  display: grid;
-  justify-items: end;
-  min-width: 90px;
-  color: var(--color-accent);
-  font-size: 1rem;
-}
-
-.douban-movie-title strong span {
-  font-size: 0.72rem;
-}
-
-.douban-movie-result .status-list {
-  max-width: none;
-  box-shadow: none;
-}
-
-.douban-summary {
-  color: var(--color-text-muted);
-  line-height: 1.6;
-}
-
 .agent-table {
   width: 100%;
   overflow: hidden;
@@ -741,113 +745,6 @@ dt,
 .browser-action-message.error {
   border-color: rgb(255 85 85 / 45%);
   color: var(--color-error);
-}
-
-.task-center {
-  display: grid;
-  gap: 12px;
-}
-
-.task-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.task-list {
-  display: grid;
-  gap: 10px;
-}
-
-.task-card {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-panel);
-  padding: 14px;
-  box-shadow: var(--shadow-panel);
-}
-
-.task-card-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
-}
-
-.task-card h2 {
-  overflow-wrap: anywhere;
-  color: var(--color-text);
-  font-size: 0.98rem;
-  font-weight: 780;
-}
-
-.task-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.task-meta span,
-.task-status {
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 3px 7px;
-  background: var(--color-panel-soft);
-  color: var(--color-text-muted);
-  font-size: 0.74rem;
-  font-weight: 740;
-}
-
-.task-status {
-  color: var(--color-accent-2);
-  text-transform: capitalize;
-}
-
-.task-status.failed {
-  border-color: rgb(255 85 85 / 45%);
-  color: var(--color-error);
-}
-
-.task-status.open {
-  border-color: rgb(241 250 140 / 45%);
-  color: var(--color-warning);
-}
-
-.task-status.resolved,
-.task-status.dismissed {
-  color: var(--color-text-dim);
-}
-
-.task-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.task-actions button {
-  min-height: 30px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 0 10px;
-  background: var(--color-panel-soft);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 760;
-}
-
-.task-actions button:hover:not(:disabled) {
-  color: var(--color-text);
-  border-color: var(--color-accent-2);
-}
-
-.task-actions button:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 .placeholder-panel.compact {
@@ -1113,9 +1010,14 @@ dd {
   padding: 14px;
 }
 
-.log-view code {
+.log-view h2 {
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.log-view p {
   color: var(--color-text-muted);
-  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+  line-height: 1.5;
 }
 
 .statusbar {
@@ -1211,22 +1113,18 @@ dd {
 
   .overview-grid,
   .capability-grid,
+  .readiness-grid,
+  .browser-host-summary,
   .browser-status-grid {
     grid-template-columns: 1fr;
   }
 
-  .douban-lookup-form,
-  .douban-movie-title {
+  .readiness-hero,
+  .browser-attention-panel,
+  .browser-runtime-panel {
+    display: grid;
     grid-template-columns: 1fr;
     align-items: stretch;
-  }
-
-  .douban-movie-title {
-    display: grid;
-  }
-
-  .douban-movie-title strong {
-    justify-items: start;
   }
 
   .agent-row {

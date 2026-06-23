@@ -5,7 +5,6 @@ import {
   BrowserProfileActions,
   type HostActions,
   LocalStatusPage,
-  OverviewPage,
   PageFrame,
 } from '@cthutool/app-shell';
 import { Button } from '@cthutool/ui';
@@ -13,13 +12,10 @@ import {
   Bot,
   Chrome,
   FileText,
-  Film,
   Home,
   Info,
-  ListChecks,
   RefreshCw,
   Save,
-  Search,
   Server,
 } from 'lucide-react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
@@ -29,10 +25,8 @@ import type { AgentConnectionState } from '../../main/agent-client';
 import type { DesktopConfig } from '../../main/config';
 import {
   type BrowserStatus,
-  type DoubanMovieInfo,
   fetchBrowserStatus as fetchBrowserStatusFromBackend,
   fetchConnectedAgents,
-  fetchDoubanMovieInfo as fetchDoubanMovieInfoFromBackend,
 } from './agents-api';
 import {
   type DesktopApi,
@@ -43,8 +37,6 @@ import { createDesktopRuntimeAdapter } from './desktop-runtime';
 import {
   buildDesktopTasks,
   countActionableTasks,
-  countTasksByStatus,
-  type DesktopTask,
   type LocalPendingAuthTask,
 } from './desktop-tasks';
 import {
@@ -61,11 +53,10 @@ type AppProps = {
   readonly desktopApi?: DesktopApi;
   readonly fetchAgents?: typeof fetchConnectedAgents;
   readonly fetchBrowserStatus?: typeof fetchBrowserStatusFromBackend;
-  readonly fetchDoubanMovieInfo?: typeof fetchDoubanMovieInfoFromBackend;
 };
 
 type Workspace = 'main' | 'settings';
-type MainView = 'home' | 'tasks' | 'browser' | 'agents';
+type MainView = 'home' | 'browser' | 'agents';
 type SettingsView = 'service' | 'status' | 'logs';
 
 const emptyState: AgentConnectionState = {
@@ -77,8 +68,7 @@ const emptyState: AgentConnectionState = {
 
 const mainNav = [
   { id: 'home', label: 'Home', icon: Home },
-  { id: 'tasks', label: 'Tasks', icon: ListChecks },
-  { id: 'browser', label: 'Browser Profiles', icon: Chrome },
+  { id: 'browser', label: 'Browser Host', icon: Chrome },
   { id: 'agents', label: 'Agents', icon: Bot },
 ] as const;
 
@@ -92,7 +82,6 @@ export function App({
   desktopApi = getDesktopApi(),
   fetchAgents = fetchConnectedAgents,
   fetchBrowserStatus = fetchBrowserStatusFromBackend,
-  fetchDoubanMovieInfo = fetchDoubanMovieInfoFromBackend,
 }: AppProps) {
   const [workspace, setWorkspace] = useState<Workspace>('main');
   const [mainView, setMainView] = useState<MainView>('home');
@@ -124,14 +113,6 @@ export function App({
   const [browserActionState, setBrowserActionState] = useState<{
     readonly message?: string;
     readonly status: 'idle' | 'running' | 'success' | 'error';
-  }>({ status: 'idle' });
-  const [doubanMovieInput, setDoubanMovieInput] = useState('');
-  const [doubanMovieResult, setDoubanMovieResult] = useState<
-    DoubanMovieInfo | undefined
-  >();
-  const [doubanMovieState, setDoubanMovieState] = useState<{
-    readonly message?: string;
-    readonly status: 'idle' | 'loading' | 'error';
   }>({ status: 'idle' });
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>(
     'idle',
@@ -346,37 +327,9 @@ export function App({
       }),
     [browserStatus, localPendingAuthTasks],
   );
-  const actionableTaskCount = useMemo(
-    () => countActionableTasks(desktopTasks),
-    [desktopTasks],
-  );
-
   const openClientStatusSettings = () => {
     setWorkspace('settings');
     setSettingsView('status');
-  };
-
-  const lookupDoubanMovie = async () => {
-    const input = doubanMovieInput.trim();
-    if (!isValidDoubanMovieInput(input)) {
-      setDoubanMovieState({
-        message: 'Enter a numeric Douban subject id or subject URL',
-        status: 'error',
-      });
-      return;
-    }
-    setDoubanMovieState({ status: 'loading' });
-    try {
-      const movie = await fetchDoubanMovieInfo(backendUrl, input);
-      setDoubanMovieResult(movie);
-      setDoubanMovieState({ status: 'idle' });
-    } catch (error) {
-      setDoubanMovieState({
-        message:
-          error instanceof Error ? error.message : 'Douban movie lookup failed',
-        status: 'error',
-      });
-    }
   };
 
   return (
@@ -399,7 +352,7 @@ export function App({
             items={mainNav.map(
               (item): ShellNavItem => ({
                 ...item,
-                badgeCount: item.id === 'tasks' ? actionableTaskCount : 0,
+                badgeCount: 0,
               }),
             )}
             selectedId={workspace === 'main' ? mainView : ''}
@@ -433,14 +386,12 @@ export function App({
                   desktopTasks,
                   refreshAgents,
                   refreshBrowserStatus,
-                  refreshLocalPendingAuthTasks,
-                  doubanMovieInput,
-                  doubanMovieResult,
-                  doubanMovieState,
-                  setDoubanMovieInput,
-                  lookupDoubanMovie,
                   runBrowserSiteAction,
                   config,
+                  connection,
+                  appInfo,
+                  statusLabel,
+                  onOpenBrowserHost: () => setMainView('browser'),
                 })
               : renderSettingsWorkspace({
                   view: settingsView,
@@ -482,14 +433,12 @@ function renderMainWorkspace({
   desktopTasks,
   refreshAgents,
   refreshBrowserStatus,
-  refreshLocalPendingAuthTasks,
-  doubanMovieInput,
-  doubanMovieResult,
-  doubanMovieState,
-  setDoubanMovieInput,
-  lookupDoubanMovie,
   runBrowserSiteAction,
   config,
+  connection,
+  appInfo,
+  statusLabel,
+  onOpenBrowserHost,
 }: {
   readonly view: MainView;
   readonly agents: readonly PublicAgentStatus[];
@@ -502,49 +451,30 @@ function renderMainWorkspace({
     readonly status: 'idle' | 'running' | 'success' | 'error';
   };
   readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
-  readonly desktopTasks: readonly DesktopTask[];
+  readonly desktopTasks: ReturnType<typeof buildDesktopTasks>;
   readonly refreshAgents: () => Promise<void>;
   readonly refreshBrowserStatus: () => Promise<void>;
-  readonly refreshLocalPendingAuthTasks: () => Promise<void>;
-  readonly doubanMovieInput: string;
-  readonly doubanMovieResult: DoubanMovieInfo | undefined;
-  readonly doubanMovieState: {
-    readonly message?: string;
-    readonly status: 'idle' | 'loading' | 'error';
-  };
-  readonly setDoubanMovieInput: Dispatch<SetStateAction<string>>;
-  readonly lookupDoubanMovie: () => Promise<void>;
   readonly runBrowserSiteAction: (
     action: 'openLogin' | 'verifyProfile' | 'clearProfile',
     site: BrowserStatus['sites'][number],
   ) => Promise<void>;
   readonly config: DesktopConfig | undefined;
+  readonly connection: AgentConnectionState;
+  readonly appInfo: DesktopAppInfo;
+  readonly statusLabel: string;
+  readonly onOpenBrowserHost: () => void;
 }) {
   if (view === 'browser') {
     return (
-      <WorkspacePanel title="Browser Profiles" eyebrow="Browser">
-        <BrowserStatusPanel
+      <WorkspacePanel title="Browser Host" eyebrow="Local Capability">
+        <BrowserHostPanel
+          appInfo={appInfo}
           browserStatus={browserStatus}
           browserStatusError={browserStatusError}
+          browserStatusLoading={browserStatusLoading}
           browserActionState={browserActionState}
           localPendingAuthTasks={localPendingAuthTasks}
           runBrowserSiteAction={runBrowserSiteAction}
-        />
-      </WorkspacePanel>
-    );
-  }
-
-  if (view === 'tasks') {
-    return (
-      <WorkspacePanel title="Tasks" eyebrow="Main">
-        <TaskCenterPanel
-          browserActionState={browserActionState}
-          browserStatusLoading={browserStatusLoading}
-          browserStatusError={browserStatusError}
-          refreshBrowserStatus={refreshBrowserStatus}
-          refreshLocalPendingAuthTasks={refreshLocalPendingAuthTasks}
-          runBrowserSiteAction={runBrowserSiteAction}
-          tasks={desktopTasks}
         />
       </WorkspacePanel>
     );
@@ -562,145 +492,226 @@ function renderMainWorkspace({
   }
 
   return (
-    <WorkspacePanel title="Overview" eyebrow="Main">
-      <OverviewPage
-        capabilities={[
-          { title: 'Agent Console', value: 'Available' },
-          { title: 'Browser Profiles', value: 'Available' },
-          { muted: true, title: 'Task Runs', value: 'Later' },
-        ]}
-        metrics={[
-          {
-            label: 'Environment',
-            value: config?.activeEnvironment.label ?? 'Local',
-          },
-          { label: 'Task Queue', value: String(desktopTasks.length) },
-          { label: 'Profiles', value: String(browserStatus.profiles.length) },
-          { label: 'Online Agents', value: String(agents.length) },
-        ]}
-      />
-      <DoubanMovieLookupPanel
-        input={doubanMovieInput}
-        movie={doubanMovieResult}
-        state={doubanMovieState}
-        setInput={setDoubanMovieInput}
-        onLookup={lookupDoubanMovie}
+    <WorkspacePanel title="Home" eyebrow="Local Readiness">
+      <HomeReadinessPanel
+        agents={agents}
+        appInfo={appInfo}
+        attentionCount={countActionableTasks(desktopTasks)}
+        browserStatus={browserStatus}
+        config={config}
+        connection={connection}
+        statusLabel={statusLabel}
+        onOpenBrowserHost={onOpenBrowserHost}
       />
     </WorkspacePanel>
   );
 }
 
-function DoubanMovieLookupPanel({
-  input,
-  movie,
-  state,
-  setInput,
-  onLookup,
+function HomeReadinessPanel({
+  agents,
+  appInfo,
+  attentionCount,
+  browserStatus,
+  config,
+  connection,
+  statusLabel,
+  onOpenBrowserHost,
 }: {
-  readonly input: string;
-  readonly movie: DoubanMovieInfo | undefined;
-  readonly state: {
-    readonly message?: string;
-    readonly status: 'idle' | 'loading' | 'error';
-  };
-  readonly setInput: Dispatch<SetStateAction<string>>;
-  readonly onLookup: () => Promise<void>;
+  readonly agents: readonly PublicAgentStatus[];
+  readonly appInfo: DesktopAppInfo;
+  readonly attentionCount: number;
+  readonly browserStatus: BrowserStatus;
+  readonly config: DesktopConfig | undefined;
+  readonly connection: AgentConnectionState;
+  readonly statusLabel: string;
+  readonly onOpenBrowserHost: () => void;
 }) {
-  const loading = state.status === 'loading';
+  const browserRuntime = appInfo.browserRuntime;
+  const browserReady = browserRuntime?.status === 'ready';
+  const localAgentOnline = connection.status === 'connected';
   return (
-    <section className="douban-lookup-panel" aria-label="Douban movie lookup">
-      <div className="douban-lookup-header">
+    <div className="home-readiness">
+      <section className="readiness-hero" aria-label="Local readiness summary">
+        <div>
+          <span>Current Host</span>
+          <h2>
+            {config?.deviceName ?? connection.deviceName ?? 'CthuDesktop'}
+          </h2>
+          <p>
+            {config?.activeEnvironment.label ??
+              connection.environmentLabel ??
+              'Local'}{' '}
+            environment is {statusLabel.toLowerCase()}.
+          </p>
+        </div>
+        <strong className={localAgentOnline ? 'ready' : 'attention'}>
+          {localAgentOnline ? 'Ready' : statusLabel}
+        </strong>
+      </section>
+
+      <section className="readiness-grid" aria-label="Readiness details">
+        <div className="metric compact">
+          <span>Backend</span>
+          <strong>{statusLabel}</strong>
+        </div>
+        <div className="metric compact">
+          <span>Local Agent</span>
+          <strong>
+            {config?.connectionEnabled === false ? 'Disabled' : 'Enabled'}
+          </strong>
+        </div>
+        <div className="metric compact">
+          <span>Browser Runtime</span>
+          <strong>{browserRuntime?.status ?? 'pending'}</strong>
+        </div>
+        <div className="metric compact">
+          <span>Online Agents</span>
+          <strong>{agents.length}</strong>
+        </div>
+        <div className="metric compact">
+          <span>Managed Profiles</span>
+          <strong>{browserStatus.profiles.length}</strong>
+        </div>
+        <div className="metric compact">
+          <span>Browser Attention</span>
+          <strong>{attentionCount}</strong>
+        </div>
+      </section>
+
+      <section
+        className={
+          attentionCount > 0
+            ? 'browser-attention-panel attention'
+            : 'browser-attention-panel'
+        }
+        aria-label="Browser attention"
+      >
         <div>
           <h2>
-            <Film size={17} />
-            <span>Douban Movie</span>
+            {attentionCount > 0
+              ? 'Browser auth needs attention'
+              : 'Browser host is clear'}
           </h2>
+          <p>
+            {attentionCount > 0
+              ? `${attentionCount} browser auth item${
+                  attentionCount === 1 ? '' : 's'
+                } need login or verification.`
+              : browserReady
+                ? 'Host browser runtime is ready and no auth attention is pending.'
+                : (browserRuntime?.message ??
+                  'Browser runtime has not reported readiness yet.')}
+          </p>
         </div>
-      </div>
-      <form
-        className="douban-lookup-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void onLookup();
-        }}
-      >
-        <label>
-          <span>Subject</span>
-          <input
-            aria-label="Douban subject"
-            placeholder="1292052"
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-          />
-        </label>
-        <Button
+        <button
+          type="button"
           className="primary-button"
-          disabled={loading}
-          type="submit"
-          variant="default"
+          onClick={onOpenBrowserHost}
         >
-          <Search size={16} />
-          <span>{loading ? 'Fetching' : 'Fetch'}</span>
-        </Button>
-      </form>
-      {state.status === 'error' && state.message ? (
-        <p className="error-text">{state.message}</p>
-      ) : null}
-      {loading ? (
-        <p className="douban-lookup-status">Fetching movie data</p>
-      ) : null}
-      {movie ? <DoubanMovieResult movie={movie} /> : null}
-    </section>
+          Open Browser Host
+        </button>
+      </section>
+    </div>
   );
 }
 
-function DoubanMovieResult({ movie }: { readonly movie: DoubanMovieInfo }) {
-  return (
-    <article className="douban-movie-result">
-      <div className="douban-movie-title">
-        <h3>
-          {movie.title}
-          {movie.year ? <span>({movie.year})</span> : null}
-        </h3>
-        {movie.rating !== undefined ? (
-          <strong>
-            {movie.rating.toFixed(1)}
-            {movie.ratingCount ? (
-              <span>{movie.ratingCount} ratings</span>
-            ) : null}
-          </strong>
-        ) : null}
-      </div>
-      <StatusList
-        rows={[
-          ['Directors', personNames(movie.directors)],
-          ['Casts', personNames(movie.casts)],
-          ['Genres', movie.genres.join(', ') || 'Unavailable'],
-          ['Countries', movie.countries.join(', ') || 'Unavailable'],
-          ['Runtime', movie.runtime ?? 'Unavailable'],
-          ['Release Dates', movie.releaseDates.join(', ') || 'Unavailable'],
-          ['Aliases', movie.aliases.join(', ') || 'Unavailable'],
-          ['IMDb', movie.imdbId ?? 'Unavailable'],
-          ['Source', movie.sourceUrl],
-        ]}
-      />
-      {movie.summary ? <p className="douban-summary">{movie.summary}</p> : null}
-    </article>
-  );
-}
-
-function isValidDoubanMovieInput(input: string): boolean {
-  if (/^\d+$/.test(input)) return true;
-  try {
-    const url = new URL(input);
-    return /\/subject\/\d+\/?/.test(url.pathname);
-  } catch {
-    return false;
+function countPendingBrowserAuthItems({
+  browserStatus,
+  localPendingAuthTasks,
+}: {
+  readonly browserStatus: BrowserStatus;
+  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
+}): number {
+  const keys = new Set<string>();
+  for (const task of [
+    ...browserStatus.pendingAuthTasks,
+    ...localPendingAuthTasks,
+  ]) {
+    if ('status' in task && !['open', 'in_progress'].includes(task.status)) {
+      continue;
+    }
+    keys.add(`${task.siteId}:${task.profileName}`);
   }
+  return keys.size;
 }
 
-function personNames(people: readonly { readonly name: string }[]): string {
-  return people.map((person) => person.name).join(', ') || 'Unavailable';
+function browserRuntimeLabel(appInfo: DesktopAppInfo): string {
+  const runtime = appInfo.browserRuntime;
+  if (!runtime) return 'Unknown';
+  return runtime.activeKind ?? runtime.preferredKind;
+}
+
+function browserRuntimeMessage(appInfo: DesktopAppInfo): string {
+  return appInfo.browserRuntime?.message ?? 'Browser runtime is not available';
+}
+
+function BrowserHostPanel({
+  appInfo,
+  browserStatus,
+  browserStatusError,
+  browserStatusLoading,
+  browserActionState,
+  localPendingAuthTasks,
+  runBrowserSiteAction,
+}: {
+  readonly appInfo: DesktopAppInfo;
+  readonly browserStatus: BrowserStatus;
+  readonly browserStatusError: string | undefined;
+  readonly browserStatusLoading: boolean;
+  readonly browserActionState: {
+    readonly message?: string;
+    readonly status: 'idle' | 'running' | 'success' | 'error';
+  };
+  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
+  readonly runBrowserSiteAction: (
+    action: 'openLogin' | 'verifyProfile' | 'clearProfile',
+    site: BrowserStatus['sites'][number],
+  ) => Promise<void>;
+}) {
+  const pendingAuthCount = countPendingBrowserAuthItems({
+    browserStatus,
+    localPendingAuthTasks,
+  });
+  return (
+    <div className="browser-host">
+      <section
+        className="browser-host-summary"
+        aria-label="Browser host summary"
+      >
+        <div className="metric compact">
+          <span>Runtime</span>
+          <strong>{browserRuntimeLabel(appInfo)}</strong>
+        </div>
+        <div className="metric compact">
+          <span>Runtime Status</span>
+          <strong>{appInfo.browserRuntime?.status ?? 'pending'}</strong>
+        </div>
+        <div className="metric compact">
+          <span>Managed Sites</span>
+          <strong>{browserStatus.sites.length}</strong>
+        </div>
+        <div className="metric compact">
+          <span>Pending Auth</span>
+          <strong>{pendingAuthCount}</strong>
+        </div>
+      </section>
+
+      <section className="browser-runtime-panel" aria-label="Browser runtime">
+        <div>
+          <h2>Host browser runtime</h2>
+          <p>{browserRuntimeMessage(appInfo)}</p>
+        </div>
+      </section>
+      <BrowserStatusPanel
+        browserStatus={browserStatus}
+        browserStatusError={browserStatusError}
+        browserStatusLoading={browserStatusLoading}
+        browserActionState={browserActionState}
+        localPendingAuthTasks={localPendingAuthTasks}
+        runBrowserSiteAction={runBrowserSiteAction}
+      />
+    </div>
+  );
 }
 
 function renderSettingsWorkspace({
@@ -781,7 +792,11 @@ function renderSettingsWorkspace({
     return (
       <WorkspacePanel title="Logs" eyebrow="Settings">
         <div className="log-view">
-          <code>{new Date().toISOString()} settings opened</code>
+          <h2>Log viewing is not connected yet</h2>
+          <p>
+            This settings section is reserved for future local or server-backed
+            log inspection. No log stream is currently wired in CthuDesktop.
+          </p>
         </div>
       </WorkspacePanel>
     );
@@ -939,144 +954,17 @@ function AgentsPanel({
   );
 }
 
-function TaskCenterPanel({
-  browserActionState,
-  browserStatusError,
-  browserStatusLoading,
-  refreshBrowserStatus,
-  refreshLocalPendingAuthTasks,
-  runBrowserSiteAction,
-  tasks,
-}: {
-  readonly browserActionState: {
-    readonly message?: string;
-    readonly status: 'idle' | 'running' | 'success' | 'error';
-  };
-  readonly browserStatusError: string | undefined;
-  readonly browserStatusLoading: boolean;
-  readonly refreshBrowserStatus: () => Promise<void>;
-  readonly refreshLocalPendingAuthTasks: () => Promise<void>;
-  readonly runBrowserSiteAction: (
-    action: 'openLogin' | 'verifyProfile' | 'clearProfile',
-    site: BrowserStatus['sites'][number],
-  ) => Promise<void>;
-  readonly tasks: readonly DesktopTask[];
-}) {
-  const counts = countTasksByStatus(tasks);
-  const isRunning = browserActionState.status === 'running';
-
-  return (
-    <div className="task-center">
-      <div className="panel-toolbar">
-        <p>{countActionableTasks(tasks)} actionable</p>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Refresh tasks"
-          onClick={() => {
-            void refreshBrowserStatus();
-            void refreshLocalPendingAuthTasks();
-          }}
-        >
-          <RefreshCw size={16} />
-        </button>
-      </div>
-      {browserStatusError ? (
-        <p className="error-text">{browserStatusError}</p>
-      ) : null}
-      {browserActionState.status !== 'idle' && browserActionState.message ? (
-        <p className={`browser-action-message ${browserActionState.status}`}>
-          {browserActionState.message}
-        </p>
-      ) : null}
-      <section className="task-summary-grid" aria-label="Task summary">
-        <div className="metric compact">
-          <span>Open</span>
-          <strong>{counts.open}</strong>
-        </div>
-        <div className="metric compact">
-          <span>In Progress</span>
-          <strong>{counts.in_progress}</strong>
-        </div>
-        <div className="metric compact">
-          <span>Failed</span>
-          <strong>{counts.failed}</strong>
-        </div>
-        <div className="metric compact">
-          <span>Resolved</span>
-          <strong>{counts.resolved}</strong>
-        </div>
-      </section>
-      {browserStatusLoading ? (
-        <div className="placeholder-panel compact">
-          <p>Loading tasks</p>
-        </div>
-      ) : tasks.length === 0 ? (
-        <div className="placeholder-panel compact">
-          <p>No pending tasks</p>
-        </div>
-      ) : (
-        <div className="task-list">
-          {tasks.map((task) => {
-            const target = taskToBrowserSite(task);
-            return (
-              <article className="task-card" key={task.id}>
-                <div className="task-card-header">
-                  <div>
-                    <h2>{task.title}</h2>
-                    <div className="task-meta">
-                      <span>{task.profileName}</span>
-                      <span>{task.source}</span>
-                      <span>{task.reason}</span>
-                      {task.updatedAt ? (
-                        <span>{formatTimestamp(task.updatedAt)}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <span className={`task-status ${task.status}`}>
-                    {task.status}
-                  </span>
-                </div>
-                <div className="task-actions">
-                  <button
-                    type="button"
-                    disabled={isRunning || !target.loginUrl}
-                    aria-label={`Open Login ${task.siteDisplayName}`}
-                    onClick={() =>
-                      void runBrowserSiteAction('openLogin', target)
-                    }
-                  >
-                    Open Login
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isRunning || !target.verifyUrl}
-                    aria-label={`Verify ${task.siteDisplayName}`}
-                    onClick={() =>
-                      void runBrowserSiteAction('verifyProfile', target)
-                    }
-                  >
-                    Verify
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function BrowserStatusPanel({
   browserStatus,
   browserStatusError,
+  browserStatusLoading,
   browserActionState,
   localPendingAuthTasks,
   runBrowserSiteAction,
 }: {
   readonly browserStatus: BrowserStatus;
   readonly browserStatusError: string | undefined;
+  readonly browserStatusLoading: boolean;
   readonly browserActionState: {
     readonly message?: string;
     readonly status: 'idle' | 'running' | 'success' | 'error';
@@ -1087,6 +975,15 @@ function BrowserStatusPanel({
     site: BrowserStatus['sites'][number],
   ) => Promise<void>;
 }) {
+  const localOnlyAuthTasks = localPendingAuthTasks.filter(
+    (task) =>
+      ['open', 'in_progress'].includes(task.status) &&
+      !browserStatus.sites.some(
+        (site) =>
+          site.siteId === task.siteId &&
+          (!site.profileName || site.profileName === task.profileName),
+      ),
+  );
   return (
     <div className="browser-status-grid">
       {browserStatusError ? (
@@ -1096,6 +993,9 @@ function BrowserStatusPanel({
         <p className={`browser-action-message ${browserActionState.status}`}>
           {browserActionState.message}
         </p>
+      ) : null}
+      {browserStatusLoading ? (
+        <p className="browser-action-message running">Loading browser status</p>
       ) : null}
       <section className="mini-status">
         <h2>Browser Sites</h2>
@@ -1146,6 +1046,83 @@ function BrowserStatusPanel({
                 </div>
               );
             })}
+            {localOnlyAuthTasks.map((task) => {
+              const site = {
+                allowedOrigins: [],
+                authPolicy: 'required' as const,
+                displayName: task.siteId,
+                loginUrl: task.loginUrl,
+                profileName: task.profileName,
+                siteId: task.siteId,
+                verifyUrl: task.verifyUrl,
+              };
+              return (
+                <div
+                  className="site-status-row"
+                  key={`${task.siteId}:${task.profileName}`}
+                >
+                  <div>
+                    <strong>{task.siteId}</strong>
+                    <small>{task.profileName}</small>
+                    <div className="site-profile-summary">
+                      <span>Pending {task.reason}</span>
+                      <span>{task.source}</span>
+                    </div>
+                  </div>
+                  <span>{task.status}</span>
+                  <BrowserProfileActions
+                    disabled={browserActionState.status === 'running'}
+                    onClear={() =>
+                      void runBrowserSiteAction('clearProfile', site)
+                    }
+                    onOpen={() => void runBrowserSiteAction('openLogin', site)}
+                    onVerify={() =>
+                      void runBrowserSiteAction('verifyProfile', site)
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : localOnlyAuthTasks.length > 0 ? (
+          <div className="mini-status-list">
+            {localOnlyAuthTasks.map((task) => {
+              const site = {
+                allowedOrigins: [],
+                authPolicy: 'required' as const,
+                displayName: task.siteId,
+                loginUrl: task.loginUrl,
+                profileName: task.profileName,
+                siteId: task.siteId,
+                verifyUrl: task.verifyUrl,
+              };
+              return (
+                <div
+                  className="site-status-row"
+                  key={`${task.siteId}:${task.profileName}`}
+                >
+                  <div>
+                    <strong>{task.siteId}</strong>
+                    <small>{task.profileName}</small>
+                    <div className="site-profile-summary">
+                      <span>Pending {task.reason}</span>
+                      <span>{task.source}</span>
+                    </div>
+                  </div>
+                  <span>{task.status}</span>
+                  <BrowserProfileActions
+                    disabled={browserActionState.status === 'running'}
+                    onClear={() =>
+                      void runBrowserSiteAction('clearProfile', site)
+                    }
+                    onOpen={() => void runBrowserSiteAction('openLogin', site)}
+                    onVerify={() =>
+                      void runBrowserSiteAction('verifyProfile', site)
+                    }
+                  />
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p>No browser sites</p>
@@ -1162,18 +1139,6 @@ function BrowserStatusPanel({
       />
     </div>
   );
-}
-
-function taskToBrowserSite(task: DesktopTask): BrowserStatus['sites'][number] {
-  return {
-    allowedOrigins: [],
-    authPolicy: 'required',
-    displayName: task.siteDisplayName,
-    loginUrl: task.loginUrl,
-    profileName: task.profileName,
-    siteId: task.siteId,
-    verifyUrl: task.verifyUrl,
-  };
 }
 
 function findSiteProfile(
