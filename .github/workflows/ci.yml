@@ -244,7 +244,7 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
-            const summaries = [
+            const expectedSummaries = [
               ['Root tests', 'coverage/coverage-summary.json'],
               ['apps/backend', 'apps/backend/coverage/coverage-summary.json'],
               ['apps/desktop', 'apps/desktop/coverage/coverage-summary.json'],
@@ -255,7 +255,13 @@ jobs:
               ['packages/config', 'packages/config/coverage/coverage-summary.json'],
               ['packages/obsidian-enhancer', 'packages/obsidian-enhancer/coverage/coverage-summary.json'],
               ['packages/ui', 'packages/ui/coverage/coverage-summary.json'],
-            ].filter(([, summaryPath]) => fs.existsSync(summaryPath));
+            ];
+            const missingSummaries = expectedSummaries.filter(
+              ([, summaryPath]) => !fs.existsSync(summaryPath),
+            );
+            const summaries = expectedSummaries.filter(([, summaryPath]) =>
+              fs.existsSync(summaryPath),
+            );
             const metric = (value) =>
               value?.pct === 'Unknown'
                 ? `Unknown (${value.covered}/${value.total})`
@@ -263,6 +269,15 @@ jobs:
             const body = [
               '## Repository Coverage',
               '',
+              ...(missingSummaries.length > 0
+                ? [
+                    '### Missing expected coverage summaries',
+                    ...missingSummaries.map(
+                      ([label, summaryPath]) => `- ${label}: ${summaryPath}`,
+                    ),
+                    '',
+                  ]
+                : []),
               ...summaries.flatMap(([label, summaryPath]) => {
                 const total = JSON.parse(fs.readFileSync(summaryPath, 'utf8')).total;
                 return [
@@ -308,6 +323,14 @@ jobs:
               } else {
                 throw error;
               }
+            }
+
+            if (missingSummaries.length > 0) {
+              core.setFailed(
+                `Missing expected coverage summaries: ${missingSummaries
+                  .map(([label, summaryPath]) => `${label} (${summaryPath})`)
+                  .join(', ')}`,
+              );
             }
 
       - name: Upload coverage to Codecov
