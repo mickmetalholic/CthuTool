@@ -12,9 +12,9 @@
     "package:win:from-build": "electron-builder --win",
     "package:mac": "pnpm run build && electron-builder --mac",
     "package:mac:from-build": "electron-builder --mac",
-    "test": "pnpm run build:deps && vitest run",
-    "test:cov": "pnpm run build:deps && vitest run --coverage",
-    "typecheck": "pnpm run build:deps && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check ."
   },
   "dependencies": {

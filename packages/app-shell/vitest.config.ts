@@ -12,4 +12,10 @@ export default defineConfig({
       exclude: ['src/**/*.d.ts'],
     },
   },
+  resolve: {
+    alias: {
+      '@cthutool/ui': new URL('../../packages/ui/src/index.ts', import.meta.url)
+        .pathname,
+    },
+  },
 });

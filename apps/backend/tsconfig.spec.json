@@ -1,6 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@cthutool/agent-protocol": ["../../packages/agent-protocol/src"],
+      "@cthutool/config": ["../../packages/config/src"]
+    },
     "types": ["vitest/globals", "node"]
   },
   "include": ["src/**/*.ts", "e2e/**/*.ts"],

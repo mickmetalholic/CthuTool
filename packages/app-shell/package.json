@@ -14,8 +14,8 @@
   "scripts": {
     "build:deps": "pnpm --filter @cthutool/ui build",
     "build": "pnpm run build:deps && tsc -p tsconfig.json",
-    "test": "pnpm run build:deps && vitest run",
-    "test:cov": "pnpm run build:deps && vitest run --coverage",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
     "typecheck": "pnpm run build:deps && tsc -p tsconfig.test.json --noEmit",
     "lint": "biome check ."
   },
