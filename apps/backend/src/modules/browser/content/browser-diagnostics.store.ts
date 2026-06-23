@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { getCurrentRequestContext } from '../../../observability';
 import type { BrowserDiagnosticsSummary } from '../../browser-automation/browser-automation.types';
 
 export const BROWSER_DIAGNOSTICS_STORE_OPTIONS =
@@ -17,6 +18,11 @@ export type BrowserDiagnosticsInput = {
   readonly html?: string;
   readonly screenshot?: Buffer;
   readonly summary: string;
+};
+
+export type BrowserDiagnosticsStoreStatus = {
+  readonly diagnosticsDir: string;
+  readonly enabled: boolean;
 };
 
 const DEFAULT_BROWSER_DIAGNOSTICS_STORE_OPTIONS: BrowserDiagnosticsStoreOptions =
@@ -45,6 +51,7 @@ export class BrowserDiagnosticsStore {
     }
 
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const requestContext = getCurrentRequestContext();
     const directory = join(this.options.diagnosticsDir, id);
     await mkdir(directory, { recursive: true });
     await writeFile(
@@ -53,6 +60,8 @@ export class BrowserDiagnosticsStore {
         {
           errorCode: input.errorCode,
           finalUrl: input.finalUrl,
+          requestId: requestContext?.requestId,
+          traceId: requestContext?.traceId,
           summary: input.summary,
           capturedAt: new Date().toISOString(),
         },
@@ -68,5 +77,12 @@ export class BrowserDiagnosticsStore {
       await writeFile(join(directory, 'screenshot.png'), input.screenshot);
     }
     return { id, summary: input.summary };
+  }
+
+  getStatus(): BrowserDiagnosticsStoreStatus {
+    return {
+      diagnosticsDir: this.options.diagnosticsDir,
+      enabled: this.options.enabled,
+    };
   }
 }

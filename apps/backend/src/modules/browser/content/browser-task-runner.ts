@@ -1,4 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BackendObservabilityService } from '../../../observability';
 import { BrowserAutomationError } from '../../browser-automation/browser-automation.errors';
 
 export const BROWSER_TASK_RUNNER_OPTIONS = 'BROWSER_TASK_RUNNER_OPTIONS';
@@ -33,6 +36,8 @@ export class BrowserTaskRunner {
     @Optional()
     @Inject(BROWSER_TASK_RUNNER_OPTIONS)
     options?: BrowserTaskRunnerOptions,
+    @Optional()
+    private readonly observability?: BackendObservabilityService,
   ) {
     this.options = options ?? DEFAULT_BROWSER_TASK_RUNNER_OPTIONS;
   }
@@ -43,12 +48,22 @@ export class BrowserTaskRunner {
     options: { readonly timeoutMs?: number } = {},
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
+      const timeoutMs = options.timeoutMs ?? this.options.defaultTimeoutMs;
       this.queue.push({
         label,
         task,
-        timeoutMs: options.timeoutMs ?? this.options.defaultTimeoutMs,
+        timeoutMs,
         resolve: resolve as (value: unknown) => void,
         reject,
+      });
+      this.observability?.record({
+        event: 'browser.task_queued',
+        details: {
+          active: this.active,
+          label,
+          queueLength: this.queue.length,
+          timeoutMs,
+        },
       });
       this.drain();
     });
@@ -69,9 +84,40 @@ export class BrowserTaskRunner {
   }
 
   private async execute<T>(item: QueueItem<T>): Promise<void> {
+    const startedAt = Date.now();
+    this.observability?.record({
+      event: 'browser.task_started',
+      details: {
+        active: this.active,
+        label: item.label,
+        queueLength: this.queue.length,
+        timeoutMs: item.timeoutMs,
+      },
+    });
     try {
       item.resolve(await withTimeout(item.task(), item.timeoutMs));
+      this.observability?.record({
+        event: 'browser.task_completed',
+        details: {
+          durationMs: Date.now() - startedAt,
+          label: item.label,
+          outcome: 'ok',
+        },
+      });
     } catch (error) {
+      this.observability?.record({
+        event: 'browser.task_failed',
+        level: 'warn',
+        details: {
+          durationMs: Date.now() - startedAt,
+          errorCode:
+            error instanceof BrowserAutomationError
+              ? error.code
+              : 'BROWSER_TASK_FAILED',
+          label: item.label,
+          outcome: 'failed',
+        },
+      });
       item.reject(error);
     }
   }

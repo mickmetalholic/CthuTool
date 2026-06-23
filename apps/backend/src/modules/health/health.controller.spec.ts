@@ -10,9 +10,20 @@ describe('HealthController', () => {
       timestamp: '2026-01-01T00:00:00.000Z',
     });
 
+    const getReadiness = jest.fn().mockResolvedValue({
+      status: 'degraded' as const,
+      service: 'backend',
+      checks: {
+        browserAgent: { agentId: 'unknown', status: 'degraded' as const },
+        diagnosticsStore: { enabled: true, status: 'ok' as const },
+      },
+      timestamp: '2026-01-01T00:00:00.000Z',
+    });
     const moduleRef = await Test.createTestingModule({
       controllers: [HealthController],
-      providers: [{ provide: HealthService, useValue: { getStatus } }],
+      providers: [
+        { provide: HealthService, useValue: { getReadiness, getStatus } },
+      ],
     }).compile();
 
     const controller = moduleRef.get(HealthController);
@@ -23,5 +34,15 @@ describe('HealthController', () => {
       timestamp: '2026-01-01T00:00:00.000Z',
     });
     expect(getStatus).toHaveBeenCalledTimes(1);
+    await expect(controller.getReadiness()).resolves.toEqual({
+      status: 'degraded',
+      service: 'backend',
+      checks: {
+        browserAgent: { agentId: 'unknown', status: 'degraded' },
+        diagnosticsStore: { enabled: true, status: 'ok' },
+      },
+      timestamp: '2026-01-01T00:00:00.000Z',
+    });
+    expect(getReadiness).toHaveBeenCalledTimes(1);
   });
 });

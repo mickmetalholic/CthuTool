@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BackendObservabilityService } from '../../../observability';
 import { BrowserAutomationError } from '../../browser-automation/browser-automation.errors';
 import type {
   BrowserAuthUsage,
@@ -26,17 +29,47 @@ export class BrowserContentService {
     private readonly taskRunner: BrowserTaskRunner,
     private readonly blockDetector: BrowserBlockDetector,
     private readonly diagnosticsStore: BrowserDiagnosticsStore,
+    @Optional()
+    private readonly observability?: BackendObservabilityService,
   ) {}
 
   async getPageContent(
     request: BrowserContentRequest,
   ): Promise<BrowserContentResult> {
     const { site, runtimeOptions } = this.resolveProviderRequest(request);
-    assertAllowedOrigin(
-      runtimeOptions.url,
-      runtimeOptions.allowedOrigins ?? [],
-    );
+    try {
+      assertAllowedOrigin(
+        runtimeOptions.url,
+        runtimeOptions.allowedOrigins ?? [],
+      );
+    } catch (error) {
+      this.observability?.record({
+        event: 'browser.content_origin_rejected',
+        level: 'warn',
+        details: {
+          errorCode:
+            error instanceof BrowserAutomationError
+              ? error.code
+              : 'ORIGIN_REJECTED',
+          siteId: site?.siteId ?? request.siteId,
+          url: runtimeOptions.url,
+        },
+      });
+      throw error;
+    }
 
+    this.observability?.record({
+      event: 'browser.content_request_resolved',
+      details: {
+        authPolicy: runtimeOptions.authPolicy,
+        includeHtml: runtimeOptions.includeHtml,
+        includeScreenshot: runtimeOptions.includeScreenshot,
+        includeText: runtimeOptions.includeText,
+        siteId: site?.siteId ?? runtimeOptions.siteId,
+        timeoutMs: runtimeOptions.timeoutMs,
+        url: runtimeOptions.url,
+      },
+    });
     const snapshot = await this.taskRunner.run(
       `browser:${runtimeOptions.url}`,
       () => this.captureViaRuntime(runtimeOptions),
@@ -48,6 +81,21 @@ export class BrowserContentService {
       detection.reason,
       snapshot,
     );
+    this.observability?.record({
+      event:
+        detection.kind === 'ok'
+          ? 'browser.content_completed'
+          : 'browser.content_detected',
+      level: detection.kind === 'ok' ? 'info' : 'warn',
+      details: {
+        detectionKind: detection.kind,
+        diagnosticsId: diagnostics?.id,
+        finalUrl: snapshot.finalUrl,
+        siteId: site?.siteId ?? runtimeOptions.siteId,
+        status: snapshot.status,
+        summary: diagnostics?.summary ?? detection.reason,
+      },
+    });
 
     return {
       ...snapshot,
@@ -125,6 +173,15 @@ export class BrowserContentService {
       ? this.siteConfig.getSite(request.siteId)
       : this.siteConfig.resolveForUrl(request.url);
     if (!site && (request.siteId || !request.allowedOrigins)) {
+      this.observability?.record({
+        event: 'browser.content_site_not_configured',
+        level: 'warn',
+        details: {
+          errorCode: 'SITE_NOT_CONFIGURED',
+          siteId: request.siteId,
+          url: request.url,
+        },
+      });
       throw new BrowserAutomationError(
         'SITE_NOT_CONFIGURED',
         request.siteId

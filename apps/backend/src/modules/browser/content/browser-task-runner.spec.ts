@@ -54,4 +54,33 @@ describe('BrowserTaskRunner', () => {
       ),
     );
   });
+
+  it('emits queue, completion, and failure observability events', async () => {
+    const observability = { record: jest.fn() };
+    const runner = new BrowserTaskRunner(
+      {
+        defaultDelayMs: 0,
+        defaultTimeoutMs: 5,
+        maxConcurrency: 1,
+      },
+      observability as never,
+    );
+
+    await expect(runner.run('fast', async () => 'done')).resolves.toBe('done');
+    await expect(
+      runner.run('slow', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      }),
+    ).rejects.toMatchObject({ code: 'NAVIGATION_TIMEOUT' });
+
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'browser.task_queued' }),
+    );
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'browser.task_completed' }),
+    );
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'browser.task_failed' }),
+    );
+  });
 });

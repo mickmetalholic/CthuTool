@@ -24,5 +24,21 @@ describe('GET /health (e2e)', () => {
     expect(res.body.service).toBe('backend');
     expect(typeof res.body.timestamp).toBe('string');
     expect(new Date(res.body.timestamp).toString()).not.toBe('Invalid Date');
+    expect(res.headers['x-request-id']).toEqual(expect.any(String));
+  });
+
+  it('returns readiness payload with dependency checks', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200);
+    expect(res.body.status).toBe('degraded');
+    expect(res.body.checks.browserAgent).toMatchObject({
+      agentId: 'unknown',
+      status: 'degraded',
+    });
+    expect(res.body.checks.diagnosticsStore).toMatchObject({
+      enabled: true,
+      status: 'ok',
+    });
   });
 });

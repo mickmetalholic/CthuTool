@@ -6,9 +6,11 @@ import { DesktopBrowserRuntimeModule } from './modules/browser/desktop-runtime/d
 import { BrowserSitesModule } from './modules/browser/sites/browser-sites.module';
 import { DoubanMovieInfoModule } from './modules/douban-movie-info/douban-movie-info.module';
 import { HealthModule } from './modules/health/health.module';
+import { ObservabilityModule } from './observability';
 
 @Module({
   imports: [
+    ObservabilityModule,
     AgentModule,
     BrowserAuthModule,
     BrowserContentModule,

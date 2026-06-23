@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BackendObservabilityService } from '../../observability';
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserContentService } from '../browser/content/browser-content.service';
 import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
@@ -13,41 +16,69 @@ import {
 
 @Injectable()
 export class DoubanMovieInfoService {
-  constructor(private readonly browserContent: BrowserContentService) {}
+  constructor(
+    private readonly browserContent: BrowserContentService,
+    @Optional()
+    private readonly observability?: BackendObservabilityService,
+  ) {}
 
   async getMovie(input: string): Promise<DoubanMovieInfoResponse> {
+    const startedAt = Date.now();
     const subjectId = normalizeDoubanSubjectInput(input);
     const sourceUrl = toDoubanSubjectUrl(subjectId);
-    const page = await this.fetchPage(subjectId, sourceUrl);
-    if (page.detection.kind !== 'ok') {
-      throw detectionToError(page.detection.kind, subjectId);
-    }
-    if (
-      page.status === 404 ||
-      /\/subject\/\d+\/?notfound/i.test(page.finalUrl)
-    ) {
-      throw doubanMovieInfoError(
-        'NOT_FOUND',
-        'Douban subject was not found',
-        subjectId,
-      );
-    }
-    if (!page.html) {
-      throw doubanMovieInfoError(
-        'PARSE_FAILED',
-        'Browser capture did not include HTML content',
-        subjectId,
-      );
-    }
-    return {
-      movie: parseDoubanMovieInfo({
+    try {
+      const page = await this.fetchPage(subjectId, sourceUrl);
+      if (page.detection.kind !== 'ok') {
+        throw detectionToError(page.detection.kind, subjectId);
+      }
+      if (
+        page.status === 404 ||
+        /\/subject\/\d+\/?notfound/i.test(page.finalUrl)
+      ) {
+        throw doubanMovieInfoError(
+          'NOT_FOUND',
+          'Douban subject was not found',
+          subjectId,
+        );
+      }
+      if (!page.html) {
+        throw doubanMovieInfoError(
+          'PARSE_FAILED',
+          'Browser capture did not include HTML content',
+          subjectId,
+        );
+      }
+      const movie = parseDoubanMovieInfo({
         capturedAt: page.capturedAt,
         finalUrl: page.finalUrl,
         html: page.html,
         sourceUrl,
         subjectId,
-      }),
-    };
+      });
+      this.observability?.record({
+        event: 'douban_movie.lookup_completed',
+        details: {
+          durationMs: Date.now() - startedAt,
+          finalUrlOrigin: new URL(page.finalUrl).origin,
+          subjectId,
+        },
+      });
+      return { movie };
+    } catch (error) {
+      this.observability?.record({
+        event: 'douban_movie.lookup_failed',
+        level: 'warn',
+        details: {
+          durationMs: Date.now() - startedAt,
+          errorCode:
+            error instanceof Error && 'code' in error
+              ? (error as { readonly code?: unknown }).code
+              : 'DOUBAN_MOVIE_LOOKUP_FAILED',
+          subjectId,
+        },
+      });
+      throw error;
+    }
   }
 
   private async fetchPage(subjectId: string, sourceUrl: string) {

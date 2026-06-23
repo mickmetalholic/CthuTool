@@ -2,7 +2,6 @@
 
 ## Purpose
 Define the backend API and parsing contract for retrieving Douban movie information by subject id through the controlled browser content pipeline.
-
 ## Requirements
 ### Requirement: Douban movie info API
 The backend SHALL provide a Douban movie info API that retrieves one movie by Douban subject id.
@@ -98,3 +97,15 @@ The Douban movie parser SHALL be testable without contacting live Douban.
 #### Scenario: Fixture parsing fails predictably
 - **WHEN** parser tests use fixture HTML for a non-movie or unsupported page
 - **THEN** the parser returns a parse failure rather than throwing an unstructured error
+
+### Requirement: Douban movie observability
+The Douban movie info API SHALL correlate subject lookup requests, browser retrieval outcomes, parser outcomes, and mapped domain errors with backend request context.
+
+#### Scenario: Domain error includes observable code
+- **WHEN** a Douban movie lookup fails due to auth, captcha, rate limiting, timeout, blocked access, not found, or parse failure
+- **THEN** backend observability records the stable domain error code, subject id when valid, browser detection kind when available, and request identifier
+
+#### Scenario: Successful lookup is observable
+- **WHEN** a Douban movie lookup succeeds
+- **THEN** backend observability records the subject id, final URL origin, duration, and parser success without logging raw page HTML
+
