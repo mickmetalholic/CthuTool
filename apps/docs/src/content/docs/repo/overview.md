@@ -8,6 +8,7 @@ The repository has several documentation layers:
 | Area | Source |
 | --- | --- |
 | User deployment, install, module usage, operations, architecture | `apps/docs/src/content/docs/` |
+| Homelab deployment desired state | `gitops/` and `k8s/` |
 | Repository setup and workspace conventions | `README.md` |
 | Cross-package legacy/source notes | `docs/` |
 | Package-local development commands | nearest package `README.md` |

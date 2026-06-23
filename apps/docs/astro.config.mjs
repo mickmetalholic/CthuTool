@@ -55,6 +55,7 @@ export default defineConfig({
           label: 'Operations',
           items: [
             { label: 'Operations Overview', slug: 'operations' },
+            { label: 'GitOps Rollouts', slug: 'operations/gitops-rollouts' },
             { label: 'Health and Logs', slug: 'operations/health-logs' },
             { label: 'Data and Security', slug: 'operations/data-security' },
           ],
@@ -78,6 +79,11 @@ export default defineConfig({
             { label: 'Reference Overview', slug: 'reference' },
             { label: 'CLI Commands', slug: 'reference/cli' },
             { label: 'Configuration', slug: 'reference/configuration' },
+            { label: 'GitOps', slug: 'reference/gitops' },
+            {
+              label: 'Engineering Config',
+              slug: 'reference/engineering-config',
+            },
             { label: 'Backend APIs', slug: 'reference/backend-apis' },
             { label: 'Repository Map', slug: 'repo/overview' },
             { label: 'Source Boundaries', slug: 'repo/source-boundaries' },

@@ -1,35 +1,48 @@
 ---
 title: Health and Logs
-description: Current health checks and log boundaries for CthuTool services.
+description: Health checks and log entry points for Kubernetes-managed CthuTool services.
 ---
 
 ## Backend Health
 
+For the Kubernetes deployment, check rollout and pod readiness first:
+
 ```bash
-curl http://<homelab-host>:3000/health
+kubectl -n cthutool rollout status deployment/cthutool-backend
+kubectl -n cthutool get pods -l app.kubernetes.io/name=cthutool-backend
 ```
 
-For local development:
+To call the backend health endpoint without a permanent ingress:
 
 ```bash
+kubectl -n cthutool port-forward service/cthutool-backend 3000:3000
 curl http://localhost:3000/health
 ```
 
-## Backend Startup Diagnostics
-
-Run the backend directly when diagnosing startup:
+For normal client use, call the URL exposed by your homelab networking layer:
 
 ```bash
-PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/backend run start:dev
+curl http://<homelab-backend-url>/health
 ```
 
-## Desktop Status
+## Backend Logs
 
-CthuDesktop surfaces backend connection state, local browser runtime diagnostics, profile status, pending auth tasks, and logs in the desktop UI.
+Read current backend logs through Kubernetes:
+
+```bash
+kubectl -n cthutool logs deployment/cthutool-backend
+```
+
+When a rollout is unhealthy, inspect events and pod details:
+
+```bash
+kubectl -n cthutool describe deployment cthutool-backend
+kubectl -n cthutool describe pods -l app.kubernetes.io/name=cthutool-backend
+```
 
 ## API Checks
 
-Developer troubleshooting can call public backend browser APIs directly:
+Developer troubleshooting can call public backend browser APIs directly once the backend URL is reachable:
 
 ```text
 GET /api/browser/sites
@@ -38,3 +51,9 @@ GET /api/browser/pending-auth-tasks
 ```
 
 These endpoints expose public status only.
+
+## Local Development Diagnostics
+
+Running the backend from a checkout with `pnpm --filter @cthutool/backend run start:dev` is a development/debugging workflow. Use it to reproduce backend behavior outside the cluster, not as the homelab deployment path.
+
+Package-local commands remain documented in `apps/backend/README.md`.

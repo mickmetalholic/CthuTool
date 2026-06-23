@@ -1,34 +1,60 @@
 ---
 title: Configuration
-description: Current deployment configuration sources for backend and browser site policy.
+description: Kubernetes configuration sources for the homelab backend deployment.
 ---
 
-CthuTool configuration is currently split by runtime owner.
+CthuTool homelab configuration is defined in Kubernetes manifests and reconciled by ArgoCD. Edit manifests in git, not live cluster resources, so ArgoCD can preserve the desired state.
 
-| Owner | Configuration | Source |
-| --- | --- | --- |
-| Backend | Port, environment, log level | Environment variables |
-| Backend | Browser site policy | `BROWSER_SITES_CONFIG_FILE` JSON |
-| Desktop | Backend URL, local browser runtime | CthuDesktop local configuration |
-| CLI | Codex config workflows and command flags | CLI commands and local user files |
+| Kubernetes source | Purpose |
+| --- | --- |
+| `k8s/configmap.yaml` | Backend environment values |
+| `k8s/deployment.yaml` | Backend container image, probes, resources, and env wiring |
+| `k8s/service.yaml` | In-cluster backend Service on port `3000` |
+| `gitops/namespaces/cthutool.yaml` | Target namespace |
+| `gitops/apps/cthutool/application.yaml` | ArgoCD source, destination, sync, retry, and self-heal policy |
 
-## Backend Environment
+## Backend ConfigMap
 
-Start backend with explicit values:
+`k8s/configmap.yaml` creates `ConfigMap/cthutool-backend` in namespace `cthutool`.
 
-```bash
-PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/backend run start:dev
+Current values:
+
+```yaml
+NODE_ENV: "production"
+PORT: "3000"
+LOG_LEVEL: "info"
 ```
+
+The Deployment consumes these values with `envFrom.configMapRef.name: cthutool-backend`.
+
+## Backend Deployment
+
+`k8s/deployment.yaml` runs `Deployment/cthutool-backend` with one replica. The container image is pinned to an immutable GHCR commit tag:
+
+```text
+ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>
+```
+
+Do not manually change the live Deployment image with `kubectl set image`; ArgoCD will revert drift. The supported rollout path is to let `.github/workflows/backend-image.yml` build the image, push GHCR tags, and update the manifest pin on `main`.
+
+The Deployment also defines:
+
+- container port `3000`
+- `imagePullPolicy: Always`
+- CPU request `100m` and limit `500m`
+- memory request `256Mi` and limit `512Mi`
+- liveness probe `GET /health`
+- readiness probe `GET /health`
+
+## Backend Service
+
+`k8s/service.yaml` creates `Service/cthutool-backend` as `ClusterIP` on port `3000`, targeting the backend container port `3000`.
+
+Use your cluster's existing ingress, reverse proxy, load balancer, or port-forward workflow to expose the backend to client computers. The repository does not currently define an ingress or TLS manifest.
 
 ## Browser Site Policy
 
-Set `BROWSER_SITES_CONFIG_FILE` to point at a JSON file:
-
-```bash
-BROWSER_SITES_CONFIG_FILE=/config/browser-sites.json pnpm --filter @cthutool/backend run start:dev
-```
-
-Keep this file outside immutable images and mount it read-only for containerized or service-managed deployments.
+Backend browser site policy is still owned by backend configuration. If `BROWSER_SITES_CONFIG_FILE` is introduced into the cluster deployment, mount it through Kubernetes-managed configuration rather than baking private runtime files into the image.
 
 The file stores site policy only. Do not store cookies, localStorage, Playwright storage-state bundles, browser user data directories, or desktop profile paths in it.
 

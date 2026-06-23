@@ -5,12 +5,17 @@ description: Current configuration references for backend, desktop, CLI, and bro
 
 ## Backend
 
-```bash
-PORT=3000
-NODE_ENV=development
-LOG_LEVEL=info
-BROWSER_SITES_CONFIG_FILE=/config/browser-sites.json
+In homelab deployment, backend environment values are defined in `k8s/configmap.yaml` and consumed by `k8s/deployment.yaml`.
+
+Current Kubernetes values:
+
+```yaml
+NODE_ENV: "production"
+PORT: "3000"
+LOG_LEVEL: "info"
 ```
+
+For local development or debugging from a checkout, the same values can be supplied as environment variables when starting the backend. Local commands are not the homelab deployment path.
 
 ## Browser Sites
 
@@ -37,16 +42,7 @@ Site entries are merged by `siteId`: a matching entry overrides the built-in sit
 
 Example source: `docs/examples/browser-sites.json`.
 
-For Docker or homelab deployments, keep the JSON file outside the image and mount it read-only:
-
-```yaml
-services:
-  backend:
-    environment:
-      BROWSER_SITES_CONFIG_FILE: /config/browser-sites.json
-    volumes:
-      - ./config/browser-sites.json:/config/browser-sites.json:ro
-```
+If this policy is used in the Kubernetes deployment, mount it through Kubernetes-managed configuration and set `BROWSER_SITES_CONFIG_FILE` in the backend environment. Do not bake private runtime files into the backend image.
 
 ## Desktop
 
@@ -75,4 +71,4 @@ Explicit Chrome binary:
 
 ## CLI
 
-The CLI reads command flags, local user state, and Codex configuration sources documented in `apps/cli/README.md`.
+The CLI reads command flags, local user state, and Codex configuration sources documented in `apps/cli/README.md` and [CLI Commands](/reference/cli/).

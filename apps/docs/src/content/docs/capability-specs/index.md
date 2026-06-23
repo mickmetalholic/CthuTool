@@ -17,21 +17,31 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 - `apps-backend-browser-auth`
 - `apps-backend-browser-automation`
 - `apps-backend-browser-content`
+- `apps-backend-browser-public-api`
 - `apps-backend-desktop-browser-runtime`
 - `apps-backend-douban-movie-info`
+- `apps-backend-image-ci`
+- `apps-backend-image-delivery`
+- `apps-backend-observability`
 - `apps-backend-sites-config`
 - `apps-cli-agent-contract`
 - `apps-cli-bundled-script-execution`
 - `apps-cli-codex-config`
 - `apps-cli-codex-plugin-management`
+- `apps-cli-distribution-ci`
+- `apps-cli-observability`
+- `apps-cli-self-installation`
 - `apps-cli-shell-completion`
 - `apps-desktop-agent-console`
 - `apps-desktop-browser-host`
 - `apps-desktop-douban-movie-info`
+- `apps-desktop-observability`
 - `apps-desktop-packaging-ci`
 - `apps-desktop-product-shell`
-- `apps-desktop-task-center`
 - `apps-docs-site`
+- `apps-root-engineering-config`
+- `apps-runtime-structured-logs`
+- `apps-web-observability`
 - `apps-web-project-shell`
 
 ## Codex Plugins
@@ -49,9 +59,20 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 - `collection-hub-import-extension`
 - `collection-hub-workspace`
 
+## GitOps
+
+- `gitops-argo-applications`
+- `gitops-bootstrap`
+- `gitops-cluster-namespaces`
+- `gitops-observability-stack`
+
 ## Packages
 
+- `packages-agent-protocol-observability`
+- `packages-app-shell-observability`
 - `packages-app-shell-runtime`
+- `packages-browser-client-sdk`
 - `packages-config-browser-sites`
+- `packages-config-observability`
 - `packages-ui-shared-components`
 <!-- openspec-index:end -->
