@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/mickmetalholic/cthutool-backend:bb54ce5f4ece6de523e1cfc649a220706d9a4b0f
+          image: ghcr.io/mickmetalholic/cthutool-backend:4a21e09314b1d293d8e13e5c92f644789eb2c43e
           imagePullPolicy: Always
           ports:
             - name: http
