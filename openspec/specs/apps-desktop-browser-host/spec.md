@@ -305,3 +305,15 @@ CthuDesktop browser host SHALL consume protocol observability metadata from brow
 #### Scenario: Error preserves command correlation
 - **WHEN** CthuDesktop returns a browser error
 - **THEN** the error message preserves the command id and compatible observability metadata so backend diagnostics can correlate the failure
+
+### Requirement: Browser host command observability
+The desktop browser host SHALL emit command lifecycle diagnostics for supported browser commands while preserving the existing controlled-command and access-control behavior.
+
+#### Scenario: Command failure is observable
+- **WHEN** a browser command fails because the host is not ready, the command is invalid, or runtime execution fails
+- **THEN** the browser host returns the existing structured error and records a diagnostic event with command id, command type, reason code, and safe context
+
+#### Scenario: Access detection is observable
+- **WHEN** browser execution detects login-required, captcha, rate-limited, or blocked content
+- **THEN** the browser host records the detection kind and safe site/profile context without attempting to bypass the access control
+

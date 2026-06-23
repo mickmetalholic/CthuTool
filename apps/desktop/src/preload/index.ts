@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AgentConnectionState } from '../main/agent-client';
 import type { DesktopConfig, DesktopConfigPatch } from '../main/config';
+import type { DesktopDiagnosticsSnapshot } from '../main/observability';
 import type { PendingAuthTask } from '../main/pending-auth-task-store';
 import type { BrowserRuntimeDiagnostic } from '../main/playwright-host';
 
@@ -18,6 +19,7 @@ const api = {
     readonly browserProfilesDir: string;
     readonly browserRuntime?: BrowserRuntimeDiagnostic;
     readonly configPath: string;
+    readonly diagnostics: DesktopDiagnosticsSnapshot;
     readonly userDataDir: string;
     readonly version: string;
     readonly platform: string;

@@ -20,6 +20,7 @@ import {
   DesktopConfigStore,
   JsonDesktopConfigStorage,
 } from './config';
+import { DesktopObservabilityRecorder } from './observability';
 import { PendingAuthTaskStore } from './pending-auth-task-store';
 import { PlaywrightHost } from './playwright-host';
 import { resolveDesktopWindowBounds } from './window-bounds';
@@ -33,6 +34,7 @@ let configStore: DesktopConfigStore | undefined;
 let browserProfileStore: BrowserProfileStore | undefined;
 let playwrightHost: PlaywrightHost | undefined;
 let pendingAuthTasks: PendingAuthTaskStore | undefined;
+const desktopObservability = new DesktopObservabilityRecorder();
 
 type BrowserSiteActionInput = {
   readonly siteId: string;
@@ -116,6 +118,7 @@ function setupIpc(store: DesktopConfigStore): void {
     browserProfilesDir: join(app.getPath('userData'), 'browser-profiles'),
     browserRuntime: playwrightHost?.getRuntimeDiagnostic(),
     configPath: join(app.getPath('userData'), 'config.json'),
+    diagnostics: desktopObservability.snapshot(),
     userDataDir: app.getPath('userData'),
     version: appVersion,
     platform:
@@ -162,11 +165,16 @@ async function executeBrowserAction(
     throw new Error('Browser host is not initialized');
   }
   const profileName = input.profileName;
+  const commandId = randomUUID();
   const payload: BrowserCommandPayload = {
     authPolicy: 'required',
     command,
-    commandId: randomUUID(),
+    commandId,
     loginUrl: input.loginUrl,
+    observability: {
+      commandId,
+      operation: command,
+    },
     profileName,
     siteId: input.siteId,
     timeoutMs: 120_000,
@@ -178,6 +186,10 @@ async function executeBrowserAction(
 }
 
 async function publishLocalBrowserState(): Promise<void> {
+  desktopObservability.emit({
+    event: 'browser.state_changed',
+    message: 'Publishing local browser state snapshot',
+  });
   await agentClient?.sendBrowserStateSnapshot();
 }
 
@@ -249,6 +261,7 @@ app.whenReady().then(async () => {
   playwrightHost = new PlaywrightHost({
     agentId: config.agentId,
     browserRuntime: config.browserRuntime,
+    observability: desktopObservability,
     onStateChanged: () => publishLocalBrowserState(),
     pendingAuthTasks,
     profileStore,
@@ -274,6 +287,7 @@ app.whenReady().then(async () => {
     },
     getBrowserStateSnapshot: buildBrowserStateSnapshot,
     onStateChange: emitConnectionState,
+    observability: desktopObservability,
   });
   agentClient.start();
   createWindow();

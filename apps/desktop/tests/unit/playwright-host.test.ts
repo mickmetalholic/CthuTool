@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { BrowserCommandPayload } from '@cthutool/agent-protocol';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { BrowserProfileStore } from '../../src/main/browser-profile-store';
+import type { DesktopObservabilityEvent } from '../../src/main/observability';
 import { PendingAuthTaskStore } from '../../src/main/pending-auth-task-store';
 import { PlaywrightHost } from '../../src/main/playwright-host';
 
@@ -32,6 +33,7 @@ describe('PlaywrightHost', () => {
       >[0]['browserRuntime'];
       readonly gotoError?: Error;
       readonly pages?: readonly PageState[];
+      readonly observabilityEvents?: DesktopObservabilityEvent[];
       readonly runtimeValidator?: ConstructorParameters<
         typeof PlaywrightHost
       >[0]['runtimeValidator'];
@@ -97,6 +99,9 @@ describe('PlaywrightHost', () => {
         now: () => new Date('2026-06-13T10:00:00.000Z'),
         pendingAuthTasks,
         profileStore,
+        observability: options.observabilityEvents
+          ? { record: (event) => options.observabilityEvents?.push(event) }
+          : undefined,
         runtime,
         runtimeValidator:
           options.runtimeValidator ?? (async () => ({ ok: true })),
@@ -299,6 +304,97 @@ describe('PlaywrightHost', () => {
         },
       }),
     });
+  });
+
+  test('records browser command diagnostics without raw artifacts', async () => {
+    const events: DesktopObservabilityEvent[] = [];
+    const { host } = await createHost({
+      observabilityEvents: events,
+      pages: [
+        {
+          html: '<html><body>secret html</body></html>',
+          status: 200,
+          text: 'secret text',
+          title: 'Example',
+          url: 'https://example.com/',
+        },
+      ],
+    });
+
+    await host.execute({
+      authPolicy: 'anonymous',
+      command: 'browser.capturePage',
+      commandId: 'cmd-1',
+      includeHtml: true,
+      includeScreenshot: true,
+      includeText: true,
+      observability: {
+        commandId: 'cmd-1',
+        operation: 'browser.capturePage',
+        requestId: 'req-1',
+      },
+      siteId: 'example',
+      url: 'https://example.com/',
+    });
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: 'browser.command_received',
+          details: expect.objectContaining({
+            commandId: 'cmd-1',
+            requestId: 'req-1',
+            siteId: 'example',
+          }),
+        }),
+        expect.objectContaining({
+          event: 'browser.command_completed',
+          details: expect.objectContaining({
+            commandId: 'cmd-1',
+            detectionKind: 'ok',
+            outcome: 'success',
+          }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(events)).not.toContain('secret html');
+    expect(JSON.stringify(events)).not.toContain('secret text');
+    expect(JSON.stringify(events)).not.toContain('c2hvdA==');
+  });
+
+  test('records access detection diagnostics', async () => {
+    const events: DesktopObservabilityEvent[] = [];
+    const { host, profileStore } = await createHost({
+      observabilityEvents: events,
+      pages: [
+        {
+          html: '<html><body>验证码</body></html>',
+          text: '验证码',
+          title: 'Blocked',
+          url: 'https://movie.douban.com/subject/1292052/',
+        },
+      ],
+    });
+    await profileStore.markStatus('douban', 'douban-main', 'verified');
+
+    await host.execute({
+      ...captureCommand,
+      includeText: true,
+    });
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: 'browser.detection',
+          level: 'warn',
+          details: expect.objectContaining({
+            detectionKind: 'captcha_required',
+            profileName: 'douban-main',
+            siteId: 'douban',
+          }),
+        }),
+      ]),
+    );
   });
 
   test('uses explicit host Chrome executable path launch options', async () => {

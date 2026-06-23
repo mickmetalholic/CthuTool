@@ -16,6 +16,13 @@ import type {
   BrowserProfileStore,
 } from './browser-profile-store';
 import type { DesktopBrowserRuntime } from './config';
+import {
+  createDesktopObservabilityEvent,
+  type DesktopObservabilityEventName,
+  type DesktopObservabilityLevel,
+  type DesktopObservabilitySink,
+  observabilityDetailsFromMetadata,
+} from './observability';
 import type { PendingAuthTaskStore } from './pending-auth-task-store';
 
 type RuntimeResponse = {
@@ -123,6 +130,7 @@ export type PlaywrightHostOptions = {
   readonly runtime?: ChromiumRuntime;
   readonly runtimeValidator?: RuntimeValidator;
   readonly now?: () => Date;
+  readonly observability?: DesktopObservabilitySink;
   readonly onStateChanged?: () => void | Promise<void>;
 };
 
@@ -184,7 +192,78 @@ export class PlaywrightHost {
   async execute(
     command: BrowserCommandPayload,
   ): Promise<BrowserResultMessage | BrowserErrorMessage> {
-    return this.runQueued(() => this.executeUnqueued(command));
+    return this.runQueued(() => this.executeObserved(command));
+  }
+
+  private async executeObserved(
+    command: BrowserCommandPayload,
+  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    const startedAt = Date.now();
+    this.recordObservability({
+      details: {
+        command: command.command,
+        commandId: command.commandId,
+        profileName: command.profileName,
+        siteId: command.siteId,
+        ...observabilityDetailsFromMetadata(command.observability),
+      },
+      event: 'browser.command_received',
+      message: 'Browser host received command',
+    });
+
+    const result = await this.executeUnqueued(command);
+    const durationMs = Math.max(0, Date.now() - startedAt);
+    if (result.type === 'browser.error') {
+      this.recordObservability({
+        details: {
+          command: command.command,
+          commandId: command.commandId,
+          durationMs,
+          outcome: 'error',
+          profileName: command.profileName,
+          reasonCode: result.payload.code,
+          siteId: command.siteId,
+          ...observabilityDetailsFromMetadata(command.observability),
+        },
+        event: 'browser.command_failed',
+        level: 'warn',
+        message: 'Browser host command failed',
+      });
+      return result;
+    }
+
+    const detectionKind = result.payload.detection.kind;
+    this.recordObservability({
+      details: {
+        command: command.command,
+        commandId: command.commandId,
+        detectionKind,
+        durationMs,
+        outcome: detectionKind === 'ok' ? 'success' : 'blocked',
+        profileName: command.profileName,
+        siteId: command.siteId,
+        ...observabilityDetailsFromMetadata(command.observability),
+      },
+      event: 'browser.command_completed',
+      level: detectionKind === 'ok' ? 'info' : 'warn',
+      message: 'Browser host command completed',
+    });
+    if (detectionKind !== 'ok') {
+      this.recordObservability({
+        details: {
+          command: command.command,
+          commandId: command.commandId,
+          detectionKind,
+          profileName: command.profileName,
+          siteId: command.siteId,
+          ...observabilityDetailsFromMetadata(command.observability),
+        },
+        event: 'browser.detection',
+        level: 'warn',
+        message: 'Browser host detected access problem',
+      });
+    }
+    return result;
   }
 
   private async executeUnqueued(
@@ -520,6 +599,23 @@ export class PlaywrightHost {
       command.profileName,
     );
     if (!profile || profile.status !== 'verified') {
+      this.recordObservability({
+        details: {
+          command: command.command,
+          commandId: command.commandId,
+          outcome: 'error',
+          profileName: command.profileName,
+          reasonCode:
+            profile?.status === 'expired'
+              ? 'AUTH_PROFILE_EXPIRED'
+              : 'AUTH_PROFILE_REQUIRED',
+          siteId: command.siteId,
+          ...observabilityDetailsFromMetadata(command.observability),
+        },
+        event: 'browser.profile_check',
+        level: 'warn',
+        message: 'Required browser profile is not verified',
+      });
       if (!command.suppressPendingAuthTask) {
         this.options.pendingAuthTasks.upsert({
           loginUrl: command.loginUrl,
@@ -652,6 +748,15 @@ export class PlaywrightHost {
       hostLaunchOptions,
     );
     if (result.ok) {
+      this.recordObservability({
+        details: {
+          browserRuntimeMessage:
+            'Using host Google Chrome for browser automation',
+          runtimeStatus: 'ready',
+        },
+        event: 'browser.runtime_ready',
+        message: 'Browser runtime is ready',
+      });
       return {
         diagnostic: {
           activeKind: 'host-chrome',
@@ -663,6 +768,17 @@ export class PlaywrightHost {
       };
     }
 
+    this.recordObservability({
+      details: {
+        browserRuntimeMessage: result.message,
+        outcome: 'unavailable',
+        reasonCode: 'BROWSER_RUNTIME_UNAVAILABLE',
+        runtimeStatus: 'unavailable',
+      },
+      event: 'browser.runtime_unavailable',
+      level: 'warn',
+      message: 'Browser runtime is unavailable',
+    });
     return {
       diagnostic: {
         message: `Host Google Chrome is unavailable: ${result.message}`,
@@ -689,6 +805,28 @@ export class PlaywrightHost {
       throw new Error(this.getRuntimeDiagnostic().message);
     }
     return this.resolvedRuntime.launchOptions;
+  }
+
+  private recordObservability(input: {
+    readonly details?: Parameters<
+      typeof createDesktopObservabilityEvent
+    >[0]['details'];
+    readonly event: DesktopObservabilityEventName;
+    readonly level?: DesktopObservabilityLevel;
+    readonly message: string;
+  }): void {
+    this.options.observability?.record(
+      createDesktopObservabilityEvent({
+        details: {
+          agentId: this.options.agentId,
+          ...input.details,
+        },
+        event: input.event,
+        level: input.level,
+        message: input.message,
+        now: this.now,
+      }),
+    );
   }
 }
 

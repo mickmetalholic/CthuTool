@@ -12,6 +12,14 @@ import {
   parseAgentServerMessageJson,
 } from '@cthutool/agent-protocol';
 import type { DesktopConfig } from './config';
+import {
+  createDesktopObservabilityEvent,
+  type DesktopObservabilityEvent,
+  type DesktopObservabilityEventName,
+  type DesktopObservabilityLevel,
+  type DesktopObservabilitySink,
+  observabilityDetailsFromMetadata,
+} from './observability';
 
 type MinimalWebSocket = {
   readonly readyState: number;
@@ -45,9 +53,17 @@ export type AgentConnectionState = {
   readonly agentId: string;
   readonly deviceName: string;
   readonly environmentLabel?: string;
+  readonly lastDiagnostic?: AgentConnectionDiagnostic;
   readonly lastError?: string;
+  readonly lastHeartbeatAt?: string;
   readonly lastRegisteredAt?: string;
+  readonly lastStateChangedAt?: string;
 };
+
+export type AgentConnectionDiagnostic = Pick<
+  DesktopObservabilityEvent,
+  'event' | 'level' | 'message' | 'timestamp'
+>;
 
 export type AgentClientOptions = {
   readonly getConfig: () => DesktopConfig;
@@ -59,6 +75,7 @@ export type AgentClientOptions = {
   readonly reconnectDelayMs?: number;
   readonly onStateChange?: (state: AgentConnectionState) => void;
   readonly onRegistered?: (state: AgentConnectionState) => void;
+  readonly observability?: DesktopObservabilitySink;
   readonly now?: () => Date;
   readonly getCapabilities?: () => readonly string[];
   readonly handleBrowserCommand?: (
@@ -75,6 +92,8 @@ export class AgentClient {
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private stopped = true;
   private state: AgentConnectionState;
+  private lastDiagnostic?: AgentConnectionDiagnostic;
+  private lastHeartbeatAt?: string;
   private readonly timers: TimerApi;
   private readonly heartbeatIntervalMs: number;
   private readonly reconnectDelayMs: number;
@@ -102,11 +121,19 @@ export class AgentClient {
 
   start(): void {
     this.stopped = false;
+    this.recordObservability({
+      event: 'agent.start',
+      message: 'Desktop agent client started',
+    });
     this.connect();
   }
 
   stop(): void {
     this.stopped = true;
+    this.recordObservability({
+      event: 'agent.stop',
+      message: 'Desktop agent client stopped',
+    });
     this.clearTimers();
     this.socket?.close();
     this.socket = undefined;
@@ -172,6 +199,13 @@ export class AgentClient {
     }
 
     this.clearTimers();
+    this.recordObservability({
+      details: {
+        connectionStatus: 'connecting',
+      },
+      event: 'agent.connecting',
+      message: 'Connecting to backend agent websocket',
+    });
     this.setState(
       this.state.status === 'connected' ? 'connecting' : 'connecting',
     );
@@ -180,12 +214,26 @@ export class AgentClient {
     );
     this.socket = socket;
     socket.onopen = () => {
+      this.recordObservability({
+        details: { connectionStatus: 'connected' },
+        event: 'agent.socket_open',
+        message: 'Backend agent websocket opened',
+      });
       this.send({ type: 'agent.hello', payload: this.buildHelloPayload() });
     };
     socket.onmessage = (event) => {
       this.handleMessage(event.data);
     };
     socket.onerror = () => {
+      this.recordObservability({
+        details: {
+          connectionStatus: this.state.status,
+          reasonCode: 'WEBSOCKET_ERROR',
+        },
+        event: 'agent.socket_error',
+        level: 'warn',
+        message: 'WebSocket connection failed',
+      });
       this.setState(this.state.status, 'WebSocket connection failed');
     };
     socket.onclose = () => {
@@ -194,6 +242,12 @@ export class AgentClient {
       if (this.stopped) {
         return;
       }
+      this.recordObservability({
+        details: { connectionStatus: 'reconnecting' },
+        event: 'agent.reconnecting',
+        level: 'warn',
+        message: 'Backend agent websocket closed; reconnect scheduled',
+      });
       this.setState('reconnecting');
       this.reconnectTimer = this.timers.setTimeout(
         () => this.connect(),
@@ -205,11 +259,27 @@ export class AgentClient {
   private handleMessage(data: unknown): void {
     const parsed = parseAgentServerMessageJson(String(data));
     if (!parsed.ok) {
+      this.recordObservability({
+        details: { reasonCode: 'INVALID_BACKEND_MESSAGE' },
+        event: 'agent.invalid_message',
+        level: 'warn',
+        message: 'Backend sent an invalid message',
+      });
       this.setState(this.state.status, 'Backend sent an invalid message');
       return;
     }
 
     if (parsed.value.type === 'agent.registered') {
+      this.recordObservability({
+        details: {
+          connectionStatus: 'connected',
+          ...observabilityDetailsFromMetadata(
+            parsed.value.payload.observability,
+          ),
+        },
+        event: 'agent.registered',
+        message: 'Backend accepted desktop agent registration',
+      });
       this.setState('connected', undefined, this.now().toISOString());
       this.options.onRegistered?.(this.state);
       this.startHeartbeat();
@@ -218,11 +288,35 @@ export class AgentClient {
     }
 
     if (parsed.value.type === 'agent.error') {
+      this.recordObservability({
+        details: {
+          reasonCode: parsed.value.payload.code,
+          ...observabilityDetailsFromMetadata(
+            parsed.value.payload.observability,
+          ),
+        },
+        event: 'agent.backend_rejected',
+        level: 'warn',
+        message: 'Backend rejected agent message',
+      });
       this.setState(this.state.status, 'Backend rejected agent message');
       return;
     }
 
     if (parsed.value.type === 'browser.command') {
+      this.recordObservability({
+        details: {
+          command: parsed.value.payload.command,
+          commandId: parsed.value.payload.commandId,
+          profileName: parsed.value.payload.profileName,
+          siteId: parsed.value.payload.siteId,
+          ...observabilityDetailsFromMetadata(
+            parsed.value.payload.observability,
+          ),
+        },
+        event: 'browser.command_received',
+        message: 'Received browser command from backend',
+      });
       void this.handleBrowserCommand(parsed.value.payload);
     }
   }
@@ -231,6 +325,19 @@ export class AgentClient {
     command: BrowserCommandPayload,
   ): Promise<void> {
     if (!this.options.handleBrowserCommand) {
+      this.recordObservability({
+        details: {
+          command: command.command,
+          commandId: command.commandId,
+          outcome: 'unavailable',
+          reasonCode: 'BROWSER_CAPABILITY_UNAVAILABLE',
+          siteId: command.siteId,
+          ...observabilityDetailsFromMetadata(command.observability),
+        },
+        event: 'browser.command_failed',
+        level: 'warn',
+        message: 'Browser capability is not available',
+      });
       this.send({
         type: 'browser.error',
         payload: {
@@ -251,12 +358,24 @@ export class AgentClient {
   private startHeartbeat(): void {
     this.clearHeartbeat();
     this.heartbeatTimer = this.timers.setInterval(() => {
+      const sentAt = this.now().toISOString();
       this.send({
         type: 'agent.heartbeat',
         payload: {
           agentId: this.options.getConfig().agentId,
-          sentAt: this.now().toISOString(),
+          sentAt,
         },
+      });
+      this.lastHeartbeatAt = sentAt;
+      this.recordObservability({
+        details: { connectionStatus: 'connected' },
+        event: 'agent.heartbeat',
+        message: 'Agent heartbeat sent',
+      });
+      this.options.onStateChange?.({
+        ...this.state,
+        lastDiagnostic: this.lastDiagnostic,
+        lastHeartbeatAt: this.lastHeartbeatAt,
       });
     }, this.heartbeatIntervalMs);
   }
@@ -277,9 +396,41 @@ export class AgentClient {
       agentId: config.agentId,
       deviceName: config.deviceName,
       lastError,
+      lastDiagnostic: this.lastDiagnostic,
+      lastHeartbeatAt: this.lastHeartbeatAt,
       lastRegisteredAt: lastRegisteredAt ?? this.state.lastRegisteredAt,
+      lastStateChangedAt: this.now().toISOString(),
     };
     this.options.onStateChange?.(this.state);
+  }
+
+  private recordObservability(input: {
+    readonly details?: Parameters<
+      typeof createDesktopObservabilityEvent
+    >[0]['details'];
+    readonly event: DesktopObservabilityEventName;
+    readonly level?: DesktopObservabilityLevel;
+    readonly message: string;
+  }): void {
+    const config = this.options.getConfig();
+    const event = createDesktopObservabilityEvent({
+      details: {
+        agentId: config.agentId,
+        backendUrl: config.backendUrl,
+        ...input.details,
+      },
+      event: input.event,
+      level: input.level,
+      message: input.message,
+      now: this.now,
+    });
+    this.lastDiagnostic = {
+      event: event.event,
+      level: event.level,
+      message: event.message,
+      timestamp: event.timestamp,
+    };
+    this.options.observability?.record(event);
   }
 
   private clearTimers(): void {

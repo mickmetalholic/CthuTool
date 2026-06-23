@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { AgentClient, toAgentWsUrl } from '../../src/main/agent-client';
 import { normalizeConfig } from '../../src/main/config';
+import type { DesktopObservabilityEvent } from '../../src/main/observability';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -93,6 +94,63 @@ describe('AgentClient', () => {
     expect(changes).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'connected' }),
     );
+  });
+
+  test('records agent lifecycle diagnostics without raw payloads', () => {
+    FakeWebSocket.instances = [];
+    const events: DesktopObservabilityEvent[] = [];
+    const client = new AgentClient({
+      getConfig: () => config,
+      WebSocketImpl: FakeWebSocket,
+      platform: 'win32',
+      version: '0.1.0',
+      now: () => new Date('2026-06-13T10:00:00.000Z'),
+      observability: { record: (event) => events.push(event) },
+    });
+
+    client.start();
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+    socket.receive(
+      JSON.stringify({
+        type: 'agent.registered',
+        payload: {
+          agentId: 'windows-pc',
+          serverTime: '2026-06-13T10:00:00.000Z',
+        },
+      }),
+    );
+    socket.receive(
+      JSON.stringify({
+        type: 'agent.error',
+        payload: {
+          code: 'invalid_agent_message',
+          message: 'bad payload',
+        },
+      }),
+    );
+
+    expect(events.map((event) => event.event)).toEqual(
+      expect.arrayContaining([
+        'agent.start',
+        'agent.connecting',
+        'agent.socket_open',
+        'agent.registered',
+        'agent.backend_rejected',
+      ]),
+    );
+    expect(events.at(-1)).toEqual(
+      expect.objectContaining({
+        event: 'agent.backend_rejected',
+        level: 'warn',
+        details: expect.objectContaining({
+          agentId: 'windows-pc',
+          backendUrl: 'http://backend.local:3000',
+          reasonCode: 'invalid_agent_message',
+        }),
+      }),
+    );
+    expect(JSON.stringify(events)).not.toContain('bad payload');
   });
 
   test('notifies after backend registration is accepted', () => {
