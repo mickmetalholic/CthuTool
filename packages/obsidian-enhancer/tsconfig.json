@@ -10,5 +10,6 @@
     "noEmit": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["coverage", "dist", "out", "build", "release"]
 }

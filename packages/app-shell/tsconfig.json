@@ -12,5 +12,5 @@
     "isolatedModules": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["dist"]
+  "exclude": ["coverage", "dist", "out", "build", "release"]
 }
