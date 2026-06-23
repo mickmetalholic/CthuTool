@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 
 const root = join(__dirname, "..", "..");
 const standardWorkspaceScripts = [
@@ -20,6 +20,26 @@ function rootWorkspacePackageJsonPaths(): string[] {
       .filter((entry) => entry.isDirectory())
       .map((entry) => join(root, area, entry.name, "package.json")),
   );
+}
+
+function rootWorkspacePackages(): Array<{
+  dir: string;
+  manifestPath: string;
+  name?: string;
+  scripts?: Record<string, string>;
+}> {
+  return rootWorkspacePackageJsonPaths().map((manifestPath) => {
+    const pkg = readJson(manifestPath) as {
+      name?: string;
+      scripts?: Record<string, string>;
+    };
+    return {
+      dir: dirname(manifestPath),
+      manifestPath,
+      name: pkg.name,
+      scripts: pkg.scripts,
+    };
+  });
 }
 
 function normalizeScript(script: string | undefined): string {
@@ -50,11 +70,7 @@ describe("root package.json scripts contract", () => {
   });
 
   it("requires standard scripts for every root workspace package", () => {
-    for (const packageJsonPath of rootWorkspacePackageJsonPaths()) {
-      const pkg = readJson(packageJsonPath) as {
-        name?: string;
-        scripts?: Record<string, string>;
-      };
+    for (const pkg of rootWorkspacePackages()) {
       for (const script of standardWorkspaceScripts) {
         expect(pkg.scripts?.[script]).toEqual(expect.any(String));
       }
@@ -62,11 +78,7 @@ describe("root package.json scripts contract", () => {
   });
 
   it("rejects placeholder standard validation scripts", () => {
-    for (const packageJsonPath of rootWorkspacePackageJsonPaths()) {
-      const pkg = readJson(packageJsonPath) as {
-        name?: string;
-        scripts?: Record<string, string>;
-      };
+    for (const pkg of rootWorkspacePackages()) {
       for (const script of standardWorkspaceScripts) {
         const command = normalizeScript(pkg.scripts?.[script]);
         expect(command).not.toContain("no tests configured");
@@ -78,11 +90,7 @@ describe("root package.json scripts contract", () => {
   });
 
   it("keeps CLI on Bun test and uses Vitest for other package runtime tests", () => {
-    for (const packageJsonPath of rootWorkspacePackageJsonPaths()) {
-      const pkg = readJson(packageJsonPath) as {
-        name?: string;
-        scripts?: Record<string, string>;
-      };
+    for (const pkg of rootWorkspacePackages()) {
       const test = normalizeScript(pkg.scripts?.test);
       if (pkg.name === "@cthutool/cli") {
         expect(test).toMatch(/(bun|run-bun\.sh)\s+test/);
@@ -93,13 +101,42 @@ describe("root package.json scripts contract", () => {
   });
 
   it("keeps type-only validation in typecheck instead of test", () => {
-    for (const packageJsonPath of rootWorkspacePackageJsonPaths()) {
-      const pkg = readJson(packageJsonPath) as {
-        name?: string;
-        scripts?: Record<string, string>;
-      };
+    for (const pkg of rootWorkspacePackages()) {
       const test = normalizeScript(pkg.scripts?.test);
       expect(test).not.toMatch(/\btsc\b.*--noemit/);
+    }
+  });
+
+  it("requires coverage scripts to use real package-local coverage runners", () => {
+    for (const pkg of rootWorkspacePackages()) {
+      const testCoverage = normalizeScript(pkg.scripts?.["test:cov"]);
+
+      if (pkg.name === "@cthutool/cli") {
+        expect(testCoverage).toContain("bun test");
+        expect(testCoverage).toContain("--coverage");
+        expect(testCoverage).toContain("--coverage-reporter=lcov");
+        expect(testCoverage).toContain("--coverage-dir=coverage");
+      } else {
+        expect(testCoverage).toContain("vitest");
+        expect(testCoverage).toContain("--coverage");
+      }
+    }
+  });
+
+  it("requires non-CLI Vitest packages to emit lcov and summary coverage artifacts", () => {
+    for (const pkg of rootWorkspacePackages()) {
+      if (pkg.name === "@cthutool/cli") {
+        continue;
+      }
+
+      const configPath = join(pkg.dir, "vitest.config.ts");
+      const config = readFileSync(configPath, "utf8");
+      const packageLabel = relative(root, pkg.dir);
+
+      expect(existsSync(configPath), packageLabel).toBe(true);
+      expect(config, packageLabel).toContain("coverage");
+      expect(config, packageLabel).toContain("lcov");
+      expect(config, packageLabel).toContain("json-summary");
     }
   });
 });

@@ -96,13 +96,24 @@ describe("CI workflow contract", () => {
     const yml = readWorkflow("ci.yml");
 
     expect(yml).toMatch(/pnpm\s+run\s+test:cov/);
+    expect(yml).toContain("coverage/**");
     expect(yml).toContain("apps/*/coverage/**");
     expect(yml).toContain("packages/*/coverage/**");
+    expect(yml).toContain("coverage/lcov.info");
     expect(yml).toContain("apps/*/coverage/lcov.info");
     expect(yml).toContain("packages/*/coverage/lcov.info");
     expect(yml).toContain("fail_ci_if_error: false");
     expect(yml).toMatch(/id-token:\s+write/);
     expect(yml).toMatch(/issues:\s+write/);
+    expect(yml).toContain("coverage/coverage-summary.json");
+    expect(yml).toContain("apps/backend/coverage/coverage-summary.json");
+    expect(yml).toContain("apps/desktop/coverage/coverage-summary.json");
+    expect(yml).toContain("packages/ui/coverage/coverage-summary.json");
+    expect(yml).toContain("missingSummaries");
+    expect(yml).toContain("core.setFailed");
+    expect(yml).not.toContain(
+      ".filter(([, summaryPath]) => fs.existsSync(summaryPath))",
+    );
   });
 
   it("keeps validation jobs on read-only repository permissions", () => {
