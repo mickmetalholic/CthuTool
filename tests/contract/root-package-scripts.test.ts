@@ -71,6 +71,49 @@ function packageTestLayers(pkg: {
   return testLayerScripts.filter((script) => pkg.scripts?.[script]);
 }
 
+function workspacePackageDirs(): Map<string, string> {
+  return new Map(rootWorkspacePackages().map((pkg) => [pkg.name ?? "", pkg.dir]));
+}
+
+function workspaceDependencyNames(pkg: { dir: string }): string[] {
+  const manifest = readJson(join(pkg.dir, "package.json")) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  return [
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.devDependencies ?? {}),
+  ].filter((name) => name.startsWith("@cthutool/"));
+}
+
+function hasSourceAlias(pkg: { dir: string }, dependencyName: string): boolean {
+  const packageDirs = workspacePackageDirs();
+  const dependencyDir = packageDirs.get(dependencyName);
+  if (!dependencyDir) {
+    return false;
+  }
+
+  const dependencySource = `${relative(pkg.dir, dependencyDir).replaceAll("\\", "/")}/src`;
+  const workspaceSource = `packages/${dependencyDir.split("/").at(-1)}/src`;
+  const candidates = [
+    "tsconfig.json",
+    "tsconfig.spec.json",
+    "tsconfig.test.json",
+    "vitest.config.ts",
+  ].map((file) => join(pkg.dir, file));
+
+  return candidates.some((candidate) => {
+    if (!existsSync(candidate)) {
+      return false;
+    }
+    const content = readFileSync(candidate, "utf8");
+    return (
+      content.includes(dependencyName) &&
+      (content.includes(dependencySource) || content.includes(workspaceSource))
+    );
+  });
+}
+
 describe("root package.json scripts contract", () => {
   it("exposes build that delegates to turbo run build", () => {
     const pkg = readJson(join(root, "package.json")) as {
@@ -220,6 +263,36 @@ describe("root package.json scripts contract", () => {
       expect(config, packageLabel).toContain("coverage");
       expect(config, packageLabel).toContain("lcov");
       expect(config, packageLabel).toContain("json-summary");
+    }
+  });
+
+  it("keeps workspace-dependent package validation directly runnable", () => {
+    for (const pkg of rootWorkspacePackages()) {
+      const workspaceDependencies = workspaceDependencyNames(pkg);
+      if (workspaceDependencies.length === 0) {
+        continue;
+      }
+
+      for (const script of [
+        "test",
+        "test:cov",
+        "test:unit",
+        "test:integration",
+        "test:e2e",
+        "typecheck",
+      ] as const) {
+        const command = normalizeScript(pkg.scripts?.[script]);
+        if (!command || command.includes("build:deps")) {
+          continue;
+        }
+
+        for (const dependencyName of workspaceDependencies) {
+          expect(
+            hasSourceAlias(pkg, dependencyName),
+            `${pkg.name} ${script} must build deps or alias ${dependencyName} to source`,
+          ).toBe(true);
+        }
+      }
     }
   });
 });
