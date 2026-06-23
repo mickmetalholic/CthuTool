@@ -38,6 +38,23 @@ describe('DesktopBrowserRuntimeService', () => {
     );
   });
 
+  it('emits runtime command completion events', async () => {
+    const observability = { record: jest.fn() };
+    const gateway = createGatewayMock();
+    const runtime = createRuntime(gateway, observability);
+
+    await runtime.capturePage({ url: 'https://example.com/' });
+
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'desktop_browser_runtime.command_completed',
+        details: expect.objectContaining({
+          commandType: 'browser.capturePage',
+        }),
+      }),
+    );
+  });
+
   it('attaches command observability metadata to browser commands', async () => {
     const { runtime, gateway } = createHarness();
 
@@ -132,7 +149,8 @@ describe('DesktopBrowserRuntimeService', () => {
 
   it('returns error when no browser agent is online', async () => {
     const gateway = createGatewayMock(null);
-    const runtime = createRuntime(gateway);
+    const observability = { record: jest.fn() };
+    const runtime = createRuntime(gateway, observability);
 
     const result = await runtime.capturePage({
       url: 'https://example.com/',
@@ -144,6 +162,11 @@ describe('DesktopBrowserRuntimeService', () => {
         'No online desktop agent with browser capability',
       );
     }
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'desktop_browser_runtime.unavailable',
+      }),
+    );
   });
 
   it('returns agent status', async () => {
@@ -192,9 +215,13 @@ function createHarness() {
   };
 }
 
-function createRuntime(gateway: GatewayMock): DesktopBrowserRuntimeService {
+function createRuntime(
+  gateway: GatewayMock,
+  observability?: { readonly record: jest.Mock },
+): DesktopBrowserRuntimeService {
   return new DesktopBrowserRuntimeService(
     gateway as unknown as AgentCommandGateway,
+    observability as never,
   );
 }
 

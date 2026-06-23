@@ -4,7 +4,10 @@ import type {
   AgentServerMessage,
   PublicAgentStatus,
 } from '@cthutool/agent-protocol';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BackendObservabilityService } from '../../../observability';
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { AgentRegistryService } from '../registry/agent-registry.service';
@@ -43,6 +46,8 @@ export class AgentCommandGateway {
   constructor(
     private readonly registry: AgentRegistryService,
     private readonly agentSocketServer: AgentWebSocketServer,
+    @Optional()
+    private readonly observability?: BackendObservabilityService,
   ) {}
 
   selectAgentByCapability(capability: string): PublicAgentStatus | undefined {
@@ -58,13 +63,50 @@ export class AgentCommandGateway {
     command: AgentCommandRequest,
     timeoutMs?: number,
   ): Promise<TResponse> {
+    const startedAt = Date.now();
+    const commandType = commandTypeOf(command);
+    this.observability?.record({
+      event: 'agent.command_dispatched',
+      details: {
+        agentId,
+        commandId: command.commandId,
+        commandType,
+        timeoutMs,
+      },
+    });
     try {
-      return await this.agentSocketServer.sendCommand<TResponse>(
+      const response = await this.agentSocketServer.sendCommand<TResponse>(
         agentId,
         attachObservability(command),
         timeoutMs,
       );
+      this.observability?.record({
+        event: 'agent.command_completed',
+        details: {
+          agentId,
+          commandId: command.commandId,
+          commandType,
+          durationMs: Date.now() - startedAt,
+          responseType: response.type,
+        },
+      });
+      return response;
     } catch (error) {
+      this.observability?.record({
+        event: 'agent.command_failed',
+        level: 'warn',
+        details: {
+          agentId,
+          commandId: command.commandId,
+          commandType,
+          durationMs: Date.now() - startedAt,
+          errorCode: 'AGENT_NOT_AVAILABLE',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Target desktop agent is not available',
+        },
+      });
       throw new AgentCommandGatewayError(
         'AGENT_NOT_AVAILABLE',
         error instanceof Error
@@ -90,6 +132,11 @@ export class AgentCommandGateway {
     }
     return this.sendCommand<TResponse>(agent.agentId, command, timeoutMs);
   }
+}
+
+function commandTypeOf(command: AgentCommandRequest): string | undefined {
+  const payload = command.message.payload as { readonly command?: unknown };
+  return typeof payload.command === 'string' ? payload.command : undefined;
 }
 
 function attachObservability<TMessage extends AgentCommandMessage>(

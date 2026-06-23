@@ -71,6 +71,52 @@ describe('AgentCommandGateway', () => {
     );
   });
 
+  it('emits command dispatch and completion events', async () => {
+    const observability = { record: jest.fn() };
+    const socket = createSocketMock();
+    const gateway = createGateway(socket, true, observability);
+
+    await gateway.sendCommand('agent-1', createCommandRequest('cmd-1'));
+
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.command_dispatched',
+        details: expect.objectContaining({ commandId: 'cmd-1' }),
+      }),
+    );
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.command_completed',
+        details: expect.objectContaining({ commandId: 'cmd-1' }),
+      }),
+    );
+  });
+
+  it('emits command failure events', async () => {
+    const observability = { record: jest.fn() };
+    const gateway = createGateway(
+      createSocketMockWithImplementation(async () => {
+        throw new Error('socket closed');
+      }),
+      true,
+      observability,
+    );
+
+    await expect(
+      gateway.sendCommand('agent-1', createCommandRequest('cmd-1')),
+    ).rejects.toMatchObject({ code: 'AGENT_NOT_AVAILABLE' });
+
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.command_failed',
+        details: expect.objectContaining({
+          commandId: 'cmd-1',
+          errorCode: 'AGENT_NOT_AVAILABLE',
+        }),
+      }),
+    );
+  });
+
   it('preserves existing message observability metadata', async () => {
     const socket = createSocketMock();
     const gateway = createGateway(socket);
@@ -126,6 +172,7 @@ type SocketMock = {
 function createGateway(
   socket: SocketMock = createSocketMock(),
   registerAgent = true,
+  observability?: { readonly record: jest.Mock },
 ): AgentCommandGateway {
   const registry = new AgentRegistryService();
   if (registerAgent) {
@@ -143,6 +190,7 @@ function createGateway(
   return new AgentCommandGateway(
     registry,
     socket as unknown as AgentWebSocketServer,
+    observability as never,
   );
 }
 

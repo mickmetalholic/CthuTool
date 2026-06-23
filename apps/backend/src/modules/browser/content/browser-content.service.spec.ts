@@ -9,7 +9,8 @@ import { BrowserTaskRunner } from './browser-task-runner';
 describe('BrowserContentService', () => {
   it('rejects a URL outside the request allowed origins before navigation', async () => {
     const runtime = createRuntimeMock();
-    const service = createService(runtime);
+    const observability = { record: jest.fn() };
+    const service = createService(runtime, observability);
 
     await expect(
       service.getPageContent({
@@ -19,6 +20,11 @@ describe('BrowserContentService', () => {
       }),
     ).rejects.toMatchObject({ code: 'ORIGIN_NOT_ALLOWED' });
     expect(runtime.capturePage).not.toHaveBeenCalled();
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'browser.content_origin_rejected',
+      }),
+    );
   });
 
   it('passes required auth policy to the browser runtime', async () => {
@@ -178,10 +184,49 @@ describe('BrowserContentService', () => {
       },
     });
   });
+
+  it('emits observable blocked detection with diagnostics id', async () => {
+    const observability = { record: jest.fn() };
+    const runtime = createRuntimeMock({
+      finalUrl: 'https://movie.douban.com/subject/1/',
+      html: '<html>captcha</html>',
+      status: 403,
+      title: 'Captcha',
+    });
+    runtime.capturePage.mockResolvedValueOnce({
+      ok: true as const,
+      value: {
+        capturedAt: new Date().toISOString(),
+        detection: { kind: 'captcha_required' as const, reason: 'captcha' },
+        finalUrl: 'https://movie.douban.com/subject/1/',
+        html: '<html>captcha</html>',
+        status: 403,
+        title: 'Captcha',
+      },
+    });
+    const service = createService(runtime, observability);
+
+    const result = await service.getPageContent({
+      includeHtml: true,
+      siteId: 'douban',
+      url: 'https://movie.douban.com/subject/1/',
+    });
+
+    expect(result.detection.kind).toBe('captcha_required');
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'browser.content_detected',
+        details: expect.objectContaining({
+          detectionKind: 'captcha_required',
+        }),
+      }),
+    );
+  });
 });
 
 function createService(
   runtime: Pick<DesktopBrowserRuntimeService, 'capturePage'>,
+  observability?: { readonly record: jest.Mock },
 ): BrowserContentService {
   return new BrowserContentService(
     runtime as DesktopBrowserRuntimeService,
@@ -196,6 +241,7 @@ function createService(
       diagnosticsDir: './tmp/diagnostics',
       enabled: false,
     }),
+    observability as never,
   );
 }
 

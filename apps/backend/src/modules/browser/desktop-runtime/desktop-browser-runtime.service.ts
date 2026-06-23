@@ -4,7 +4,13 @@ import {
   type BrowserCommandPayload,
   createBrowserCommandMessage,
 } from '@cthutool/agent-protocol';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import {
+  BackendObservabilityService,
+  currentObservabilityMetadata,
+} from '../../../observability';
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
 import {
@@ -21,7 +27,11 @@ import type {
 
 @Injectable()
 export class DesktopBrowserRuntimeService {
-  constructor(private readonly commandGateway: AgentCommandGateway) {}
+  constructor(
+    private readonly commandGateway: AgentCommandGateway,
+    @Optional()
+    private readonly observability?: BackendObservabilityService,
+  ) {}
 
   async capturePage(options: {
     readonly url: string;
@@ -37,9 +47,19 @@ export class DesktopBrowserRuntimeService {
     readonly loginUrl?: string;
     readonly verifyUrl?: string;
   }): Promise<DesktopBrowserRuntimeResult<DesktopBrowserCaptureResult>> {
+    const startedAt = Date.now();
     const agent =
       this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
     if (!agent) {
+      this.observability?.record({
+        event: 'desktop_browser_runtime.unavailable',
+        level: 'warn',
+        details: {
+          code: 'AGENT_NOT_AVAILABLE',
+          operation: 'browser.capturePage',
+          url: options.url,
+        },
+      });
       return {
         ok: false,
         error: 'No online desktop agent with browser capability',
@@ -48,6 +68,7 @@ export class DesktopBrowserRuntimeService {
     }
 
     try {
+      const commandId = randomUUID();
       const response = await this.commandGateway.sendCommand(
         agent.agentId,
         createBrowserCommand({
@@ -58,7 +79,7 @@ export class DesktopBrowserRuntimeService {
               ] as BrowserCommandPayload['blockResources'])
             : undefined,
           command: 'browser.capturePage',
-          commandId: randomUUID(),
+          commandId,
           includeHtml: options.includeHtml,
           includeScreenshot: options.includeScreenshot,
           includeText: options.includeText,
@@ -74,6 +95,14 @@ export class DesktopBrowserRuntimeService {
       );
 
       if (response.type === 'browser.error') {
+        this.recordRuntimeCommand('desktop_browser_runtime.command_failed', {
+          agentId: agent.agentId,
+          commandId,
+          commandType: 'browser.capturePage',
+          durationMs: Date.now() - startedAt,
+          errorCode: response.payload.code,
+          siteId: options.siteId,
+        });
         return this.toChallengeOrError(response, {
           siteId: options.siteId ?? 'default',
           profileName: options.profileName,
@@ -82,6 +111,15 @@ export class DesktopBrowserRuntimeService {
         });
       }
 
+      this.recordRuntimeCommand('desktop_browser_runtime.command_completed', {
+        agentId: agent.agentId,
+        commandId,
+        commandType: 'browser.capturePage',
+        detectionKind: response.payload.detection?.kind,
+        durationMs: Date.now() - startedAt,
+        siteId: options.siteId,
+        status: response.payload.status,
+      });
       return {
         ok: true,
         value: {
@@ -96,6 +134,17 @@ export class DesktopBrowserRuntimeService {
         },
       };
     } catch (error) {
+      this.recordRuntimeCommand('desktop_browser_runtime.command_failed', {
+        agentId: agent.agentId,
+        commandType: 'browser.capturePage',
+        durationMs: Date.now() - startedAt,
+        errorCode: 'AGENT_NOT_AVAILABLE',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Desktop browser runtime is not available',
+        siteId: options.siteId,
+      });
       return {
         ok: false,
         error:
@@ -185,9 +234,19 @@ export class DesktopBrowserRuntimeService {
       readonly verifyUrl?: string;
     },
   ): Promise<DesktopBrowserRuntimeResult<DesktopBrowserProfileStatus>> {
+    const startedAt = Date.now();
     const agent =
       this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
     if (!agent) {
+      this.observability?.record({
+        event: 'desktop_browser_runtime.unavailable',
+        level: 'warn',
+        details: {
+          code: 'AGENT_NOT_AVAILABLE',
+          operation: commandPayload.command,
+          siteId: context.siteId,
+        },
+      });
       return {
         ok: false,
         error: 'No online desktop agent with browser capability',
@@ -196,20 +255,38 @@ export class DesktopBrowserRuntimeService {
     }
 
     try {
+      const commandId = commandPayload.commandId ?? randomUUID();
       const response = await this.commandGateway.sendCommand(
         agent.agentId,
         createBrowserCommand({
           ...commandPayload,
-          commandId: commandPayload.commandId ?? randomUUID(),
+          commandId,
         }),
         commandPayload.timeoutMs,
       );
 
       if (response.type === 'browser.error') {
+        this.recordRuntimeCommand('desktop_browser_runtime.command_failed', {
+          agentId: agent.agentId,
+          commandId,
+          commandType: commandPayload.command,
+          durationMs: Date.now() - startedAt,
+          errorCode: response.payload.code,
+          siteId: context.siteId,
+        });
         return this.toChallengeOrError(response, context);
       }
 
       const profile = response.payload.profile;
+      this.recordRuntimeCommand('desktop_browser_runtime.command_completed', {
+        agentId: agent.agentId,
+        commandId,
+        commandType: commandPayload.command,
+        detectionKind: response.payload.detection?.kind,
+        durationMs: Date.now() - startedAt,
+        siteId: context.siteId,
+        status: response.payload.status,
+      });
       return {
         ok: true,
         value: {
@@ -221,6 +298,17 @@ export class DesktopBrowserRuntimeService {
         },
       };
     } catch (error) {
+      this.recordRuntimeCommand('desktop_browser_runtime.command_failed', {
+        agentId: agent.agentId,
+        commandType: commandPayload.command,
+        durationMs: Date.now() - startedAt,
+        errorCode: 'AGENT_NOT_AVAILABLE',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Desktop browser runtime is not available',
+        siteId: context.siteId,
+      });
       return {
         ok: false,
         error:
@@ -284,13 +372,26 @@ export class DesktopBrowserRuntimeService {
       code: code ?? 'COMMAND_FAILED',
     };
   }
+
+  private recordRuntimeCommand(
+    event: string,
+    details: Record<string, unknown>,
+  ): void {
+    this.observability?.record({
+      event,
+      level: event.endsWith('failed') ? 'warn' : 'info',
+      details,
+    });
+  }
 }
 
 function createBrowserCommand(payload: BrowserCommandPayload) {
-  const observability = payload.observability ?? {
-    commandId: payload.commandId,
-    operation: payload.command,
-  };
+  const observability =
+    payload.observability ??
+    currentObservabilityMetadata({
+      commandId: payload.commandId,
+      operation: payload.command,
+    });
   return {
     commandId: payload.commandId,
     observability,

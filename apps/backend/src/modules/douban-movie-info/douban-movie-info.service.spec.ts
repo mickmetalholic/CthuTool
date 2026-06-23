@@ -66,6 +66,34 @@ describe('DoubanMovieInfoService', () => {
     });
   });
 
+  it('emits observable success and failure events', async () => {
+    const observability = { record: vi.fn() };
+    const service = createService(createBrowserContent(), observability);
+
+    await service.getMovie('1292052');
+
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'douban_movie.lookup_completed',
+        details: expect.objectContaining({ subjectId: '1292052' }),
+      }),
+    );
+
+    const failing = createService(
+      createBrowserContent({ detection: { kind: 'rate_limited' } }),
+      observability,
+    );
+    await expect(failing.getMovie('1292052')).rejects.toMatchObject({
+      code: 'RATE_LIMITED',
+    });
+    expect(observability.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'douban_movie.lookup_failed',
+        details: expect.objectContaining({ subjectId: '1292052' }),
+      }),
+    );
+  });
+
   it('returns not found for a missing subject snapshot', async () => {
     const service = createService(
       createBrowserContent({
@@ -104,6 +132,7 @@ function createBrowserContent(
 
 function createService(
   browserContent: BrowserContentService & { getPageContent: Mock },
+  observability?: { readonly record: Mock },
 ): DoubanMovieInfoService {
-  return new DoubanMovieInfoService(browserContent);
+  return new DoubanMovieInfoService(browserContent, observability as never);
 }

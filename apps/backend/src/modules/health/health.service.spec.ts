@@ -11,4 +11,59 @@ describe('HealthService', () => {
     expect(typeof result.timestamp).toBe('string');
     expect(new Date(result.timestamp).toString()).not.toBe('Invalid Date');
   });
+
+  it('returns degraded readiness when browser agent is unavailable', async () => {
+    const service = new HealthService(
+      {
+        getStatus: jest.fn(async () => ({
+          agentId: 'unknown',
+          available: false,
+        })),
+      } as never,
+      {
+        getStatus: jest.fn(() => ({
+          diagnosticsDir: './data/browser-diagnostics',
+          enabled: true,
+        })),
+      } as never,
+    );
+
+    await expect(service.getReadiness()).resolves.toMatchObject({
+      status: 'degraded',
+      checks: {
+        browserAgent: { agentId: 'unknown', status: 'degraded' },
+        diagnosticsStore: {
+          diagnosticsDir: './data/browser-diagnostics',
+          enabled: true,
+          status: 'ok',
+        },
+      },
+    });
+  });
+
+  it('returns ready when dependencies are available', async () => {
+    const service = new HealthService(
+      {
+        getStatus: jest.fn(async () => ({
+          agentId: 'agent-1',
+          available: true,
+          lastSeenAt: '2026-01-01T00:00:00.000Z',
+        })),
+      } as never,
+      {
+        getStatus: jest.fn(() => ({
+          diagnosticsDir: './data/browser-diagnostics',
+          enabled: true,
+        })),
+      } as never,
+    );
+
+    await expect(service.getReadiness()).resolves.toMatchObject({
+      status: 'ready',
+      checks: {
+        browserAgent: { agentId: 'agent-1', status: 'ok' },
+        diagnosticsStore: { enabled: true, status: 'ok' },
+      },
+    });
+  });
 });

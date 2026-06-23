@@ -25,7 +25,9 @@ describe('Undefined route (e2e)', () => {
     expect(res.body).toMatchObject({
       code: 'NOT_FOUND',
       message: 'Route not found',
+      requestId: expect.any(String),
     });
+    expect(res.headers['x-request-id']).toBe(res.body.requestId);
     expect(typeof res.body.timestamp).toBe('string');
   });
 });

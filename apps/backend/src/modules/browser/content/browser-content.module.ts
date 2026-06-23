@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ObservabilityModule } from '../../../observability';
 import { SitesConfigModule } from '../../sites-config/sites-config.module';
 import { DesktopBrowserRuntimeModule } from '../desktop-runtime/desktop-browser-runtime.module';
 import { BrowserBlockDetector } from './browser-block-detector';
@@ -13,8 +14,12 @@ import {
 } from './browser-task-runner';
 
 @Module({
-  imports: [DesktopBrowserRuntimeModule, SitesConfigModule],
-  exports: [BrowserContentService],
+  imports: [
+    DesktopBrowserRuntimeModule,
+    ObservabilityModule,
+    SitesConfigModule,
+  ],
+  exports: [BrowserContentService, BrowserDiagnosticsStore],
   providers: [
     {
       provide: BROWSER_DIAGNOSTICS_STORE_OPTIONS,
