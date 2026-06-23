@@ -1,39 +1,60 @@
 ---
 title: Upgrade and Troubleshooting
-description: Operational upgrade and first-response troubleshooting notes for homelab deployments.
+description: GitOps upgrade flow and first-response troubleshooting for homelab deployments.
 ---
 
-## Upgrade Checklist
+## Upgrade Flow
 
-For a checkout-based deployment:
+CthuTool backend upgrades are delivered through GitHub Actions, GHCR, Kubernetes manifests, and ArgoCD.
+
+1. Merge a backend-relevant change to `main`.
+2. Confirm the `Backend Image` workflow succeeds.
+3. Confirm the workflow pushed `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`.
+4. Confirm `k8s/deployment.yaml` on `main` was updated to that commit image tag.
+5. Watch ArgoCD sync the `cthutool` Application.
+6. Watch Kubernetes roll out `Deployment/cthutool-backend`.
 
 ```bash
-git fetch
-git pull
-pnpm install
-pnpm run build
+kubectl -n argocd get application cthutool
+kubectl -n cthutool rollout status deployment/cthutool-backend
 ```
 
-Restart the backend process after updating.
+Do not upgrade the homelab backend by pulling the repository and running `pnpm` on the server. Local checkout commands are development and debugging tools.
 
 ## Health Checks
 
 ```bash
-curl http://<homelab-host>:3000/health
+kubectl -n cthutool port-forward service/cthutool-backend 3000:3000
+curl http://localhost:3000/health
 ```
 
-If a reverse proxy is in front of the backend, verify both the direct backend URL and the proxied URL.
+If a reverse proxy or ingress is in front of the backend, verify both the Service through a port-forward and the externally exposed URL.
+
+## ArgoCD Does Not Sync
+
+- Confirm `gitops/apps/cthutool/application.yaml` points at repo `https://github.com/mickmetalholic/CthuTool`, revision `main`, path `k8s/`.
+- Inspect the Application status with `kubectl -n argocd describe application cthutool`.
+- Confirm the namespace exists: `kubectl get namespace cthutool`.
+- Confirm the manifests are valid by applying them to a test cluster or inspecting ArgoCD events.
+
+## Image Did Not Change
+
+- Check the `Backend Image` GitHub Actions run for the relevant `main` commit.
+- Confirm the workflow had permission to push GHCR packages and commit back to `main`.
+- Confirm `k8s/deployment.yaml` contains `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`, not only the floating `main` tag.
+- Confirm ArgoCD synced after the manifest pin commit.
 
 ## Desktop Connectivity
 
 CthuDesktop connects to the backend through HTTP APIs and a WebSocket agent connection. If desktop status is offline:
 
 - verify the backend URL in desktop settings
-- confirm the homelab host is reachable from the client computer
-- check whether the backend WebSocket endpoint is allowed by the proxy
+- confirm the homelab URL is reachable from the client computer
+- check whether the backend WebSocket endpoint is allowed by the proxy or ingress layer
+- confirm the backend pod is ready and `/health` responds
 
 ## Browser Auth
 
 Required-auth browser work needs an online CthuDesktop instance with a working host Chrome runtime. Raw browser storage stays on the client computer.
 
-Use [Health and Logs](/operations/health-logs/) for the current operational checks.
+Use [GitOps Rollouts](/operations/gitops-rollouts/) for deeper ArgoCD and rollout checks.

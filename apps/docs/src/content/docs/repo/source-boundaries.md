@@ -8,11 +8,18 @@ The docs site is the primary user and operator reading surface. It should reduce
 ## Canonical Sources
 
 - User-facing deployment, installation, module usage, operations, and architecture docs live in `apps/docs/src/content/docs/`.
+- Official homelab deployment desired state lives in `gitops/` and `k8s/`, with user/operator explanation in this docs site.
 - Repository setup and workspace conventions remain in `README.md`.
 - Legacy cross-package runtime source notes remain in `docs/` until migrated or retired.
 - Package-local development commands remain in package README files.
 - Normative requirements remain in `openspec/specs/`.
 - Active proposals and implementation tasks remain in `openspec/changes/`.
+
+## Deployment vs Development
+
+Homelab deployment docs should describe the Kubernetes/GitOps path: namespace resources, ArgoCD Application CRs, `k8s/` manifests, GHCR backend images, rollout checks, and cluster health checks.
+
+Local commands such as `pnpm --filter @cthutool/backend run start:dev` are development or debugging commands. They may appear in package README files or clearly labeled development/reference pages, but they should not be presented as the official homelab deployment path.
 
 ## Docs-Site Pages
 

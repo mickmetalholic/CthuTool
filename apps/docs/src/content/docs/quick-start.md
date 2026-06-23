@@ -3,37 +3,54 @@ title: Quick Start
 description: Short path for deploying CthuTool services and installing client tools.
 ---
 
-Use this path when you want to get the current CthuTool pieces running without reading the full repository map first.
+Use this path when you want the current CthuTool pieces running without reading the full repository map first.
 
-## 1. Prepare a Checkout
+## 1. Prepare the Homelab Cluster
 
-On the machine where you will build or run services:
+CthuTool server-side services deploy through Kubernetes/GitOps. For a small homelab, k3s is the expected Kubernetes distribution, but the manifests are ordinary Kubernetes resources.
 
-```bash
-corepack enable
-corepack prepare pnpm@9.15.4 --activate
-pnpm install
-```
+You need:
 
-The repository currently expects Node.js 24.x and pnpm 9.15.4. CLI build and tests also use Bun.
+- a Kubernetes or k3s cluster reachable with `kubectl`
+- ArgoCD installed in the cluster
+- access to this repository's `gitops/` and `k8s/` directories
 
-## 2. Start the Homelab Backend
-
-From the repository root on the homelab machine:
+Install ArgoCD if the cluster does not already have it:
 
 ```bash
-PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/backend run start:dev
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 ```
 
-Verify the service:
+## 2. Apply GitOps Entry Points
+
+The repository does not yet use an app-of-apps root Application, so bootstrap the current GitOps entry points manually:
 
 ```bash
-curl http://localhost:3000/health
+kubectl apply -f gitops/namespaces/
+kubectl apply -f gitops/apps/ --recursive
 ```
 
-For a networked homelab setup, expose the backend through the host name or reverse proxy that your desktop clients will use.
+The `cthutool` ArgoCD Application points at `https://github.com/mickmetalholic/CthuTool`, revision `main`, path `k8s/`. ArgoCD then reconciles the backend `ConfigMap`, `Deployment`, and `Service` into the `cthutool` namespace.
 
-## 3. Install the CLI on a Client Computer
+## 3. Verify the Backend Rollout
+
+Check the Kubernetes resources first:
+
+```bash
+kubectl -n cthutool get deploy,svc,cm
+kubectl -n cthutool rollout status deployment/cthutool-backend
+```
+
+Then verify the backend through the address you expose from your cluster:
+
+```bash
+curl http://<homelab-backend-url>/health
+```
+
+The in-cluster Service is currently `ClusterIP` on port `3000`. Ingress, TLS, or LAN exposure should be handled by your cluster's existing networking layer.
+
+## 4. Install the CLI on a Client Computer
 
 For personal use from GitHub:
 
@@ -45,10 +62,12 @@ chc --help
 Update later with:
 
 ```bash
-chc self-update
+chc update
 ```
 
-## 4. Start the Desktop App for Local Browser Work
+## 5. Connect Desktop Clients
+
+CthuDesktop runs on client computers, not in the cluster. Point the desktop app at the backend URL exposed from your homelab cluster, such as `http://homelab.local:3000`.
 
 For development builds from a checkout:
 
@@ -56,8 +75,6 @@ For development builds from a checkout:
 pnpm --filter @cthutool/desktop dev
 ```
 
-Set the backend URL in CthuDesktop Settings when your backend runs on a homelab host such as `http://homelab.local:3000`.
+## 6. Choose a Module
 
-## 5. Choose a Module
-
-Start from [Modules](/modules/) after the core service and client paths are in place.
+Start from [Modules](/modules/) after the cluster service and client tools are in place.

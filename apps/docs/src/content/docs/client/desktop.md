@@ -14,13 +14,15 @@ pnpm install
 pnpm --filter @cthutool/desktop dev
 ```
 
-Start the backend separately:
+For local desktop development, either point the app at a homelab backend URL or start a development backend separately:
 
 ```bash
-pnpm --filter @cthutool/backend dev
+PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/backend run start:dev
 ```
 
-The desktop app defaults to `http://localhost:3000`. Change the Backend URL in Settings when connecting to a homelab backend such as `http://homelab.local:3000`.
+The local backend command is for development and debugging. The homelab backend deployment runs in Kubernetes and is reconciled by ArgoCD.
+
+The desktop app defaults to `http://localhost:3000`. Change the Backend URL in Settings when connecting to a homelab backend exposed from the cluster, such as `http://homelab.local:3000`.
 
 ## Packaging
 
