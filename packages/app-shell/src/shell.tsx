@@ -12,7 +12,19 @@ import {
   type StatusListProps,
 } from '@cthutool/ui';
 import type * as React from 'react';
-import { useRuntimeCapability } from './runtime';
+import {
+  type ObservableDiagnosticsReference,
+  type ObservableRuntimeState,
+  type ObservableStateKind,
+  useObservableRuntimeState,
+  useRuntimeCapability,
+} from './runtime';
+
+type StatusListObjectRow = Extract<
+  StatusListProps['rows'][number],
+  { readonly status?: unknown }
+>;
+type PageStatusKind = NonNullable<StatusListObjectRow['status']>;
 
 export function AppShellFrame({
   activity,
@@ -215,4 +227,251 @@ export function PageMetadataList(props: MetadataListProps) {
 
 export function PageStatusList(props: StatusListProps) {
   return <StatusList {...props} data-slot="page-status-list" />;
+}
+
+export type ObservableStatusSummaryProps = React.ComponentProps<'section'> & {
+  readonly emptyState?: React.ReactNode;
+  readonly state?: ObservableRuntimeState;
+};
+
+export function ObservableStatusSummary({
+  className,
+  emptyState,
+  state: stateProp,
+  ...props
+}: ObservableStatusSummaryProps) {
+  const runtimeState = useObservableRuntimeState();
+  const state = stateProp ?? runtimeState;
+
+  if (!state) {
+    return (
+      <section
+        className={cn('grid min-w-0 gap-3', className)}
+        data-slot="observable-status-summary"
+        {...props}
+      >
+        {emptyState ?? (
+          <PageNotice title="Observable state unavailable">
+            This runtime has not provided backend, agent, browser, or
+            diagnostics status.
+          </PageNotice>
+        )}
+      </section>
+    );
+  }
+
+  const diagnosticsReferences = state.diagnostics?.references ?? [];
+
+  return (
+    <section
+      className={cn('grid min-w-0 gap-3', className)}
+      data-slot="observable-status-summary"
+      {...props}
+    >
+      <MetricSummary metrics={toObservableMetrics(state)} />
+      <PageStatusList rows={toObservableRows(state)} />
+      {diagnosticsReferences.length > 0 ? (
+        <DiagnosticsReferenceList references={diagnosticsReferences} />
+      ) : null}
+    </section>
+  );
+}
+
+export function toObservableMetrics(
+  state: ObservableRuntimeState,
+): readonly MetricTileProps[] {
+  return [
+    {
+      label: 'Backend',
+      meta: state.backend?.url ?? state.backend?.requestId,
+      value: observableStatusLabel(state.backend?.status),
+    },
+    {
+      label: 'Agent',
+      meta: state.agent?.agentId ?? state.agent?.backendUrl,
+      value: observableStatusLabel(state.agent?.status),
+    },
+    {
+      label: 'Browser',
+      meta: state.browserRuntime?.diagnostic,
+      value: observableStatusLabel(state.browserRuntime?.status),
+    },
+    {
+      label: 'Diagnostics',
+      meta: state.diagnostics?.enabled === false ? 'Disabled' : undefined,
+      value: observableStatusLabel(state.diagnostics?.status),
+    },
+  ];
+}
+
+export function toObservableRows(
+  state: ObservableRuntimeState,
+): StatusListProps['rows'] {
+  return [
+    {
+      label: 'Backend',
+      status: observableBadgeStatus(state.backend?.status),
+      value: summarizeObservableBackend(state),
+    },
+    {
+      label: 'Agent',
+      status: observableBadgeStatus(state.agent?.status),
+      value: summarizeObservableAgent(state),
+    },
+    {
+      label: 'Browser Runtime',
+      status: observableBadgeStatus(state.browserRuntime?.status),
+      value: summarizeObservableBrowser(state),
+    },
+    {
+      label: 'Diagnostics',
+      status: observableBadgeStatus(state.diagnostics?.status),
+      value: summarizeObservableDiagnostics(state),
+    },
+  ];
+}
+
+export function isSafeDiagnosticsHref(href: string): boolean {
+  if (href.startsWith('#')) {
+    return true;
+  }
+  if (href.startsWith('/') && !href.startsWith('//')) {
+    return true;
+  }
+
+  try {
+    const url = new URL(href);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function DiagnosticsReferenceList({
+  references,
+}: {
+  readonly references: readonly ObservableDiagnosticsReference[];
+}) {
+  return (
+    <div className="grid min-w-0 gap-2" data-slot="diagnostics-references">
+      {references.map((reference) => (
+        <div
+          className="grid min-w-0 gap-1 rounded-md border border-border bg-[color:var(--surface-subtle)] px-3 py-2 text-sm"
+          data-slot="diagnostics-reference"
+          key={reference.id}
+        >
+          <div className="font-medium text-foreground">
+            {reference.label ?? `Diagnostics ${reference.id}`}
+          </div>
+          {reference.summary ? (
+            <div className="min-w-0 break-words text-muted-foreground">
+              {reference.summary}
+            </div>
+          ) : null}
+          {reference.href && isSafeDiagnosticsHref(reference.href) ? (
+            <a
+              className="min-w-0 break-words text-accent"
+              href={reference.href}
+            >
+              {reference.id}
+            </a>
+          ) : (
+            <span className="min-w-0 break-words text-muted-foreground">
+              {reference.id}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function observableStatusLabel(status: ObservableStateKind | undefined) {
+  switch (status) {
+    case 'ok':
+      return 'OK';
+    case 'degraded':
+      return 'Degraded';
+    case 'unavailable':
+      return 'Unavailable';
+    case 'unknown':
+    case undefined:
+      return 'Unknown';
+  }
+}
+
+function observableBadgeStatus(
+  status: ObservableStateKind | undefined,
+): PageStatusKind {
+  switch (status) {
+    case 'ok':
+      return 'connected';
+    case 'degraded':
+      return 'warning';
+    case 'unavailable':
+      return 'error';
+    case 'unknown':
+    case undefined:
+      return 'neutral';
+  }
+}
+
+function summarizeObservableBackend(state: ObservableRuntimeState) {
+  const backend = state.backend;
+  if (!backend) {
+    return 'No backend status provided';
+  }
+  return [
+    backend.label,
+    backend.url,
+    backend.lastError?.message,
+    backend.checkedAt ? `checked ${backend.checkedAt}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+}
+
+function summarizeObservableAgent(state: ObservableRuntimeState) {
+  const agent = state.agent;
+  if (!agent) {
+    return 'No agent status provided';
+  }
+  return [
+    agent.agentId,
+    agent.backendUrl,
+    agent.lastError?.message,
+    agent.lastSeenAt ? `seen ${agent.lastSeenAt}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+}
+
+function summarizeObservableBrowser(state: ObservableRuntimeState) {
+  const browser = state.browserRuntime;
+  if (!browser) {
+    return 'No browser runtime status provided';
+  }
+  return [
+    browser.diagnostic,
+    browser.lastError?.message,
+    browser.lastSeenAt ? `seen ${browser.lastSeenAt}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+}
+
+function summarizeObservableDiagnostics(state: ObservableRuntimeState) {
+  const diagnostics = state.diagnostics;
+  if (!diagnostics) {
+    return 'No diagnostics status provided';
+  }
+  return [
+    diagnostics.enabled ? 'Enabled' : 'Disabled',
+    diagnostics.lastError?.message,
+    diagnostics.references?.length
+      ? `${diagnostics.references.length} reference(s)`
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join(' | ');
 }
