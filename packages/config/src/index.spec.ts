@@ -3,9 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   ConfigError,
+  defaultObservabilityConfig,
   loadBrowserSitesFile,
   mergeBrowserSites,
   parseBrowserSitesConfig,
+  parseObservabilityConfig,
+  parseObservabilityEnv,
 } from './index';
 
 describe('browser sites config', () => {
@@ -204,5 +207,168 @@ describe('browser sites config', () => {
 
     expect(JSON.stringify(sites)).not.toContain('secret');
     expect(sites[0]).not.toHaveProperty('profileDir');
+  });
+});
+
+describe('observability config', () => {
+  it('returns safe environment-specific defaults', () => {
+    expect(defaultObservabilityConfig('development')).toEqual({
+      consoleDiagnostics: true,
+      diagnosticsDir: './data/diagnostics',
+      diagnosticsEnabled: true,
+      logLevel: 'debug',
+      samplingRatio: 1,
+    });
+
+    expect(defaultObservabilityConfig('production')).toEqual({
+      consoleDiagnostics: false,
+      diagnosticsDir: './data/diagnostics',
+      diagnosticsEnabled: false,
+      logLevel: 'info',
+      samplingRatio: 1,
+    });
+
+    expect(defaultObservabilityConfig('test')).toEqual({
+      consoleDiagnostics: false,
+      diagnosticsDir: './tmp/diagnostics',
+      diagnosticsEnabled: false,
+      logLevel: 'error',
+      samplingRatio: 1,
+    });
+  });
+
+  it('accepts valid observability overrides', () => {
+    expect(
+      parseObservabilityConfig(
+        {
+          consoleDiagnostics: false,
+          diagnosticsDir: './tmp/obs',
+          diagnosticsEnabled: true,
+          logLevel: 'warn',
+          samplingRatio: 0.25,
+          telemetryExporterEndpoint: 'https://otel.example/v1/traces',
+        },
+        { environment: 'production' },
+      ),
+    ).toEqual({
+      consoleDiagnostics: false,
+      diagnosticsDir: './tmp/obs',
+      diagnosticsEnabled: true,
+      logLevel: 'warn',
+      samplingRatio: 0.25,
+      telemetryExporterEndpoint: 'https://otel.example/v1/traces',
+    });
+  });
+
+  it('parses observability environment variables consistently', () => {
+    expect(
+      parseObservabilityEnv({
+        NODE_ENV: 'production',
+        OBSERVABILITY_CONSOLE_DIAGNOSTICS: 'true',
+        OBSERVABILITY_DIAGNOSTICS_DIR: './var/diagnostics',
+        OBSERVABILITY_DIAGNOSTICS_ENABLED: 'true',
+        OBSERVABILITY_EXPORTER_ENDPOINT: 'https://otel.example/v1/metrics',
+        OBSERVABILITY_LOG_LEVEL: 'debug',
+        OBSERVABILITY_SAMPLING_RATIO: '0.5',
+      }),
+    ).toEqual({
+      consoleDiagnostics: true,
+      diagnosticsDir: './var/diagnostics',
+      diagnosticsEnabled: true,
+      logLevel: 'debug',
+      samplingRatio: 0.5,
+      telemetryExporterEndpoint: 'https://otel.example/v1/metrics',
+    });
+  });
+
+  it('rejects invalid observability values with structured issues', () => {
+    expect(() =>
+      parseObservabilityConfig({
+        consoleDiagnostics: 'yes',
+        diagnosticsDir: '',
+        diagnosticsEnabled: 'no',
+        logLevel: 'verbose',
+        samplingRatio: 2,
+        telemetryExporterEndpoint: 'not-a-url',
+      }),
+    ).toThrow(ConfigError);
+
+    try {
+      parseObservabilityConfig({
+        logLevel: 'verbose',
+        samplingRatio: 2,
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      expect((error as ConfigError).issues).toEqual([
+        {
+          message: 'must be debug, info, warn, or error',
+          path: 'observability.logLevel',
+        },
+        {
+          message: 'must be a number between 0 and 1',
+          path: 'observability.samplingRatio',
+        },
+      ]);
+    }
+  });
+
+  it('rejects sensitive observability fields without exposing values', () => {
+    expect(() =>
+      parseObservabilityConfig({
+        cookies: [{ name: 'sid', value: 'secret-cookie' }],
+        localStorage: { token: 'secret-token' },
+        logLevel: 'info',
+        profileDir: '/tmp/profile',
+        storageState: { cookies: [] },
+      }),
+    ).toThrow(ConfigError);
+
+    try {
+      parseObservabilityConfig({
+        nested: {
+          apiToken: 'secret-token',
+        },
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      expect((error as ConfigError).message).toContain(
+        'observability.nested.apiToken',
+      );
+      expect((error as ConfigError).message).not.toContain('secret-token');
+    }
+  });
+
+  it('keeps observability config separate from browser sites config', () => {
+    const siteInput = {
+      version: 1,
+      sites: [
+        {
+          allowedOrigins: ['https://example.com'],
+          authPolicy: 'anonymous',
+          displayName: 'Example',
+          siteId: 'example',
+        },
+      ],
+    };
+
+    expect(parseBrowserSitesConfig(siteInput)).toEqual([
+      {
+        allowedOrigins: ['https://example.com'],
+        authPolicy: 'anonymous',
+        displayName: 'Example',
+        siteId: 'example',
+      },
+    ]);
+
+    expect(parseObservabilityConfig({}, { environment: 'production' })).toEqual(
+      {
+        consoleDiagnostics: false,
+        diagnosticsDir: './data/diagnostics',
+        diagnosticsEnabled: false,
+        logLevel: 'info',
+        samplingRatio: 1,
+      },
+    );
   });
 });
