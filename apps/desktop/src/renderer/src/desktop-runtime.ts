@@ -2,11 +2,13 @@ import {
   type AppRuntime,
   createDesktopRuntime,
   type HostActions,
+  type RuntimeObservabilityOptions,
 } from '@cthutool/app-shell';
 import type { DesktopApi } from './desktop-api';
 
 export function createDesktopRuntimeAdapter(
   desktopApi: DesktopApi,
+  observability?: RuntimeObservabilityOptions,
 ): AppRuntime {
   const clearBrowserProfile: HostActions['clearBrowserProfile'] =
     typeof desktopApi.clearBrowserProfile === 'function'
@@ -28,5 +30,5 @@ export function createDesktopRuntimeAdapter(
     windowAction: (action) => desktopApi.windowAction(action),
   };
 
-  return createDesktopRuntime(actions);
+  return createDesktopRuntime(actions, observability);
 }
