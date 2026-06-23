@@ -58,6 +58,45 @@ type AppProps = {
 type Workspace = 'main' | 'settings';
 type MainView = 'home' | 'browser' | 'agents';
 type SettingsView = 'service' | 'status' | 'logs';
+type BrowserProfileActionName = 'openLogin' | 'verifyProfile' | 'clearProfile';
+type BrowserActionState = {
+  readonly action?: BrowserProfileActionName;
+  readonly message?: string;
+  readonly status: 'idle' | 'running' | 'success' | 'error';
+  readonly targetKey?: string;
+};
+type BrowserSite = BrowserStatus['sites'][number];
+type BrowserProfile = BrowserStatus['profiles'][number];
+type BrowserPendingAuth =
+  | BrowserStatus['pendingAuthTasks'][number]
+  | LocalPendingAuthTask;
+type BrowserAttentionItem = {
+  readonly key: string;
+  readonly profileName: string;
+  readonly reason: string;
+  readonly siteId: string;
+  readonly siteName: string;
+  readonly source: string;
+  readonly status?: string;
+};
+type BrowserProfileRow = {
+  readonly actionState?: BrowserActionState;
+  readonly key: string;
+  readonly pendingTask?: BrowserPendingAuth;
+  readonly profile?: BrowserProfile;
+  readonly site: BrowserSite;
+  readonly source: 'backend' | 'local';
+  readonly statusLabel: string;
+};
+type BrowserHostDisplayModel = {
+  readonly attentionItems: readonly BrowserAttentionItem[];
+  readonly localOnlyRows: readonly BrowserProfileRow[];
+  readonly profileRows: readonly BrowserProfileRow[];
+  readonly runtimeKind: string;
+  readonly runtimeMessage: string;
+  readonly runtimeReady: boolean;
+  readonly runtimeStatus: string;
+};
 
 const emptyState: AgentConnectionState = {
   status: 'disconnected',
@@ -110,10 +149,8 @@ export function App({
   const [localPendingAuthTasks, setLocalPendingAuthTasks] = useState<
     LocalPendingAuthTask[]
   >([]);
-  const [browserActionState, setBrowserActionState] = useState<{
-    readonly message?: string;
-    readonly status: 'idle' | 'running' | 'success' | 'error';
-  }>({ status: 'idle' });
+  const [browserActionState, setBrowserActionState] =
+    useState<BrowserActionState>({ status: 'idle' });
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>(
     'idle',
   );
@@ -215,13 +252,13 @@ export function App({
   }, [desktopApi]);
 
   const runBrowserSiteAction = useCallback(
-    async (
-      action: 'openLogin' | 'verifyProfile' | 'clearProfile',
-      site: BrowserStatus['sites'][number],
-    ) => {
+    async (action: BrowserProfileActionName, site: BrowserSite) => {
+      const targetKey = browserSiteKey(site);
       setBrowserActionState({
+        action,
         message: `${browserActionVerb(action)} ${site.displayName}`,
         status: 'running',
+        targetKey,
       });
       const input = {
         loginUrl: site.loginUrl,
@@ -234,18 +271,22 @@ export function App({
         const result = await runAction(input);
         assertBrowserActionResult(result);
         setBrowserActionState({
+          action,
           message:
             getBrowserResultWarning(result) ??
             `${browserActionDone(action)} ${site.displayName}`,
           status: 'success',
+          targetKey,
         });
       } catch (error) {
         setBrowserActionState({
+          action,
           message:
             error instanceof Error
               ? error.message
               : `${browserActionVerb(action)} failed`,
           status: 'error',
+          targetKey,
         });
       }
       await refreshLocalPendingAuthTasks();
@@ -446,17 +487,14 @@ function renderMainWorkspace({
   readonly browserStatus: BrowserStatus;
   readonly browserStatusError: string | undefined;
   readonly browserStatusLoading: boolean;
-  readonly browserActionState: {
-    readonly message?: string;
-    readonly status: 'idle' | 'running' | 'success' | 'error';
-  };
+  readonly browserActionState: BrowserActionState;
   readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
   readonly desktopTasks: ReturnType<typeof buildDesktopTasks>;
   readonly refreshAgents: () => Promise<void>;
   readonly refreshBrowserStatus: () => Promise<void>;
   readonly runBrowserSiteAction: (
-    action: 'openLogin' | 'verifyProfile' | 'clearProfile',
-    site: BrowserStatus['sites'][number],
+    action: BrowserProfileActionName,
+    site: BrowserSite,
   ) => Promise<void>;
   readonly config: DesktopConfig | undefined;
   readonly connection: AgentConnectionState;
@@ -658,56 +696,66 @@ function BrowserHostPanel({
   readonly browserStatus: BrowserStatus;
   readonly browserStatusError: string | undefined;
   readonly browserStatusLoading: boolean;
-  readonly browserActionState: {
-    readonly message?: string;
-    readonly status: 'idle' | 'running' | 'success' | 'error';
-  };
+  readonly browserActionState: BrowserActionState;
   readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
   readonly runBrowserSiteAction: (
-    action: 'openLogin' | 'verifyProfile' | 'clearProfile',
-    site: BrowserStatus['sites'][number],
+    action: BrowserProfileActionName,
+    site: BrowserSite,
   ) => Promise<void>;
 }) {
-  const pendingAuthCount = countPendingBrowserAuthItems({
+  const model = buildBrowserHostDisplayModel({
+    appInfo,
+    browserActionState,
     browserStatus,
     localPendingAuthTasks,
   });
   return (
     <div className="browser-host">
+      <section className="browser-runtime-panel" aria-label="Browser runtime">
+        <div>
+          <span>Browser runtime</span>
+          <h2>Host browser runtime</h2>
+          <p>{model.runtimeMessage}</p>
+        </div>
+        <strong className={model.runtimeReady ? 'ready' : 'attention'}>
+          {model.runtimeStatus}
+        </strong>
+      </section>
+
       <section
         className="browser-host-summary"
         aria-label="Browser host summary"
       >
         <div className="metric compact">
           <span>Runtime</span>
-          <strong>{browserRuntimeLabel(appInfo)}</strong>
-        </div>
-        <div className="metric compact">
-          <span>Runtime Status</span>
-          <strong>{appInfo.browserRuntime?.status ?? 'pending'}</strong>
+          <strong>{model.runtimeKind}</strong>
         </div>
         <div className="metric compact">
           <span>Managed Sites</span>
           <strong>{browserStatus.sites.length}</strong>
         </div>
         <div className="metric compact">
+          <span>Managed Profiles</span>
+          <strong>{browserStatus.profiles.length}</strong>
+        </div>
+        <div className="metric compact">
           <span>Pending Auth</span>
-          <strong>{pendingAuthCount}</strong>
+          <strong>{model.attentionItems.length}</strong>
         </div>
       </section>
 
-      <section className="browser-runtime-panel" aria-label="Browser runtime">
-        <div>
-          <h2>Host browser runtime</h2>
-          <p>{browserRuntimeMessage(appInfo)}</p>
-        </div>
-      </section>
-      <BrowserStatusPanel
-        browserStatus={browserStatus}
-        browserStatusError={browserStatusError}
-        browserStatusLoading={browserStatusLoading}
-        browserActionState={browserActionState}
-        localPendingAuthTasks={localPendingAuthTasks}
+      {browserStatusError ? (
+        <p className="error-text browser-host-notice">{browserStatusError}</p>
+      ) : null}
+      {browserStatusLoading ? (
+        <p className="browser-action-message running browser-host-notice">
+          Loading browser status
+        </p>
+      ) : null}
+
+      <BrowserAttentionPanel items={model.attentionItems} />
+      <BrowserManagedProfilesPanel
+        rows={[...model.profileRows, ...model.localOnlyRows]}
         runBrowserSiteAction={runBrowserSiteAction}
       />
     </div>
@@ -954,197 +1002,213 @@ function AgentsPanel({
   );
 }
 
-function BrowserStatusPanel({
-  browserStatus,
-  browserStatusError,
-  browserStatusLoading,
-  browserActionState,
-  localPendingAuthTasks,
+function BrowserAttentionPanel({
+  items,
+}: {
+  readonly items: readonly BrowserAttentionItem[];
+}) {
+  const hasAttention = items.length > 0;
+  return (
+    <section
+      className={
+        hasAttention
+          ? 'browser-attention-section attention'
+          : 'browser-attention-section'
+      }
+      aria-label="Browser auth attention"
+    >
+      <div className="browser-section-header">
+        <div>
+          <span>Browser auth attention</span>
+          <h2>
+            {hasAttention
+              ? 'Authentication needs action'
+              : 'No browser-auth attention'}
+          </h2>
+        </div>
+        <strong>{items.length}</strong>
+      </div>
+      {hasAttention ? (
+        <div className="browser-attention-list">
+          {items.map((item) => (
+            <div className="browser-attention-item" key={item.key}>
+              <div>
+                <strong>{item.siteName}</strong>
+                <small>{item.profileName}</small>
+              </div>
+              <div className="site-profile-summary">
+                <span>Pending {item.reason}</span>
+                <span>{item.source}</span>
+                {item.status ? <span>{item.status}</span> : null}
+              </div>
+              <small>Next actions: Open, Verify, Clear</small>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p>All browser-auth profiles are clear for this host.</p>
+      )}
+    </section>
+  );
+}
+
+function BrowserManagedProfilesPanel({
+  rows,
   runBrowserSiteAction,
 }: {
-  readonly browserStatus: BrowserStatus;
-  readonly browserStatusError: string | undefined;
-  readonly browserStatusLoading: boolean;
-  readonly browserActionState: {
-    readonly message?: string;
-    readonly status: 'idle' | 'running' | 'success' | 'error';
-  };
-  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
+  readonly rows: readonly BrowserProfileRow[];
   readonly runBrowserSiteAction: (
-    action: 'openLogin' | 'verifyProfile' | 'clearProfile',
-    site: BrowserStatus['sites'][number],
+    action: BrowserProfileActionName,
+    site: BrowserSite,
   ) => Promise<void>;
 }) {
-  const localOnlyAuthTasks = localPendingAuthTasks.filter(
-    (task) =>
-      ['open', 'in_progress'].includes(task.status) &&
-      !browserStatus.sites.some(
-        (site) =>
-          site.siteId === task.siteId &&
-          (!site.profileName || site.profileName === task.profileName),
-      ),
-  );
   return (
-    <div className="browser-status-grid">
-      {browserStatusError ? (
-        <p className="error-text">{browserStatusError}</p>
-      ) : null}
-      {browserActionState.status !== 'idle' && browserActionState.message ? (
-        <p className={`browser-action-message ${browserActionState.status}`}>
-          {browserActionState.message}
-        </p>
-      ) : null}
-      {browserStatusLoading ? (
-        <p className="browser-action-message running">Loading browser status</p>
-      ) : null}
-      <section className="mini-status">
-        <h2>Browser Sites</h2>
-        {browserStatus.sites.length > 0 ? (
-          <div className="mini-status-list">
-            {browserStatus.sites.map((site) => {
-              const profile = findSiteProfile(browserStatus, site);
-              const pendingTask = findSitePendingAuthTask(
-                browserStatus,
-                localPendingAuthTasks,
-                site,
-              );
-              return (
-                <div className="site-status-row" key={site.siteId}>
-                  <div>
-                    <strong>{site.displayName}</strong>
-                    <small>{site.profileName ?? 'anonymous'}</small>
-                    <div className="site-profile-summary">
-                      {profile?.displayName ? (
-                        <span>{profile.displayName}</span>
-                      ) : null}
-                      {profile?.externalUserId ? (
-                        <span>ID {profile.externalUserId}</span>
-                      ) : null}
-                      {profile?.verifiedAt ? (
-                        <span>{formatTimestamp(profile.verifiedAt)}</span>
-                      ) : null}
-                      {(!profile || profile.status !== 'verified') &&
-                      pendingTask ? (
-                        <span>Pending {pendingTask.reason}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <span>{profile?.status ?? site.authPolicy}</span>
-                  <BrowserProfileActions
-                    disabled={
-                      site.authPolicy !== 'required' ||
-                      browserActionState.status === 'running'
-                    }
-                    onClear={() =>
-                      void runBrowserSiteAction('clearProfile', site)
-                    }
-                    onOpen={() => void runBrowserSiteAction('openLogin', site)}
-                    onVerify={() =>
-                      void runBrowserSiteAction('verifyProfile', site)
-                    }
-                  />
-                </div>
-              );
-            })}
-            {localOnlyAuthTasks.map((task) => {
-              const site = {
-                allowedOrigins: [],
-                authPolicy: 'required' as const,
-                displayName: task.siteId,
-                loginUrl: task.loginUrl,
-                profileName: task.profileName,
-                siteId: task.siteId,
-                verifyUrl: task.verifyUrl,
-              };
-              return (
-                <div
-                  className="site-status-row"
-                  key={`${task.siteId}:${task.profileName}`}
-                >
-                  <div>
-                    <strong>{task.siteId}</strong>
-                    <small>{task.profileName}</small>
-                    <div className="site-profile-summary">
-                      <span>Pending {task.reason}</span>
-                      <span>{task.source}</span>
-                    </div>
-                  </div>
-                  <span>{task.status}</span>
-                  <BrowserProfileActions
-                    disabled={browserActionState.status === 'running'}
-                    onClear={() =>
-                      void runBrowserSiteAction('clearProfile', site)
-                    }
-                    onOpen={() => void runBrowserSiteAction('openLogin', site)}
-                    onVerify={() =>
-                      void runBrowserSiteAction('verifyProfile', site)
-                    }
-                  />
-                </div>
-              );
-            })}
-          </div>
-        ) : localOnlyAuthTasks.length > 0 ? (
-          <div className="mini-status-list">
-            {localOnlyAuthTasks.map((task) => {
-              const site = {
-                allowedOrigins: [],
-                authPolicy: 'required' as const,
-                displayName: task.siteId,
-                loginUrl: task.loginUrl,
-                profileName: task.profileName,
-                siteId: task.siteId,
-                verifyUrl: task.verifyUrl,
-              };
-              return (
-                <div
-                  className="site-status-row"
-                  key={`${task.siteId}:${task.profileName}`}
-                >
-                  <div>
-                    <strong>{task.siteId}</strong>
-                    <small>{task.profileName}</small>
-                    <div className="site-profile-summary">
-                      <span>Pending {task.reason}</span>
-                      <span>{task.source}</span>
-                    </div>
-                  </div>
-                  <span>{task.status}</span>
-                  <BrowserProfileActions
-                    disabled={browserActionState.status === 'running'}
-                    onClear={() =>
-                      void runBrowserSiteAction('clearProfile', site)
-                    }
-                    onOpen={() => void runBrowserSiteAction('openLogin', site)}
-                    onVerify={() =>
-                      void runBrowserSiteAction('verifyProfile', site)
-                    }
-                  />
-                </div>
-              );
-            })}
-          </div>
+    <section className="browser-profile-panel" aria-label="Managed profiles">
+      <div className="browser-section-header">
+        <div>
+          <span>Managed profiles</span>
+          <h2>Site profiles</h2>
+        </div>
+        <strong>{rows.length}</strong>
+      </div>
+      {rows.length > 0 ? (
+        <div className="browser-profile-list">
+          {rows.map((row) => (
+            <BrowserManagedProfileRow
+              key={row.key}
+              row={row}
+              runBrowserSiteAction={runBrowserSiteAction}
+            />
+          ))}
+        </div>
+      ) : (
+        <p>No managed browser profiles are available yet.</p>
+      )}
+    </section>
+  );
+}
+
+function BrowserManagedProfileRow({
+  row,
+  runBrowserSiteAction,
+}: {
+  readonly row: BrowserProfileRow;
+  readonly runBrowserSiteAction: (
+    action: BrowserProfileActionName,
+    site: BrowserSite,
+  ) => Promise<void>;
+}) {
+  const actionDisabled =
+    row.site.authPolicy !== 'required' || row.actionState?.status === 'running';
+  return (
+    <div className="browser-profile-row">
+      <div className="browser-profile-main">
+        <strong>{row.site.displayName}</strong>
+        <small>{row.site.profileName ?? 'anonymous'}</small>
+        <div className="site-profile-summary">
+          {row.profile?.displayName ? (
+            <span>{row.profile.displayName}</span>
+          ) : null}
+          {row.profile?.externalUserId ? (
+            <span>ID {row.profile.externalUserId}</span>
+          ) : null}
+          {row.profile?.verifiedAt ? (
+            <span>{formatTimestamp(row.profile.verifiedAt)}</span>
+          ) : null}
+          {row.pendingTask ? (
+            <span>Pending {row.pendingTask.reason}</span>
+          ) : null}
+          {row.source === 'local' ? <span>Local fallback</span> : null}
+        </div>
+        {row.actionState?.message && row.actionState.status !== 'idle' ? (
+          <p className={`browser-row-feedback ${row.actionState.status}`}>
+            {row.actionState.message}
+          </p>
         ) : (
-          <p>No browser sites</p>
+          <p className="browser-row-feedback idle">
+            {row.site.authPolicy === 'required'
+              ? 'Actions available: Open, Verify, Clear'
+              : 'Anonymous access'}
+          </p>
         )}
-      </section>
-      <MiniStatusTable
-        emptyLabel="No profile summaries"
-        rows={browserStatus.profiles.map((profile) => [
-          profile.siteId,
-          profile.profileName,
-          profile.status,
-        ])}
-        title="Profiles"
+      </div>
+      <span className="browser-profile-state">{row.statusLabel}</span>
+      <BrowserProfileActions
+        disabled={actionDisabled}
+        onClear={() => void runBrowserSiteAction('clearProfile', row.site)}
+        onOpen={() => void runBrowserSiteAction('openLogin', row.site)}
+        onVerify={() => void runBrowserSiteAction('verifyProfile', row.site)}
       />
     </div>
   );
 }
 
+function buildBrowserHostDisplayModel({
+  appInfo,
+  browserActionState,
+  browserStatus,
+  localPendingAuthTasks,
+}: {
+  readonly appInfo: DesktopAppInfo;
+  readonly browserActionState: BrowserActionState;
+  readonly browserStatus: BrowserStatus;
+  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
+}): BrowserHostDisplayModel {
+  const profileRows = browserStatus.sites.map((site): BrowserProfileRow => {
+    const profile = findSiteProfile(browserStatus, site);
+    const pendingTask = findSitePendingAuthTask(
+      browserStatus,
+      localPendingAuthTasks,
+      site,
+    );
+    const key = browserSiteKey(site);
+    return {
+      actionState:
+        browserActionState.targetKey === key ? browserActionState : undefined,
+      key,
+      pendingTask,
+      profile,
+      site,
+      source: 'backend',
+      statusLabel:
+        profile?.status ?? (pendingTask ? 'attention' : site.authPolicy),
+    };
+  });
+  const localOnlyRows = getLocalOnlyAuthTasks(
+    browserStatus,
+    localPendingAuthTasks,
+  ).map((task): BrowserProfileRow => {
+    const site = siteFromLocalPendingAuthTask(task);
+    const key = browserSiteKey(site);
+    return {
+      actionState:
+        browserActionState.targetKey === key ? browserActionState : undefined,
+      key,
+      pendingTask: task,
+      site,
+      source: 'local',
+      statusLabel: task.status,
+    };
+  });
+
+  return {
+    attentionItems: buildBrowserAttentionItems({
+      browserStatus,
+      localPendingAuthTasks,
+    }),
+    localOnlyRows,
+    profileRows,
+    runtimeKind: browserRuntimeLabel(appInfo),
+    runtimeMessage: browserRuntimeMessage(appInfo),
+    runtimeReady: appInfo.browserRuntime?.status === 'ready',
+    runtimeStatus: appInfo.browserRuntime?.status ?? 'pending',
+  };
+}
+
 function findSiteProfile(
   browserStatus: BrowserStatus,
-  site: BrowserStatus['sites'][number],
-): BrowserStatus['profiles'][number] | undefined {
+  site: BrowserSite,
+): BrowserProfile | undefined {
   return browserStatus.profiles.find(
     (profile) =>
       profile.siteId === site.siteId &&
@@ -1155,11 +1219,8 @@ function findSiteProfile(
 function findSitePendingAuthTask(
   browserStatus: BrowserStatus,
   localPendingAuthTasks: readonly LocalPendingAuthTask[],
-  site: BrowserStatus['sites'][number],
-):
-  | BrowserStatus['pendingAuthTasks'][number]
-  | LocalPendingAuthTask
-  | undefined {
+  site: BrowserSite,
+): BrowserPendingAuth | undefined {
   return [...browserStatus.pendingAuthTasks, ...localPendingAuthTasks].find(
     (task) =>
       task.siteId === site.siteId &&
@@ -1170,6 +1231,85 @@ function findSitePendingAuthTask(
   );
 }
 
+function buildBrowserAttentionItems({
+  browserStatus,
+  localPendingAuthTasks,
+}: {
+  readonly browserStatus: BrowserStatus;
+  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
+}): BrowserAttentionItem[] {
+  const siteNames = new Map(
+    browserStatus.sites.map((site) => [site.siteId, site.displayName]),
+  );
+  const items = new Map<string, BrowserAttentionItem>();
+  for (const task of browserStatus.pendingAuthTasks) {
+    const key = browserTaskKey(task);
+    items.set(key, {
+      key,
+      profileName: task.profileName,
+      reason: task.reason,
+      siteId: task.siteId,
+      siteName: siteNames.get(task.siteId) ?? task.siteId,
+      source: 'backend',
+    });
+  }
+  for (const task of localPendingAuthTasks.filter(
+    isActiveLocalPendingAuthTask,
+  )) {
+    const key = browserTaskKey(task);
+    const existing = items.get(key);
+    items.set(key, {
+      key,
+      profileName: task.profileName,
+      reason: existing?.reason ?? task.reason,
+      siteId: task.siteId,
+      siteName: existing?.siteName ?? siteNames.get(task.siteId) ?? task.siteId,
+      source: existing ? `${existing.source} + ${task.source}` : task.source,
+      status: task.status,
+    });
+  }
+  return [...items.values()];
+}
+
+function getLocalOnlyAuthTasks(
+  browserStatus: BrowserStatus,
+  localPendingAuthTasks: readonly LocalPendingAuthTask[],
+): LocalPendingAuthTask[] {
+  return localPendingAuthTasks.filter(
+    (task) =>
+      isActiveLocalPendingAuthTask(task) &&
+      !browserStatus.sites.some(
+        (site) =>
+          site.siteId === task.siteId &&
+          (!site.profileName || site.profileName === task.profileName),
+      ),
+  );
+}
+
+function isActiveLocalPendingAuthTask(task: LocalPendingAuthTask): boolean {
+  return task.status === 'open' || task.status === 'in_progress';
+}
+
+function siteFromLocalPendingAuthTask(task: LocalPendingAuthTask): BrowserSite {
+  return {
+    allowedOrigins: [],
+    authPolicy: 'required',
+    displayName: task.siteId,
+    loginUrl: task.loginUrl,
+    profileName: task.profileName,
+    siteId: task.siteId,
+    verifyUrl: task.verifyUrl,
+  };
+}
+
+function browserSiteKey(site: BrowserSite): string {
+  return `${site.siteId}:${site.profileName ?? 'anonymous'}`;
+}
+
+function browserTaskKey(task: BrowserPendingAuth): string {
+  return `${task.siteId}:${task.profileName}`;
+}
+
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
@@ -1177,7 +1317,7 @@ function formatTimestamp(value: string): string {
 
 function resolveBrowserAction(
   actions: HostActions,
-  action: 'openLogin' | 'verifyProfile' | 'clearProfile',
+  action: BrowserProfileActionName,
 ): (input: BrowserProfileActionInput) => Promise<unknown> {
   const actionMethod =
     action === 'openLogin'
@@ -1239,62 +1379,16 @@ function assertBrowserActionResult(result: unknown): void {
   }
 }
 
-function browserActionVerb(
-  action: 'openLogin' | 'verifyProfile' | 'clearProfile',
-): string {
+function browserActionVerb(action: BrowserProfileActionName): string {
   if (action === 'openLogin') return 'Opening';
   if (action === 'verifyProfile') return 'Verifying';
   return 'Clearing';
 }
 
-function browserActionDone(
-  action: 'openLogin' | 'verifyProfile' | 'clearProfile',
-): string {
+function browserActionDone(action: BrowserProfileActionName): string {
   if (action === 'openLogin') return 'Login window opened for';
   if (action === 'verifyProfile') return 'Verified';
   return 'Cleared';
-}
-
-function MiniStatusTable({
-  emptyLabel,
-  rows,
-  title,
-}: {
-  readonly emptyLabel: string;
-  readonly rows: readonly (readonly [string, string, string])[];
-  readonly title: string;
-}) {
-  return (
-    <section className="mini-status">
-      <h2>{title}</h2>
-      {rows.length > 0 ? (
-        <div className="mini-status-list">
-          {rows.map(([left, middle, right]) => (
-            <div className="mini-status-row" key={`${left}:${middle}:${right}`}>
-              <strong>{left}</strong>
-              <span>{middle}</span>
-              <small>{right}</small>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p>{emptyLabel}</p>
-      )}
-    </section>
-  );
-}
-
-function StatusList({ rows }: { readonly rows: readonly [string, string][] }) {
-  return (
-    <dl className="status-list">
-      {rows.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
 }
 
 function localPathValue(value: string): string {

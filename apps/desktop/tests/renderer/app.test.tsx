@@ -130,6 +130,35 @@ describe('CthuDesktop shell', () => {
     });
   }
 
+  function createReadyBrowserStatus() {
+    return vi.fn().mockResolvedValue({
+      pendingAuthTasks: [],
+      profiles: [
+        {
+          agentId: 'agent-1',
+          displayName: 'Cthu User',
+          externalUserId: '50353979',
+          siteId: 'douban',
+          profileName: 'douban-main',
+          status: 'verified',
+          updatedAt: '2026-06-13T10:00:00.000Z',
+          verifiedAt: '2026-06-13T10:00:00.000Z',
+        },
+      ],
+      sites: [
+        {
+          siteId: 'douban',
+          displayName: 'Douban',
+          allowedOrigins: ['https://movie.douban.com'],
+          authPolicy: 'required',
+          profileName: 'douban-main',
+          loginUrl: 'https://accounts.douban.com/passport/login',
+          verifyUrl: 'https://www.douban.com/mine/',
+        },
+      ],
+    });
+  }
+
   function primaryNavButton(name: string) {
     return within(screen.getByLabelText('Primary')).getByRole('button', {
       name,
@@ -412,10 +441,23 @@ describe('CthuDesktop shell', () => {
       screen.getByRole('heading', { name: 'Browser Host', level: 1 }),
     ).toBeInTheDocument();
     expect(await screen.findByText('Host browser runtime')).toBeInTheDocument();
+    expect(screen.getByText('Browser runtime')).toBeInTheDocument();
     expect(
       screen.getByText('Using host Google Chrome for browser automation'),
     ).toBeInTheDocument();
-    expect(await screen.findByText('Browser Sites')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Browser auth attention'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Site profiles' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Managed profiles')).toBeInTheDocument();
+    const runtimePanel = screen.getByLabelText('Browser runtime');
+    const managedProfiles = screen.getByLabelText('Managed profiles');
+    expect(
+      runtimePanel.compareDocumentPosition(managedProfiles) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     expect(screen.getAllByText('douban-main')).not.toHaveLength(0);
     expect(screen.getAllByText('verified')).not.toHaveLength(0);
     expect(screen.getByText('Cthu User')).toBeInTheDocument();
@@ -476,7 +518,12 @@ describe('CthuDesktop shell', () => {
     expect(
       await screen.findByRole('heading', { name: 'Browser Host', level: 1 }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Pending missing')).toBeInTheDocument();
+    expect(screen.getByText('Authentication needs action')).toBeInTheDocument();
+    expect(screen.getAllByText('Pending missing')).toHaveLength(2);
+    expect(screen.getByText('backend')).toBeInTheDocument();
+    expect(
+      screen.getByText('Next actions: Open, Verify, Clear'),
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Open' }));
 
@@ -521,9 +568,32 @@ describe('CthuDesktop shell', () => {
     expect(
       await screen.findByText('browser status offline'),
     ).toBeInTheDocument();
-    expect(await screen.findByText('zhihu-main')).toBeInTheDocument();
+    expect(await screen.findAllByText('zhihu-main')).toHaveLength(2);
     expect(screen.getByText('local_preflight')).toBeInTheDocument();
+    expect(screen.getByText('Local fallback')).toBeInTheDocument();
     expect(desktopApi.openBrowserLogin).not.toHaveBeenCalled();
+  });
+
+  test('shows a browser-auth ready state when no attention is pending', async () => {
+    render(
+      <App
+        desktopApi={createDesktopApi()}
+        fetchAgents={vi.fn().mockResolvedValue([])}
+        fetchBrowserStatus={createReadyBrowserStatus()}
+      />,
+    );
+
+    await userEvent.click(primaryNavButton('Browser Host'));
+
+    expect(
+      await screen.findByText('No browser-auth attention'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('All browser-auth profiles are clear for this host.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Site profiles' }),
+    ).toBeInTheDocument();
   });
 
   test('shows a pending Douban login reason when no verified profile exists', async () => {
@@ -562,7 +632,7 @@ describe('CthuDesktop shell', () => {
 
     await userEvent.click(primaryNavButton('Browser Host'));
 
-    expect(await screen.findByText('Pending missing')).toBeInTheDocument();
+    expect(await screen.findAllByText('Pending missing')).toHaveLength(2);
   });
 
   test('starts login using site fields returned by backend browser APIs', async () => {
@@ -592,13 +662,23 @@ describe('CthuDesktop shell', () => {
     );
 
     await userEvent.click(primaryNavButton('Browser Host'));
-    await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    const openButton = await screen.findByRole('button', { name: 'Open' });
+    const profileRow = openButton.closest('.browser-profile-row');
+    expect(profileRow).toBeInstanceOf(HTMLElement);
+    await userEvent.click(openButton);
 
     expect(desktopApi.openBrowserLogin).toHaveBeenCalledWith({
       loginUrl: 'https://custom.example/login',
       profileName: 'custom-main',
       siteId: 'custom',
       verifyUrl: 'https://custom.example/me',
+    });
+    await waitFor(() => {
+      expect(
+        within(profileRow as HTMLElement).getByText(
+          'Login window opened for Custom Site',
+        ),
+      ).toBeInTheDocument();
     });
   });
 
@@ -623,10 +703,15 @@ describe('CthuDesktop shell', () => {
     );
 
     await userEvent.click(primaryNavButton('Browser Host'));
-    await userEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    const openButton = await screen.findByRole('button', { name: 'Open' });
+    const profileRow = openButton.closest('.browser-profile-row');
+    expect(profileRow).toBeInstanceOf(HTMLElement);
+    await userEvent.click(openButton);
 
     expect(
-      await screen.findByText('Executable does not exist'),
+      await within(profileRow as HTMLElement).findByText(
+        'Executable does not exist',
+      ),
     ).toBeInTheDocument();
   });
 
