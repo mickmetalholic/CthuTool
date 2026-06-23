@@ -4,6 +4,7 @@ import {
   createBrowserErrorMessage,
   createBrowserResultMessage,
 } from '@cthutool/agent-protocol';
+import type { Mock } from 'vitest';
 import type { AgentCommandGateway } from '../../agent/command-gateway/agent-command-gateway.service';
 import { DesktopBrowserRuntimeService } from './desktop-browser-runtime.service';
 
@@ -173,8 +174,8 @@ function createRuntime(gateway: GatewayMock): DesktopBrowserRuntimeService {
 }
 
 type GatewayMock = {
-  readonly selectAgentByCapability: jest.Mock;
-  readonly sendCommand: jest.Mock;
+  readonly selectAgentByCapability: Mock;
+  readonly sendCommand: Mock;
 };
 
 function createGatewayMock(
@@ -195,8 +196,8 @@ function createGatewayMock(
   }),
 ): GatewayMock {
   return {
-    selectAgentByCapability: jest.fn(() => agent ?? undefined),
-    sendCommand: jest.fn(async () => response),
+    selectAgentByCapability: vi.fn(() => agent ?? undefined),
+    sendCommand: vi.fn(async () => response),
   };
 }
 

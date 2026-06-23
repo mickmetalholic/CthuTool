@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { DoubanMovieInfoController } from './douban-movie-info.controller';
 import type { DoubanMovieInfoService } from './douban-movie-info.service';
 
@@ -23,9 +24,9 @@ describe('DoubanMovieInfoController', () => {
   });
 });
 
-function createService(): DoubanMovieInfoService & { getMovie: jest.Mock } {
+function createService(): DoubanMovieInfoService & { getMovie: Mock } {
   return {
-    getMovie: jest.fn(async () => ({
+    getMovie: vi.fn(async () => ({
       movie: {
         aliases: [],
         capturedAt: '2026-06-15T10:00:00.000Z',
@@ -42,5 +43,5 @@ function createService(): DoubanMovieInfoService & { getMovie: jest.Mock } {
         writers: [],
       },
     })),
-  } as unknown as DoubanMovieInfoService & { getMovie: jest.Mock };
+  } as unknown as DoubanMovieInfoService & { getMovie: Mock };
 }

@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { SitesConfigService } from '../../sites-config/sites-config.service';
 import type { DesktopBrowserRuntimeService } from '../desktop-runtime/desktop-browser-runtime.service';
 import { BrowserBlockDetector } from './browser-block-detector';
@@ -206,10 +207,10 @@ function createRuntimeMock(snapshot?: {
   readonly text?: string;
   readonly screenshotBase64?: string;
 }): Pick<DesktopBrowserRuntimeService, 'capturePage'> & {
-  readonly capturePage: jest.Mock;
+  readonly capturePage: Mock;
 } {
   return {
-    capturePage: jest.fn(async () => {
+    capturePage: vi.fn(async () => {
       if (snapshot) {
         return {
           ok: true as const,

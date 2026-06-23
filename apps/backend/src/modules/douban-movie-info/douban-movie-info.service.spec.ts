@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import type { BrowserContentService } from '../browser/content/browser-content.service';
 import { BrowserAutomationError } from '../browser-automation/browser-automation.errors';
 import type { BrowserContentResult } from '../browser-automation/browser-automation.types';
@@ -49,14 +50,14 @@ describe('DoubanMovieInfoService', () => {
 
   it('maps browser provider errors into Douban errors', async () => {
     const browserContent = {
-      getPageContent: jest.fn(async () => {
+      getPageContent: vi.fn(async () => {
         throw new BrowserAutomationError(
           'AGENT_NOT_AVAILABLE',
           'No browser agent',
         );
       }),
     } as unknown as BrowserContentService & {
-      getPageContent: jest.Mock;
+      getPageContent: Mock;
     };
     const service = createService(browserContent);
 
@@ -83,9 +84,9 @@ describe('DoubanMovieInfoService', () => {
 
 function createBrowserContent(
   patch: Partial<BrowserContentResult> = {},
-): BrowserContentService & { getPageContent: jest.Mock } {
+): BrowserContentService & { getPageContent: Mock } {
   return {
-    getPageContent: jest.fn(
+    getPageContent: vi.fn(
       async (): Promise<BrowserContentResult> => ({
         auth: { profileName: 'douban-main', status: 'available', used: true },
         capturedAt: '2026-06-15T10:00:00.000Z',
@@ -98,11 +99,11 @@ function createBrowserContent(
         ...patch,
       }),
     ),
-  } as unknown as BrowserContentService & { getPageContent: jest.Mock };
+  } as unknown as BrowserContentService & { getPageContent: Mock };
 }
 
 function createService(
-  browserContent: BrowserContentService & { getPageContent: jest.Mock },
+  browserContent: BrowserContentService & { getPageContent: Mock },
 ): DoubanMovieInfoService {
   return new DoubanMovieInfoService(browserContent);
 }

@@ -4,12 +4,12 @@ import { bootstrap } from './main';
 
 describe('bootstrap', () => {
   it('starts app with validated configuration', async () => {
-    const enableCors = jest.fn();
-    const useGlobalFilters = jest.fn();
-    const listen = jest.fn().mockResolvedValue(undefined);
+    const enableCors = vi.fn();
+    const useGlobalFilters = vi.fn();
+    const listen = vi.fn().mockResolvedValue(undefined);
     const app = { enableCors, useGlobalFilters, listen };
-    const log = jest.fn();
-    const error = jest.fn();
+    const log = vi.fn();
+    const error = vi.fn();
     const config: ServiceConfiguration = {
       logLevel: 'info',
       nodeEnv: 'development',
@@ -17,11 +17,11 @@ describe('bootstrap', () => {
     };
 
     await bootstrap({
-      createApp: jest.fn().mockResolvedValue(app),
-      parseConfig: jest.fn().mockReturnValue(ok(config)),
-      loadEnv: jest.fn(),
-      createLogger: jest.fn().mockReturnValue({ log, error }),
-      exit: jest.fn(),
+      createApp: vi.fn().mockResolvedValue(app),
+      parseConfig: vi.fn().mockReturnValue(ok(config)),
+      loadEnv: vi.fn(),
+      createLogger: vi.fn().mockReturnValue({ log, error }),
+      exit: vi.fn(),
     });
 
     expect(enableCors).toHaveBeenCalledWith({ origin: true });
@@ -38,16 +38,16 @@ describe('bootstrap', () => {
   });
 
   it('logs and exits when configuration is invalid', async () => {
-    const createApp = jest.fn();
-    const log = jest.fn();
-    const error = jest.fn();
-    const exit = jest.fn();
+    const createApp = vi.fn();
+    const log = vi.fn();
+    const error = vi.fn();
+    const exit = vi.fn();
 
     await bootstrap({
       createApp,
-      parseConfig: jest.fn().mockReturnValue(err(new Error('invalid config'))),
-      loadEnv: jest.fn(),
-      createLogger: jest.fn().mockReturnValue({ log, error }),
+      parseConfig: vi.fn().mockReturnValue(err(new Error('invalid config'))),
+      loadEnv: vi.fn(),
+      createLogger: vi.fn().mockReturnValue({ log, error }),
       exit,
     });
 
