@@ -48,8 +48,42 @@ export class ConfigError extends Error {
   }
 }
 
+export type ObservabilityLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export type ObservabilityEnvironment = 'development' | 'test' | 'production';
+
+export type ObservabilityConfig = {
+  readonly logLevel: ObservabilityLogLevel;
+  readonly diagnosticsEnabled: boolean;
+  readonly diagnosticsDir: string;
+  readonly consoleDiagnostics: boolean;
+  readonly samplingRatio: number;
+  readonly telemetryExporterEndpoint?: string;
+};
+
+export type ObservabilityConfigOptions = {
+  readonly environment?: ObservabilityEnvironment;
+};
+
+export const OBSERVABILITY_ENV_KEYS = {
+  consoleDiagnostics: 'OBSERVABILITY_CONSOLE_DIAGNOSTICS',
+  diagnosticsDir: 'OBSERVABILITY_DIAGNOSTICS_DIR',
+  diagnosticsEnabled: 'OBSERVABILITY_DIAGNOSTICS_ENABLED',
+  logLevel: 'OBSERVABILITY_LOG_LEVEL',
+  samplingRatio: 'OBSERVABILITY_SAMPLING_RATIO',
+  telemetryExporterEndpoint: 'OBSERVABILITY_EXPORTER_ENDPOINT',
+} as const;
+
 const SITE_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
+const OBSERVABILITY_LOG_LEVELS = new Set<ObservabilityLogLevel>([
+  'debug',
+  'info',
+  'warn',
+  'error',
+]);
+const SENSITIVE_OBSERVABILITY_KEY_PATTERN =
+  /(authorization|cookie|localstorage|password|profiledir|profilepath|secret|sessionstorage|storagestate|token)/i;
 const RESOURCE_TYPES = new Set<BrowserResourceType>([
   'document',
   'font',
@@ -60,6 +94,129 @@ const RESOURCE_TYPES = new Set<BrowserResourceType>([
   'xhr',
   'fetch',
 ]);
+
+export function defaultObservabilityConfig(
+  environment: ObservabilityEnvironment = 'development',
+): ObservabilityConfig {
+  if (environment === 'production') {
+    return {
+      consoleDiagnostics: false,
+      diagnosticsDir: './data/diagnostics',
+      diagnosticsEnabled: false,
+      logLevel: 'info',
+      samplingRatio: 1,
+    };
+  }
+
+  if (environment === 'test') {
+    return {
+      consoleDiagnostics: false,
+      diagnosticsDir: './tmp/diagnostics',
+      diagnosticsEnabled: false,
+      logLevel: 'error',
+      samplingRatio: 1,
+    };
+  }
+
+  return {
+    consoleDiagnostics: true,
+    diagnosticsDir: './data/diagnostics',
+    diagnosticsEnabled: true,
+    logLevel: 'debug',
+    samplingRatio: 1,
+  };
+}
+
+export function parseObservabilityConfig(
+  value: unknown = {},
+  options: ObservabilityConfigOptions = {},
+): ObservabilityConfig {
+  const environment = options.environment ?? 'development';
+  const defaults = defaultObservabilityConfig(environment);
+  const issues: ConfigIssue[] = [];
+
+  if (value === undefined) {
+    return defaults;
+  }
+  if (!isRecord(value)) {
+    throw validationError([
+      { path: 'observability', message: 'must be an object' },
+    ]);
+  }
+
+  collectSensitiveObservabilityIssues(value, 'observability', issues);
+
+  const logLevel = readOptionalLogLevel(
+    value,
+    'observability.logLevel',
+    'logLevel',
+    issues,
+  );
+  const diagnosticsEnabled = readOptionalBoolean(
+    value,
+    'observability.diagnosticsEnabled',
+    'diagnosticsEnabled',
+    issues,
+  );
+  const diagnosticsDir = readOptionalString(
+    value,
+    'observability.diagnosticsDir',
+    'diagnosticsDir',
+    issues,
+  );
+  const consoleDiagnostics = readOptionalBoolean(
+    value,
+    'observability.consoleDiagnostics',
+    'consoleDiagnostics',
+    issues,
+  );
+  const samplingRatio = readOptionalRatio(
+    value,
+    'observability.samplingRatio',
+    'samplingRatio',
+    issues,
+  );
+  const telemetryExporterEndpoint = readOptionalUrl(
+    value,
+    'observability.telemetryExporterEndpoint',
+    'telemetryExporterEndpoint',
+    issues,
+  );
+
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
+
+  return {
+    consoleDiagnostics: consoleDiagnostics ?? defaults.consoleDiagnostics,
+    diagnosticsDir: diagnosticsDir ?? defaults.diagnosticsDir,
+    diagnosticsEnabled: diagnosticsEnabled ?? defaults.diagnosticsEnabled,
+    logLevel: logLevel ?? defaults.logLevel,
+    samplingRatio: samplingRatio ?? defaults.samplingRatio,
+    ...(telemetryExporterEndpoint ? { telemetryExporterEndpoint } : {}),
+  };
+}
+
+export function parseObservabilityEnv(
+  env: Record<string, string | undefined>,
+  options: ObservabilityConfigOptions = {},
+): ObservabilityConfig {
+  const environment =
+    options.environment ?? readEnvironment(env.NODE_ENV) ?? 'development';
+
+  return parseObservabilityConfig(
+    {
+      consoleDiagnostics: env[OBSERVABILITY_ENV_KEYS.consoleDiagnostics],
+      diagnosticsDir: env[OBSERVABILITY_ENV_KEYS.diagnosticsDir],
+      diagnosticsEnabled: env[OBSERVABILITY_ENV_KEYS.diagnosticsEnabled],
+      logLevel: env[OBSERVABILITY_ENV_KEYS.logLevel],
+      samplingRatio: env[OBSERVABILITY_ENV_KEYS.samplingRatio],
+      telemetryExporterEndpoint:
+        env[OBSERVABILITY_ENV_KEYS.telemetryExporterEndpoint],
+    },
+    { environment },
+  );
+}
 
 export async function loadBrowserSitesFile(
   path: string,
@@ -321,6 +478,69 @@ function readOptionalString(
   return raw;
 }
 
+function readOptionalBoolean(
+  value: Record<string, unknown>,
+  path: string,
+  key: string,
+  issues: ConfigIssue[],
+): boolean | undefined {
+  const raw = value[key];
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (raw === true || raw === 'true') {
+    return true;
+  }
+  if (raw === false || raw === 'false') {
+    return false;
+  }
+  issues.push({ path, message: 'must be true or false' });
+  return undefined;
+}
+
+function readOptionalLogLevel(
+  value: Record<string, unknown>,
+  path: string,
+  key: string,
+  issues: ConfigIssue[],
+): ObservabilityLogLevel | undefined {
+  const raw = value[key];
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (
+    typeof raw === 'string' &&
+    OBSERVABILITY_LOG_LEVELS.has(raw as ObservabilityLogLevel)
+  ) {
+    return raw as ObservabilityLogLevel;
+  }
+  issues.push({ path, message: 'must be debug, info, warn, or error' });
+  return undefined;
+}
+
+function readOptionalRatio(
+  value: Record<string, unknown>,
+  path: string,
+  key: string,
+  issues: ConfigIssue[],
+): number | undefined {
+  const raw = value[key];
+  if (raw === undefined) {
+    return undefined;
+  }
+  const parsed = typeof raw === 'string' ? Number(raw) : raw;
+  if (
+    typeof parsed !== 'number' ||
+    Number.isNaN(parsed) ||
+    parsed < 0 ||
+    parsed > 1
+  ) {
+    issues.push({ path, message: 'must be a number between 0 and 1' });
+    return undefined;
+  }
+  return parsed;
+}
+
 function readAuthPolicy(
   value: Record<string, unknown>,
   path: string,
@@ -422,6 +642,36 @@ function validationError(issues: readonly ConfigIssue[]): ConfigError {
     issues.map((issue) => `${issue.path}: ${issue.message}`).join('; '),
     issues,
   );
+}
+
+function collectSensitiveObservabilityIssues(
+  value: Record<string, unknown>,
+  basePath: string,
+  issues: ConfigIssue[],
+): void {
+  for (const key of Object.keys(value)) {
+    const path = `${basePath}.${key}`;
+    if (SENSITIVE_OBSERVABILITY_KEY_PATTERN.test(key)) {
+      issues.push({
+        path,
+        message: 'is not supported in observability config',
+      });
+      continue;
+    }
+    const child = value[key];
+    if (isRecord(child)) {
+      collectSensitiveObservabilityIssues(child, path, issues);
+    }
+  }
+}
+
+function readEnvironment(
+  value: string | undefined,
+): ObservabilityEnvironment | undefined {
+  if (value === 'development' || value === 'test' || value === 'production') {
+    return value;
+  }
+  return undefined;
 }
 
 function sortSites(sites: readonly BrowserSiteConfig[]): BrowserSiteConfig[] {
