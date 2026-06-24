@@ -1,38 +1,83 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const activeProcesses = new Set<ReturnType<typeof Bun.spawn>>();
+
+type CliRunResult = {
+  readonly code: number;
+  readonly err: string;
+  readonly out: string;
+};
+
+afterEach(() => {
+  for (const proc of activeProcesses) {
+    try {
+      proc.kill();
+    } catch {
+      // Best-effort cleanup for already-exited subprocesses.
+    }
+  }
+  activeProcesses.clear();
+});
+
+async function runCli(
+  args: readonly string[],
+  options: {
+    readonly env?: Record<string, string | undefined>;
+    readonly timeoutMs?: number;
+  } = {},
+): Promise<CliRunResult> {
+  const proc = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
+    cwd: cliRoot,
+    env: options.env,
+    stdout: 'pipe',
+    stderr: 'pipe',
+    stdin: 'ignore',
+  });
+  activeProcesses.add(proc);
+
+  const timeoutMs = options.timeoutMs ?? 15_000;
+  let timeout: Timer | undefined;
+  try {
+    const timedOut = new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(() => {
+        proc.kill();
+        reject(new Error(`CLI subprocess timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+    const [out, err, code] = await Promise.race([
+      Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]),
+      timedOut,
+    ]);
+    return { code, err, out };
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    activeProcesses.delete(proc);
+  }
+}
 
 describe('scripts convert-to-cbz JSON mode', () => {
   test('runs without prompting and prints a JSON summary when input is provided', async () => {
     const inputRoot = await mkdtemp(join(tmpdir(), 'cthutool-empty-input-'));
     await mkdir(inputRoot, { recursive: true });
 
-    const proc = Bun.spawn(
-      [
-        'bun',
-        'run',
-        'src/index.ts',
-        'scripts',
-        'convert-to-cbz',
-        '--input',
-        inputRoot,
-        '--json',
-      ],
-      {
-        cwd: cliRoot,
-        stdout: 'pipe',
-        stderr: 'pipe',
-        stdin: 'ignore',
-      },
-    );
-
-    const out = await new Response(proc.stdout).text();
-    const err = await new Response(proc.stderr).text();
-    const code = await proc.exited;
+    const { code, err, out } = await runCli([
+      'scripts',
+      'convert-to-cbz',
+      '--input',
+      inputRoot,
+      '--json',
+    ]);
     const parsed = JSON.parse(out);
 
     expect(code).toBe(0);
@@ -48,29 +93,12 @@ describe('scripts convert-to-cbz JSON mode', () => {
     const inputRoot = await mkdtemp(join(tmpdir(), 'cthutool-empty-input-'));
     await mkdir(inputRoot, { recursive: true });
 
-    const proc = Bun.spawn(
-      [
-        'bun',
-        'run',
-        'src/index.ts',
-        'scripts',
-        'convert-to-cbz',
-        '--input',
-        inputRoot,
-        '--json',
-      ],
+    const { code, err, out } = await runCli(
+      ['scripts', 'convert-to-cbz', '--input', inputRoot, '--json'],
       {
-        cwd: cliRoot,
         env: { ...Bun.env, CHC_CLI_DIAGNOSTICS: '1' },
-        stdout: 'pipe',
-        stderr: 'pipe',
-        stdin: 'ignore',
       },
     );
-
-    const out = await new Response(proc.stdout).text();
-    const err = await new Response(proc.stderr).text();
-    const code = await proc.exited;
     const parsed = JSON.parse(out);
     const diagnostics = err
       .trim()
@@ -91,19 +119,11 @@ describe('scripts convert-to-cbz JSON mode', () => {
   });
 
   test('fails without prompting when input is missing non-interactively', async () => {
-    const proc = Bun.spawn(
-      ['bun', 'run', 'src/index.ts', 'scripts', 'convert-to-cbz', '--json'],
-      {
-        cwd: cliRoot,
-        stdout: 'pipe',
-        stderr: 'pipe',
-        stdin: 'ignore',
-      },
-    );
-
-    const out = await new Response(proc.stdout).text();
-    const err = await new Response(proc.stderr).text();
-    const code = await proc.exited;
+    const { code, err, out } = await runCli([
+      'scripts',
+      'convert-to-cbz',
+      '--json',
+    ]);
 
     expect(code).not.toBe(0);
     expect(JSON.parse(out)).toEqual({

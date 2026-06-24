@@ -57,46 +57,48 @@ export const runConversionJob = async (
   const outputRoot = options.output ?? join(options.input, '.output');
   const logger = createProgressLoggerImpl();
 
-  const files = await scanTargetFilesImpl(options);
-  if (files.length === 0) {
-    logger.info('No convertible files found.');
-    await logger.flush();
-    return {
-      totalFiles: 0,
-      successCount: 0,
-      failureCount: 0,
-      failures: [],
+  try {
+    const files = await scanTargetFilesImpl(options);
+    if (files.length === 0) {
+      logger.info('No convertible files found.');
+      return {
+        totalFiles: 0,
+        successCount: 0,
+        failureCount: 0,
+        failures: [],
+        outputRoot,
+        durationMs: Date.now() - startedAt,
+      };
+    }
+
+    const dep = await checkPopplerImpl();
+    if (dep.isErr()) {
+      throw new Error(dep.error.message);
+    }
+
+    logger.info(`Discovered ${files.length} target files.`);
+    logger.start(files.length, options.fileConcurrency);
+    const results = await scheduleTasksImpl(files, converters, options, logger);
+    const summary = buildConversionSummary(
+      files.length,
+      results,
       outputRoot,
-      durationMs: Date.now() - startedAt,
-    };
+      Date.now() - startedAt,
+    );
+    logger.summary({
+      totalFiles: summary.totalFiles,
+      successCount: summary.successCount,
+      failureCount: summary.failureCount,
+      failures: summary.failures.map((f) => ({
+        sourcePath: f.sourcePath,
+        reason: f.reason,
+      })),
+      outputRoot: summary.outputRoot,
+      durationMs: summary.durationMs,
+    });
+    return summary;
+  } finally {
+    await logger.flush();
+    logger.stop();
   }
-
-  const dep = await checkPopplerImpl();
-  if (dep.isErr()) {
-    throw new Error(dep.error.message);
-  }
-
-  logger.info(`Discovered ${files.length} target files.`);
-  logger.start(files.length, options.fileConcurrency);
-  const results = await scheduleTasksImpl(files, converters, options, logger);
-  const summary = buildConversionSummary(
-    files.length,
-    results,
-    outputRoot,
-    Date.now() - startedAt,
-  );
-  logger.summary({
-    totalFiles: summary.totalFiles,
-    successCount: summary.successCount,
-    failureCount: summary.failureCount,
-    failures: summary.failures.map((f) => ({
-      sourcePath: f.sourcePath,
-      reason: f.reason,
-    })),
-    outputRoot: summary.outputRoot,
-    durationMs: summary.durationMs,
-  });
-  await logger.flush();
-  logger.stop();
-  return summary;
 };
