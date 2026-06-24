@@ -1,4 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { BackendObservabilityService } from '../../observability';
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserDiagnosticsStore } from '../browser/content/browser-diagnostics.store';
@@ -37,6 +40,8 @@ export class HealthService {
     private readonly desktopRuntime?: DesktopBrowserRuntimeService,
     @Optional()
     private readonly diagnosticsStore?: BrowserDiagnosticsStore,
+    @Optional()
+    private readonly observability?: BackendObservabilityService,
   ) {}
 
   getStatus(): HealthStatus {
@@ -52,7 +57,7 @@ export class HealthService {
     const diagnostics = this.diagnosticsStore?.getStatus();
     const browserAgentStatus = browser?.available ? 'ok' : 'degraded';
     const diagnosticsStatus = diagnostics?.enabled ? 'ok' : 'degraded';
-    return {
+    const result: ReadinessStatus = {
       status:
         browserAgentStatus === 'ok' && diagnosticsStatus === 'ok'
           ? 'ready'
@@ -72,5 +77,22 @@ export class HealthService {
       },
       timestamp: new Date().toISOString(),
     };
+
+    this.observability?.record({
+      event:
+        result.status === 'ready'
+          ? 'health.readiness_ready'
+          : 'health.readiness_degraded',
+      level: result.status === 'ready' ? 'info' : 'warn',
+      details: {
+        browserAgentId: result.checks.browserAgent.agentId,
+        browserAgentStatus,
+        diagnosticsEnabled: diagnostics?.enabled ?? false,
+        diagnosticsStoreStatus: diagnosticsStatus,
+        status: result.status,
+      },
+    });
+
+    return result;
   }
 }

@@ -13,6 +13,10 @@ import { createCodexConfigPaths } from '../infra/codex-config-paths';
 import { cliContractArgs, createCliContext } from '../runtime/cli-context';
 import { createCliError } from '../runtime/cli-error';
 import {
+  type ObservedCliCommandScope,
+  runObservedCliCommand,
+} from '../runtime/command-diagnostics';
+import {
   processOutput,
   writeCommandError,
   writeHumanStatus,
@@ -367,6 +371,7 @@ async function confirmApplyOverwrite(
   context: ReturnType<typeof createCliContext>,
   paths: Record<ManagedApplyArea, string[]>,
   args: ConfigCommandArgs,
+  fail?: ObservedCliCommandScope['fail'],
 ): Promise<boolean> {
   if (!hasApplyOverwriteRisk(paths) || args.yes === true) {
     return true;
@@ -377,6 +382,7 @@ async function confirmApplyOverwrite(
     'codex apply would overwrite or delete local prompts/rules; rerun with --yes to confirm.',
   );
   if (context.json || !context.interactive) {
+    fail?.(error, { details: { phase: 'confirmation' } });
     writeCommandError(context, processOutput, error);
     process.exitCode = error.exitCode;
     return false;
@@ -411,12 +417,21 @@ async function confirmApplyOverwrite(
       'invalid_option',
       'codex apply cancelled.',
     );
+    fail?.(cancelError, { details: { phase: 'confirmation' } });
     writeCommandError(context, processOutput, cancelError);
     process.exitCode = cancelError.exitCode;
     return false;
   }
 
   return true;
+}
+
+async function runObservedCodexSubcommand(
+  subcommand: string,
+  args: ConfigCommandArgs,
+  run: (scope: ObservedCliCommandScope) => Promise<void> | void,
+): Promise<void> {
+  await runObservedCliCommand(args, { command: 'codex', subcommand }, run);
 }
 
 export const codexCommand = defineCommand({
@@ -432,7 +447,9 @@ export const codexCommand = defineCommand({
       },
       args: configArgs,
       async run({ args }) {
-        await runComparison(args);
+        await runObservedCodexSubcommand('status', args, async () => {
+          await runComparison(args);
+        });
       },
     }),
     export: defineCommand({
@@ -442,23 +459,28 @@ export const codexCommand = defineCommand({
       },
       args: configArgs,
       async run({ args }) {
-        const context = createCliContext(args);
-        const result = await exportCodexConfig(createPaths(args));
-        if (context.json) {
-          writeJsonValue(processOutput, {
-            ok: true,
-            command: 'codex export',
-            result,
-          });
-        } else {
-          writeHumanStatus(context, processOutput, pc.cyan('Codex export'));
-          writeHumanStatus(
-            context,
-            processOutput,
-            `exported: ${result.exportedAreas.join(', ')}`,
-          );
-        }
-        process.exitCode = 0;
+        await runObservedCodexSubcommand(
+          'export',
+          args,
+          async ({ context }) => {
+            const result = await exportCodexConfig(createPaths(args));
+            if (context.json) {
+              writeJsonValue(processOutput, {
+                ok: true,
+                command: 'codex export',
+                result,
+              });
+            } else {
+              writeHumanStatus(context, processOutput, pc.cyan('Codex export'));
+              writeHumanStatus(
+                context,
+                processOutput,
+                `exported: ${result.exportedAreas.join(', ')}`,
+              );
+            }
+            process.exitCode = 0;
+          },
+        );
       },
     }),
     apply: defineCommand({
@@ -468,36 +490,42 @@ export const codexCommand = defineCommand({
       },
       args: applyArgs,
       async run({ args }) {
-        const context = createCliContext(args);
-        const paths = createPaths(args);
-        const comparison = await compareCodexConfig(paths);
-        if (
-          !(await confirmApplyOverwrite(
-            context,
-            getApplyOverwritePaths(comparison),
-            args,
-          ))
-        ) {
-          return;
-        }
+        await runObservedCodexSubcommand(
+          'apply',
+          args,
+          async ({ context, fail }) => {
+            const paths = createPaths(args);
+            const comparison = await compareCodexConfig(paths);
+            if (
+              !(await confirmApplyOverwrite(
+                context,
+                getApplyOverwritePaths(comparison),
+                args,
+                fail,
+              ))
+            ) {
+              return;
+            }
 
-        const result = await applyCodexConfig(paths);
-        if (context.json) {
-          writeJsonValue(processOutput, {
-            ok: true,
-            command: 'codex apply',
-            result,
-          });
-        } else {
-          writeHumanStatus(context, processOutput, pc.cyan('Codex apply'));
-          writeHumanStatus(
-            context,
-            processOutput,
-            `applied: ${result.appliedAreas.join(', ')}`,
-          );
-          writeManualInstallHint(context, result);
-        }
-        process.exitCode = 0;
+            const result = await applyCodexConfig(paths);
+            if (context.json) {
+              writeJsonValue(processOutput, {
+                ok: true,
+                command: 'codex apply',
+                result,
+              });
+            } else {
+              writeHumanStatus(context, processOutput, pc.cyan('Codex apply'));
+              writeHumanStatus(
+                context,
+                processOutput,
+                `applied: ${result.appliedAreas.join(', ')}`,
+              );
+              writeManualInstallHint(context, result);
+            }
+            process.exitCode = 0;
+          },
+        );
       },
     }),
     install: defineCommand({
@@ -508,32 +536,42 @@ export const codexCommand = defineCommand({
       },
       args: configArgs,
       async run({ args }) {
-        const context = createCliContext(args);
-        const result = await installCodexAssets(createPaths(args));
-        if (context.json) {
-          writeJsonValue(processOutput, {
-            ok: true,
-            command: 'codex install',
-            result,
-          });
-        } else {
-          writeHumanStatus(context, processOutput, pc.cyan('Codex install'));
-          writeHumanStatus(
-            context,
-            processOutput,
-            `installed skills: ${result.installedSkills.join(', ') || '(none)'}`,
-          );
-          writeHumanStatus(
-            context,
-            processOutput,
-            `installed plugins: ${
-              result.installedPlugins.map((plugin) => plugin.name).join(', ') ||
-              '(none)'
-            }`,
-          );
-          writeManualInstallHint(context, result);
-        }
-        process.exitCode = 0;
+        await runObservedCodexSubcommand(
+          'install',
+          args,
+          async ({ context }) => {
+            const result = await installCodexAssets(createPaths(args));
+            if (context.json) {
+              writeJsonValue(processOutput, {
+                ok: true,
+                command: 'codex install',
+                result,
+              });
+            } else {
+              writeHumanStatus(
+                context,
+                processOutput,
+                pc.cyan('Codex install'),
+              );
+              writeHumanStatus(
+                context,
+                processOutput,
+                `installed skills: ${result.installedSkills.join(', ') || '(none)'}`,
+              );
+              writeHumanStatus(
+                context,
+                processOutput,
+                `installed plugins: ${
+                  result.installedPlugins
+                    .map((plugin) => plugin.name)
+                    .join(', ') || '(none)'
+                }`,
+              );
+              writeManualInstallHint(context, result);
+            }
+            process.exitCode = 0;
+          },
+        );
       },
     }),
   },

@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { type CommandDef, defineCommand } from 'citty';
 import { getCompletionCandidates } from '../domain/completion-candidates';
+import { createCliError } from '../runtime/cli-error';
+import { runObservedCliCommand } from '../runtime/command-diagnostics';
 
 type RootCommandResolver = () => CommandDef;
 type CompletionProfileAction = 'enable' | 'disable' | 'status';
@@ -202,36 +204,53 @@ export function createCompletionCommand() {
       },
     },
     async run({ args, rawArgs }) {
-      const first = rawArgs[0] ?? '';
-      if (isCompletionProfileAction(first)) {
-        const shell = rawArgs[1] ?? '';
-        if (shell !== 'powershell') {
-          process.stderr.write(
-            `managed persistent completion currently supports PowerShell only: ${shell || '<missing>'}\n`,
-          );
-          process.exitCode = 1;
-          return;
-        }
-        try {
-          await handlePowerShellProfileAction(first);
-        } catch (error) {
-          process.stderr.write(
-            `${error instanceof Error ? error.message : String(error)}\n`,
-          );
-          process.exitCode = 1;
-        }
-        return;
-      }
+      await runObservedCliCommand(
+        args,
+        { command: 'completion' },
+        async ({ fail }) => {
+          const first = rawArgs[0] ?? '';
+          if (isCompletionProfileAction(first)) {
+            const shell = rawArgs[1] ?? '';
+            if (shell !== 'powershell') {
+              const error = createCliError(
+                'invalid_option',
+                `managed persistent completion currently supports PowerShell only: ${shell || '<missing>'}`,
+              );
+              fail(error, { details: { action: first, shell } });
+              process.stderr.write(`${error.message}\n`);
+              process.exitCode = error.exitCode;
+              return;
+            }
+            try {
+              await handlePowerShellProfileAction(first);
+            } catch (error) {
+              const cliError = createCliError(
+                'invalid_option',
+                error instanceof Error ? error.message : String(error),
+              );
+              fail(cliError, { details: { action: first, shell } });
+              process.stderr.write(`${cliError.message}\n`);
+              process.exitCode = cliError.exitCode;
+            }
+            return;
+          }
 
-      const shell = typeof args.shell === 'string' ? args.shell : '';
-      const script = renderShellScript(shell);
-      if (!script) {
-        process.stderr.write(`unsupported shell: ${shell}\n`);
-        process.exitCode = 1;
-        return;
-      }
-      process.stdout.write(script);
-      process.exitCode = 0;
+          const shell = typeof args.shell === 'string' ? args.shell : '';
+          const script = renderShellScript(shell);
+          if (!script) {
+            const error = createCliError(
+              'invalid_option',
+              `unsupported shell: ${shell}`,
+            );
+            fail(error, { details: { shell } });
+            process.stderr.write(`${error.message}\n`);
+            process.exitCode = error.exitCode;
+            return;
+          }
+          process.stdout.write(script);
+          process.exitCode = 0;
+        },
+      );
     },
   });
 }

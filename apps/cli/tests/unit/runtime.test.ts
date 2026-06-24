@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createCliContext } from '../../src/runtime/cli-context';
 import { createCliError } from '../../src/runtime/cli-error';
+import { runObservedCliCommand } from '../../src/runtime/command-diagnostics';
 import {
   createCliCommandDiagnostics,
   createCliDiagnostics,
@@ -196,5 +197,26 @@ describe('CLI runtime contract', () => {
       }),
     );
     expect(lines[1].details.json).toBe(true);
+  });
+
+  test('records unexpected command failures before rethrowing', async () => {
+    const events: string[] = [];
+    await expect(
+      runObservedCliCommand(
+        {},
+        { command: 'test' },
+        async () => {
+          throw new Error('unexpected failure');
+        },
+        {
+          diagnostics: {
+            complete: () => events.push('complete'),
+            fail: (error) => events.push(`fail:${error.code}`),
+          },
+        },
+      ),
+    ).rejects.toThrow('unexpected failure');
+
+    expect(events).toEqual(['fail:invalid_option']);
   });
 });
