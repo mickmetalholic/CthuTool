@@ -1,11 +1,11 @@
 ---
 name: anki-english-expression-card-maker
-description: Create English Expression Anki notes from English sentences, reading excerpts, and target expressions through the CthuCodex Anki MCP tools. Use when the user explicitly asks to make, add, generate, or create an English expression card/note for Anki, especially for the `English Expression` note type with fields `Sentence`, `Expression`, and `Explanation`, cloze deletion, structured English explanations, examples, and optional tags.
+description: Create English Expression Anki notes from English sentences, reading excerpts, and one or more target expressions through the CthuCodex Anki MCP tools. Use when the user explicitly asks to make, add, generate, or create English expression cards/notes for Anki, especially for the `English Expression` note type with fields `Sentence`, `Expression`, and `Explanation`, cloze deletion, structured English explanations, examples, optional tags, and batch creation from `[[...]]` markers.
 ---
 
 # Anki English Expression Card Maker
 
-Use this skill to create one `English Expression` Anki note from an English sentence or excerpt and a target expression.
+Use this skill to create one or more `English Expression` Anki notes from an English sentence or excerpt and target expression markers.
 
 ## Constants
 
@@ -16,20 +16,20 @@ Use this skill to create one `English Expression` Anki note from an English sent
 ## Workflow
 
 1. Parse the user's input into:
-   - `sourceSentence`: the single English sentence to store.
-   - `expression`: the expression being studied, with user markup removed.
-   - `surfaceSpan`: the exact sentence span to cloze.
+   - `sourceSentence`: the single English sentence to store for each note.
+   - `targets`: one or more target expressions to study, with user markup removed.
+   - `surfaceSpan`: the exact sentence span to cloze for each target.
    - `clozeHint`: two to four short synonyms or paraphrases for the cloze.
    - `explanation`: structured English content for `Explanation`.
    - `tags`: optional tags from a `tags:` line or standalone tag-like line, normalized before validation.
 2. Call `cthu_anki_collection_schema` for `English Expression`.
 3. Confirm the model exists and fields include `Sentence`, `Expression`, and `Explanation`.
 4. If no tags were supplied, use an empty tag list and continue without asking for tags.
-5. Generate a candidate note payload.
+5. Generate one candidate note payload per target.
 6. Show the candidate if review would help, especially when the expression boundary, sentence selection, or hint required judgment.
-7. Call `cthu_anki_validate_notes` with the candidate note.
-8. If validation passes, call `cthu_anki_add_notes` with `openAfterCreate: true`.
-9. Report the created note ID and any Browser-opening warning.
+7. Call `cthu_anki_validate_notes` with all candidate notes in one `notes` array.
+8. If validation passes for all notes, call `cthu_anki_add_notes` with all candidate notes and `openAfterCreate: true`.
+9. Report each created note ID, a per-note Browser query deep link such as `nid:<noteId>`, the combined Browser query, and any Browser-opening warning.
 
 Do not write a note if the expression, source sentence, schema, or validation result is unclear.
 
@@ -40,6 +40,20 @@ Accept an expression marked inline:
 ```text
 Nutrition labels can offer some helpful clues if you can **get past the maze of** information and jargon.
 ```
+
+Accept one or more expression targets marked with double brackets. When `[[...]]` markers exist, create one note for each marked expression:
+
+```text
+Nutrition labels can [[offer]] some helpful [[clues]] if you can **get past the maze of** information and jargon.
+```
+
+Double-bracket targets may use alias syntax `[[label|surface]]`. Use the text after `|` as the expression and sentence surface. Treat the text before `|` only as an optional meaning or lemma clue:
+
+```text
+Cloud gaming arrived [[disastrous|disastrously]] too early.
+```
+
+In this example, create the card from `disastrously`, not `disastrous`.
 
 Also accept a separate expression line:
 
@@ -86,12 +100,14 @@ In this example, parse `get past the maze of` as the expression and normalize th
 Parsing rules:
 
 - Before treating a short standalone line as an expression clue, check whether it is tag-like. A line is tag-like when it contains `::`, contains spaced hyphen hierarchy separators with at least two non-empty parts such as `A - B`, or matches an existing collection tag after normalization. Treat tag-like lines as tags, not expression clues.
-- If exactly one `**...**` span exists, use that span as `surfaceSpan` and `expression`, then remove only the markdown `**` markers from `sourceSentence`.
-- If there is no `**...**` span, treat the last short non-tag line as an expression clue. Use it to identify `surfaceSpan` in the sentence or excerpt.
+- If one or more `[[...]]` spans exist, use each bracketed span as a target expression and create one note per target. Ignore all `**...**` spans for target selection in this case.
+- If a bracketed span contains `|`, parse it as `[[label|surface]]`: use `surface` as the final sentence text, `surfaceSpan`, and `Expression`. Do not write the `label` text to final note fields unless it is useful as background for the explanation.
+- If `[[...]]` spans exist, remove `[[`, `]]`, and `**` marker characters from final note fields. In each generated `Sentence`, add cloze syntax only around the current target expression and leave the other target expressions as plain text.
+- If no `[[...]]` span exists and one or more `**...**` spans exist, use each bold span as a target expression and create one note per marked span.
+- If there are no `[[...]]` or `**...**` spans, treat the last short non-tag line as an expression clue. Use it to identify `surfaceSpan` in the sentence or excerpt.
 - If a longer excerpt is provided, select the sentence containing `surfaceSpan` only when there is exactly one confident containing sentence.
 - If the expression clue cannot be found exactly but a close match is obvious, use it only when the intended phrase boundary is clear.
-- If the expression cannot be confidently found, appears in multiple possible sentences, or occurs multiple times in the selected sentence, ask the user to clarify before validation.
-- If there are multiple marked spans, ask whether to create multiple cards or which expression to study.
+- If an expression cannot be confidently found, appears in multiple possible sentences, or occurs multiple times in the selected sentence without a marker identifying the occurrence, ask the user to clarify before validation.
 
 ## Field Generation
 
@@ -121,6 +137,33 @@ Example candidate:
 }
 ```
 
+Example batch candidates from `[[...]]` markers:
+
+```json
+[
+  {
+    "Sentence": "Nutrition labels can {{c1::offer::provide / give / present}} some helpful clues if you can get past the maze of information and jargon.",
+    "Expression": "offer",
+    "Explanation": "Definition:<br>To provide, give, or make something available.<br><br>Synonyms:<br>provide, give, present, supply, make available, extend, propose<br><br>Other Examples:<br>The guide can offer practical advice.<br>The course offers useful examples.<br>This report offers a clear summary."
+  },
+  {
+    "Sentence": "Nutrition labels can offer some helpful {{c1::clues::hints / signs / indications}} if you can get past the maze of information and jargon.",
+    "Expression": "clues",
+    "Explanation": "Definition:<br>Pieces of information that help someone understand or solve something.<br><br>Synonyms:<br>hints, signs, indications, pointers, signals, evidence, leads<br><br>Other Examples:<br>The context gives clues about the meaning.<br>Her tone offered a few clues.<br>Look for clues in the surrounding sentence."
+  }
+]
+```
+
+Example alias target:
+
+```json
+{
+  "Sentence": "Cloud gaming arrived {{c1::disastrously::catastrophically / terribly / ruinously}} too early.",
+  "Expression": "disastrously",
+  "Explanation": "Definition:<br>In a way that causes serious harm, failure, or very bad results.<br><br>Synonyms:<br>catastrophically, terribly, ruinously, badly, calamitously, devastatingly, fatally<br><br>Other Examples:<br>The launch went disastrously wrong.<br>The plan was disastrously underfunded.<br>The system failed disastrously during testing."
+}
+```
+
 ## Tag Selection
 
 If the user supplied `tags:` or a standalone tag-like line, normalize and use those tags.
@@ -142,7 +185,7 @@ If tags are missing:
 
 ## Candidate Payload
 
-Use this Anki MCP note shape:
+Use this Anki MCP note shape. For multiple targets, include one note object per target in the `notes` array:
 
 ```json
 {
@@ -203,4 +246,5 @@ Create with:
 - If validation fails, show the validation result and do not call `cthu_anki_add_notes`.
 - If validation fails because the note would be a duplicate, report the duplicate-card result and ask before making any alternate card.
 - If note creation succeeds but Browser opening fails, report the warning without treating creation as failed.
+- If note creation succeeds, report each created note ID, each `nid:<noteId>` Browser query, and the combined Browser query from `openResult.query` when available.
 - If the user asks for a dry run or preview, generate and show the candidate without calling write tools.
