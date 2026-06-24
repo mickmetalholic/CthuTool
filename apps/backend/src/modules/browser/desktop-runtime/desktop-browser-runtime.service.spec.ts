@@ -4,7 +4,10 @@ import {
   createBrowserRuntimeSuccessResponse,
 } from '@cthutool/browser-runtime-protocol';
 import type { Mock } from 'vitest';
-import type { AgentCommandGateway } from '../../agent/command-gateway/agent-command-gateway.service';
+import {
+  type AgentCommandGateway,
+  AgentCommandGatewayError,
+} from '../../agent/command-gateway/agent-command-gateway.service';
 import { DesktopBrowserRuntimeService } from './desktop-browser-runtime.service';
 
 describe('DesktopBrowserRuntimeService', () => {
@@ -47,12 +50,13 @@ describe('DesktopBrowserRuntimeService', () => {
         event: 'desktop_browser_runtime.command_completed',
         details: expect.objectContaining({
           commandType: 'browser.capturePage',
+          responseType: 'jsonrpc.result',
         }),
       }),
     );
   });
 
-  it('attaches command observability metadata to browser commands', async () => {
+  it('attaches command observability metadata to browser runtime requests', async () => {
     const { runtime, gateway } = createHarness();
 
     await runtime.capturePage({
@@ -68,6 +72,83 @@ describe('DesktopBrowserRuntimeService', () => {
       }),
       undefined,
     );
+  });
+
+  it('opens login through the browser runtime protocol', async () => {
+    const updatedAt = new Date().toISOString();
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createProfileOperationResponse('browser.openLogin', {
+        profileName: 'douban-main',
+        status: 'verified',
+        updatedAt,
+      }),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.openLogin({
+      siteId: 'douban',
+      profileName: 'douban-main',
+      loginUrl: 'https://accounts.douban.com/passport/login',
+      timeoutMs: 12_000,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        profileName: 'douban-main',
+        status: 'available',
+        updatedAt,
+      },
+    });
+    expect(gateway.sendCommand).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({
+        jsonrpc: '2.0',
+        method: 'browser.openLogin',
+        params: expect.objectContaining({
+          authPolicy: 'required',
+          loginUrl: 'https://accounts.douban.com/passport/login',
+          profileName: 'douban-main',
+          siteId: 'douban',
+        }),
+      }),
+      12_000,
+    );
+  });
+
+  it.each([
+    ['missing', 'missing'],
+    ['expired', 'expired'],
+    ['login_required', 'invalid'],
+    ['verifying', 'invalid'],
+    ['blocked', 'invalid'],
+    [undefined, 'invalid'],
+  ] as const)('maps verified profile status %s to desktop status %s', async (runtimeStatus, desktopStatus) => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createProfileOperationResponse('browser.verifyProfile', {
+        profileName: runtimeStatus ? 'zhihu-main' : undefined,
+        status: runtimeStatus,
+        updatedAt: runtimeStatus ? new Date().toISOString() : undefined,
+      }),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.verifyProfile({
+      siteId: 'zhihu',
+      profileName: 'zhihu-main',
+      verifyUrl: 'https://www.zhihu.com/',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({
+        profileName: 'zhihu-main',
+        status: desktopStatus,
+        updatedAt: runtimeStatus ? expect.any(String) : undefined,
+      });
+    }
   });
 
   it('returns interaction challenge when auth is required', async () => {
@@ -133,6 +214,149 @@ describe('DesktopBrowserRuntimeService', () => {
     }
   });
 
+  it.each([
+    ['login_required', 'login', 'login_required'],
+    ['login_expired', 'verify', 'profile_expired'],
+    ['verification_failed', 'verify', 'verification_failed'],
+    ['captcha_required', 'verify', 'captcha_required'],
+    ['blocked', 'verify', 'blocked'],
+    ['rate_limited', 'verify', 'rate_limited'],
+  ] as const)('maps explicit %s challenge to an interaction challenge', async (kind, action, reason) => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserRuntimeErrorResponse('cmd-1', {
+        challenge: {
+          kind,
+          siteId: 'douban',
+          profileName: 'douban-main',
+          loginUrl: 'https://accounts.douban.com/passport/login',
+          verifyUrl: 'https://movie.douban.com/',
+        },
+        code: kind === 'rate_limited' ? 'RATE_LIMITED' : 'CAPTCHA_REQUIRED',
+        message: 'Browser interaction is required',
+      }),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.capturePage({
+      url: 'https://movie.douban.com/subject/1292052/',
+      siteId: 'douban',
+      profileName: 'douban-main',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok && 'challenge' in result) {
+      expect(result.challenge).toEqual({
+        siteId: 'douban',
+        profileName: 'douban-main',
+        action,
+        reason,
+        loginUrl: 'https://accounts.douban.com/passport/login',
+        verifyUrl: 'https://movie.douban.com/',
+      });
+    }
+  });
+
+  it('falls back to an expired challenge for expired runtime profiles', async () => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserRuntimeErrorResponse('cmd-1', {
+        code: 'BROWSER_PROFILE_EXPIRED',
+        message: 'Required browser profile expired',
+        profileStatus: 'expired',
+      }),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.capturePage({
+      url: 'https://example.com/',
+      siteId: 'example',
+      profileName: 'my-profile',
+      verifyUrl: 'https://example.com/verify',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok && 'challenge' in result) {
+      expect(result.challenge.reason).toBe('profile_expired');
+      expect(result.challenge.action).toBe('verify');
+    }
+  });
+
+  it('returns runtime errors that do not require interaction', async () => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserRuntimeErrorResponse('cmd-1', {
+        code: 'BROWSER_COMMAND_FAILED',
+        message: 'Browser command failed',
+      }),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.capturePage({
+      url: 'https://example.com/',
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Browser command failed',
+      code: 'BROWSER_COMMAND_FAILED',
+    });
+  });
+
+  it('rejects invalid browser runtime responses', async () => {
+    const gateway = createGatewayMock(createAgentStatus('agent-1'), {
+      jsonrpc: '2.0',
+      id: 'bad-response',
+      result: {
+        detection: { kind: 'ok' },
+      },
+    } as BrowserRuntimeResponse<'browser.capturePage'>);
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.capturePage({
+      url: 'https://example.com/',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok && 'error' in result) {
+      expect(result.code).toBe('INVALID_BROWSER_RUNTIME_RESPONSE');
+    }
+  });
+
+  it('returns gateway errors when command dispatch fails', async () => {
+    const gateway = createGatewayMock();
+    gateway.sendCommand.mockRejectedValueOnce(
+      new AgentCommandGatewayError('AGENT_NOT_AVAILABLE', 'socket closed'),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.capturePage({
+      url: 'https://example.com/',
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'socket closed',
+      code: 'AGENT_NOT_AVAILABLE',
+    });
+  });
+
+  it('returns generic unavailable errors for unexpected dispatch failures', async () => {
+    const gateway = createGatewayMock();
+    gateway.sendCommand.mockRejectedValueOnce(new Error('boom'));
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.capturePage({
+      url: 'https://example.com/',
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Desktop browser runtime is not available',
+      code: 'AGENT_NOT_AVAILABLE',
+    });
+  });
+
   it('returns error when no browser agent is online', async () => {
     const gateway = createGatewayMock(null);
     const observability = { record: vi.fn() };
@@ -153,6 +377,23 @@ describe('DesktopBrowserRuntimeService', () => {
         event: 'desktop_browser_runtime.unavailable',
       }),
     );
+  });
+
+  it('returns profile operation errors when no browser agent is online', async () => {
+    const gateway = createGatewayMock(null);
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.openLogin({
+      siteId: 'example',
+      profileName: 'main',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok && 'error' in result) {
+      expect(result.error).toBe(
+        'No online desktop agent with browser capability',
+      );
+    }
   });
 
   it('returns agent status', async () => {
@@ -378,6 +619,36 @@ type GatewayMock = {
   readonly selectAgentByCapability: Mock;
   readonly sendCommand: Mock;
 };
+
+function createProfileOperationResponse(
+  method: 'browser.openLogin' | 'browser.verifyProfile',
+  profile: {
+    readonly profileName?: string;
+    readonly status?:
+      | 'missing'
+      | 'login_required'
+      | 'verifying'
+      | 'verified'
+      | 'expired'
+      | 'blocked';
+    readonly updatedAt?: string;
+  },
+): BrowserRuntimeResponse<typeof method> {
+  return createBrowserRuntimeSuccessResponse('cmd-returned', {
+    capturedAt: new Date().toISOString(),
+    detection: { kind: 'ok' },
+    ...(profile.profileName && profile.status && profile.updatedAt
+      ? {
+          profile: {
+            siteId: 'site',
+            profileName: profile.profileName,
+            status: profile.status,
+            updatedAt: profile.updatedAt,
+          },
+        }
+      : {}),
+  });
+}
 
 function createGatewayMock(
   agent: ReturnType<typeof createAgentStatus> | null = createAgentStatus(
