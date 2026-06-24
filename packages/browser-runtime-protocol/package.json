@@ -5,10 +5,11 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
-    "test:cov": "vitest run --coverage",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:deps": "pnpm --filter @cthutool/agent-protocol build",
+    "build": "pnpm run build:deps && tsc -p tsconfig.json",
+    "test": "pnpm run build:deps && vitest run",
+    "test:cov": "pnpm run build:deps && vitest run --coverage",
+    "typecheck": "pnpm run build:deps && tsc -p tsconfig.json --noEmit",
     "lint": "biome check ."
   },
   "dependencies": {
