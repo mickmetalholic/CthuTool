@@ -6,14 +6,17 @@ import {
   type HostActions,
   LocalStatusPage,
   PageFrame,
+  PageStatusList,
 } from '@cthutool/app-shell';
 import { Button } from '@cthutool/ui';
 import {
+  Activity,
   Bot,
   Chrome,
   FileText,
   Home,
   Info,
+  Palette,
   RefreshCw,
   Save,
   Server,
@@ -57,7 +60,12 @@ type AppProps = {
 
 type Workspace = 'main' | 'settings';
 type MainView = 'home' | 'browser' | 'agents';
-type SettingsView = 'service' | 'status' | 'logs';
+type SettingsView =
+  | 'service'
+  | 'local-runtime'
+  | 'diagnostics'
+  | 'logs'
+  | 'appearance';
 type BrowserProfileActionName = 'openLogin' | 'verifyProfile' | 'clearProfile';
 type BrowserActionState = {
   readonly action?: BrowserProfileActionName;
@@ -112,9 +120,11 @@ const mainNav = [
 ] as const;
 
 const settingsNav = [
-  { id: 'service', label: 'Service', icon: Server },
-  { id: 'status', label: 'Status', icon: Info },
+  { id: 'service', label: 'Service Connection', icon: Server },
+  { id: 'local-runtime', label: 'Local Runtime', icon: Activity },
+  { id: 'diagnostics', label: 'Diagnostics', icon: Info },
   { id: 'logs', label: 'Logs', icon: FileText },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
 ] as const;
 
 export function App({
@@ -368,9 +378,13 @@ export function App({
       }),
     [browserStatus, localPendingAuthTasks],
   );
+  const openConnectionSettings = () => {
+    setWorkspace('settings');
+    setSettingsView('service');
+  };
   const openClientStatusSettings = () => {
     setWorkspace('settings');
-    setSettingsView('status');
+    setSettingsView('local-runtime');
   };
 
   return (
@@ -444,6 +458,7 @@ export function App({
                   saveState,
                   connection,
                   appInfo,
+                  activeEnvironmentLabel: activeEnvironment?.label ?? 'Local',
                 })}
           </section>
         </div>
@@ -455,7 +470,8 @@ export function App({
           platform={appInfo.platform}
           statusLabel={statusLabel}
           version={appInfo.version}
-          onOpenStatus={openClientStatusSettings}
+          onOpenClientStatus={openClientStatusSettings}
+          onOpenConnectionStatus={openConnectionSettings}
         />
       </main>
     </AppRuntimeProvider>
@@ -772,6 +788,7 @@ function renderSettingsWorkspace({
   saveState,
   connection,
   appInfo,
+  activeEnvironmentLabel,
 }: {
   readonly view: SettingsView;
   readonly config: DesktopConfig | undefined;
@@ -796,35 +813,57 @@ function renderSettingsWorkspace({
   readonly saveState: 'idle' | 'saving' | 'saved';
   readonly connection: AgentConnectionState;
   readonly appInfo: DesktopAppInfo;
+  readonly activeEnvironmentLabel: string;
 }) {
-  if (view === 'status') {
+  const configuredBackendUrl = config?.backendUrl ?? connection.backendUrl;
+  const browserRuntimeKind =
+    appInfo.browserRuntime?.activeKind ??
+    appInfo.browserRuntime?.preferredKind ??
+    'Unknown';
+  const browserRuntimeStatus = appInfo.browserRuntime?.status ?? 'unknown';
+  const browserRuntimeDetail =
+    appInfo.browserRuntime?.message ?? 'Not available';
+
+  if (view === 'local-runtime') {
     return (
-      <WorkspacePanel title="Connection Status" eyebrow="Settings">
+      <WorkspacePanel title="Local Runtime" eyebrow="Settings">
         <LocalStatusPage
           rows={[
-            ['Backend URL', config?.backendUrl ?? connection.backendUrl],
             ['Agent ID', config?.agentId ?? connection.agentId],
-            [
-              'Browser Runtime',
-              appInfo.browserRuntime?.activeKind ??
-                appInfo.browserRuntime?.preferredKind ??
-                'Unknown',
-            ],
-            ['Runtime Status', appInfo.browserRuntime?.status ?? 'unknown'],
-            [
-              'Runtime Detail',
-              appInfo.browserRuntime?.message ?? 'Not available',
-            ],
             ['Device', config?.deviceName ?? connection.deviceName],
+            ['Browser Runtime', browserRuntimeKind],
+            ['Runtime Status', browserRuntimeStatus],
+            ['Version', appInfo.version],
+            ['Platform', appInfo.platform],
+            ['Packaged', appInfo.isPackaged ? 'yes' : 'no'],
+          ]}
+          localRows={[
+            ['User Data', localPathValue(appInfo.userDataDir)],
+            ['Browser Profiles', localPathValue(appInfo.browserProfilesDir)],
+            ['Config File', localPathValue(appInfo.configPath)],
+          ]}
+        />
+      </WorkspacePanel>
+    );
+  }
+
+  if (view === 'diagnostics') {
+    return (
+      <WorkspacePanel title="Diagnostics" eyebrow="Settings">
+        <LocalStatusPage
+          rows={[
+            ['Environment', activeEnvironmentLabel],
+            ['Backend URL', configuredBackendUrl],
             ['Connection', connection.status],
+            ['Agent ID', config?.agentId ?? connection.agentId],
             [
               'Last Registered',
               connection.lastRegisteredAt ?? 'Not registered',
             ],
             ['Last Error', connection.lastError ?? 'None'],
-            ['Version', appInfo.version],
-            ['Platform', appInfo.platform],
-            ['Packaged', appInfo.isPackaged ? 'yes' : 'no'],
+            ['Browser Runtime', browserRuntimeKind],
+            ['Runtime Status', browserRuntimeStatus],
+            ['Runtime Detail', browserRuntimeDetail],
           ]}
           localRows={[
             ['User Data', localPathValue(appInfo.userDataDir)],
@@ -846,6 +885,27 @@ function renderSettingsWorkspace({
             log inspection. No log stream is currently wired in CthuDesktop.
           </p>
         </div>
+      </WorkspacePanel>
+    );
+  }
+
+  if (view === 'appearance') {
+    return (
+      <WorkspacePanel title="Appearance" eyebrow="Settings">
+        <div className="log-view">
+          <h2>Fixed theme system</h2>
+          <p>
+            CthuDesktop is currently using the Dracula token system. Theme
+            switching controls are not available in this settings phase.
+          </p>
+        </div>
+        <PageStatusList
+          rows={[
+            ['Mode', config?.appearance.mode ?? form.appearanceMode],
+            ['Color Scheme', config?.appearance.colorScheme ?? 'dracula'],
+            ['Theme Controls', 'Not connected in this release'],
+          ]}
+        />
       </WorkspacePanel>
     );
   }

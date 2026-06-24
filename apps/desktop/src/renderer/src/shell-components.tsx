@@ -175,7 +175,8 @@ export function DesktopStatusBar({
   backendUrl,
   connectionStatus,
   environmentLabel,
-  onOpenStatus,
+  onOpenClientStatus,
+  onOpenConnectionStatus,
   platform,
   statusLabel,
   version,
@@ -183,7 +184,8 @@ export function DesktopStatusBar({
   readonly backendUrl: string;
   readonly connectionStatus: string;
   readonly environmentLabel: string;
-  readonly onOpenStatus: () => void;
+  readonly onOpenClientStatus: () => void;
+  readonly onOpenConnectionStatus: () => void;
   readonly platform: string;
   readonly statusLabel: string;
   readonly version: string;
@@ -194,7 +196,7 @@ export function DesktopStatusBar({
         aria-label="Open connection details"
         className={`statusbar-connection ${connectionStatus}`}
         type="button"
-        onClick={onOpenStatus}
+        onClick={onOpenConnectionStatus}
       >
         {connectionStatus === 'connected' ? (
           <Wifi size={13} />
@@ -209,7 +211,7 @@ export function DesktopStatusBar({
         aria-label="Open client status"
         className="statusbar-meta"
         type="button"
-        onClick={onOpenStatus}
+        onClick={onOpenClientStatus}
       >
         <span>{platform}</span>
         <span>v{version}</span>

@@ -250,6 +250,9 @@ describe('CthuDesktop shell', () => {
     expect(screen.getByText('Browser Attention')).toBeInTheDocument();
     expect(screen.queryByLabelText('Douban subject')).not.toBeInTheDocument();
     expect(
+      screen.queryByDisplayValue('http://backend.local:3000'),
+    ).not.toBeInTheDocument();
+    expect(
       within(screen.getByLabelText('Primary')).queryByRole('button', {
         name: 'Tasks',
       }),
@@ -292,14 +295,22 @@ describe('CthuDesktop shell', () => {
         deviceName: 'Windows PC',
       });
     });
-    await userEvent.click(screen.getByRole('button', { name: 'Status' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Local Runtime' }),
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Local Runtime' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('windows-pc')).toBeInTheDocument();
+    expect(screen.getByText('Browser Runtime')).toBeInTheDocument();
+    expect(screen.getByText('Browser Profiles')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    expect(
+      screen.getByRole('heading', { name: 'Diagnostics' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Last Registered')).toBeInTheDocument();
     expect(screen.getByText('Last Error')).toBeInTheDocument();
     expect(screen.getByText('Backend URL')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Diagnostics' }),
-    ).not.toBeInTheDocument();
     const logsButtons = screen.getAllByRole('button', { name: 'Logs' });
     const settingsLogsButton = logsButtons.at(-1);
     expect(settingsLogsButton).toBeDefined();
@@ -308,9 +319,15 @@ describe('CthuDesktop shell', () => {
     expect(
       screen.getByText('Log viewing is not connected yet'),
     ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
     expect(
-      screen.queryByRole('button', { name: 'Appearance' }),
-    ).not.toBeInTheDocument();
+      screen.getByRole('heading', { name: 'Appearance' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Fixed theme system')).toBeInTheDocument();
+    expect(screen.getByText('Theme Controls')).toBeInTheDocument();
+    expect(
+      screen.getByText('Not connected in this release'),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole('option', { name: 'Dracula' }),
     ).not.toBeInTheDocument();
@@ -332,10 +349,12 @@ describe('CthuDesktop shell', () => {
     );
 
     expect(
-      screen.getByRole('heading', { name: 'Connection Status' }),
+      screen.getByRole('heading', { name: 'Service Connection' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Last Registered')).toBeInTheDocument();
-    expect(screen.getByText('Backend URL')).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue('http://backend.local:3000'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Local Agent Enabled')).toBeInTheDocument();
   });
 
   test('opens client status from the status bar client button', async () => {
@@ -354,7 +373,7 @@ describe('CthuDesktop shell', () => {
     );
 
     expect(
-      screen.getByRole('heading', { name: 'Connection Status' }),
+      screen.getByRole('heading', { name: 'Local Runtime' }),
     ).toBeInTheDocument();
     expect(screen.getAllByText('win32')).not.toHaveLength(0);
     expect(screen.getByText('0.0.0')).toBeInTheDocument();
@@ -382,9 +401,11 @@ describe('CthuDesktop shell', () => {
     );
 
     expect(
-      screen.getByRole('heading', { name: 'Connection Status' }),
+      screen.getByRole('heading', { name: 'Service Connection' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Last Registered')).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue('http://backend.local:3000'),
+    ).toBeInTheDocument();
   });
 
   test('shows a restart hint when local path info is not available yet', async () => {
