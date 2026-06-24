@@ -17,7 +17,8 @@ Use this skill to create one `Japanese Sentence` Anki note from a Japanese examp
 
 1. Parse the user's input into:
    - `sentence`: the Japanese example sentence without markdown markers.
-   - `surfacePhrase`: the exact sentence span to cloze.
+   - `grammarClue`: the marked or standalone grammar clue from the user.
+   - `surfacePhrase`: the smallest natural sentence span to cloze for learning the construction, which may be wider than `grammarClue`.
    - `grammarPoint`: the canonical grammar item being studied.
    - `tags`: optional tags from a `tags:` line or standalone tag-like line, normalized before validation.
 2. Call `cthu_anki_collection_schema` for `Japanese Sentence`.
@@ -78,12 +79,12 @@ In this example, parse `って` as the grammar point clue and normalize the fina
 Parsing rules:
 
 - Before treating a short standalone line as a grammar clue, check whether it is tag-like. A line is tag-like when it contains `::`, contains spaced hyphen hierarchy separators with at least three non-empty parts such as `A - B - C`, or matches an existing collection tag after normalization. Treat tag-like lines as tags, not grammar clues.
-- If exactly one `**...**` span exists, use that span as `surfacePhrase` and remove only the markdown `**` markers from `sentence`.
-- If there is no `**...**` span, treat the last short non-tag line as a grammar clue. Use it to identify `surfacePhrase` in the sentence and canonicalize `grammarPoint`.
-- If the grammar clue does not occur exactly in the sentence but is a clear conjugated phrase, typo, or partial phrase for a known grammar construction, infer the matching `surfacePhrase` only when confident. For example, with `冷蔵庫が壊れたので、新しいのを買うことにした。` and `買うとにした`, use `買うことにした` as `surfacePhrase` and `～ことにする` as `grammarPoint`.
+- If exactly one `**...**` span exists, treat that span as `grammarClue`, remove only the markdown `**` markers from `sentence`, and then choose `surfacePhrase` using the cloze span selection rules below.
+- If there is no `**...**` span, treat the last short non-tag line as `grammarClue`. Use it to identify the studied construction in the sentence and canonicalize `grammarPoint`.
+- If the grammar clue does not occur exactly in the sentence but is a clear conjugated phrase, typo, or partial phrase for a known grammar construction, infer the matching construction only when confident. For example, with `冷蔵庫が壊れたので、新しいのを買うことにした。` and `買うとにした`, use `買うことにした` as `surfacePhrase` and `～ことにする` as `grammarPoint`.
 - If the grammar clue is a canonical pattern such as `～ことにする`, find the matching surface phrase in the sentence, such as `買うことにした`.
-- If the surface phrase cannot be confidently found in the sentence, ask the user to clarify.
-- If the surface phrase occurs multiple times and no occurrence is marked, ask which occurrence to cloze.
+- If the studied construction cannot be confidently found in the sentence, ask the user to clarify.
+- If the construction occurs multiple times and no occurrence is marked, ask which occurrence to cloze.
 - If there are multiple marked spans, ask whether to create multiple clozes or which grammar point to study.
 
 Canonical grammar-point rules:
@@ -92,6 +93,18 @@ Canonical grammar-point rules:
 - Prefer dictionary/citation form for grammar patterns, using `～` when natural: `～ことにする`, `～に対して`, `～ようにする`.
 - Convert inflected or sentence-bound forms to the canonical pattern when confident: `買うことにした` -> `～ことにする`.
 - Ask the user when multiple canonical grammar patterns could explain the same surface phrase.
+
+## Cloze Span Selection
+
+Default to hiding the smallest natural phrase that carries the grammar construction, not just the grammar marker or particle.
+
+Rules:
+
+- Treat `grammarClue` as a clue for locating the construction, not as the final cloze span.
+- Include the immediately governed predicate, adjective, noun, or nominalizer when the grammar point depends on that surrounding material.
+- Prefer a complete learnable construction such as `行くのに対して`, `買うことにした`, `先生だって`, or `聞いたところによると` over only `に対して`, `ことにした`, `って`, or `ところによると`.
+- Use only the grammar marker itself when it is already the complete learnable target, when a wider span would hide unrelated content, or when the user explicitly asks to hide only the marked text.
+- If more than one wider phrase is plausible, ask the user before validation.
 
 ## Field Generation
 
@@ -104,7 +117,7 @@ Generate fields as follows:
 
 The `文` field must always use `{{c1::...::...}}` cloze syntax with an English hint after the second `::`.
 
-The cloze span may be wider than the grammar point when that is better for learning the construction. For example, if the grammar point is `に対して`, this is better than hiding only `に対して`:
+The cloze span should usually be wider than the grammar point when that is better for learning the construction. For example, if the grammar point is `に対して`, hide the connected phrase instead of only `に対して`:
 
 ```text
 うちの課は女性がよく飲みに{{c1::行くのに対して::in contrast to going out for drinks}}、男性はみなまっすぐ家に帰る。
