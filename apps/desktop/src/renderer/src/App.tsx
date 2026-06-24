@@ -77,7 +77,6 @@ type BrowserAttentionItem = {
   readonly reason: string;
   readonly siteId: string;
   readonly siteName: string;
-  readonly source: string;
   readonly status?: string;
 };
 type BrowserProfileRow = {
@@ -708,7 +707,7 @@ function BrowserHostPanel({
           <strong>{browserStatus.profiles.length}</strong>
         </div>
         <div className="metric compact">
-          <span>Pending Auth</span>
+          <span>Auth Attention</span>
           <strong>{model.attentionItems.length}</strong>
         </div>
       </section>
@@ -1066,8 +1065,7 @@ function BrowserAttentionPanel({
                 <small>{item.profileName}</small>
               </div>
               <div className="site-profile-summary">
-                <span>Pending {item.reason}</span>
-                <span>{item.source}</span>
+                <span>{item.reason}</span>
                 {item.status ? <span>{item.status}</span> : null}
               </div>
               <small>Next actions: Open, Verify, Clear</small>
@@ -1144,6 +1142,9 @@ function BrowserManagedProfileRow({
           {row.profile?.verifiedAt ? (
             <span>{formatTimestamp(row.profile.verifiedAt)}</span>
           ) : null}
+          {row.site.authPolicy === 'required' && !row.profile ? (
+            <span>Missing profile</span>
+          ) : null}
           {row.source === 'local' ? <span>Local fallback</span> : null}
         </div>
         {row.actionState?.message && row.actionState.status !== 'idle' ? (
@@ -1188,7 +1189,9 @@ function buildBrowserHostDisplayModel({
       profile,
       site,
       source: 'backend',
-      statusLabel: profile?.status ?? site.authPolicy,
+      statusLabel:
+        profile?.status ??
+        (site.authPolicy === 'required' ? 'missing' : site.authPolicy),
     };
   });
 
@@ -1218,23 +1221,22 @@ function buildBrowserAttentionItems({
 }: {
   readonly browserStatus: BrowserStatus;
 }): BrowserAttentionItem[] {
-  const siteNames = new Map(
-    browserStatus.sites.map((site) => [site.siteId, site.displayName]),
-  );
   const items = new Map<string, BrowserAttentionItem>();
-  for (const profile of browserStatus.profiles) {
-    if (profile.status === 'verified') {
-      continue;
-    }
-    const key = `${profile.siteId}:${profile.profileName}`;
+  for (const site of browserStatus.sites) {
+    if (site.authPolicy !== 'required') continue;
+
+    const profile = findSiteProfile(browserStatus, site);
+    if (profile?.status === 'verified') continue;
+
+    const key = browserSiteKey(site);
     items.set(key, {
       key,
-      profileName: profile.profileName,
-      reason: profile.status,
-      siteId: profile.siteId,
-      siteName: siteNames.get(profile.siteId) ?? profile.siteId,
+      profileName: site.profileName ?? 'anonymous',
+      reason: profile ? 'Profile needs verification' : 'Missing profile',
+      siteId: site.siteId,
+      siteName: site.displayName,
       source: 'profile',
-      status: profile.status,
+      status: profile?.status,
     });
   }
   return [...items.values()];

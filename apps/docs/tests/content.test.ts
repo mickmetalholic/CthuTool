@@ -58,7 +58,7 @@ describe('docs content', () => {
 
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
-      const content = readFileSync(file, 'utf8');
+      const content = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
       const frontmatter = parseFrontmatter(content);
 
       expect(frontmatter.title, file).toEqual(expect.any(String));
