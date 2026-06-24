@@ -32,7 +32,7 @@ Commands and bundled scripts MUST NOT call prompt APIs when the shared context i
 - **THEN** the command may prompt for the missing input
 
 ### Requirement: JSON Stdout Contract
-Commands that support JSON mode SHALL write exactly one parseable JSON value to stdout when `--json` is set.
+Commands that support JSON mode SHALL write exactly one parseable JSON value to stdout when `--json` is set and SHALL complete the process lifecycle deterministically after that value is written.
 
 #### Scenario: Successful JSON command
 - **WHEN** a JSON-enabled command completes successfully
@@ -45,6 +45,10 @@ Commands that support JSON mode SHALL write exactly one parseable JSON value to 
 #### Scenario: Diagnostics stay off JSON stdout
 - **WHEN** warnings or diagnostics are produced while `--json` is set
 - **THEN** those diagnostics are written to stderr and are not mixed into JSON stdout
+
+#### Scenario: JSON command exits after output
+- **WHEN** a JSON-enabled command writes its success or deliberate-error JSON value
+- **THEN** the command resolves its command runner and exits without leaving active handles or child work that causes callers to time out
 
 ### Requirement: Command Error Model
 Command boundary failures SHALL use a command error model with a stable code, human-readable message, and exit code.
