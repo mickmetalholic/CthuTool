@@ -11,8 +11,12 @@ import {
   SelfUpdateError,
   type SelfUpdateStep,
 } from '../domain/self-update-manager';
-import { cliContractArgs, createCliContext } from '../runtime/cli-context';
-import { createCliError } from '../runtime/cli-error';
+import {
+  cliContractArgs,
+  type CliContext,
+} from '../runtime/cli-context';
+import { type CliError, createCliError } from '../runtime/cli-error';
+import { runObservedCliCommand } from '../runtime/command-diagnostics';
 import {
   processOutput,
   writeCommandError,
@@ -35,15 +39,6 @@ const selfUpdateArgs = {
     description: 'Local source checkout directory',
   },
 } as const;
-
-type SelfUpdateCommandArgs = {
-  readonly json?: unknown;
-  readonly noInteractive?: unknown;
-  readonly quiet?: unknown;
-  readonly repo?: unknown;
-  readonly ref?: unknown;
-  readonly 'install-dir'?: unknown;
-};
 
 function getStringArg(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0
@@ -68,15 +63,16 @@ function formatStep(step: SelfUpdateStep): string {
   }
 }
 
-function writeFailure(args: SelfUpdateCommandArgs, error: unknown): void {
-  const context = createCliContext(args);
-  const cliError =
-    error instanceof SelfUpdateError
-      ? createCliError('self_update_failed', error.message)
-      : createCliError(
-          'self_update_failed',
-          error instanceof Error ? error.message : 'self-update failed',
-        );
+function toSelfUpdateCliError(error: unknown): CliError {
+  return error instanceof SelfUpdateError
+    ? createCliError('self_update_failed', error.message)
+    : createCliError(
+        'self_update_failed',
+        error instanceof Error ? error.message : 'self-update failed',
+      );
+}
+
+function writeFailure(context: CliContext, cliError: CliError): void {
   writeCommandError(context, processOutput, cliError);
   process.exitCode = cliError.exitCode;
 }
@@ -90,48 +86,67 @@ function createUpdateCommand(name: 'update' | 'self-update') {
     },
     args: selfUpdateArgs,
     async run({ args }) {
-      const context = createCliContext(args);
-      const repo = getStringArg(args.repo);
-      const ref = getStringArg(args.ref);
-      const installDir = getStringArg(args['install-dir']);
+      await runObservedCliCommand(
+        args,
+        { command: name },
+        async ({ context, fail }) => {
+          const repo = getStringArg(args.repo);
+          const ref = getStringArg(args.ref);
+          const installDir = getStringArg(args['install-dir']);
 
-      writeHumanStatus(context, processOutput, pc.cyan('CthuTool update'));
-      writeHumanStatus(
-        context,
-        processOutput,
-        `repo: ${repo ?? defaultSelfUpdateRepo}`,
-      );
-      writeHumanStatus(
-        context,
-        processOutput,
-        `ref:  ${ref ?? defaultSelfUpdateRef}`,
-      );
-      writeHumanStatus(
-        context,
-        processOutput,
-        `dir:  ${installDir ?? getDefaultSelfUpdateInstallDir()}`,
-      );
+          writeHumanStatus(
+            context,
+            processOutput,
+            pc.cyan(
+              name === 'self-update'
+                ? 'CthuTool self-update'
+                : 'CthuTool update',
+            ),
+          );
+          writeHumanStatus(
+            context,
+            processOutput,
+            `repo: ${repo ?? defaultSelfUpdateRepo}`,
+          );
+          writeHumanStatus(
+            context,
+            processOutput,
+            `ref:  ${ref ?? defaultSelfUpdateRef}`,
+          );
+          writeHumanStatus(
+            context,
+            processOutput,
+            `dir:  ${installDir ?? getDefaultSelfUpdateInstallDir()}`,
+          );
 
-      try {
-        const result = await runSelfUpdate(
-          { repo, ref, installDir },
-          createSelfUpdateDeps((step) => {
-            writeHumanStatus(context, processOutput, `- ${formatStep(step)}`);
-          }),
-        );
-        if (context.json) {
-          writeJsonValue(processOutput, {
-            ok: true,
-            command: 'update',
-            result,
-          });
-        } else {
-          writeHumanStatus(context, processOutput, pc.green('updated'));
-        }
-        process.exitCode = 0;
-      } catch (error) {
-        writeFailure(args, error);
-      }
+          try {
+            const result = await runSelfUpdate(
+              { repo, ref, installDir },
+              createSelfUpdateDeps((step) => {
+                writeHumanStatus(
+                  context,
+                  processOutput,
+                  `- ${formatStep(step)}`,
+                );
+              }),
+            );
+            if (context.json) {
+              writeJsonValue(processOutput, {
+                ok: true,
+                command: name,
+                result,
+              });
+            } else {
+              writeHumanStatus(context, processOutput, pc.green('updated'));
+            }
+            process.exitCode = 0;
+          } catch (error) {
+            const cliError = toSelfUpdateCliError(error);
+            fail(cliError, { details: { installDir, ref, repo } });
+            writeFailure(context, cliError);
+          }
+        },
+      );
     },
   });
 }
@@ -143,18 +158,19 @@ export const versionCommand = defineCommand({
   },
   args: cliContractArgs,
   async run({ args }) {
-    const context = createCliContext(args);
-    const version = getCliVersion();
-    if (context.json) {
-      writeJsonValue(processOutput, {
-        ok: true,
-        command: 'version',
-        version,
-      });
-    } else {
-      processOutput.stdout.write(`chc ${version}\n`);
-    }
-    process.exitCode = 0;
+    await runObservedCliCommand(args, { command: 'version' }, ({ context }) => {
+      const version = getCliVersion();
+      if (context.json) {
+        writeJsonValue(processOutput, {
+          ok: true,
+          command: 'version',
+          version,
+        });
+      } else {
+        processOutput.stdout.write(`chc ${version}\n`);
+      }
+      process.exitCode = 0;
+    });
   },
 });
 
@@ -165,44 +181,67 @@ export const statusCommand = defineCommand({
   },
   args: selfUpdateArgs,
   async run({ args }) {
-    const context = createCliContext(args);
-    const status = await getCliInstallationStatus({
-      repo: getStringArg(args.repo),
-      ref: getStringArg(args.ref),
-      installDir: getStringArg(args['install-dir']),
-    });
-    if (context.json) {
-      writeJsonValue(processOutput, {
-        ok: true,
-        command: 'status',
-        status,
-      });
-    } else {
-      writeHumanStatus(context, processOutput, pc.cyan('CthuTool status'));
-      writeHumanStatus(
-        context,
-        processOutput,
-        `version:     ${status.version}`,
-      );
-      writeHumanStatus(
-        context,
-        processOutput,
-        `install dir: ${status.installDir}`,
-      );
-      writeHumanStatus(context, processOutput, `repo:        ${status.repo}`);
-      writeHumanStatus(context, processOutput, `ref:         ${status.ref}`);
-      writeHumanStatus(
-        context,
-        processOutput,
-        `commit:      ${status.commit ?? 'unavailable'}`,
-      );
-      writeHumanStatus(
-        context,
-        processOutput,
-        `bundle:      ${status.bundlePresent ? 'present' : 'missing'} (${status.bundlePath})`,
-      );
-    }
-    process.exitCode = 0;
+    await runObservedCliCommand(
+      args,
+      { command: 'status' },
+      async ({ context, fail }) => {
+        try {
+          const status = await getCliInstallationStatus({
+            repo: getStringArg(args.repo),
+            ref: getStringArg(args.ref),
+            installDir: getStringArg(args['install-dir']),
+          });
+          if (context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: 'status',
+              status,
+            });
+          } else {
+            writeHumanStatus(
+              context,
+              processOutput,
+              pc.cyan('CthuTool status'),
+            );
+            writeHumanStatus(
+              context,
+              processOutput,
+              `version:     ${status.version}`,
+            );
+            writeHumanStatus(
+              context,
+              processOutput,
+              `install dir: ${status.installDir}`,
+            );
+            writeHumanStatus(
+              context,
+              processOutput,
+              `repo:        ${status.repo}`,
+            );
+            writeHumanStatus(
+              context,
+              processOutput,
+              `ref:         ${status.ref}`,
+            );
+            writeHumanStatus(
+              context,
+              processOutput,
+              `commit:      ${status.commit ?? 'unavailable'}`,
+            );
+            writeHumanStatus(
+              context,
+              processOutput,
+              `bundle:      ${status.bundlePresent ? 'present' : 'missing'} (${status.bundlePath})`,
+            );
+          }
+          process.exitCode = 0;
+        } catch (error) {
+          const cliError = toSelfUpdateCliError(error);
+          fail(cliError);
+          writeFailure(context, cliError);
+        }
+      },
+    );
   },
 });
 

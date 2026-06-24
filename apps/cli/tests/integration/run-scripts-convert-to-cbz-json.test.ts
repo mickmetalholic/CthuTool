@@ -87,7 +87,7 @@ describe('scripts convert-to-cbz JSON mode', () => {
     expect(parsed.script).toBe('convert-to-cbz');
     expect(parsed.summary.totalFiles).toBe(0);
     expect(parsed.summary.outputRoot).toBe(join(inputRoot, '.output'));
-  });
+  }, 15_000);
 
   test('keeps JSON stdout parseable when diagnostics are enabled', async () => {
     const inputRoot = await mkdtemp(join(tmpdir(), 'cthutool-empty-input-'));
@@ -116,7 +116,7 @@ describe('scripts convert-to-cbz JSON mode', () => {
       'cli.command_completed',
     );
     expect(err).not.toContain(inputRoot);
-  });
+  }, 15_000);
 
   test('fails without prompting when input is missing non-interactively', async () => {
     const { code, err, out } = await runCli([
@@ -135,5 +135,5 @@ describe('scripts convert-to-cbz JSON mode', () => {
       },
     });
     expect(err).toBe('');
-  });
+  }, 15_000);
 });

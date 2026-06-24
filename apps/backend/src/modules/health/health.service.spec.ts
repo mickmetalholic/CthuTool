@@ -13,6 +13,7 @@ describe('HealthService', () => {
   });
 
   it('returns degraded readiness when browser agent is unavailable', async () => {
+    const observability = { record: jest.fn() };
     const service = new HealthService(
       {
         getStatus: jest.fn(async () => ({
@@ -26,6 +27,7 @@ describe('HealthService', () => {
           enabled: true,
         })),
       } as never,
+      observability as never,
     );
 
     await expect(service.getReadiness()).resolves.toMatchObject({
@@ -39,9 +41,21 @@ describe('HealthService', () => {
         },
       },
     });
+    expect(observability.record).toHaveBeenCalledWith({
+      event: 'health.readiness_degraded',
+      level: 'warn',
+      details: {
+        browserAgentId: 'unknown',
+        browserAgentStatus: 'degraded',
+        diagnosticsEnabled: true,
+        diagnosticsStoreStatus: 'ok',
+        status: 'degraded',
+      },
+    });
   });
 
   it('returns ready when dependencies are available', async () => {
+    const observability = { record: jest.fn() };
     const service = new HealthService(
       {
         getStatus: jest.fn(async () => ({
@@ -56,6 +70,7 @@ describe('HealthService', () => {
           enabled: true,
         })),
       } as never,
+      observability as never,
     );
 
     await expect(service.getReadiness()).resolves.toMatchObject({
@@ -63,6 +78,17 @@ describe('HealthService', () => {
       checks: {
         browserAgent: { agentId: 'agent-1', status: 'ok' },
         diagnosticsStore: { enabled: true, status: 'ok' },
+      },
+    });
+    expect(observability.record).toHaveBeenCalledWith({
+      event: 'health.readiness_ready',
+      level: 'info',
+      details: {
+        browserAgentId: 'agent-1',
+        browserAgentStatus: 'ok',
+        diagnosticsEnabled: true,
+        diagnosticsStoreStatus: 'ok',
+        status: 'ready',
       },
     });
   });

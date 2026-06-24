@@ -59,6 +59,29 @@ describe('observableFetch', () => {
       }),
     );
   });
+
+  it('records network failure metadata', async () => {
+    const logger = createLogger();
+    global.fetch = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    }) as typeof fetch;
+
+    await expect(
+      observableFetch('/api/health', {
+        action: 'health.check',
+        logger,
+      }),
+    ).rejects.toThrow('fetch failed');
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'health.check',
+        errorCode: 'TypeError',
+        event: 'api.request_error',
+        route: '/api/health',
+      }),
+    );
+  });
 });
 
 function createLogger(): WebLogger {
