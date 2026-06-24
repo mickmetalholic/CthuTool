@@ -127,7 +127,7 @@ if (rawArgs.length === 1 && rawArgs[0] === '--version') {
   await showNativeUsage(omittedTopLevelCommand, rootCommand);
   process.exitCode = 0;
 } else {
-  runMain(rootCommand, { showUsage: showNativeUsage }).catch(() => {
+  await runMain(rootCommand, { showUsage: showNativeUsage }).catch(() => {
     process.exitCode = 1;
   });
 }
