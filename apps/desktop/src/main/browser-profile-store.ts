@@ -8,7 +8,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { join } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import type { BrowserProfileSummary } from '@cthutool/agent-protocol';
 
 export type BrowserProfileStatus = BrowserProfileSummary['status'];
@@ -184,36 +184,40 @@ async function replaceFile(
   targetPath: string,
 ): Promise<void> {
   let latestError: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       await rename(tempPath, targetPath);
       return;
     } catch (error) {
       latestError = error;
-      if (!isTransientReplaceError(error) || attempt === 2) {
+      if (!isRetryableReplaceError(error) || attempt === 4) {
         break;
       }
       try {
         await rm(targetPath, { force: true });
       } catch (removeError) {
-        if (!isTransientReplaceError(removeError)) {
+        if (!isRetryableReplaceError(removeError)) {
           latestError = removeError;
           break;
         }
       }
-      await sleep(20 * (attempt + 1));
+      await delay(20 * (attempt + 1));
     }
   }
   await rm(tempPath, { force: true });
   throw latestError;
 }
 
-function isTransientReplaceError(error: unknown): boolean {
+function isRetryableReplaceError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = (error as NodeJS.ErrnoException).code;
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    ['EACCES', 'EPERM', 'EEXIST'].includes(String(error.code))
+    code === 'EACCES' ||
+    code === 'EBUSY' ||
+    code === 'EEXIST' ||
+    code === 'EPERM'
   );
 }
 
