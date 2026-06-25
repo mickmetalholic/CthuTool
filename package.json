@@ -20,6 +20,7 @@
     "check:cli-dist": "scripts/check-cli-dist.sh",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "precommit:cli-dist": "node scripts/precommit-refresh-cli-dist.mjs",
     "prepare": "husky",
     "prepack": "pnpm --filter @cthutool/cli build",
     "commit": "git-cz"
@@ -30,8 +31,8 @@
     }
   },
   "lint-staged": {
-    "apps/**/*.{js,ts,mjs,cjs,jsx,tsx,json,jsonc}": "pnpm exec biome check --write",
-    "packages/**/*.{js,ts,mjs,cjs,jsx,tsx,json,jsonc}": "pnpm exec biome check --write"
+    "apps/**/*.{js,ts,mjs,cjs,jsx,tsx,json,jsonc}": "pnpm exec biome check --write --no-errors-on-unmatched",
+    "packages/**/*.{js,ts,mjs,cjs,jsx,tsx,json,jsonc}": "pnpm exec biome check --write --no-errors-on-unmatched"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.9",
