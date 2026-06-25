@@ -8,6 +8,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { BrowserProfileSummary } from '@cthutool/agent-protocol';
 
 export type BrowserProfileStatus = BrowserProfileSummary['status'];
@@ -22,6 +23,8 @@ export type BrowserProfilePatch = Partial<
 >;
 
 export class BrowserProfileStore {
+  private readonly saveQueues = new Map<string, Promise<void>>();
+
   constructor(
     private readonly rootDir: string,
     private readonly now: () => Date = () => new Date(),
@@ -54,31 +57,37 @@ export class BrowserProfileStore {
     patch: BrowserProfilePatch,
   ): Promise<LocalBrowserProfile> {
     assertProfileKey(siteId, profileName);
-    const current = await this.getProfile(siteId, profileName);
-    const updatedAt = this.now().toISOString();
-    const displayName =
-      'displayName' in patch ? patch.displayName : current?.displayName;
-    const externalUserId =
-      'externalUserId' in patch
-        ? patch.externalUserId
-        : current?.externalUserId;
-    const verifiedAt =
-      'verifiedAt' in patch ? patch.verifiedAt : current?.verifiedAt;
-    const next: LocalBrowserProfile = {
-      profileName,
-      siteId,
-      status: patch.status ?? current?.status ?? 'missing',
-      updatedAt,
-      ...(displayName ? { displayName } : {}),
-      ...(externalUserId ? { externalUserId } : {}),
-      ...(verifiedAt ? { verifiedAt } : {}),
-    };
-    await mkdir(this.profileDir(siteId, profileName), { recursive: true });
-    const metaPath = this.metaPath(siteId, profileName);
-    const tempMetaPath = `${metaPath}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(tempMetaPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
-    await rename(tempMetaPath, metaPath);
-    return next;
+    return this.enqueueSave(siteId, profileName, async () => {
+      const current = await this.getProfile(siteId, profileName);
+      const updatedAt = this.now().toISOString();
+      const displayName =
+        'displayName' in patch ? patch.displayName : current?.displayName;
+      const externalUserId =
+        'externalUserId' in patch
+          ? patch.externalUserId
+          : current?.externalUserId;
+      const verifiedAt =
+        'verifiedAt' in patch ? patch.verifiedAt : current?.verifiedAt;
+      const next: LocalBrowserProfile = {
+        profileName,
+        siteId,
+        status: patch.status ?? current?.status ?? 'missing',
+        updatedAt,
+        ...(displayName ? { displayName } : {}),
+        ...(externalUserId ? { externalUserId } : {}),
+        ...(verifiedAt ? { verifiedAt } : {}),
+      };
+      await mkdir(this.profileDir(siteId, profileName), { recursive: true });
+      const metaPath = this.metaPath(siteId, profileName);
+      const tempMetaPath = `${metaPath}.${process.pid}.${Date.now()}.tmp`;
+      await writeFile(
+        tempMetaPath,
+        `${JSON.stringify(next, null, 2)}\n`,
+        'utf8',
+      );
+      await replaceFile(tempMetaPath, metaPath);
+      return next;
+    });
   }
 
   async markStatus(
@@ -146,6 +155,66 @@ export class BrowserProfileStore {
   private metaPath(siteId: string, profileName: string): string {
     return join(this.profileDir(siteId, profileName), 'profile-meta.json');
   }
+
+  private async enqueueSave<T>(
+    siteId: string,
+    profileName: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const key = `${siteId}:${profileName}`;
+    const previous = this.saveQueues.get(key) ?? Promise.resolve();
+    const run = previous.catch(() => undefined).then(task);
+    const next = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.saveQueues.set(key, next);
+    try {
+      return await run;
+    } finally {
+      if (this.saveQueues.get(key) === next) {
+        this.saveQueues.delete(key);
+      }
+    }
+  }
+}
+
+async function replaceFile(
+  tempPath: string,
+  targetPath: string,
+): Promise<void> {
+  let latestError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await rename(tempPath, targetPath);
+      return;
+    } catch (error) {
+      latestError = error;
+      if (!isTransientReplaceError(error) || attempt === 2) {
+        break;
+      }
+      try {
+        await rm(targetPath, { force: true });
+      } catch (removeError) {
+        if (!isTransientReplaceError(removeError)) {
+          latestError = removeError;
+          break;
+        }
+      }
+      await sleep(20 * (attempt + 1));
+    }
+  }
+  await rm(tempPath, { force: true });
+  throw latestError;
+}
+
+function isTransientReplaceError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    ['EACCES', 'EPERM', 'EEXIST'].includes(String(error.code))
+  );
 }
 
 function parseProfileMeta(raw: string): LocalBrowserProfile {

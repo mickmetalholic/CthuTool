@@ -85,7 +85,7 @@ describe("root package.json scripts contract", () => {
       };
       const test = normalizeScript(pkg.scripts?.test);
       if (pkg.name === "@cthutool/cli") {
-        expect(test).toContain("bun test");
+        expect(test).toMatch(/(bun|run-bun\.sh)\s+test/);
       } else {
         expect(test).toContain("vitest");
       }

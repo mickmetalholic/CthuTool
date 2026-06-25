@@ -57,6 +57,35 @@ describe('BrowserProfileStore', () => {
     expect(expired.verifiedAt).toBeUndefined();
   });
 
+  test('serializes concurrent metadata saves for the same profile', async () => {
+    const store = await createStore();
+
+    await Promise.all([
+      store.saveProfile('douban', 'douban-main', {
+        displayName: 'Cthu User',
+        status: 'login_required',
+      }),
+      store.saveProfile('douban', 'douban-main', {
+        status: 'expired',
+      }),
+      store.saveProfile('douban', 'douban-main', {
+        externalUserId: '50353979',
+        status: 'verified',
+        verifiedAt: '2026-06-13T10:00:00.000Z',
+      }),
+    ]);
+
+    expect(await store.getProfile('douban', 'douban-main')).toEqual({
+      displayName: 'Cthu User',
+      externalUserId: '50353979',
+      profileName: 'douban-main',
+      siteId: 'douban',
+      status: 'verified',
+      updatedAt: '2026-06-13T10:00:00.000Z',
+      verifiedAt: '2026-06-13T10:00:00.000Z',
+    });
+  });
+
   test('lists local profile metadata for state projection', async () => {
     const store = await createStore();
     await store.markStatus('douban', 'douban-main', 'verified');

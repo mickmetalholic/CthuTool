@@ -63,9 +63,7 @@ describe('global bin', () => {
     expect(rootPackage.scripts.start).toBeUndefined();
     expect(cliPackage.scripts.prepare).toBeUndefined();
     expect(cliPackage.scripts.prepack).toBeUndefined();
-    expect(cliPackage.scripts.build).toBe(
-      'bun build src/index.ts --outdir dist --target node --define process.env.NODE_ENV=\'"production"\'',
-    );
+    expect(cliPackage.scripts.build).toBe('../../scripts/build-cli-dist.sh');
     expect(cliPackage.scripts.dev).toBe(
       'bun build src/index.ts --outdir dist --target node --watch',
     );
