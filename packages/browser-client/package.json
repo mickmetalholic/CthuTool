@@ -1,0 +1,26 @@
+{
+  "name": "@cthutool/browser-client",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "lint": "biome check ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "5.9.2",
+    "vitest": "^2.1.9"
+  }
+}
