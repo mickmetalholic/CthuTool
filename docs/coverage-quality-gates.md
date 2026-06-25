@@ -20,6 +20,10 @@ Thresholds are configured in each package's Vitest coverage configuration, not
 in hidden CI shell logic. The root coverage command fails when a threshold-gated
 package fails its package-local coverage gate.
 
+Codecov project and patch statuses are visibility signals for pull request
+review. They remain informational so global diff coverage does not override the
+package-aware gates above.
+
 ## Visibility-Only Packages
 
 These packages still produce and publish coverage artifacts, but their coverage

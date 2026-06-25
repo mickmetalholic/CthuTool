@@ -138,4 +138,18 @@ describe("coverage quality gate policy", () => {
     expect(ci).not.toMatch(/coverage-threshold/i);
     expect(ci).toContain("pnpm run test:cov");
   });
+
+  it("keeps Codecov statuses informational beside package-local gates", () => {
+    const codecov = readText("codecov.yml");
+    const policy = readText("docs/coverage-quality-gates.md");
+
+    expect(codecov).toMatch(
+      /project:[\s\S]*default:[\s\S]*informational:\s*true/,
+    );
+    expect(codecov).toMatch(
+      /patch:[\s\S]*default:[\s\S]*informational:\s*true/,
+    );
+    expect(policy).toContain("Codecov project and patch statuses");
+    expect(policy).toContain("package-aware gates");
+  });
 });
