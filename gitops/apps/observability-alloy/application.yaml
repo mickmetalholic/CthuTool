@@ -1,0 +1,83 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-alloy
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: alloy
+    targetRevision: 1.10.0
+    helm:
+      releaseName: alloy
+      values: |
+        controller:
+          type: daemonset
+
+        alloy:
+          configMap:
+            create: true
+            content: |-
+              discovery.kubernetes "pods" {
+                role = "pod"
+              }
+
+              discovery.relabel "cthutool_pods" {
+                targets = discovery.kubernetes.pods.targets
+
+                rule {
+                  source_labels = ["__meta_kubernetes_namespace"]
+                  regex = "cthutool"
+                  action = "keep"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_namespace"]
+                  target_label = "namespace"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_part_of"]
+                  target_label = "app"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_component"]
+                  target_label = "component"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_name"]
+                  target_label = "pod"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_container_name"]
+                  target_label = "container"
+                }
+              }
+
+              loki.source.kubernetes "cthutool_pods" {
+                targets = discovery.relabel.cthutool_pods.output
+                forward_to = [loki.write.default.receiver]
+              }
+
+              loki.write "default" {
+                endpoint {
+                  url = "http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push"
+                }
+              }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

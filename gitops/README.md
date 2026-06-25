@@ -10,6 +10,7 @@ gitops/
 ├── apps/                # ArgoCD Application CRs (one subdirectory per app)
 │   └── <app-name>/
 │       └── application.yaml
+├── observability/       # Observability stack docs and extension points
 ├── bootstrap/           # ArgoCD self-install manifests (future)
 └── README.md
 ```
@@ -21,6 +22,7 @@ gitops/
 - **Auto-sync**: Applications are configured with automated sync (`prune: true`, `selfHeal: true`). ArgoCD polls git every **3 minutes** by default and reconciles any drift.
 - **Retry**: A `syncPolicy.retry` block with exponential backoff (up to 3 minutes) handles transient failures — once the app repo's manifests are valid, the Application self-recovers without manual intervention.
 - **Drift correction**: If a resource is manually edited on the cluster via `kubectl edit`, ArgoCD reverts it within minutes. Edit manifests in git, not the live cluster.
+- **Observability**: Prometheus, Grafana, Loki, and Alloy are managed through upstream chart Applications. See `gitops/observability/README.md` for the metrics, logs, dashboard, and future telemetry ingestion boundaries.
 
 ## Setup
 
@@ -66,3 +68,4 @@ Once applied, ArgoCD discovers the Application CRs from the cluster side and beg
 |-----|-----------|-------------|
 | CthuTool | `cthutool` | [mickmetalholic/CthuTool](https://github.com/mickmetalholic/CthuTool) (self-hosted) |
 | PixelPlayground | `pixel-playground` | [mickmetalholic/PixelPlayground](https://github.com/mickmetalholic/PixelPlayground) |
+| Observability | `observability` | Upstream Helm charts managed by Applications in this repo |
