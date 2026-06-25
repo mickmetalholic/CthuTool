@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   BROWSER_CAPABILITY,
+  type BrowserAction,
   type BrowserCommandPayload,
   createBrowserCommandMessage,
 } from '@cthutool/agent-protocol';
@@ -20,9 +21,11 @@ import {
 import type {
   DesktopBrowserCaptureResult,
   DesktopBrowserProfileStatus,
+  DesktopBrowserRunActionsResult,
   DesktopBrowserRuntimeDiagnostics,
   DesktopBrowserRuntimeResult,
   DesktopBrowserRuntimeStatus,
+  DesktopBrowserSessionMetadata,
 } from './desktop-browser-runtime.types';
 
 @Injectable()
@@ -154,6 +157,122 @@ export class DesktopBrowserRuntimeService {
         code: 'AGENT_NOT_AVAILABLE',
       };
     }
+  }
+
+  async createSession(options: {
+    readonly sessionId: string;
+    readonly siteId: string;
+    readonly profileName?: string;
+    readonly authPolicy?: 'anonymous' | 'required';
+    readonly blockResources?: readonly string[];
+    readonly expiresAt: string;
+    readonly timeoutMs?: number;
+  }): Promise<DesktopBrowserRuntimeResult<DesktopBrowserSessionMetadata>> {
+    const agent =
+      this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
+    if (!agent) {
+      return {
+        ok: false,
+        error: 'No online desktop agent with browser capability',
+        code: 'AGENT_NOT_AVAILABLE',
+      };
+    }
+
+    const result = await this.sendSessionCommand<DesktopBrowserSessionMetadata>(
+      agent.agentId,
+      {
+        authPolicy: options.authPolicy ?? 'anonymous',
+        blockResources: options.blockResources
+          ? ([
+              ...options.blockResources,
+            ] as BrowserCommandPayload['blockResources'])
+          : undefined,
+        command: 'browser.createSession',
+        commandId: randomUUID(),
+        expiresAt: options.expiresAt,
+        profileName: options.profileName,
+        sessionId: options.sessionId,
+        siteId: options.siteId,
+        timeoutMs: options.timeoutMs,
+      },
+      {
+        siteId: options.siteId,
+        profileName: options.profileName,
+      },
+    );
+    if (!result.ok) {
+      return result;
+    }
+    return {
+      ok: true,
+      value: {
+        ...result.value,
+        agentId: agent.agentId,
+      },
+    };
+  }
+
+  async runActions(options: {
+    readonly agentId: string;
+    readonly sessionId: string;
+    readonly siteId: string;
+    readonly profileName?: string;
+    readonly authPolicy?: 'anonymous' | 'required';
+    readonly actions: readonly BrowserAction[];
+    readonly timeoutMs?: number;
+  }): Promise<DesktopBrowserRuntimeResult<DesktopBrowserRunActionsResult>> {
+    return this.sendSessionCommand<DesktopBrowserRunActionsResult>(
+      options.agentId,
+      {
+        actions: [...options.actions],
+        authPolicy: options.authPolicy ?? 'anonymous',
+        command: 'browser.runActions',
+        commandId: randomUUID(),
+        profileName: options.profileName,
+        sessionId: options.sessionId,
+        siteId: options.siteId,
+        timeoutMs: options.timeoutMs,
+      },
+      {
+        siteId: options.siteId,
+        profileName: options.profileName,
+      },
+    );
+  }
+
+  async closeSession(options: {
+    readonly agentId: string;
+    readonly sessionId: string;
+    readonly siteId: string;
+    readonly profileName?: string;
+    readonly authPolicy?: 'anonymous' | 'required';
+    readonly timeoutMs?: number;
+  }): Promise<DesktopBrowserRuntimeResult<{ readonly sessionId: string }>> {
+    const result = await this.sendSessionCommand<{
+      readonly sessionId: string;
+    }>(
+      options.agentId,
+      {
+        authPolicy: options.authPolicy ?? 'anonymous',
+        command: 'browser.closeSession',
+        commandId: randomUUID(),
+        profileName: options.profileName,
+        sessionId: options.sessionId,
+        siteId: options.siteId,
+        timeoutMs: options.timeoutMs,
+      },
+      {
+        siteId: options.siteId,
+        profileName: options.profileName,
+      },
+    );
+    if (!result.ok) {
+      return result;
+    }
+    return {
+      ok: true,
+      value: { sessionId: result.value.sessionId },
+    };
   }
 
   async openLogin(options: {
@@ -320,6 +439,51 @@ export class DesktopBrowserRuntimeService {
     }
   }
 
+  private async sendSessionCommand<
+    TResult extends
+      | DesktopBrowserSessionMetadata
+      | DesktopBrowserRunActionsResult
+      | { readonly sessionId: string },
+  >(
+    agentId: string,
+    commandPayload: BrowserCommandPayload & { readonly commandId?: string },
+    context: {
+      readonly siteId: string;
+      readonly profileName?: string;
+      readonly loginUrl?: string;
+      readonly verifyUrl?: string;
+    },
+  ): Promise<DesktopBrowserRuntimeResult<TResult>> {
+    try {
+      const response = await this.commandGateway.sendCommand(
+        agentId,
+        createBrowserCommand({
+          ...commandPayload,
+          commandId: commandPayload.commandId ?? randomUUID(),
+        }),
+        commandPayload.timeoutMs,
+      );
+
+      if (response.type === 'browser.error') {
+        return this.toChallengeOrError(response, context);
+      }
+
+      return {
+        ok: true,
+        value: sessionResponseToRuntimeValue(response.payload) as TResult,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error:
+          error instanceof AgentCommandGatewayError
+            ? error.message
+            : 'Desktop browser runtime is not available',
+        code: 'AGENT_NOT_AVAILABLE',
+      };
+    }
+  }
+
   private toChallengeOrError(
     response: {
       readonly payload: {
@@ -399,5 +563,32 @@ function createBrowserCommand(payload: BrowserCommandPayload) {
       ...payload,
       observability,
     }),
+  };
+}
+
+function sessionResponseToRuntimeValue(response: {
+  readonly actionResults?: readonly unknown[];
+  readonly capturedAt?: string;
+  readonly session?: {
+    readonly createdAt: string;
+    readonly expiresAt: string;
+    readonly profileName?: string;
+    readonly sessionId: string;
+    readonly siteId: string;
+  };
+  readonly sessionId?: string;
+}) {
+  if (response.session) {
+    return response.session;
+  }
+  if (response.actionResults) {
+    return {
+      actionResults: response.actionResults,
+      capturedAt: response.capturedAt ?? new Date().toISOString(),
+      sessionId: response.sessionId ?? '',
+    };
+  }
+  return {
+    sessionId: response.sessionId ?? '',
   };
 }

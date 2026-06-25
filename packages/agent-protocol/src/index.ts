@@ -15,6 +15,19 @@ export const BROWSER_COMMANDS = [
   'browser.verifyProfile',
   'browser.openLogin',
   'browser.clearProfile',
+  'browser.createSession',
+  'browser.runActions',
+  'browser.closeSession',
+] as const;
+export const BROWSER_ACTION_TYPES = [
+  'goto',
+  'waitForSelector',
+  'click',
+  'fill',
+  'textContent',
+  'content',
+  'title',
+  'screenshot',
 ] as const;
 export const BROWSER_RESOURCE_TYPES = [
   'document',
@@ -85,6 +98,13 @@ const CommandIdSchema = v.pipe(
   v.maxLength(128),
 );
 
+const BrowserSessionIdSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(128),
+);
+
 const SiteIdSchema = v.pipe(
   v.string(),
   v.trim(),
@@ -102,6 +122,86 @@ const ProfileNameSchema = v.pipe(
 );
 
 const HttpUrlSchema = v.pipe(v.string(), v.url());
+
+const PositiveIntegerSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
+const WaitUntilSchema = v.picklist(['domcontentloaded', 'load', 'networkidle']);
+const BrowserActionIdSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(128),
+);
+const BrowserSelectorSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(2048),
+);
+const BrowserActionBaseSchema = v.object({
+  actionId: v.optional(BrowserActionIdSchema),
+  timeoutMs: v.optional(PositiveIntegerSchema),
+});
+export const BrowserActionSchema = v.variant('type', [
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('goto'),
+    url: HttpUrlSchema,
+    waitUntil: v.optional(WaitUntilSchema),
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('waitForSelector'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('click'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('fill'),
+    selector: BrowserSelectorSchema,
+    value: v.pipe(v.string(), v.maxLength(100_000)),
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('textContent'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('content'),
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('title'),
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('screenshot'),
+    fullPage: v.optional(v.boolean()),
+  }),
+]);
+
+export const BrowserActionResultSchema = v.object({
+  actionId: v.optional(BrowserActionIdSchema),
+  type: v.picklist(BROWSER_ACTION_TYPES),
+  finalUrl: v.optional(HttpUrlSchema),
+  status: v.optional(v.pipe(v.number(), v.integer())),
+  title: v.optional(v.string()),
+  html: v.optional(v.string()),
+  text: v.optional(v.string()),
+  screenshotBase64: v.optional(v.string()),
+});
+
+export const BrowserSessionMetadataSchema = v.object({
+  sessionId: BrowserSessionIdSchema,
+  siteId: SiteIdSchema,
+  profileName: v.optional(ProfileNameSchema),
+  createdAt: v.pipe(v.string(), v.isoTimestamp()),
+  expiresAt: v.pipe(v.string(), v.isoTimestamp()),
+});
 
 const ObservabilityIdSchema = v.pipe(
   v.string(),
@@ -196,6 +296,7 @@ export const BrowserCommandPayloadSchema = v.object({
   commandId: CommandIdSchema,
   command: v.picklist(BROWSER_COMMANDS),
   siteId: SiteIdSchema,
+  sessionId: v.optional(BrowserSessionIdSchema),
   url: v.optional(HttpUrlSchema),
   profileName: v.optional(ProfileNameSchema),
   authPolicy: v.picklist(BROWSER_AUTH_POLICIES),
@@ -210,6 +311,8 @@ export const BrowserCommandPayloadSchema = v.object({
   timeoutMs: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   blockResources: v.optional(v.array(v.picklist(BROWSER_RESOURCE_TYPES))),
   suppressPendingAuthTask: v.optional(v.boolean()),
+  expiresAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  actions: v.optional(v.array(BrowserActionSchema)),
   observability: v.optional(AgentObservabilityMetadataSchema),
 });
 
@@ -226,6 +329,7 @@ export const BrowserDetectionSchema = v.object({
 export const BrowserResultPayloadSchema = v.object({
   commandId: CommandIdSchema,
   command: v.picklist(BROWSER_COMMANDS),
+  sessionId: v.optional(BrowserSessionIdSchema),
   finalUrl: v.optional(HttpUrlSchema),
   status: v.optional(v.pipe(v.number(), v.integer())),
   title: v.optional(v.string()),
@@ -235,6 +339,8 @@ export const BrowserResultPayloadSchema = v.object({
   capturedAt: v.pipe(v.string(), v.isoTimestamp()),
   detection: BrowserDetectionSchema,
   profile: v.optional(BrowserProfileSummarySchema),
+  session: v.optional(BrowserSessionMetadataSchema),
+  actionResults: v.optional(v.array(BrowserActionResultSchema)),
   observability: v.optional(AgentObservabilityMetadataSchema),
 });
 
@@ -250,6 +356,9 @@ export const BrowserErrorPayloadSchema = v.object({
   message: NonEmptyDisplayStringSchema,
   profileStatus: v.optional(v.picklist(BROWSER_PROFILE_STATUSES)),
   retryable: v.optional(v.boolean()),
+  sessionId: v.optional(BrowserSessionIdSchema),
+  failedActionIndex: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  failedActionType: v.optional(v.picklist(BROWSER_ACTION_TYPES)),
   observability: v.optional(AgentObservabilityMetadataSchema),
 });
 
@@ -329,6 +438,16 @@ export type BrowserAuthPolicy = v.InferOutput<
 export type BrowserCommandName = v.InferOutput<
   typeof BrowserCommandPayloadSchema
 >['command'];
+export type BrowserActionType = v.InferOutput<
+  typeof BrowserActionSchema
+>['type'];
+export type BrowserAction = v.InferOutput<typeof BrowserActionSchema>;
+export type BrowserActionResult = v.InferOutput<
+  typeof BrowserActionResultSchema
+>;
+export type BrowserSessionMetadata = v.InferOutput<
+  typeof BrowserSessionMetadataSchema
+>;
 export type BrowserCommandPayload = v.InferOutput<
   typeof BrowserCommandPayloadSchema
 >;

@@ -1,7 +1,14 @@
-import type { BrowserDetection } from '../../browser-automation/browser-automation.types';
+import type {
+  BrowserAction,
+  BrowserActionResult,
+  BrowserDetection,
+} from '@cthutool/agent-protocol';
 
 export type DesktopBrowserRuntimeOperation =
   | 'capturePage'
+  | 'createSession'
+  | 'runActions'
+  | 'closeSession'
   | 'openLogin'
   | 'verifyProfile'
   | 'getStatus'
@@ -45,6 +52,24 @@ export type DesktopBrowserCaptureResult = {
   readonly text?: string;
   readonly screenshotBase64?: string;
   readonly detection: BrowserDetection;
+  readonly capturedAt: string;
+};
+
+export type DesktopBrowserSessionMetadata = {
+  readonly agentId: string;
+  readonly sessionId: string;
+  readonly siteId: string;
+  readonly profileName?: string;
+  readonly createdAt: string;
+  readonly expiresAt: string;
+};
+
+export type DesktopBrowserAction = BrowserAction;
+export type DesktopBrowserActionResult = BrowserActionResult;
+
+export type DesktopBrowserRunActionsResult = {
+  readonly sessionId: string;
+  readonly actionResults: readonly DesktopBrowserActionResult[];
   readonly capturedAt: string;
 };
 

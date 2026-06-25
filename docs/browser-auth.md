@@ -41,6 +41,32 @@ GET /api/browser/profiles
 GET /api/browser/pending-auth-tasks
 ```
 
+Trusted applications can also use the backend public browser session API to run
+controlled browser actions through an online CthuDesktop agent:
+
+```text
+POST /api/browser/sessions
+POST /api/browser/sessions/{sessionId}/actions
+DELETE /api/browser/sessions/{sessionId}
+```
+
+The session API is intended for trusted deployments first and does not add API
+key authentication. Keep it behind a trusted network boundary until an explicit
+auth layer is added. The backend stores only thin session routing metadata such
+as `sessionId`, owning `agentId`, site/profile names, timestamps, and expiry;
+CthuDesktop stores the actual Playwright context and page. The first
+implementation uses an in-memory backend routing store, so active sessions do
+not survive backend restarts and multi-replica deployments require sticky
+routing or a later Redis-backed store.
+
+Action execution uses a bounded Playwright-like DSL instead of arbitrary
+Playwright script passthrough. Supported action types include `goto`,
+`waitForSelector`, `click`, `fill`, `textContent`, `content`, `title`, and
+`screenshot`. Navigation actions must stay within the configured site's
+`allowedOrigins`, and responses never include cookies, localStorage,
+Playwright storage-state contents, desktop profile paths, or raw Playwright
+object handles.
+
 ## Site Configuration
 
 The backend ships with built-in Douban and Zhihu site policies. To override

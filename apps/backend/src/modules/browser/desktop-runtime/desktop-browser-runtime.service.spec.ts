@@ -205,6 +205,183 @@ describe('DesktopBrowserRuntimeService', () => {
       available: false,
     });
   });
+
+  it('creates browser sessions on a selected browser agent', async () => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserResultMessage({
+        capturedAt: '2026-06-13T10:00:00.000Z',
+        command: 'browser.createSession',
+        commandId: 'cmd-returned',
+        detection: { kind: 'ok' },
+        session: {
+          createdAt: '2026-06-13T10:00:00.000Z',
+          expiresAt: '2026-06-13T10:15:00.000Z',
+          profileName: 'douban-main',
+          sessionId: 'session-1',
+          siteId: 'douban',
+        },
+        sessionId: 'session-1',
+      }),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.createSession({
+      authPolicy: 'required',
+      expiresAt: '2026-06-13T10:15:00.000Z',
+      profileName: 'douban-main',
+      sessionId: 'session-1',
+      siteId: 'douban',
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        agentId: 'agent-1',
+        createdAt: '2026-06-13T10:00:00.000Z',
+        expiresAt: '2026-06-13T10:15:00.000Z',
+        profileName: 'douban-main',
+        sessionId: 'session-1',
+        siteId: 'douban',
+      },
+    });
+    expect(gateway.sendCommand).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({
+        message: expect.objectContaining({
+          payload: expect.objectContaining({
+            command: 'browser.createSession',
+            sessionId: 'session-1',
+          }),
+        }),
+      }),
+      undefined,
+    );
+  });
+
+  it('runs browser session actions on the owning agent', async () => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserResultMessage({
+        actionResults: [
+          {
+            actionId: 'a1',
+            html: '<html>ok</html>',
+            type: 'content',
+          },
+        ],
+        capturedAt: '2026-06-13T10:00:01.000Z',
+        command: 'browser.runActions',
+        commandId: 'cmd-returned',
+        detection: { kind: 'ok' },
+        sessionId: 'session-1',
+      }),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.runActions({
+      actions: [{ actionId: 'a1', type: 'content' }],
+      agentId: 'agent-owner',
+      authPolicy: 'anonymous',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        actionResults: [
+          {
+            actionId: 'a1',
+            html: '<html>ok</html>',
+            type: 'content',
+          },
+        ],
+        capturedAt: '2026-06-13T10:00:01.000Z',
+        sessionId: 'session-1',
+      },
+    });
+    expect(gateway.sendCommand).toHaveBeenCalledWith(
+      'agent-owner',
+      expect.objectContaining({
+        message: expect.objectContaining({
+          payload: expect.objectContaining({
+            command: 'browser.runActions',
+            sessionId: 'session-1',
+          }),
+        }),
+      }),
+      undefined,
+    );
+  });
+
+  it('closes browser sessions on the owning agent', async () => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserResultMessage({
+        capturedAt: '2026-06-13T10:00:02.000Z',
+        command: 'browser.closeSession',
+        commandId: 'cmd-returned',
+        detection: { kind: 'ok' },
+        sessionId: 'session-1',
+      }),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.closeSession({
+      agentId: 'agent-owner',
+      authPolicy: 'anonymous',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: { sessionId: 'session-1' },
+    });
+    expect(gateway.sendCommand).toHaveBeenCalledWith(
+      'agent-owner',
+      expect.objectContaining({
+        message: expect.objectContaining({
+          payload: expect.objectContaining({
+            command: 'browser.closeSession',
+            sessionId: 'session-1',
+          }),
+        }),
+      }),
+      undefined,
+    );
+  });
+
+  it('maps session action failures without exposing transport internals', async () => {
+    const gateway = createGatewayMock(
+      createAgentStatus('agent-1'),
+      createBrowserErrorMessage({
+        code: 'BROWSER_ACTION_FAILED',
+        command: 'browser.runActions',
+        commandId: 'cmd-returned',
+        failedActionIndex: 0,
+        failedActionType: 'click',
+        message: 'Selector was not found',
+        sessionId: 'session-1',
+      }),
+    );
+    const runtime = createRuntime(gateway);
+
+    const result = await runtime.runActions({
+      actions: [{ actionId: 'a1', selector: 'button', type: 'click' }],
+      agentId: 'agent-owner',
+      authPolicy: 'anonymous',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'BROWSER_ACTION_FAILED',
+      error: 'Selector was not found',
+    });
+  });
 });
 
 function createHarness() {
