@@ -2,7 +2,7 @@
 
 # ── Builder stage ──────────────────────────────────────────────
 FROM node:24-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /app
 
 # Install dependencies (cache layer)
@@ -22,7 +22,7 @@ RUN pnpm --filter @cthutool/backend build
 
 # ── Production stage ───────────────────────────────────────────
 FROM node:24-alpine
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /app
 
 # Copy only what's needed at runtime

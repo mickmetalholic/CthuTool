@@ -38,13 +38,15 @@ describe("root package.json scripts contract", () => {
     );
   });
 
-  it("exposes lint that runs biome check at repo root", () => {
+  it("exposes lint that delegates workspace package linting to turbo", () => {
     const pkg = readJson(join(root, "package.json")) as {
       scripts?: { lint?: string };
     };
     expect(pkg.scripts?.lint).toBeDefined();
     const lint = pkg.scripts?.lint ?? "";
-    expect(lint).toMatch(/biome(\.exe)?\s+check/);
+    expect(lint).toMatch(
+      /turbo(\.exe)?\s+run\s+lint|exec\s+turbo(\.exe)?\s+run\s+lint/,
+    );
   });
 
   it("requires standard scripts for every root workspace package", () => {
@@ -59,16 +61,17 @@ describe("root package.json scripts contract", () => {
     }
   });
 
-  it("rejects placeholder validation scripts", () => {
+  it("rejects placeholder standard validation scripts", () => {
     for (const packageJsonPath of rootWorkspacePackageJsonPaths()) {
       const pkg = readJson(packageJsonPath) as {
         name?: string;
         scripts?: Record<string, string>;
       };
-      for (const script of ["test", "test:cov"] as const) {
+      for (const script of standardWorkspaceScripts) {
         const command = normalizeScript(pkg.scripts?.[script]);
         expect(command).not.toContain("no tests configured");
         expect(command).not.toContain("no coverage configured");
+        expect(command).not.toContain("not configured");
         expect(command).not.toMatch(/\b(exit\s+0|true)\b/);
       }
     }

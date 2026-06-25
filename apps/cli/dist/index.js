@@ -1619,7 +1619,7 @@ var o2 = new Proxy(r2, { get(e2, s) {
   const e2 = i(true);
   return Object.keys(e2);
 } });
-var t = typeof process < "u" && process.env && "development" || "";
+var t = typeof process < "u" && process.env && "production" || "";
 var f2 = [["APPVEYOR"], ["AWS_AMPLIFY", "AWS_APP_ID", { ci: true }], ["AZURE_PIPELINES", "SYSTEM_TEAMFOUNDATIONCOLLECTIONURI"], ["AZURE_STATIC", "INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN"], ["APPCIRCLE", "AC_APPCIRCLE"], ["BAMBOO", "bamboo_planKey"], ["BITBUCKET", "BITBUCKET_COMMIT"], ["BITRISE", "BITRISE_IO"], ["BUDDY", "BUDDY_WORKSPACE_ID"], ["BUILDKITE"], ["CIRCLE", "CIRCLECI"], ["CIRRUS", "CIRRUS_CI"], ["CLOUDFLARE_PAGES", "CF_PAGES", { ci: true }], ["CODEBUILD", "CODEBUILD_BUILD_ARN"], ["CODEFRESH", "CF_BUILD_ID"], ["DRONE"], ["DRONE", "DRONE_BUILD_EVENT"], ["DSARI"], ["GITHUB_ACTIONS"], ["GITLAB", "GITLAB_CI"], ["GITLAB", "CI_MERGE_REQUEST_ID"], ["GOCD", "GO_PIPELINE_LABEL"], ["LAYERCI"], ["HUDSON", "HUDSON_URL"], ["JENKINS", "JENKINS_URL"], ["MAGNUM"], ["NETLIFY"], ["NETLIFY", "NETLIFY_LOCAL", { ci: false }], ["NEVERCODE"], ["RENDER"], ["SAIL", "SAILCI"], ["SEMAPHORE"], ["SCREWDRIVER"], ["SHIPPABLE"], ["SOLANO", "TDDIUM"], ["STRIDER"], ["TEAMCITY", "TEAMCITY_VERSION"], ["TRAVIS"], ["VERCEL", "NOW_BUILDER"], ["VERCEL", "VERCEL", { ci: false }], ["VERCEL", "VERCEL_ENV", { ci: false }], ["APPCENTER", "APPCENTER_BUILD_ID"], ["CODESANDBOX", "CODESANDBOX_SSE", { ci: false }], ["CODESANDBOX", "CODESANDBOX_HOST", { ci: false }], ["STACKBLITZ"], ["STORMKIT"], ["CLEAVR"], ["ZEABUR"], ["CODESPHERE", "CODESPHERE_APP_ID", { ci: true }], ["RAILWAY", "RAILWAY_PROJECT_ID"], ["RAILWAY", "RAILWAY_SERVICE_ID"], ["DENO-DEPLOY", "DENO_DEPLOYMENT_ID"], ["FIREBASE_APP_HOSTING", "FIREBASE_APP_HOSTING", { ci: true }]];
 function b() {
   if (globalThis.process?.env)
@@ -3919,6 +3919,152 @@ function isCliCommandError(value) {
   return value instanceof CliCommandError;
 }
 
+// src/runtime/observability.ts
+import { basename as basename2, dirname as dirname4, sep as sep2 } from "node:path";
+var CLI_DIAGNOSTICS_ENV = "CHC_CLI_DIAGNOSTICS";
+var REDACTED = "[redacted]";
+var MAX_STRING_LENGTH = 160;
+var MAX_OBJECT_KEYS = 16;
+function isCliDiagnosticsEnabled(env2 = process.env) {
+  const raw = env2[CLI_DIAGNOSTICS_ENV];
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+function createCliDiagnostics(context, output, base = {}, deps = {}) {
+  const now = deps.now ?? (() => new Date);
+  const isEnabled = deps.isEnabled ?? (() => isCliDiagnosticsEnabled());
+  const diagnostics = {
+    isEnabled,
+    child: (childBase) => createCliDiagnostics(context, output, { ...base, ...childBase }, { isEnabled, now }),
+    emit: (input) => {
+      if (!isEnabled() || isSuppressed(context, input.level)) {
+        return;
+      }
+      const event = {
+        source: "cthutool.cli",
+        timestamp: now().toISOString(),
+        ...base,
+        ...input,
+        message: input.message === undefined ? undefined : sanitizeDiagnosticMessage(input.message),
+        details: input.details ? sanitizeDiagnosticDetails(input.details) : undefined
+      };
+      output.stderr.write(`${JSON.stringify(dropUndefined(event))}
+`);
+    }
+  };
+  return diagnostics;
+}
+function createCliCommandDiagnostics(context, output, base, deps = {}) {
+  const nowMs = deps.nowMs ?? (() => Date.now());
+  const startedAt = nowMs();
+  const diagnostics = createCliDiagnostics(context, output, base, deps);
+  diagnostics.emit({
+    level: "debug",
+    event: "cli.command_started",
+    phase: "start",
+    details: modeDetails(context)
+  });
+  return {
+    complete: (input = {}) => {
+      diagnostics.emit({
+        level: "info",
+        event: "cli.command_completed",
+        phase: "complete",
+        durationMs: Math.max(0, nowMs() - startedAt),
+        exitCode: input.exitCode ?? 0,
+        details: { ...modeDetails(context), ...input.details }
+      });
+    },
+    fail: (error, input = {}) => {
+      diagnostics.emit({
+        level: "error",
+        event: "cli.command_failed",
+        phase: "failure",
+        durationMs: Math.max(0, nowMs() - startedAt),
+        exitCode: error.exitCode,
+        errorCode: error.code,
+        message: error.message,
+        details: { ...modeDetails(context), ...input.details }
+      });
+    }
+  };
+}
+function summarizeScriptArgs(args) {
+  const keys = Object.keys(args).sort();
+  return {
+    argumentCount: keys.length,
+    argumentKeys: keys
+  };
+}
+function sanitizeDiagnosticDetails(details) {
+  return sanitizeObject(details, 0);
+}
+function modeDetails(context) {
+  return {
+    interactive: context.interactive,
+    isTty: context.isTty,
+    json: context.json,
+    quiet: context.quiet
+  };
+}
+function isSuppressed(context, level) {
+  return context.quiet && (level === "debug" || level === "info");
+}
+function sanitizeObject(value, depth) {
+  const entries = Object.entries(value).slice(0, MAX_OBJECT_KEYS);
+  return Object.fromEntries(entries.map(([key, item]) => [key, sanitizeValue(key, item, depth)]));
+}
+function sanitizeValue(key, value, depth) {
+  if (isSensitiveKey(key)) {
+    return REDACTED;
+  }
+  if (typeof value === "string") {
+    return isPathKey(key) ? summarizePath(value) : truncate(value);
+  }
+  if (typeof value === "number" || typeof value === "boolean" || value === null || value === undefined) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (value.length <= 8 && value.every((item) => ["string", "number", "boolean"].includes(typeof item))) {
+      return value.map((item, index) => sanitizeValue(`${key}.${index}`, item, depth + 1));
+    }
+    return {
+      itemCount: value.length,
+      items: value.slice(0, 8).map((item, index) => sanitizeValue(`${key}.${index}`, item, depth + 1))
+    };
+  }
+  if (typeof value === "object") {
+    if (depth >= 2) {
+      return "[object]";
+    }
+    return sanitizeObject(value, depth + 1);
+  }
+  return String(value);
+}
+function isSensitiveKey(key) {
+  return /token|secret|password|passwd|cookie|authorization|credential|storage.?state/i.test(key);
+}
+function isPathKey(key) {
+  return /path|dir|directory|root|file/i.test(key);
+}
+function summarizePath(value) {
+  const normalized = value.replaceAll("\\", sep2);
+  const name = basename2(normalized);
+  const parent = basename2(dirname4(normalized));
+  return parent && parent !== "." ? `${parent}${sep2}${name}` : name;
+}
+function truncate(value) {
+  if (value.length <= MAX_STRING_LENGTH) {
+    return value;
+  }
+  return `${value.slice(0, MAX_STRING_LENGTH - 3)}...`;
+}
+function sanitizeDiagnosticMessage(value) {
+  return truncate(value.replace(/(token|secret|password|passwd|cookie|authorization|credential)=([^&\s]+)/gi, "$1=[redacted]"));
+}
+function dropUndefined(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+
 // src/runtime/output.ts
 var processOutput = {
   stdout: process.stdout,
@@ -3952,6 +4098,47 @@ function writeHumanStatus(context, output, message = "") {
   }
   output.stdout.write(`${message}
 `);
+}
+
+// src/runtime/command-diagnostics.ts
+async function runObservedCliCommand(args, base, run, deps = {}) {
+  const context = createCliContext(args, deps.isTty ? { isTty: deps.isTty } : undefined);
+  const diagnostics = deps.diagnostics ?? createCliCommandDiagnostics(context, processOutput, base);
+  let finalized = false;
+  const scope = {
+    context,
+    complete: (input = {}) => {
+      diagnostics.complete({
+        ...input,
+        exitCode: input.exitCode ?? numericProcessExitCode()
+      });
+      finalized = true;
+    },
+    fail: (error, input = {}) => {
+      diagnostics.fail(error, input);
+      finalized = true;
+    }
+  };
+  try {
+    await run(scope);
+    if (!finalized) {
+      scope.complete();
+    }
+  } catch (error) {
+    if (!finalized) {
+      scope.fail(toDiagnosticCliError(error));
+    }
+    throw error;
+  }
+}
+function numericProcessExitCode() {
+  return typeof process.exitCode === "number" ? process.exitCode : 0;
+}
+function toDiagnosticCliError(error) {
+  if (isCliCommandError(error)) {
+    return error;
+  }
+  return createCliError("invalid_option", error instanceof Error ? error.message : "command failed unexpectedly");
 }
 
 // src/command/codex.command.ts
@@ -4174,12 +4361,13 @@ function getApplyOverwritePaths(comparison) {
 function hasApplyOverwriteRisk(paths) {
   return paths.prompts.length > 0 || paths.rules.length > 0;
 }
-async function confirmApplyOverwrite(context, paths, args) {
+async function confirmApplyOverwrite(context, paths, args, fail) {
   if (!hasApplyOverwriteRisk(paths) || args.yes === true) {
     return true;
   }
   const error = createCliError("invalid_option", "codex apply would overwrite or delete local prompts/rules; rerun with --yes to confirm.");
   if (context.json || !context.interactive) {
+    fail?.(error, { details: { phase: "confirmation" } });
     writeCommandError(context, processOutput, error);
     process.exitCode = error.exitCode;
     return false;
@@ -4204,11 +4392,15 @@ async function confirmApplyOverwrite(context, paths, args) {
   });
   if (lD2(answer) || answer !== true) {
     const cancelError = createCliError("invalid_option", "codex apply cancelled.");
+    fail?.(cancelError, { details: { phase: "confirmation" } });
     writeCommandError(context, processOutput, cancelError);
     process.exitCode = cancelError.exitCode;
     return false;
   }
   return true;
+}
+async function runObservedCodexSubcommand(subcommand, args, run) {
+  await runObservedCliCommand(args, { command: "codex", subcommand }, run);
 }
 var codexCommand = defineCommand({
   meta: {
@@ -4223,7 +4415,9 @@ var codexCommand = defineCommand({
       },
       args: configArgs,
       async run({ args }) {
-        await runComparison(args);
+        await runObservedCodexSubcommand("status", args, async () => {
+          await runComparison(args);
+        });
       }
     }),
     export: defineCommand({
@@ -4233,19 +4427,20 @@ var codexCommand = defineCommand({
       },
       args: configArgs,
       async run({ args }) {
-        const context = createCliContext(args);
-        const result = await exportCodexConfig(createPaths(args));
-        if (context.json) {
-          writeJsonValue(processOutput, {
-            ok: true,
-            command: "codex export",
-            result
-          });
-        } else {
-          writeHumanStatus(context, processOutput, import_picocolors2.default.cyan("Codex export"));
-          writeHumanStatus(context, processOutput, `exported: ${result.exportedAreas.join(", ")}`);
-        }
-        process.exitCode = 0;
+        await runObservedCodexSubcommand("export", args, async ({ context }) => {
+          const result = await exportCodexConfig(createPaths(args));
+          if (context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: "codex export",
+              result
+            });
+          } else {
+            writeHumanStatus(context, processOutput, import_picocolors2.default.cyan("Codex export"));
+            writeHumanStatus(context, processOutput, `exported: ${result.exportedAreas.join(", ")}`);
+          }
+          process.exitCode = 0;
+        });
       }
     }),
     apply: defineCommand({
@@ -4255,25 +4450,26 @@ var codexCommand = defineCommand({
       },
       args: applyArgs,
       async run({ args }) {
-        const context = createCliContext(args);
-        const paths = createPaths(args);
-        const comparison = await compareCodexConfig(paths);
-        if (!await confirmApplyOverwrite(context, getApplyOverwritePaths(comparison), args)) {
-          return;
-        }
-        const result = await applyCodexConfig(paths);
-        if (context.json) {
-          writeJsonValue(processOutput, {
-            ok: true,
-            command: "codex apply",
-            result
-          });
-        } else {
-          writeHumanStatus(context, processOutput, import_picocolors2.default.cyan("Codex apply"));
-          writeHumanStatus(context, processOutput, `applied: ${result.appliedAreas.join(", ")}`);
-          writeManualInstallHint(context, result);
-        }
-        process.exitCode = 0;
+        await runObservedCodexSubcommand("apply", args, async ({ context, fail }) => {
+          const paths = createPaths(args);
+          const comparison = await compareCodexConfig(paths);
+          if (!await confirmApplyOverwrite(context, getApplyOverwritePaths(comparison), args, fail)) {
+            return;
+          }
+          const result = await applyCodexConfig(paths);
+          if (context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: "codex apply",
+              result
+            });
+          } else {
+            writeHumanStatus(context, processOutput, import_picocolors2.default.cyan("Codex apply"));
+            writeHumanStatus(context, processOutput, `applied: ${result.appliedAreas.join(", ")}`);
+            writeManualInstallHint(context, result);
+          }
+          process.exitCode = 0;
+        });
       }
     }),
     install: defineCommand({
@@ -4283,21 +4479,22 @@ var codexCommand = defineCommand({
       },
       args: configArgs,
       async run({ args }) {
-        const context = createCliContext(args);
-        const result = await installCodexAssets(createPaths(args));
-        if (context.json) {
-          writeJsonValue(processOutput, {
-            ok: true,
-            command: "codex install",
-            result
-          });
-        } else {
-          writeHumanStatus(context, processOutput, import_picocolors2.default.cyan("Codex install"));
-          writeHumanStatus(context, processOutput, `installed skills: ${result.installedSkills.join(", ") || "(none)"}`);
-          writeHumanStatus(context, processOutput, `installed plugins: ${result.installedPlugins.map((plugin) => plugin.name).join(", ") || "(none)"}`);
-          writeManualInstallHint(context, result);
-        }
-        process.exitCode = 0;
+        await runObservedCodexSubcommand("install", args, async ({ context }) => {
+          const result = await installCodexAssets(createPaths(args));
+          if (context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: "codex install",
+              result
+            });
+          } else {
+            writeHumanStatus(context, processOutput, import_picocolors2.default.cyan("Codex install"));
+            writeHumanStatus(context, processOutput, `installed skills: ${result.installedSkills.join(", ") || "(none)"}`);
+            writeHumanStatus(context, processOutput, `installed plugins: ${result.installedPlugins.map((plugin) => plugin.name).join(", ") || "(none)"}`);
+            writeManualInstallHint(context, result);
+          }
+          process.exitCode = 0;
+        });
       }
     })
   }
@@ -4307,15 +4504,15 @@ var codexCommand = defineCommand({
 import { execFile } from "node:child_process";
 import { mkdir as mkdir3, readFile as readFile4, writeFile as writeFile3 } from "node:fs/promises";
 import { homedir as homedir2, platform as platform2 } from "node:os";
-import { dirname as dirname5, join as join5 } from "node:path";
+import { dirname as dirname6, join as join5 } from "node:path";
 import { promisify } from "node:util";
 
 // src/infra/bundled-scripts-root.ts
 import { existsSync as existsSync2 } from "node:fs";
-import { dirname as dirname4, join as join3 } from "node:path";
+import { dirname as dirname5, join as join3 } from "node:path";
 import { fileURLToPath } from "node:url";
 function getBundledScriptsRoot() {
-  const moduleDir = dirname4(fileURLToPath(import.meta.url));
+  const moduleDir = dirname5(fileURLToPath(import.meta.url));
   const candidates = [
     join3(moduleDir, "../scripts"),
     join3(moduleDir, "../src/scripts")
@@ -5455,7 +5652,7 @@ async function handlePowerShellProfileAction(action) {
   const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
 `) ? migratedContent : `${migratedContent}
 `;
-  await mkdir3(dirname5(profilePath), { recursive: true });
+  await mkdir3(dirname6(profilePath), { recursive: true });
   await writeFile3(profilePath, `${prefix}${powershellCompletionBlock}
 `);
   process.stdout.write(`PowerShell completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
@@ -5478,34 +5675,42 @@ function createCompletionCommand() {
       }
     },
     async run({ args, rawArgs }) {
-      const first = rawArgs[0] ?? "";
-      if (isCompletionProfileAction(first)) {
-        const shell2 = rawArgs[1] ?? "";
-        if (shell2 !== "powershell") {
-          process.stderr.write(`managed persistent completion currently supports PowerShell only: ${shell2 || "<missing>"}
+      await runObservedCliCommand(args, { command: "completion" }, async ({ fail }) => {
+        const first = rawArgs[0] ?? "";
+        if (isCompletionProfileAction(first)) {
+          const shell2 = rawArgs[1] ?? "";
+          if (shell2 !== "powershell") {
+            const error = createCliError("invalid_option", `managed persistent completion currently supports PowerShell only: ${shell2 || "<missing>"}`);
+            fail(error, { details: { action: first, shell: shell2 } });
+            process.stderr.write(`${error.message}
 `);
-          process.exitCode = 1;
+            process.exitCode = error.exitCode;
+            return;
+          }
+          try {
+            await handlePowerShellProfileAction(first);
+          } catch (error) {
+            const cliError = createCliError("invalid_option", error instanceof Error ? error.message : String(error));
+            fail(cliError, { details: { action: first, shell: shell2 } });
+            process.stderr.write(`${cliError.message}
+`);
+            process.exitCode = cliError.exitCode;
+          }
           return;
         }
-        try {
-          await handlePowerShellProfileAction(first);
-        } catch (error) {
-          process.stderr.write(`${error instanceof Error ? error.message : String(error)}
+        const shell = typeof args.shell === "string" ? args.shell : "";
+        const script = renderShellScript(shell);
+        if (!script) {
+          const error = createCliError("invalid_option", `unsupported shell: ${shell}`);
+          fail(error, { details: { shell } });
+          process.stderr.write(`${error.message}
 `);
-          process.exitCode = 1;
+          process.exitCode = error.exitCode;
+          return;
         }
-        return;
-      }
-      const shell = typeof args.shell === "string" ? args.shell : "";
-      const script = renderShellScript(shell);
-      if (!script) {
-        process.stderr.write(`unsupported shell: ${shell}
-`);
-        process.exitCode = 1;
-        return;
-      }
-      process.stdout.write(script);
-      process.exitCode = 0;
+        process.stdout.write(script);
+        process.exitCode = 0;
+      });
     }
   });
 }
@@ -5544,6 +5749,18 @@ import { pathToFileURL } from "node:url";
 function runBundledScript(pkg, args, context) {
   const entryPath = join6(pkg.rootPath, pkg.entryRelative);
   const href = pathToFileURL(entryPath).href;
+  const startedAt = Date.now();
+  const diagnostics = context.diagnostics?.child({ scriptId: pkg.id });
+  diagnostics?.emit({
+    level: "info",
+    event: "cli.script_started",
+    phase: "start",
+    scriptId: pkg.id,
+    details: {
+      entryPath,
+      scriptArgs: summarizeScriptArgs(args)
+    }
+  });
   return $ResultAsync.fromPromise(import(href), (e3) => ({
     kind: "load",
     message: e3 instanceof Error ? e3.message : String(e3)
@@ -5569,6 +5786,40 @@ function runBundledScript(pkg, args, context) {
         message: e3 instanceof Error ? e3.message : String(e3)
       };
     });
+  }).map(() => {
+    diagnostics?.emit({
+      level: "info",
+      event: "cli.script_completed",
+      phase: "complete",
+      scriptId: pkg.id,
+      durationMs: Math.max(0, Date.now() - startedAt)
+    });
+    return;
+  }).mapErr((error) => {
+    if (error.kind === "execution" && error.cliError) {
+      diagnostics?.emit({
+        level: "error",
+        event: "cli.script_failed",
+        phase: "execution",
+        scriptId: pkg.id,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        exitCode: error.cliError.exitCode,
+        errorCode: error.cliError.code,
+        message: error.cliError.message,
+        details: { scriptArgs: summarizeScriptArgs(args) }
+      });
+      return error;
+    }
+    diagnostics?.emit({
+      level: "error",
+      event: "cli.script_failed",
+      phase: error.kind,
+      scriptId: pkg.id,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      message: error.message,
+      details: { scriptArgs: summarizeScriptArgs(args) }
+    });
+    return error;
   });
 }
 
@@ -5637,22 +5888,47 @@ var createScriptsCommand = (deps = defaultDeps) => defineCommand({
   },
   async run({ args }) {
     const context = createCliContext(args, { isTty: deps.isInteractive });
+    const commandDiagnostics = createCliCommandDiagnostics(context, processOutput, { command: "scripts" });
+    const diagnostics = createCliDiagnostics(context, processOutput, {
+      command: "scripts"
+    });
+    const fail = (error, details) => {
+      commandDiagnostics.fail(error, { details });
+      writeCommandError(context, processOutput, error);
+      process.exitCode = error.exitCode;
+    };
     const root = getBundledScriptsRoot();
     const discovered = await discoverScripts(root);
     if (discovered.isErr()) {
       const error = createCliError("discovery_failed", discovered.error.message);
-      writeCommandError(context, processOutput, error);
-      process.exitCode = error.exitCode;
+      fail(error, { phase: "discovery", scriptsRoot: root });
       return;
     }
     const catalog = discovered.value;
+    diagnostics.emit({
+      level: "debug",
+      event: "cli.scripts_discovered",
+      phase: "discovery",
+      details: {
+        packageCount: catalog.packages.length,
+        warningCount: catalog.warnings.length
+      }
+    });
     for (const w3 of catalog.warnings) {
       writeWarning(processOutput, import_picocolors3.default.yellow(`${w3.path}: ${w3.message}`));
+      diagnostics.emit({
+        level: "warn",
+        event: "cli.script_discovery_warning",
+        phase: "discovery",
+        details: {
+          message: w3.message,
+          path: w3.path
+        }
+      });
     }
     if (catalog.packages.length === 0) {
       const error = createCliError("discovery_failed", "no valid bundled script packages found (see apps/cli/src/scripts/)");
-      writeCommandError(context, processOutput, error);
-      process.exitCode = error.exitCode;
+      fail(error, { phase: "discovery", scriptsRoot: root });
       return;
     }
     const explicitId = resolveExplicitId(args);
@@ -5660,42 +5936,78 @@ var createScriptsCommand = (deps = defaultDeps) => defineCommand({
     if (!targetId) {
       if (!context.interactive) {
         const error = createCliError("missing_required_argument", "script id is required in non-interactive mode (use: chc scripts <id> or --script <id>)");
-        writeCommandError(context, processOutput, error);
-        process.exitCode = error.exitCode;
+        fail(error, { phase: "selection" });
         return;
       }
       const options = listSelectable(catalog);
       if (options.length === 1) {
         const [only] = options;
         targetId = only.id;
+        diagnostics.emit({
+          level: "info",
+          event: "cli.script_selected",
+          phase: "selection",
+          scriptId: targetId,
+          details: { selectionMode: "single-option" }
+        });
       } else {
         const choice = await deps.pickScriptId(options);
         if (choice === undefined) {
           const error = createCliError("invalid_option", "selection cancelled");
-          writeCommandError(context, processOutput, error);
-          process.exitCode = error.exitCode;
+          fail(error, { phase: "selection" });
           return;
         }
         targetId = choice;
+        diagnostics.emit({
+          level: "info",
+          event: "cli.script_selected",
+          phase: "selection",
+          scriptId: targetId,
+          details: { selectionMode: "interactive" }
+        });
       }
+    } else {
+      diagnostics.emit({
+        level: "info",
+        event: "cli.script_selected",
+        phase: "selection",
+        scriptId: targetId,
+        details: {
+          selectionMode: explicitId === args.script ? "flag" : "positional"
+        }
+      });
     }
     const resolved = resolvePackage(catalog, targetId);
     if (resolved.isErr()) {
       const error = resolved.error.kind === "not_found" ? createCliError("unknown_selection", `unknown script id: ${resolved.error.id}`) : createCliError("ambiguous_selection", `ambiguous script id: ${resolved.error.id}`);
-      writeCommandError(context, processOutput, error);
-      process.exitCode = error.exitCode;
+      fail(error, {
+        phase: "selection",
+        requestedScriptId: resolved.error.id
+      });
       return;
     }
     const executed = await runBundledScript(resolved.value, toScriptArgs(args), {
-      cli: context
+      cli: context,
+      diagnostics: diagnostics.child({
+        scriptId: resolved.value.id
+      })
     });
     if (executed.isErr()) {
       const e3 = executed.error;
       const error = e3.kind === "load" ? createCliError("script_load_failed", e3.message) : e3.kind === "no_default_export" ? createCliError("script_load_failed", e3.message) : e3.cliError ?? createCliError("script_execution_failed", e3.message);
-      writeCommandError(context, processOutput, error);
-      process.exitCode = error.exitCode;
+      fail(error, {
+        phase: e3.kind,
+        scriptId: resolved.value.id,
+        scriptArgs: summarizeScriptArgs(toScriptArgs(args))
+      });
       return;
     }
+    commandDiagnostics.complete({
+      details: {
+        scriptId: resolved.value.id,
+        scriptArgs: summarizeScriptArgs(toScriptArgs(args))
+      }
+    });
     process.exitCode = 0;
   }
 });
@@ -5709,7 +6021,7 @@ import { spawn } from "node:child_process";
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "node:fs";
 import { mkdir as mkdir4 } from "node:fs/promises";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname6, join as join7 } from "node:path";
+import { dirname as dirname7, join as join7 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var defaultSelfUpdateRepo = "https://github.com/mickmetalholic/CthuTool.git";
 var defaultSelfUpdateRef = "main";
@@ -5781,7 +6093,7 @@ async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
     });
   } else {
     recordStep("clone");
-    await deps.mkdir(dirname6(resolved.installDir));
+    await deps.mkdir(dirname7(resolved.installDir));
     await runRequired(deps, "git", [
       "clone",
       resolved.repo,
@@ -5894,12 +6206,12 @@ function runCommand2(command, args, options = {}) {
   });
 }
 function findRepoRootFromModule() {
-  let current = dirname6(fileURLToPath2(import.meta.url));
+  let current = dirname7(fileURLToPath2(import.meta.url));
   while (true) {
     if (isCthuToolRoot(current)) {
       return current;
     }
-    const parent = dirname6(current);
+    const parent = dirname7(current);
     if (parent === current) {
       throw new Error("Unable to locate CthuTool package root.");
     }
@@ -5957,9 +6269,10 @@ function formatStep(step) {
       return "installing global command";
   }
 }
-function writeFailure(args, error) {
-  const context = createCliContext(args);
-  const cliError = error instanceof SelfUpdateError ? createCliError("self_update_failed", error.message) : createCliError("self_update_failed", error instanceof Error ? error.message : "self-update failed");
+function toSelfUpdateCliError(error) {
+  return error instanceof SelfUpdateError ? createCliError("self_update_failed", error.message) : createCliError("self_update_failed", error instanceof Error ? error.message : "self-update failed");
+}
+function writeFailure(context, cliError) {
   writeCommandError(context, processOutput, cliError);
   process.exitCode = cliError.exitCode;
 }
@@ -5971,31 +6284,34 @@ function createUpdateCommand(name) {
     },
     args: selfUpdateArgs,
     async run({ args }) {
-      const context = createCliContext(args);
-      const repo = getStringArg2(args.repo);
-      const ref = getStringArg2(args.ref);
-      const installDir = getStringArg2(args["install-dir"]);
-      writeHumanStatus(context, processOutput, import_picocolors4.default.cyan("CthuTool update"));
-      writeHumanStatus(context, processOutput, `repo: ${repo ?? defaultSelfUpdateRepo}`);
-      writeHumanStatus(context, processOutput, `ref:  ${ref ?? defaultSelfUpdateRef}`);
-      writeHumanStatus(context, processOutput, `dir:  ${installDir ?? getDefaultSelfUpdateInstallDir()}`);
-      try {
-        const result = await runSelfUpdate({ repo, ref, installDir }, createSelfUpdateDeps((step) => {
-          writeHumanStatus(context, processOutput, `- ${formatStep(step)}`);
-        }));
-        if (context.json) {
-          writeJsonValue(processOutput, {
-            ok: true,
-            command: "update",
-            result
-          });
-        } else {
-          writeHumanStatus(context, processOutput, import_picocolors4.default.green("updated"));
+      await runObservedCliCommand(args, { command: name }, async ({ context, fail }) => {
+        const repo = getStringArg2(args.repo);
+        const ref = getStringArg2(args.ref);
+        const installDir = getStringArg2(args["install-dir"]);
+        writeHumanStatus(context, processOutput, import_picocolors4.default.cyan(name === "self-update" ? "CthuTool self-update" : "CthuTool update"));
+        writeHumanStatus(context, processOutput, `repo: ${repo ?? defaultSelfUpdateRepo}`);
+        writeHumanStatus(context, processOutput, `ref:  ${ref ?? defaultSelfUpdateRef}`);
+        writeHumanStatus(context, processOutput, `dir:  ${installDir ?? getDefaultSelfUpdateInstallDir()}`);
+        try {
+          const result = await runSelfUpdate({ repo, ref, installDir }, createSelfUpdateDeps((step) => {
+            writeHumanStatus(context, processOutput, `- ${formatStep(step)}`);
+          }));
+          if (context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: name,
+              result
+            });
+          } else {
+            writeHumanStatus(context, processOutput, import_picocolors4.default.green("updated"));
+          }
+          process.exitCode = 0;
+        } catch (error) {
+          const cliError = toSelfUpdateCliError(error);
+          fail(cliError, { details: { installDir, ref, repo } });
+          writeFailure(context, cliError);
         }
-        process.exitCode = 0;
-      } catch (error) {
-        writeFailure(args, error);
-      }
+      });
     }
   });
 }
@@ -6006,19 +6322,20 @@ var versionCommand = defineCommand({
   },
   args: cliContractArgs,
   async run({ args }) {
-    const context = createCliContext(args);
-    const version = getCliVersion();
-    if (context.json) {
-      writeJsonValue(processOutput, {
-        ok: true,
-        command: "version",
-        version
-      });
-    } else {
-      processOutput.stdout.write(`chc ${version}
+    await runObservedCliCommand(args, { command: "version" }, ({ context }) => {
+      const version = getCliVersion();
+      if (context.json) {
+        writeJsonValue(processOutput, {
+          ok: true,
+          command: "version",
+          version
+        });
+      } else {
+        processOutput.stdout.write(`chc ${version}
 `);
-    }
-    process.exitCode = 0;
+      }
+      process.exitCode = 0;
+    });
   }
 });
 var statusCommand = defineCommand({
@@ -6028,28 +6345,35 @@ var statusCommand = defineCommand({
   },
   args: selfUpdateArgs,
   async run({ args }) {
-    const context = createCliContext(args);
-    const status = await getCliInstallationStatus({
-      repo: getStringArg2(args.repo),
-      ref: getStringArg2(args.ref),
-      installDir: getStringArg2(args["install-dir"])
+    await runObservedCliCommand(args, { command: "status" }, async ({ context, fail }) => {
+      try {
+        const status = await getCliInstallationStatus({
+          repo: getStringArg2(args.repo),
+          ref: getStringArg2(args.ref),
+          installDir: getStringArg2(args["install-dir"])
+        });
+        if (context.json) {
+          writeJsonValue(processOutput, {
+            ok: true,
+            command: "status",
+            status
+          });
+        } else {
+          writeHumanStatus(context, processOutput, import_picocolors4.default.cyan("CthuTool status"));
+          writeHumanStatus(context, processOutput, `version:     ${status.version}`);
+          writeHumanStatus(context, processOutput, `install dir: ${status.installDir}`);
+          writeHumanStatus(context, processOutput, `repo:        ${status.repo}`);
+          writeHumanStatus(context, processOutput, `ref:         ${status.ref}`);
+          writeHumanStatus(context, processOutput, `commit:      ${status.commit ?? "unavailable"}`);
+          writeHumanStatus(context, processOutput, `bundle:      ${status.bundlePresent ? "present" : "missing"} (${status.bundlePath})`);
+        }
+        process.exitCode = 0;
+      } catch (error) {
+        const cliError = toSelfUpdateCliError(error);
+        fail(cliError);
+        writeFailure(context, cliError);
+      }
     });
-    if (context.json) {
-      writeJsonValue(processOutput, {
-        ok: true,
-        command: "status",
-        status
-      });
-    } else {
-      writeHumanStatus(context, processOutput, import_picocolors4.default.cyan("CthuTool status"));
-      writeHumanStatus(context, processOutput, `version:     ${status.version}`);
-      writeHumanStatus(context, processOutput, `install dir: ${status.installDir}`);
-      writeHumanStatus(context, processOutput, `repo:        ${status.repo}`);
-      writeHumanStatus(context, processOutput, `ref:         ${status.ref}`);
-      writeHumanStatus(context, processOutput, `commit:      ${status.commit ?? "unavailable"}`);
-      writeHumanStatus(context, processOutput, `bundle:      ${status.bundlePresent ? "present" : "missing"} (${status.bundlePath})`);
-    }
-    process.exitCode = 0;
   }
 });
 var updateCommand = createUpdateCommand("update");
@@ -6166,7 +6490,7 @@ if (rawArgs.length === 1 && rawArgs[0] === "--version") {
   await showNativeUsage(omittedTopLevelCommand, rootCommand);
   process.exitCode = 0;
 } else {
-  runMain(rootCommand, { showUsage: showNativeUsage }).catch(() => {
+  await runMain(rootCommand, { showUsage: showNativeUsage }).catch(() => {
     process.exitCode = 1;
   });
 }
