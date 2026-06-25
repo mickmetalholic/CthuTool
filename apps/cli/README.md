@@ -91,7 +91,9 @@ CHC_INSTALL_MODE=remote scripts/install-chc.sh
 ```
 
 For release changes to CLI source, refresh and commit the runtime bundle in the
-same change:
+same change. The root pre-commit hook automatically runs this refresh and
+stages `apps/cli/dist/index.js` when staged CLI bundle inputs change, but the
+commands remain useful for explicit verification:
 
 ```bash
 pnpm --filter @cthutool/cli build

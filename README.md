@@ -94,7 +94,9 @@ chc update --ref v0.1.0
 ```
 
 When changing CLI source, refresh and commit the runtime bundle in the same
-change:
+change. The pre-commit hook automatically runs this refresh and stages
+`apps/cli/dist/index.js` when staged CLI bundle inputs change, but the commands
+remain useful for explicit verification:
 
 ```bash
 pnpm --filter @cthutool/cli build
