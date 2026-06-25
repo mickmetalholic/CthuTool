@@ -72,7 +72,7 @@ describe('AgentCommandGateway', () => {
   });
 
   it('emits command dispatch and completion events', async () => {
-    const observability = { record: jest.fn() };
+    const observability = { record: vi.fn() };
     const socket = createSocketMock();
     const gateway = createGateway(socket, true, observability);
 
@@ -93,7 +93,7 @@ describe('AgentCommandGateway', () => {
   });
 
   it('emits command failure events', async () => {
-    const observability = { record: jest.fn() };
+    const observability = { record: vi.fn() };
     const gateway = createGateway(
       createSocketMockWithImplementation(async () => {
         throw new Error('socket closed');
@@ -172,7 +172,7 @@ type SocketMock = {
 function createGateway(
   socket: SocketMock = createSocketMock(),
   registerAgent = true,
-  observability?: { readonly record: jest.Mock },
+  observability?: { readonly record: Mock },
 ): AgentCommandGateway {
   const registry = new AgentRegistryService();
   if (registerAgent) {
