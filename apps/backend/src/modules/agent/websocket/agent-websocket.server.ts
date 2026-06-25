@@ -21,6 +21,9 @@ import type {
   AgentCommandRequest,
   AgentCommandResponse,
 } from '../command-gateway/agent-command-gateway.service';
+// Nest DI needs runtime class reference.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { AgentLifecycleEvents } from '../registry/agent-lifecycle-events.service';
 // Nest DI needs runtime class reference; `import type` strips it and breaks metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { AgentRegistryLogger } from '../registry/agent-registry.logger';
@@ -55,6 +58,7 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
     private readonly httpAdapterHost: HttpAdapterHost,
     private readonly registry: AgentRegistryService,
     private readonly registryLogger: AgentRegistryLogger,
+    private readonly lifecycleEvents: AgentLifecycleEvents,
   ) {}
 
   onModuleInit(): void {
@@ -166,6 +170,9 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
         connectionId: state.connectionId,
         agentId: status?.agentId ?? state.agentId,
       });
+      if (status) {
+        this.lifecycleEvents.emitAgentDisconnected(status);
+      }
     });
   };
 
@@ -310,6 +317,7 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
         connectionId: status.connectionId,
         agentId: status.agentId,
       });
+      this.lifecycleEvents.emitAgentDisconnected(status);
       const socket = this.sockets.get(status.connectionId);
       socket?.close(4000, 'agent heartbeat stale');
       this.sockets.delete(status.connectionId);

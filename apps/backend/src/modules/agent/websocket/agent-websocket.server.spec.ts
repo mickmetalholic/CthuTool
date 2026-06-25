@@ -26,6 +26,20 @@ describe('AgentWebSocketServer', () => {
     expect(socket.closed).toBeUndefined();
   });
 
+  it('emits lifecycle event when a registered agent disconnects', () => {
+    const { lifecycleEvents, registry, server } = createHarness();
+    const socket = new FakeSocket();
+
+    handleConnection(server, socket);
+    socket.emitMessage(JSON.stringify(helloMessage()));
+    const status = registry.listOnlineAgents()[0];
+    expect(status?.agentId).toBe('agent-1');
+
+    socket.emitClose();
+
+    expect(lifecycleEvents.emitAgentDisconnected).toHaveBeenCalledWith(status);
+  });
+
   it('rejects heartbeat for unregistered agent', () => {
     const { server, socket, state } = createHarness();
 
@@ -107,7 +121,8 @@ describe('AgentWebSocketServer', () => {
 function createHarness() {
   const registry = new AgentRegistryService();
   const logger = createLogger();
-  const server = createServer(registry, logger);
+  const lifecycleEvents = createLifecycleEvents();
+  const server = createServer(registry, logger, lifecycleEvents);
   const socket = new FakeSocket();
   const state = { connectionId: 'conn-1' };
   // Register the socket in the server's internal map (as handleConnection would)
@@ -117,6 +132,7 @@ function createHarness() {
     socket,
   );
   return {
+    lifecycleEvents,
     registry,
     server,
     socket,
@@ -127,6 +143,7 @@ function createHarness() {
 function createServer(
   registry: AgentRegistryService,
   logger: Pick<AgentRegistryLogger, 'log' | 'warn'>,
+  lifecycleEvents: ReturnType<typeof createLifecycleEvents>,
 ): AgentWebSocketServer {
   return new AgentWebSocketServer(
     {
@@ -139,6 +156,7 @@ function createServer(
     } as never,
     registry,
     logger as AgentRegistryLogger,
+    lifecycleEvents as never,
   );
 }
 
@@ -147,6 +165,20 @@ function createLogger(): Pick<AgentRegistryLogger, 'log' | 'warn'> {
     log: vi.fn(),
     warn: vi.fn(),
   };
+}
+
+function createLifecycleEvents() {
+  return {
+    emitAgentDisconnected: vi.fn(),
+  };
+}
+
+function handleConnection(server: AgentWebSocketServer, socket: FakeSocket) {
+  (
+    server as unknown as {
+      handleConnection: (socket: FakeSocket) => void;
+    }
+  ).handleConnection(socket);
 }
 
 function handleMessage(
@@ -191,7 +223,23 @@ function helloMessage() {
 class FakeSocket {
   readonly sent: string[] = [];
   readonly readyState = 1;
+  readonly listeners: {
+    close?: () => void;
+    message?: (data: string) => void;
+  } = {};
   closed?: { readonly code?: number; readonly reason?: string };
+
+  on(event: 'close' | 'message', listener: (data: string) => void): void {
+    this.listeners[event] = listener as never;
+  }
+
+  emitClose(): void {
+    this.listeners.close?.();
+  }
+
+  emitMessage(data: string): void {
+    this.listeners.message?.(data);
+  }
 
   send(data: string, callback?: (error?: Error) => void): void {
     this.sent.push(data);

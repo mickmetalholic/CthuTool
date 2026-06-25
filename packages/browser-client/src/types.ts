@@ -46,6 +46,7 @@ export type BrowserSessionOptions = {
   readonly profileName?: string;
   readonly authPolicy?: BrowserAuthPolicy;
   readonly timeoutMs?: number;
+  readonly ttlMs?: number;
   readonly expiresInMs?: number;
   readonly metadata?: Readonly<Record<string, unknown>>;
 };
@@ -115,7 +116,7 @@ export type BrowserAction =
   | BrowserScreenshotAction;
 
 export type BrowserActionSuccessResult = {
-  readonly ok: true;
+  readonly ok?: true;
   readonly actionId?: string;
   readonly type: BrowserActionType;
   readonly durationMs?: number;

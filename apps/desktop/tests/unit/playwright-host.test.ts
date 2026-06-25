@@ -731,6 +731,47 @@ describe('PlaywrightHost', () => {
     expect(stateChanged).toHaveBeenCalled();
   });
 
+  test('keeps pending auth open when login window close verification still requires login', async () => {
+    const stateChanged = vi.fn();
+    const { closeLoginWindow, host, pendingAuthTasks, profileStore } =
+      await createHost({
+        pages: [
+          {
+            html: '<html><body>login</body></html>',
+            text: 'login',
+            url: 'https://accounts.douban.com/passport/login',
+          },
+          {
+            html: '<html><body>please log in</body></html>',
+            text: 'please log in',
+            title: 'Douban',
+            url: 'https://www.douban.com/',
+          },
+        ],
+      });
+    host.setStateChangedCallback(stateChanged);
+
+    await host.execute({
+      authPolicy: 'required',
+      command: 'browser.openLogin',
+      commandId: 'cmd-login',
+      loginUrl: 'https://accounts.douban.com/passport/login',
+      profileName: 'douban-main',
+      siteId: 'douban',
+      verifyUrl: 'https://www.douban.com/mine/',
+    });
+    closeLoginWindow();
+    await waitForProfileStatus(profileStore, 'login_required');
+
+    expect(pendingAuthTasks.list()[0]).toEqual(
+      expect.objectContaining({
+        reason: 'missing',
+        status: 'open',
+      }),
+    );
+    expect(stateChanged).toHaveBeenCalled();
+  });
+
   test('extracts Douban display name and user id during verification', async () => {
     const { host, pendingAuthTasks, profileStore } = await createHost({
       pages: [doubanHomePage('Cthu User'), doubanMinePage('50353979')],
@@ -886,6 +927,78 @@ describe('PlaywrightHost', () => {
     });
     expect((await profileStore.getProfile('example', 'main'))?.status).toBe(
       'verified',
+    );
+  });
+
+  test('marks generic verification as login required when sign-in content is detected', async () => {
+    const { host, pendingAuthTasks, profileStore } = await createHost({
+      pages: [
+        {
+          html: '<html><body>please sign in</body></html>',
+          text: 'please sign in',
+          title: 'Example',
+          url: 'https://example.com/account',
+        },
+      ],
+    });
+
+    const result = await host.execute({
+      authPolicy: 'required',
+      command: 'browser.verifyProfile',
+      commandId: 'cmd-verify',
+      profileName: 'main',
+      siteId: 'example',
+      verifyUrl: 'https://example.com/account',
+    });
+
+    expect(result).toEqual({
+      type: 'browser.result',
+      payload: expect.objectContaining({
+        detection: { kind: 'login_required' },
+      }),
+    });
+    expect((await profileStore.getProfile('example', 'main'))?.status).toBe(
+      'login_required',
+    );
+    expect(pendingAuthTasks.list()[0]).toEqual(
+      expect.objectContaining({
+        reason: 'verification_failed',
+        status: 'open',
+      }),
+    );
+  });
+
+  test('marks generic verification as blocked when navigation fails', async () => {
+    const { host, pendingAuthTasks, profileStore } = await createHost({
+      gotoError: new Error('page.goto: net::ERR_TUNNEL_CONNECTION_FAILED'),
+    });
+
+    const result = await host.execute({
+      authPolicy: 'required',
+      command: 'browser.verifyProfile',
+      commandId: 'cmd-verify',
+      profileName: 'main',
+      siteId: 'example',
+      verifyUrl: 'https://example.com/account',
+    });
+
+    expect(result).toEqual({
+      type: 'browser.result',
+      payload: expect.objectContaining({
+        detection: expect.objectContaining({
+          kind: 'blocked',
+          reason: expect.stringContaining('ERR_TUNNEL_CONNECTION_FAILED'),
+        }),
+      }),
+    });
+    expect((await profileStore.getProfile('example', 'main'))?.status).toBe(
+      'blocked',
+    );
+    expect(pendingAuthTasks.list()[0]).toEqual(
+      expect.objectContaining({
+        reason: 'blocked',
+        status: 'open',
+      }),
     );
   });
 });

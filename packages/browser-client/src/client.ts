@@ -29,7 +29,7 @@ export class CthuBrowserClient {
 
   async createSession(options: BrowserSessionOptions = {}) {
     const response = await this.transport.requestJson<CreateSessionEnvelope>({
-      body: options,
+      body: normalizeSessionOptions(options),
       method: 'POST',
       path: '/api/browser/sessions',
     });
@@ -230,7 +230,7 @@ export class BrowserPage {
     if (!result) {
       throw malformedActionResult(action.type);
     }
-    if (!result.ok) {
+    if (result.ok === false) {
       throw new BrowserClientError({
         code: result.code,
         message: result.message,
@@ -261,6 +261,18 @@ function normalizeSession(response: CreateSessionEnvelope): BrowserSession {
   }
 
   return value as BrowserSession;
+}
+
+function normalizeSessionOptions(
+  options: BrowserSessionOptions,
+): BrowserSessionOptions & { readonly ttlMs?: number } {
+  const { expiresInMs, ...rest } = options;
+  return {
+    ...rest,
+    ...(rest.ttlMs === undefined && expiresInMs !== undefined
+      ? { ttlMs: expiresInMs }
+      : {}),
+  };
 }
 
 function normalizeActionResults(response: RunActionsEnvelope) {

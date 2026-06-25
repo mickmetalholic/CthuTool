@@ -24,6 +24,7 @@ describe('CthuBrowserClient transport', () => {
 
     const session = await client.createSession({
       authPolicy: 'required',
+      expiresInMs: 60_000,
       siteId: 'douban',
     });
 
@@ -35,6 +36,7 @@ describe('CthuBrowserClient transport', () => {
           body: JSON.stringify({
             authPolicy: 'required',
             siteId: 'douban',
+            ttlMs: 60_000,
           }),
           headers: {
             accept: 'application/json',
@@ -94,23 +96,22 @@ describe('BrowserPage convenience API', () => {
     const { calls, fetch } = createMockFetch([
       jsonResponse(200, { session: { sessionId: 'session-1' } }),
       jsonResponse(200, {
-        results: [{ ok: true, type: 'goto', finalUrl: 'https://example.test' }],
+        results: [{ type: 'goto', finalUrl: 'https://example.test' }],
       }),
       jsonResponse(200, {
-        results: [{ ok: true, type: 'textContent', text: 'Example' }],
+        results: [{ type: 'textContent', text: 'Example' }],
       }),
       jsonResponse(200, {
-        results: [{ html: '<html></html>', ok: true, type: 'content' }],
+        results: [{ html: '<html></html>', type: 'content' }],
       }),
       jsonResponse(200, {
-        results: [{ ok: true, title: 'Example title', type: 'title' }],
+        results: [{ title: 'Example title', type: 'title' }],
       }),
       jsonResponse(200, {
         results: [
           {
             base64: 'iVBORw0KGgo=',
             mimeType: 'image/png',
-            ok: true,
             type: 'screenshot',
           },
         ],
@@ -157,7 +158,7 @@ describe('BrowserPage convenience API', () => {
   it('supports low-level runActions calls', async () => {
     const { fetch } = createMockFetch([
       jsonResponse(200, {
-        actionResults: [{ ok: true, title: 'Low-level', type: 'title' }],
+        actionResults: [{ title: 'Low-level', type: 'title' }],
       }),
     ]);
     const client = new CthuBrowserClient({
@@ -167,7 +168,7 @@ describe('BrowserPage convenience API', () => {
 
     await expect(
       client.runActions('session-1', [{ type: 'title' }]),
-    ).resolves.toEqual([{ ok: true, title: 'Low-level', type: 'title' }]);
+    ).resolves.toEqual([{ title: 'Low-level', type: 'title' }]);
   });
 
   it('throws browser operation errors returned in action results', async () => {
@@ -217,7 +218,7 @@ describe('BrowserPage convenience API', () => {
     const { calls, fetch } = createMockFetch([
       jsonResponse(200, { sessionId: 'session-1' }),
       jsonResponse(200, {
-        results: [{ ok: true, title: 'Scoped title', type: 'title' }],
+        results: [{ title: 'Scoped title', type: 'title' }],
       }),
       emptyResponse(204),
     ]);

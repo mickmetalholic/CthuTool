@@ -6,7 +6,14 @@ import {
   type BrowserAction,
   type BrowserActionResult,
 } from '@cthutool/agent-protocol';
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
+// Nest DI needs runtime class reference.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { AgentLifecycleEvents } from '../../agent/registry/agent-lifecycle-events.service';
 // Nest DI needs runtime class reference.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { SitesConfigService } from '../../sites-config/sites-config.service';
@@ -55,12 +62,27 @@ export type PublicBrowserSession = {
 };
 
 @Injectable()
-export class BrowserPublicApiService {
+export class BrowserPublicApiService implements OnModuleInit, OnModuleDestroy {
+  private unsubscribeAgentDisconnected?: () => void;
+
   constructor(
     private readonly desktopRuntime: DesktopBrowserRuntimeService,
     private readonly siteConfig: SitesConfigService,
     private readonly sessions: BrowserSessionRoutingStore,
+    private readonly agentLifecycleEvents: AgentLifecycleEvents,
   ) {}
+
+  onModuleInit(): void {
+    this.unsubscribeAgentDisconnected =
+      this.agentLifecycleEvents.onAgentDisconnected((event) => {
+        this.sessions.expireByAgent(event.agent.agentId);
+      });
+  }
+
+  onModuleDestroy(): void {
+    this.unsubscribeAgentDisconnected?.();
+    this.unsubscribeAgentDisconnected = undefined;
+  }
 
   async createSession(input: unknown): Promise<CreateBrowserSessionResponse> {
     await this.cleanupExpiredSessions();
