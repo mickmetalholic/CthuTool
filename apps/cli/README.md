@@ -22,23 +22,34 @@ directly:
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash
 ```
 
-Or run the repository installer from a checkout:
+The public raw installer runs in remote mode. It keeps a source checkout at
+`~/.cthutool/source/CthuTool`, verifies the committed CLI bundle, and installs
+the root package globally so `chc` is on `PATH`.
+
+Run the repository installer from a checkout to install global `chc` from that
+checkout:
 
 ```bash
 scripts/install-chc.sh
 ```
 
-The installer keeps a source checkout at `~/.cthutool/source/CthuTool`,
-verifies the committed CLI bundle, and installs the root package globally so
-`chc` is on `PATH`.
+Local file execution runs in local mode by default. It uses the repository that
+contains `scripts/install-chc.sh` instead of cloning or updating the managed
+checkout.
+
 Override defaults with environment variables:
 
 ```bash
-CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_REF=main scripts/install-chc.sh
+CHC_INSTALL_MODE=remote CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_REF=main scripts/install-chc.sh
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | CHC_REF=v0.1.0 bash
-CHC_REF=v0.1.0 scripts/install-chc.sh
-CHC_INSTALL_DIR="$HOME/dev/CthuTool" scripts/install-chc.sh
+CHC_INSTALL_MODE=remote CHC_REF=v0.1.0 scripts/install-chc.sh
+CHC_INSTALL_MODE=remote CHC_INSTALL_DIR="$HOME/dev/CthuTool" scripts/install-chc.sh
 ```
+
+`CHC_INSTALL_MODE` accepts `auto`, `local`, or `remote`. In `auto` mode, which
+is the default, raw stdin execution selects `remote` and local file execution
+selects `local`. `CHC_REPO_URL`, `CHC_REPO`, `CHC_REF`, and `CHC_INSTALL_DIR`
+apply to `remote` mode.
 
 Update an installed CLI in place:
 
@@ -54,20 +65,30 @@ chc update --ref v0.1.0
 
 ## Local Development
 
-For linked local development, install the repository once and keep the built CLI updated:
+For local development, install the checkout once and keep the built CLI
+updated:
 
 ```bash
-npm link
+scripts/install-chc.sh
 pnpm --filter @cthutool/cli dev
 ```
 
-Then run commands through the linked global executable:
+Then run commands through the global executable:
 
 ```bash
 chc codex status
 ```
 
-The `dev` script watches the TypeScript source and rebuilds `apps/cli/dist/index.js`. The linked `chc` command runs that built JavaScript with Node, matching the production runtime while still picking up local changes after each rebuild.
+The `dev` script watches the TypeScript source and rebuilds
+`apps/cli/dist/index.js`. The installed `chc` command runs that built
+JavaScript with Node, matching the production runtime while still picking up
+local changes after each rebuild.
+
+To restore the global command to the managed checkout after local development:
+
+```bash
+CHC_INSTALL_MODE=remote scripts/install-chc.sh
+```
 
 For release changes to CLI source, refresh and commit the runtime bundle in the
 same change:

@@ -48,24 +48,41 @@ curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/script
 chc --help
 ```
 
-Or run the installer from a checkout:
+The public raw installer runs in remote mode. It clones or updates
+`https://github.com/mickmetalholic/CthuTool.git` into
+`~/.cthutool/source/CthuTool`, verifies the committed CLI bundle, and runs
+`npm install -g --ignore-scripts` for the root package that exposes `chc`.
+
+For local checkout development, run the installer from the checkout:
 
 ```bash
 scripts/install-chc.sh
+pnpm --filter @cthutool/cli dev
 chc --help
 ```
 
-The installer clones or updates `https://github.com/mickmetalholic/CthuTool.git`
-into `~/.cthutool/source/CthuTool`, verifies the committed CLI bundle, and runs
-`npm install -g --ignore-scripts` for the root package that exposes `chc`.
+Local script execution runs in local mode by default. It installs global `chc`
+from the repository containing `scripts/install-chc.sh`, so the command follows
+that checkout while the `dev` script rebuilds `apps/cli/dist/index.js`.
+
+To restore global `chc` to the managed checkout after local development:
+
+```bash
+CHC_INSTALL_MODE=remote scripts/install-chc.sh
+```
 
 Use environment variables to install a different source or version:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | CHC_REF=v0.1.0 bash
-CHC_REF=v0.1.0 scripts/install-chc.sh
-CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_INSTALL_DIR="$HOME/.cthutool/source/CthuTool" scripts/install-chc.sh
+CHC_INSTALL_MODE=remote CHC_REF=v0.1.0 scripts/install-chc.sh
+CHC_INSTALL_MODE=remote CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_INSTALL_DIR="$HOME/.cthutool/source/CthuTool" scripts/install-chc.sh
 ```
+
+`CHC_INSTALL_MODE` accepts `auto`, `local`, or `remote`. In `auto` mode, which
+is the default, raw stdin execution selects `remote` and local file execution
+selects `local`. Repository, ref, and install-dir overrides apply to `remote`
+mode.
 
 After the first install, update from the CLI:
 
