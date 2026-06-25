@@ -11,10 +11,7 @@ import {
   SelfUpdateError,
   type SelfUpdateStep,
 } from '../domain/self-update-manager';
-import {
-  cliContractArgs,
-  type CliContext,
-} from '../runtime/cli-context';
+import { type CliContext, cliContractArgs } from '../runtime/cli-context';
 import { type CliError, createCliError } from '../runtime/cli-error';
 import { runObservedCliCommand } from '../runtime/command-diagnostics';
 import {

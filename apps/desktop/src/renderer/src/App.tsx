@@ -686,26 +686,6 @@ function HomeReadinessPanel({
   );
 }
 
-function countPendingBrowserAuthItems({
-  browserStatus,
-  localPendingAuthTasks,
-}: {
-  readonly browserStatus: BrowserStatus;
-  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
-}): number {
-  const keys = new Set<string>();
-  for (const task of [
-    ...browserStatus.pendingAuthTasks,
-    ...localPendingAuthTasks,
-  ]) {
-    if ('status' in task && !['open', 'in_progress'].includes(task.status)) {
-      continue;
-    }
-    keys.add(`${task.siteId}:${task.profileName}`);
-  }
-  return keys.size;
-}
-
 function browserRuntimeLabel(appInfo: DesktopAppInfo): string {
   const runtime = appInfo.browserRuntime;
   if (!runtime) return 'Unknown';

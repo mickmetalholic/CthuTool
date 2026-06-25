@@ -9,7 +9,7 @@ import { BrowserTaskRunner } from './browser-task-runner';
 describe('BrowserContentService', () => {
   it('rejects a URL outside the request allowed origins before navigation', async () => {
     const runtime = createRuntimeMock();
-    const observability = { record: jest.fn() };
+    const observability = { record: vi.fn() };
     const service = createService(runtime, observability);
 
     await expect(
@@ -186,7 +186,7 @@ describe('BrowserContentService', () => {
   });
 
   it('emits observable blocked detection with diagnostics id', async () => {
-    const observability = { record: jest.fn() };
+    const observability = { record: vi.fn() };
     const runtime = createRuntimeMock({
       finalUrl: 'https://movie.douban.com/subject/1/',
       html: '<html>captcha</html>',
@@ -226,7 +226,7 @@ describe('BrowserContentService', () => {
 
 function createService(
   runtime: Pick<DesktopBrowserRuntimeService, 'capturePage'>,
-  observability?: { readonly record: jest.Mock },
+  observability?: { readonly record: Mock },
 ): BrowserContentService {
   return new BrowserContentService(
     runtime as DesktopBrowserRuntimeService,

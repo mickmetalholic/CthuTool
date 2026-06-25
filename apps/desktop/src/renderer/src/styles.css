@@ -427,14 +427,14 @@ p {
   min-width: 0;
 }
 
-.workspace-panel [data-slot="page-header"] span {
+[data-slot="page-header"] span {
   color: var(--color-accent-2);
   font-size: 0.78rem;
   font-weight: 780;
   text-transform: uppercase;
 }
 
-.workspace-panel [data-slot="page-header"] h1 {
+[data-slot="page-header"] h1 {
   overflow-wrap: anywhere;
   color: var(--color-text);
   font-size: 1.45rem;
@@ -872,6 +872,11 @@ dt,
   table-layout: fixed;
 }
 
+.error-text {
+  color: var(--color-error);
+  font-weight: 700;
+}
+
 .browser-status-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1095,11 +1100,6 @@ dt,
   padding: 24px 12px;
   color: var(--color-text-muted);
   text-align: center;
-}
-
-.error-text {
-  color: var(--color-error);
-  font-weight: 700;
 }
 
 .settings-form {

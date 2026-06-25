@@ -89,7 +89,7 @@ describe('desktop renderer observability', () => {
     );
 
     await userEvent.click(await screen.findByLabelText('Settings'));
-    await userEvent.click(screen.getByText('Status'));
+    await userEvent.click(screen.getByText('Diagnostics'));
 
     expect(await screen.findByText('Last Diagnostic')).toBeInTheDocument();
     expect(screen.getByText('browser.detection (warn)')).toBeInTheDocument();
@@ -97,9 +97,12 @@ describe('desktop renderer observability', () => {
     await userEvent.click(screen.getByText('Logs'));
 
     await waitFor(() =>
-      expect(screen.getByText(/browser\.detection/)).toBeInTheDocument(),
+      expect(
+        screen.getByText('Log viewing is not connected yet'),
+      ).toBeInTheDocument(),
     );
-    expect(screen.getByText(/command=cmd-1/)).toBeInTheDocument();
+    expect(screen.queryByText(/browser\.detection/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/command=cmd-1/)).not.toBeInTheDocument();
     expect(screen.queryByText(/browser-profiles/)).not.toBeInTheDocument();
     expect(screen.queryByText(/screenshot/)).not.toBeInTheDocument();
   });

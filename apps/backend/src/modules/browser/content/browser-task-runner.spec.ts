@@ -56,7 +56,7 @@ describe('BrowserTaskRunner', () => {
   });
 
   it('emits queue, completion, and failure observability events', async () => {
-    const observability = { record: jest.fn() };
+    const observability = { record: vi.fn() };
     const runner = new BrowserTaskRunner(
       {
         defaultDelayMs: 0,

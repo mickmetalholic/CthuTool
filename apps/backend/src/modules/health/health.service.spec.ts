@@ -13,16 +13,16 @@ describe('HealthService', () => {
   });
 
   it('returns degraded readiness when browser agent is unavailable', async () => {
-    const observability = { record: jest.fn() };
+    const observability = { record: vi.fn() };
     const service = new HealthService(
       {
-        getStatus: jest.fn(async () => ({
+        getStatus: vi.fn(async () => ({
           agentId: 'unknown',
           available: false,
         })),
       } as never,
       {
-        getStatus: jest.fn(() => ({
+        getStatus: vi.fn(() => ({
           diagnosticsDir: './data/browser-diagnostics',
           enabled: true,
         })),
@@ -55,17 +55,17 @@ describe('HealthService', () => {
   });
 
   it('returns ready when dependencies are available', async () => {
-    const observability = { record: jest.fn() };
+    const observability = { record: vi.fn() };
     const service = new HealthService(
       {
-        getStatus: jest.fn(async () => ({
+        getStatus: vi.fn(async () => ({
           agentId: 'agent-1',
           available: true,
           lastSeenAt: '2026-01-01T00:00:00.000Z',
         })),
       } as never,
       {
-        getStatus: jest.fn(() => ({
+        getStatus: vi.fn(() => ({
           diagnosticsDir: './data/browser-diagnostics',
           enabled: true,
         })),

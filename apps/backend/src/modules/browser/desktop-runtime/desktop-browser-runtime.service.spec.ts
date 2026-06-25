@@ -39,7 +39,7 @@ describe('DesktopBrowserRuntimeService', () => {
   });
 
   it('emits runtime command completion events', async () => {
-    const observability = { record: jest.fn() };
+    const observability = { record: vi.fn() };
     const gateway = createGatewayMock();
     const runtime = createRuntime(gateway, observability);
 
@@ -149,7 +149,7 @@ describe('DesktopBrowserRuntimeService', () => {
 
   it('returns error when no browser agent is online', async () => {
     const gateway = createGatewayMock(null);
-    const observability = { record: jest.fn() };
+    const observability = { record: vi.fn() };
     const runtime = createRuntime(gateway, observability);
 
     const result = await runtime.capturePage({
@@ -217,7 +217,7 @@ function createHarness() {
 
 function createRuntime(
   gateway: GatewayMock,
-  observability?: { readonly record: jest.Mock },
+  observability?: { readonly record: Mock },
 ): DesktopBrowserRuntimeService {
   return new DesktopBrowserRuntimeService(
     gateway as unknown as AgentCommandGateway,
