@@ -45,13 +45,20 @@ The kube-prometheus-stack values include a starter Grafana dashboard named `Cthu
 
 ## Alert Rule Extension Point
 
-Prometheus selects custom alert and recording rules labeled:
+Custom alert and recording rules should be added through the
+`kube-prometheus-stack` chart's `additionalPrometheusRulesMap` values or a
+future GitOps-managed `PrometheusRule` manifest that matches the chart-managed
+Prometheus rule selector. Do not override the stack's default `ruleSelector`;
+doing so can exclude kube-prometheus-stack's built-in rules.
+
+Rules kept outside the chart values should use the project ownership label:
 
 ```yaml
 observability.cthutool.io/rule-scope: platform
 ```
 
-Add future platform alert rules under a GitOps-managed manifest path and use that label so Prometheus picks them up without backend code changes.
+This label is for ownership and review; the Prometheus selector compatibility
+must still be verified when the rule manifest is introduced.
 
 ## Future Telemetry Ingestion
 

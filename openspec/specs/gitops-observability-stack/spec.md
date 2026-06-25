@@ -1,7 +1,7 @@
 # gitops-observability-stack Specification
 
 ## Purpose
-TBD - created by archiving change gitops-observability-grafana-stack. Update Purpose after archive.
+Define the GitOps-managed Kubernetes observability stack for CthuTool, including metrics, dashboards, log collection, platform integration boundaries, and future telemetry ingestion extension points.
 ## Requirements
 ### Requirement: GitOps-managed observability stack
 The repository SHALL define a GitOps-managed observability stack for the Kubernetes cluster using existing open source components rather than a custom CthuTool observability or logging service.
@@ -83,4 +83,3 @@ CthuTool Kubernetes readiness checks SHALL use the backend readiness endpoint in
 - **WHEN** Prometheus scrape or alerting configuration is inspected
 - **THEN** readiness probe configuration remains separate from metrics scraping
 - **AND** `/metrics` is not used as a Kubernetes readiness probe
-
