@@ -31,6 +31,15 @@ const thresholdGatedPackages = {
       lines: 90,
     },
   },
+  "@cthutool/obsidian-enhancer": {
+    configPath: "packages/obsidian-enhancer/vitest.config.ts",
+    thresholds: {
+      statements: 75,
+      branches: 65,
+      functions: 85,
+      lines: 75,
+    },
+  },
 } as const;
 
 const visibilityOnlyPackages = [
@@ -57,11 +66,6 @@ const visibilityOnlyPackages = [
   {
     name: "@cthutool/app-shell",
     configPath: "packages/app-shell/vitest.config.ts",
-    runner: "vitest",
-  },
-  {
-    name: "@cthutool/obsidian-enhancer",
-    configPath: "packages/obsidian-enhancer/vitest.config.ts",
     runner: "vitest",
   },
   {

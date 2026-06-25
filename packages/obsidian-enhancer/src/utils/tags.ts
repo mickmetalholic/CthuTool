@@ -8,14 +8,17 @@ const normalizeComparableSegment = (segment: string): string =>
 
 export const normalizeTag = (tag: string): string =>
   tag
-    .replace(/^#/, '')
+    .trim()
+    .replace(/^#+/, '')
     .split('/')
     .map((segment) => normalizeComparableSegment(segment))
     .filter(Boolean)
     .join('/');
 
 export const normalizeFolderSegment = (segment: string): string =>
-  normalizeComparableSegment(segment.replace(/^\$/, '').replace(/@.+$/, ''));
+  normalizeComparableSegment(
+    segment.trim().replace(/^\$/, '').replace(/@.+$/, ''),
+  );
 
 export const toTagSegments = (tag: string): string[] =>
   normalizeTag(tag)
