@@ -168,15 +168,13 @@ async function executeBrowserAction(
     verifyUrl: input.verifyUrl,
   };
   const commandId = randomUUID();
-  return playwrightHost.executeRequest(
-    {
-      ...createBrowserRuntimeRequest(commandId, command, payload),
-      observability: {
-        commandId,
-        operation: command,
-      },
+  return playwrightHost.executeRequest({
+    ...createBrowserRuntimeRequest(commandId, command, payload),
+    observability: {
+      commandId,
+      operation: command,
     },
-  );
+  });
 }
 
 function persistWindowState(): void {

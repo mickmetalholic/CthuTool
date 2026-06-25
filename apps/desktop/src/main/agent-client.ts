@@ -344,13 +344,17 @@ export class AgentClient {
         message: 'Browser capability is not available',
       });
       this.send(
-        createJsonRpcErrorResponse(parsed.value.id, {
-          code: JSON_RPC_METHOD_NOT_FOUND,
-          message: 'Browser capability is not available',
-          data: {
-            code: 'BROWSER_CAPABILITY_UNAVAILABLE',
+        createJsonRpcErrorResponse(
+          parsed.value.id,
+          {
+            code: JSON_RPC_METHOD_NOT_FOUND,
+            message: 'Browser capability is not available',
+            data: {
+              code: 'BROWSER_CAPABILITY_UNAVAILABLE',
+            },
           },
-        }, parsed.value.observability),
+          parsed.value.observability,
+        ),
       );
       return;
     }
