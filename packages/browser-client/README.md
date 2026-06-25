@@ -41,6 +41,12 @@ try {
 }
 ```
 
+Session TTL can be configured with `ttlMs`:
+
+```ts
+const page = await client.newPage({ siteId: 'douban', ttlMs: 10 * 60 * 1000 });
+```
+
 For scoped usage, `withPage()` closes the session with `try/finally` behavior:
 
 ```ts

@@ -170,6 +170,24 @@ describe('BrowserPublicApiService', () => {
     );
     expect(store.get('session-1')).toBeUndefined();
   });
+
+  it('expires sessions when the owning agent disconnects', async () => {
+    const { agentLifecycleEvents, service, store } = createHarness();
+    service.onModuleInit();
+    await service.createSession({ siteId: 'douban' });
+
+    agentLifecycleEvents.emitAgentDisconnected('agent-1');
+
+    expect(store.get('session-1')).toBeUndefined();
+    await expect(
+      service.runActions('session-1', { actions: [{ type: 'content' }] }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        code: 'BROWSER_SESSION_NOT_FOUND',
+      }),
+    );
+    service.onModuleDestroy();
+  });
 });
 
 function createHarness(options: { readonly now?: () => Date } = {}) {
@@ -227,7 +245,29 @@ function createHarness(options: { readonly now?: () => Date } = {}) {
   store.setNowForTesting(
     options.now ?? (() => new Date('2026-06-13T10:00:00.000Z')),
   );
+  const disconnectedHandlers = new Set<(agentId: string) => void>();
+  const agentLifecycleEvents = {
+    emitAgentDisconnected(agentId: string) {
+      for (const handler of disconnectedHandlers) {
+        handler(agentId);
+      }
+    },
+    onAgentDisconnected: vi.fn(
+      (
+        handler: (event: {
+          readonly agent: { readonly agentId: string };
+        }) => void,
+      ) => {
+        const wrapped = (agentId: string) => handler({ agent: { agentId } });
+        disconnectedHandlers.add(wrapped);
+        return () => {
+          disconnectedHandlers.delete(wrapped);
+        };
+      },
+    ),
+  };
   return {
+    agentLifecycleEvents,
     runtime: runtime as typeof runtime & {
       readonly createSession: Mock;
       readonly runActions: Mock;
@@ -237,6 +277,7 @@ function createHarness(options: { readonly now?: () => Date } = {}) {
       runtime as never,
       siteConfig as never,
       store,
+      agentLifecycleEvents as never,
     ),
     siteConfig,
     store,
