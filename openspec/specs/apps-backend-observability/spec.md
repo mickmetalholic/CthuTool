@@ -1,7 +1,7 @@
 # apps-backend-observability Specification
 
 ## Purpose
-TBD - created by archiving change apps-backend-observability-semantics. Update Purpose after archive.
+Define backend request context, structured event, readiness, metrics, and trace semantics so CthuTool backend operations can be safely correlated and monitored.
 ## Requirements
 ### Requirement: Backend request context
 The backend SHALL assign or preserve a request context for HTTP entry points that includes a request identifier, start time, method, route or path, response status, duration, and optional upstream correlation metadata.
@@ -72,4 +72,3 @@ The backend SHALL expose a Prometheus-compatible `/metrics` endpoint in a future
 - **WHEN** this GitOps observability stack change is implemented
 - **THEN** the platform may define scrape configuration for `/metrics`
 - **AND** backend code changes to implement `/metrics` remain a separate task boundary unless a later change explicitly includes them
-

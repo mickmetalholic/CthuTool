@@ -35,7 +35,8 @@ spec:
         singleBinary:
           replicas: 1
           persistence:
-            enabled: false
+            enabled: true
+            size: 10Gi
 
         read:
           replicas: 0

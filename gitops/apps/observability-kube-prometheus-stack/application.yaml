@@ -14,6 +14,8 @@ spec:
       values: |
         fullnameOverride: kube-prometheus-stack
 
+        additionalPrometheusRulesMap: {}
+
         alertmanager:
           enabled: true
           service:
@@ -231,9 +233,6 @@ spec:
           prometheusSpec:
             retention: 7d
             enableAdminAPI: false
-            ruleSelector:
-              matchLabels:
-                observability.cthutool.io/rule-scope: platform
             additionalScrapeConfigs:
               - job_name: cthutool-backend
                 kubernetes_sd_configs:
