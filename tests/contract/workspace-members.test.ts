@@ -16,4 +16,14 @@ describe("workspace members contract", () => {
     );
     expect(ws.packages ?? []).not.toContain("scratches/collection-hub/*");
   });
+
+  it("keeps root package orchestration scoped away from collection hub", () => {
+    const pkgRaw = readFileSync(join(root, "package.json"), "utf8");
+    const pkg = JSON.parse(pkgRaw) as { scripts?: Record<string, string> };
+
+    for (const script of ["lint", "typecheck", "test", "test:cov", "build"]) {
+      expect(pkg.scripts?.[script]).toBeDefined();
+      expect(pkg.scripts?.[script]).not.toContain("scratches/collection-hub");
+    }
+  });
 });

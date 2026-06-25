@@ -7,9 +7,12 @@ on:
       - ".github/workflows/desktop-artifacts.yml"
       - "apps/desktop/**"
       - "packages/agent-protocol/**"
+      - "packages/app-shell/**"
+      - "packages/ui/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - "turbo.json"
   push:
     branches:
       - main
@@ -17,9 +20,12 @@ on:
       - ".github/workflows/desktop-artifacts.yml"
       - "apps/desktop/**"
       - "packages/agent-protocol/**"
+      - "packages/app-shell/**"
+      - "packages/ui/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - "turbo.json"
 
 permissions:
   contents: read
@@ -51,25 +57,28 @@ jobs:
           node-version: 24.14.1
           cache: pnpm
 
+      - name: Restore Turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.ref_name }}-
+            turbo-${{ runner.os }}-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck desktop
-        run: pnpm --filter @cthutool/desktop typecheck
-
-      - name: Test desktop
-        run: pnpm --filter @cthutool/desktop test
-
-      - name: Build desktop
-        run: pnpm --filter @cthutool/desktop build
+      - name: Validate desktop dependency graph
+        run: pnpm turbo run typecheck test build --filter=@cthutool/desktop...
 
       - name: Package Windows desktop
         if: matrix.os == 'windows-latest'
-        run: pnpm --filter @cthutool/desktop package:win
+        run: pnpm --filter @cthutool/desktop package:win:from-build
 
       - name: Package macOS desktop
         if: matrix.os == 'macos-latest'
-        run: pnpm --filter @cthutool/desktop package:mac
+        run: pnpm --filter @cthutool/desktop package:mac:from-build
 
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v4

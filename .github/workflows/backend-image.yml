@@ -1,6 +1,17 @@
 name: Backend Image
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/backend-image.yml"
+      - "apps/backend/**"
+      - "packages/agent-protocol/**"
+      - "packages/config/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.json"
+      - "k8s/**"
   push:
     branches:
       - main
@@ -16,17 +27,41 @@ on:
       - "k8s/**"
   workflow_dispatch:
 
-permissions:
-  contents: write
-  packages: write
-
 env:
   IMAGE_NAME: ghcr.io/mickmetalholic/cthutool-backend
 
 jobs:
-  build-and-push:
+  validate:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          push: false
+          cache-from: type=gha
+
+  build-and-push:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: backend-image-main
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
