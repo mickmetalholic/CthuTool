@@ -373,18 +373,19 @@ describe('AgentClient', () => {
 
     client.start();
     const socket = FakeWebSocket.instances[0];
+    socket.open();
     socket.receive(
       JSON.stringify({
-        type: 'browser.command',
-        payload: {
-          authPolicy: 'anonymous',
-          command: 'browser.capturePage',
+        jsonrpc: '2.0',
+        id: 'cmd-1',
+        method: 'browser.capturePage',
+        observability: {
           commandId: 'cmd-1',
-          observability: {
-            commandId: 'cmd-1',
-            operation: 'browser.capturePage',
-            requestId: 'req-1',
-          },
+          operation: 'browser.capturePage',
+          requestId: 'req-1',
+        },
+        params: {
+          authPolicy: 'anonymous',
           siteId: 'example',
           url: 'https://example.com/',
         },
@@ -392,17 +393,19 @@ describe('AgentClient', () => {
     );
     await Promise.resolve();
 
-    expect(JSON.parse(socket.sent[0])).toEqual({
-      type: 'browser.error',
-      payload: expect.objectContaining({
-        code: 'BROWSER_CAPABILITY_UNAVAILABLE',
-        commandId: 'cmd-1',
-        observability: {
-          commandId: 'cmd-1',
-          operation: 'browser.capturePage',
-          requestId: 'req-1',
+    expect(JSON.parse(socket.sent.at(-1) ?? '')).toEqual({
+      jsonrpc: '2.0',
+      id: 'cmd-1',
+      error: expect.objectContaining({
+        data: {
+          code: 'BROWSER_CAPABILITY_UNAVAILABLE',
         },
       }),
+      observability: {
+        commandId: 'cmd-1',
+        operation: 'browser.capturePage',
+        requestId: 'req-1',
+      },
     });
   });
 
