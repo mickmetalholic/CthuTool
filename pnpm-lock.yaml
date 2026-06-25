@@ -369,6 +369,21 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@24.13.2)(jsdom@25.0.1)(lightningcss@1.32.0)(terser@5.46.1)
 
+  packages/browser-client:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.10
+        version: 22.19.15
+      '@vitest/coverage-v8':
+        specifier: ^2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@22.19.15)(jsdom@25.0.1)(lightningcss@1.32.0)(terser@5.46.1))
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.19.15)(jsdom@25.0.1)(lightningcss@1.32.0)(terser@5.46.1)
+
   packages/config:
     devDependencies:
       '@types/node':
