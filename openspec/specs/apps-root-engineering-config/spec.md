@@ -173,7 +173,7 @@ Root-managed runtime coverage quality gates SHALL be configured per package so m
 
 #### Scenario: Initial gated packages are explicit
 - **WHEN** root engineering contract tests inspect coverage quality gate configuration
-- **THEN** `@cthutool/backend`, `@cthutool/config`, and `@cthutool/agent-protocol` are listed as threshold-gated packages
+- **THEN** `@cthutool/backend`, `@cthutool/config`, `@cthutool/agent-protocol`, and `@cthutool/obsidian-enhancer` are listed as threshold-gated packages
 - **AND** each listed package has explicit threshold values for the coverage metrics enforced by its test runner
 
 #### Scenario: Visibility-only packages stay non-blocking
@@ -221,6 +221,27 @@ The repository SHALL document how root-managed packages move from visibility-onl
 - **WHEN** coverage gate policy discusses `@cthutool/cli`
 - **THEN** it preserves Bun coverage as the CLI runner
 - **AND** any future CLI threshold decision accounts for Bun coverage output differences instead of requiring Vitest-specific artifacts
+
+### Requirement: Obsidian enhancer domain behavior is covered
+The Obsidian enhancer package SHALL include behavior tests for its domain utilities and adapter-facing boundaries.
+
+#### Scenario: Tag and exclusion logic is covered
+- **WHEN** package tests exercise tag and excluded root utilities
+- **THEN** they cover valid inputs, invalid inputs, empty inputs, and duplicate or normalized values
+- **AND** expected normalization behavior is asserted
+
+#### Scenario: Obsidian adapter boundaries are covered
+- **WHEN** package behavior depends on Obsidian-facing APIs
+- **THEN** tests use typed fakes or stable adapters
+- **AND** tests do not require a live Obsidian application
+
+### Requirement: Obsidian enhancer coverage graduation is evaluated
+The Obsidian enhancer package SHALL record a coverage baseline and explicitly decide whether it becomes threshold-gated.
+
+#### Scenario: Coverage gate decision is documented
+- **WHEN** package coverage is expanded
+- **THEN** the coverage policy records the baseline and gating decision
+- **AND** any package-local thresholds are visible in runner configuration
 
 ### Requirement: Coverage outputs are visible for runtime test suites
 The root coverage workflow SHALL collect coverage artifacts for root-managed runtime test suites that support coverage and SHALL avoid fake coverage success for packages without runtime coverage.

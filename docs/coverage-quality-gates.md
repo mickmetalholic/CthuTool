@@ -15,6 +15,7 @@ the current package `test:cov` commands.
 | `@cthutool/backend` | 83.38 | 79.79 | 85.89 | 83.38 | 75 | 70 | 80 | 75 |
 | `@cthutool/config` | 81.88 | 69.90 | 100.00 | 81.88 | 75 | 60 | 90 | 75 |
 | `@cthutool/agent-protocol` | 94.35 | 97.43 | 90.47 | 94.35 | 90 | 90 | 85 | 90 |
+| `@cthutool/obsidian-enhancer` | 81.91 | 73.13 | 94.44 | 81.91 | 75 | 65 | 85 | 75 |
 
 Thresholds are configured in each package's Vitest coverage configuration, not
 in hidden CI shell logic. The root coverage command fails when a threshold-gated
@@ -34,7 +35,6 @@ percentages are not threshold-gated yet:
 - `@cthutool/docs`
 - `@cthutool/web`
 - `@cthutool/app-shell`
-- `@cthutool/obsidian-enhancer`
 - `@cthutool/ui`
 
 `@cthutool/cli` intentionally remains on Bun coverage. It is not threshold-gated
