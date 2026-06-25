@@ -40,6 +40,24 @@ const thresholdGatedPackages = {
       lines: 75,
     },
   },
+  "@cthutool/app-shell": {
+    configPath: "packages/app-shell/vitest.config.ts",
+    thresholds: {
+      statements: 85,
+      branches: 65,
+      functions: 70,
+      lines: 85,
+    },
+  },
+  "@cthutool/ui": {
+    configPath: "packages/ui/vitest.config.ts",
+    thresholds: {
+      statements: 80,
+      branches: 85,
+      functions: 75,
+      lines: 80,
+    },
+  },
 } as const;
 
 const visibilityOnlyPackages = [
@@ -61,16 +79,6 @@ const visibilityOnlyPackages = [
   {
     name: "@cthutool/web",
     configPath: "apps/web/vitest.config.ts",
-    runner: "vitest",
-  },
-  {
-    name: "@cthutool/app-shell",
-    configPath: "packages/app-shell/vitest.config.ts",
-    runner: "vitest",
-  },
-  {
-    name: "@cthutool/ui",
-    configPath: "packages/ui/vitest.config.ts",
     runner: "vitest",
   },
 ] as const;
@@ -133,6 +141,16 @@ describe("coverage quality gate policy", () => {
     expect(policy).toContain("Root engineering contract tests");
     expect(policy).toContain("@cthutool/cli");
     expect(policy).toContain("Bun coverage");
+  });
+
+  it("documents shared frontend package baselines and threshold decisions", () => {
+    const policy = readText("docs/coverage-quality-gates.md");
+
+    expect(policy).toContain("@cthutool/app-shell");
+    expect(policy).toContain("@cthutool/ui");
+    expect(policy).toContain("frontend behavior tests");
+    expect(policy).toContain("| `@cthutool/app-shell` | 92.40 | 72.22 | 76.47 | 92.40 | 85 | 65 | 70 | 85 |");
+    expect(policy).toContain("| `@cthutool/ui` | 84.22 | 92.50 | 81.08 | 84.22 | 80 | 85 | 75 | 80 |");
   });
 
   it("keeps coverage thresholds out of hidden CI shell logic", () => {

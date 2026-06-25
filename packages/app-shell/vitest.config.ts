@@ -3,13 +3,19 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    environment: 'jsdom',
+    include: ['tests/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text-summary', 'lcov', 'html', 'json-summary'],
       include: ['src/**/*.ts', 'src/**/*.tsx'],
       exclude: ['src/**/*.d.ts'],
+      thresholds: {
+        statements: 85,
+        branches: 65,
+        functions: 70,
+        lines: 85,
+      },
     },
   },
   resolve: {

@@ -26,17 +26,32 @@ describe('app shell runtime contracts', () => {
   });
 
   it('exposes stable main and settings navigation entries', () => {
-    expect(mainNavigation.map((item) => item.id)).toEqual([
-      'overview',
-      'browser',
-      'agents',
+    expect(mainNavigation).toEqual([
+      { area: 'main', icon: 'home', id: 'overview', label: 'Overview' },
+      {
+        area: 'main',
+        icon: 'browser',
+        id: 'browser',
+        label: 'Browser Profiles',
+      },
+      { area: 'main', icon: 'agents', id: 'agents', label: 'Agents' },
     ]);
-    expect(settingsNavigation.map((item) => item.id)).toEqual([
-      'service',
-      'status',
-      'diagnostics',
-      'logs',
-      'appearance',
+    expect(settingsNavigation).toEqual([
+      { area: 'settings', icon: 'service', id: 'service', label: 'Service' },
+      { area: 'settings', icon: 'status', id: 'status', label: 'Status' },
+      {
+        area: 'settings',
+        icon: 'diagnostics',
+        id: 'diagnostics',
+        label: 'Diagnostics',
+      },
+      { area: 'settings', icon: 'logs', id: 'logs', label: 'Logs' },
+      {
+        area: 'settings',
+        icon: 'appearance',
+        id: 'appearance',
+        label: 'Appearance',
+      },
     ]);
   });
 });
