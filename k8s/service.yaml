@@ -6,7 +6,13 @@ metadata:
   labels:
     app.kubernetes.io/name: cthutool-backend
     app.kubernetes.io/part-of: cthutool
+    app.kubernetes.io/component: backend
     app.kubernetes.io/managed-by: argocd
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "3000"
+    prometheus.io/scheme: http
 spec:
   selector:
     app.kubernetes.io/name: cthutool-backend
