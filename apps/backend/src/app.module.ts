@@ -4,6 +4,7 @@ import { AgentModule } from './modules/agent/agent.module';
 import { BrowserAuthModule } from './modules/browser/auth/browser-auth.module';
 import { BrowserContentModule } from './modules/browser/content/browser-content.module';
 import { DesktopBrowserRuntimeModule } from './modules/browser/desktop-runtime/desktop-browser-runtime.module';
+import { BrowserPublicApiModule } from './modules/browser/public-api/browser-public-api.module';
 import { BrowserSitesModule } from './modules/browser/sites/browser-sites.module';
 import { DoubanMovieInfoModule } from './modules/douban-movie-info/douban-movie-info.module';
 import { HealthModule } from './modules/health/health.module';
@@ -17,6 +18,7 @@ import { ObservabilityModule } from './observability';
     BrowserAuthModule,
     BrowserContentModule,
     DesktopBrowserRuntimeModule,
+    BrowserPublicApiModule,
     BrowserSitesModule,
     DoubanMovieInfoModule,
     HealthModule,

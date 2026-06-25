@@ -1,5 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import type {
+  BrowserAction,
+  BrowserActionResult,
   BrowserCommandPayload,
   BrowserDetection,
   BrowserErrorMessage,
@@ -30,7 +32,13 @@ type RuntimeResponse = {
 };
 
 type RuntimeLocator = {
+  readonly click: (options?: { readonly timeout?: number }) => Promise<void>;
+  readonly fill: (
+    value: string,
+    options?: { readonly timeout?: number },
+  ) => Promise<void>;
   readonly textContent: () => Promise<string | null>;
+  readonly waitFor: (options?: { readonly timeout?: number }) => Promise<void>;
 };
 
 type RuntimePage = {
@@ -116,6 +124,18 @@ type ProfileVerifier = (input: {
   readonly context: RuntimeContext;
 }) => Promise<ProfileVerificationResult>;
 
+type BrowserSession = {
+  readonly sessionId: string;
+  readonly siteId: string;
+  readonly profileName?: string;
+  readonly context: RuntimeContext;
+  readonly page: RuntimePage;
+  readonly close: () => Promise<void>;
+  readonly createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string;
+};
+
 const profileVerifiers = new Map<string, ProfileVerifier>([
   ['douban', verifyDoubanProfile],
 ]);
@@ -141,6 +161,7 @@ export class PlaywrightHost {
   private readonly maxPayloadBytes: number;
   private readonly now: () => Date;
   private readonly loginContexts = new Map<string, RuntimeContext>();
+  private readonly browserSessions = new Map<string, BrowserSession>();
   private readonly suppressedLoginContextCloses = new Set<string>();
   private runtimeConfig: DesktopBrowserRuntime;
   private resolvedRuntime?: ResolvedBrowserRuntime;
@@ -270,6 +291,7 @@ export class PlaywrightHost {
     command: BrowserCommandPayload,
   ): Promise<BrowserResultMessage | BrowserErrorMessage> {
     try {
+      await this.cleanupExpiredSessions();
       await this.ensureRuntimeReady();
       if (!this.isReady()) {
         return this.error(
@@ -315,11 +337,163 @@ export class PlaywrightHost {
     if (command.command === 'browser.clearProfile') {
       return this.clearProfile(command);
     }
+    if (command.command === 'browser.createSession') {
+      return this.createSession(command);
+    }
+    if (command.command === 'browser.runActions') {
+      return this.runActions(command);
+    }
+    if (command.command === 'browser.closeSession') {
+      return this.closeSession(command);
+    }
     return this.error(
       command,
       'UNSUPPORTED_BROWSER_COMMAND',
       'Unsupported browser command',
     );
+  }
+
+  private async createSession(
+    command: BrowserCommandPayload,
+  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    if (!command.sessionId) {
+      return this.error(
+        command,
+        'INVALID_BROWSER_COMMAND',
+        'Create session command requires sessionId',
+      );
+    }
+    if (this.browserSessions.has(command.sessionId)) {
+      return this.error(
+        command,
+        'BROWSER_SESSION_DUPLICATE',
+        'Browser session already exists',
+        { sessionId: command.sessionId },
+      );
+    }
+    const profileCheck = await this.requireProfileIfNeeded(command);
+    if (profileCheck) {
+      return profileCheck;
+    }
+
+    const createdAt = this.now().toISOString();
+    const expiresAt = command.expiresAt ?? addMilliseconds(this.now(), 900_000);
+    const { context, page, close } = await this.createSessionContext(command);
+    this.browserSessions.set(command.sessionId, {
+      close,
+      context,
+      createdAt,
+      expiresAt,
+      lastUsedAt: createdAt,
+      page,
+      profileName: command.profileName,
+      sessionId: command.sessionId,
+      siteId: command.siteId,
+    });
+
+    return createBrowserResultMessage({
+      capturedAt: createdAt,
+      command: command.command,
+      commandId: command.commandId,
+      detection: { kind: 'ok' },
+      session: {
+        createdAt,
+        expiresAt,
+        ...(command.profileName ? { profileName: command.profileName } : {}),
+        sessionId: command.sessionId,
+        siteId: command.siteId,
+      },
+      sessionId: command.sessionId,
+    });
+  }
+
+  private async runActions(
+    command: BrowserCommandPayload,
+  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    if (!command.sessionId) {
+      return this.error(
+        command,
+        'INVALID_BROWSER_COMMAND',
+        'Run actions command requires sessionId',
+      );
+    }
+    if (!command.actions?.length) {
+      return this.error(
+        command,
+        'INVALID_BROWSER_COMMAND',
+        'Run actions command requires at least one action',
+        { sessionId: command.sessionId },
+      );
+    }
+    const session = this.browserSessions.get(command.sessionId);
+    if (!session) {
+      return this.error(
+        command,
+        'BROWSER_SESSION_NOT_FOUND',
+        'Browser session was not found',
+        { sessionId: command.sessionId },
+      );
+    }
+    if (isExpired(session.expiresAt, this.now())) {
+      await this.closeBrowserSession(session.sessionId);
+      return this.error(
+        command,
+        'BROWSER_SESSION_EXPIRED',
+        'Browser session has expired',
+        { sessionId: command.sessionId },
+      );
+    }
+
+    const actionResults: BrowserActionResult[] = [];
+    for (const [index, action] of command.actions.entries()) {
+      try {
+        actionResults.push(
+          await this.executeSessionAction(session.page, action),
+        );
+      } catch (error) {
+        session.lastUsedAt = this.now().toISOString();
+        return this.error(
+          command,
+          'BROWSER_ACTION_FAILED',
+          error instanceof Error ? error.message : 'Browser action failed',
+          {
+            failedActionIndex: index,
+            failedActionType: action.type,
+            sessionId: command.sessionId,
+          },
+        );
+      }
+    }
+    session.lastUsedAt = this.now().toISOString();
+
+    return createBrowserResultMessage({
+      actionResults,
+      capturedAt: session.lastUsedAt,
+      command: command.command,
+      commandId: command.commandId,
+      detection: { kind: 'ok' },
+      sessionId: command.sessionId,
+    });
+  }
+
+  private async closeSession(
+    command: BrowserCommandPayload,
+  ): Promise<BrowserResultMessage | BrowserErrorMessage> {
+    if (!command.sessionId) {
+      return this.error(
+        command,
+        'INVALID_BROWSER_COMMAND',
+        'Close session command requires sessionId',
+      );
+    }
+    await this.closeBrowserSession(command.sessionId);
+    return createBrowserResultMessage({
+      capturedAt: this.now().toISOString(),
+      command: command.command,
+      commandId: command.commandId,
+      detection: { kind: 'ok' },
+      sessionId: command.sessionId,
+    });
   }
 
   private async capturePage(
@@ -532,6 +706,43 @@ export class PlaywrightHost {
     });
   }
 
+  private async createSessionContext(command: BrowserCommandPayload): Promise<{
+    readonly context: RuntimeContext;
+    readonly page: RuntimePage;
+    readonly close: () => Promise<void>;
+  }> {
+    if (command.authPolicy === 'required') {
+      const context = await this.launchPersistentContext(command);
+      if (command.blockResources?.length) {
+        const blocked = new Set<string>(command.blockResources);
+        await context.route('**/*', (route) => routeResource(route, blocked));
+      }
+      return {
+        context,
+        page: await context.newPage(),
+        close: () => context.close(),
+      };
+    }
+
+    const browser = await this.runtime.launch({
+      ...this.activeRuntimeLaunchOptions(),
+      headless: this.headless,
+    });
+    const context = await browser.newContext();
+    if (command.blockResources?.length) {
+      const blocked = new Set<string>(command.blockResources);
+      await context.route('**/*', (route) => routeResource(route, blocked));
+    }
+    return {
+      context,
+      page: await context.newPage(),
+      close: async () => {
+        await context.close();
+        await browser.close();
+      },
+    };
+  }
+
   private async closeLoginContext(key: string): Promise<void> {
     const context = this.loginContexts.get(key);
     if (!context) {
@@ -678,18 +889,128 @@ export class PlaywrightHost {
     command: BrowserCommandPayload,
     code: string,
     message: string,
-    profileStatus?: BrowserErrorMessage['payload']['profileStatus'],
+    details?:
+      | BrowserErrorMessage['payload']['profileStatus']
+      | {
+          readonly failedActionIndex?: number;
+          readonly failedActionType?: BrowserErrorMessage['payload']['failedActionType'];
+          readonly profileStatus?: BrowserErrorMessage['payload']['profileStatus'];
+          readonly sessionId?: string;
+        },
   ): BrowserErrorMessage {
+    const profileStatus =
+      typeof details === 'string' ? details : details?.profileStatus;
     return createBrowserErrorMessage({
       code,
       command: command.command,
       commandId: command.commandId,
+      ...(typeof details === 'object' && details.failedActionIndex !== undefined
+        ? { failedActionIndex: details.failedActionIndex }
+        : {}),
+      ...(typeof details === 'object' && details.failedActionType
+        ? { failedActionType: details.failedActionType }
+        : {}),
       message,
       ...(command.observability
         ? { observability: command.observability }
         : {}),
       ...(profileStatus ? { profileStatus } : {}),
+      ...(typeof details === 'object' && details.sessionId
+        ? { sessionId: details.sessionId }
+        : {}),
     });
+  }
+
+  private async executeSessionAction(
+    page: RuntimePage,
+    action: BrowserAction,
+  ): Promise<BrowserActionResult> {
+    if (action.type === 'goto') {
+      const response = await page.goto(action.url, {
+        timeout: action.timeoutMs,
+        waitUntil: action.waitUntil ?? 'domcontentloaded',
+      });
+      return {
+        actionId: action.actionId,
+        finalUrl: page.url(),
+        ...(response?.status() !== undefined
+          ? { status: response.status() }
+          : {}),
+        type: action.type,
+      };
+    }
+    if (action.type === 'waitForSelector') {
+      await page
+        .locator(action.selector)
+        .waitFor({ timeout: action.timeoutMs });
+      return { actionId: action.actionId, type: action.type };
+    }
+    if (action.type === 'click') {
+      await page.locator(action.selector).click({ timeout: action.timeoutMs });
+      return { actionId: action.actionId, type: action.type };
+    }
+    if (action.type === 'fill') {
+      await page
+        .locator(action.selector)
+        .fill(action.value, { timeout: action.timeoutMs });
+      return { actionId: action.actionId, type: action.type };
+    }
+    if (action.type === 'textContent') {
+      return {
+        actionId: action.actionId,
+        text: capPayload(
+          (await page.locator(action.selector).textContent()) ?? '',
+          this.maxPayloadBytes,
+        ),
+        type: action.type,
+      };
+    }
+    if (action.type === 'content') {
+      return {
+        actionId: action.actionId,
+        html: capPayload(await page.content(), this.maxPayloadBytes),
+        type: action.type,
+      };
+    }
+    if (action.type === 'title') {
+      return {
+        actionId: action.actionId,
+        title: await page.title(),
+        type: action.type,
+      };
+    }
+    if (action.type === 'screenshot') {
+      const screenshot = await page.screenshot({
+        fullPage: action.fullPage ?? true,
+      });
+      return {
+        actionId: action.actionId,
+        screenshotBase64: capPayload(
+          screenshot.toString('base64'),
+          this.maxPayloadBytes,
+        ),
+        type: action.type,
+      };
+    }
+    throw new Error('Unsupported browser action');
+  }
+
+  private async cleanupExpiredSessions(): Promise<void> {
+    const now = this.now();
+    for (const session of this.browserSessions.values()) {
+      if (isExpired(session.expiresAt, now)) {
+        await this.closeBrowserSession(session.sessionId);
+      }
+    }
+  }
+
+  private async closeBrowserSession(sessionId: string): Promise<void> {
+    const session = this.browserSessions.get(sessionId);
+    if (!session) {
+      return;
+    }
+    this.browserSessions.delete(sessionId);
+    await session.close();
   }
 
   private watchLoginContextClose(
@@ -1097,6 +1418,14 @@ function capPayload(value: string, maxBytes: number): string {
   return Buffer.byteLength(value, 'utf8') > maxBytes
     ? value.slice(0, maxBytes)
     : value;
+}
+
+function addMilliseconds(date: Date, milliseconds: number): string {
+  return new Date(date.getTime() + milliseconds).toISOString();
+}
+
+function isExpired(expiresAt: string, now: Date): boolean {
+  return Date.parse(expiresAt) <= now.getTime();
 }
 
 function routeResource(

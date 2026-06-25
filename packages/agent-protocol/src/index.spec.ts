@@ -183,6 +183,59 @@ describe('agent protocol validation', () => {
     }
   });
 
+  it('accepts browser session commands from the server', () => {
+    const commands = [
+      createBrowserCommandMessage({
+        authPolicy: 'required',
+        command: 'browser.createSession',
+        commandId: 'create-1',
+        expiresAt: '2026-06-13T12:15:00.000Z',
+        profileName: 'douban-main',
+        sessionId: 'session-1',
+        siteId: 'douban',
+      }),
+      createBrowserCommandMessage({
+        actions: [
+          {
+            actionId: 'action-1',
+            type: 'goto',
+            url: 'https://movie.douban.com/subject/1292052/',
+          },
+          {
+            actionId: 'action-2',
+            selector: 'h1',
+            type: 'textContent',
+          },
+        ],
+        authPolicy: 'required',
+        command: 'browser.runActions',
+        commandId: 'run-1',
+        profileName: 'douban-main',
+        sessionId: 'session-1',
+        siteId: 'douban',
+      }),
+      createBrowserCommandMessage({
+        authPolicy: 'required',
+        command: 'browser.closeSession',
+        commandId: 'close-1',
+        profileName: 'douban-main',
+        sessionId: 'session-1',
+        siteId: 'douban',
+      }),
+    ];
+
+    for (const command of commands) {
+      expect(validateBrowserCommandMessage(command)).toEqual({
+        ok: true,
+        value: command,
+      });
+      expect(validateAgentServerMessage(command)).toEqual({
+        ok: true,
+        value: command,
+      });
+    }
+  });
+
   it('accepts browser results and errors from the agent', () => {
     const result = createBrowserResultMessage({
       capturedAt: '2026-06-13T12:00:00.000Z',
@@ -256,6 +309,71 @@ describe('agent protocol validation', () => {
       value: result,
     });
     expect(parseAgentClientMessageJson(JSON.stringify(error))).toEqual({
+      ok: true,
+      value: error,
+    });
+  });
+
+  it('accepts browser session results and action errors from the agent', () => {
+    const create = createBrowserResultMessage({
+      capturedAt: '2026-06-13T12:00:00.000Z',
+      command: 'browser.createSession',
+      commandId: 'create-1',
+      detection: { kind: 'ok' },
+      session: {
+        createdAt: '2026-06-13T12:00:00.000Z',
+        expiresAt: '2026-06-13T12:15:00.000Z',
+        profileName: 'douban-main',
+        sessionId: 'session-1',
+        siteId: 'douban',
+      },
+      sessionId: 'session-1',
+    });
+    const run = createBrowserResultMessage({
+      actionResults: [
+        {
+          actionId: 'action-1',
+          finalUrl: 'https://movie.douban.com/subject/1292052/',
+          status: 200,
+          type: 'goto',
+        },
+        {
+          actionId: 'action-2',
+          text: 'The Shawshank Redemption',
+          type: 'textContent',
+        },
+      ],
+      capturedAt: '2026-06-13T12:00:01.000Z',
+      command: 'browser.runActions',
+      commandId: 'run-1',
+      detection: { kind: 'ok' },
+      sessionId: 'session-1',
+    });
+    const error = createBrowserErrorMessage({
+      code: 'BROWSER_ACTION_FAILED',
+      command: 'browser.runActions',
+      commandId: 'run-2',
+      failedActionIndex: 1,
+      failedActionType: 'click',
+      message: 'Selector was not found',
+      sessionId: 'session-1',
+    });
+
+    for (const message of [create, run]) {
+      expect(validateBrowserResultMessage(message)).toEqual({
+        ok: true,
+        value: message,
+      });
+      expect(validateAgentClientMessage(message)).toEqual({
+        ok: true,
+        value: message,
+      });
+    }
+    expect(validateBrowserErrorMessage(error)).toEqual({
+      ok: true,
+      value: error,
+    });
+    expect(validateAgentClientMessage(error)).toEqual({
       ok: true,
       value: error,
     });

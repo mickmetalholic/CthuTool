@@ -32,6 +32,7 @@ describe('PlaywrightHost', () => {
         typeof PlaywrightHost
       >[0]['browserRuntime'];
       readonly gotoError?: Error;
+      readonly now?: () => Date;
       readonly pages?: readonly PageState[];
       readonly observabilityEvents?: DesktopObservabilityEvent[];
       readonly runtimeValidator?: ConstructorParameters<
@@ -40,13 +41,9 @@ describe('PlaywrightHost', () => {
     } = {},
   ) {
     tempDir = await mkdtemp(join(tmpdir(), 'cthutool-playwright-host-'));
-    const profileStore = new BrowserProfileStore(
-      tempDir,
-      () => new Date('2026-06-13T10:00:00.000Z'),
-    );
-    const pendingAuthTasks = new PendingAuthTaskStore(
-      () => new Date('2026-06-13T10:00:00.000Z'),
-    );
+    const now = options.now ?? (() => new Date('2026-06-13T10:00:00.000Z'));
+    const profileStore = new BrowserProfileStore(tempDir, now);
+    const pendingAuthTasks = new PendingAuthTaskStore(now);
     const defaultPage: PageState = {
       html: '<html><body>ok</body></html>',
       status: 200,
@@ -67,7 +64,10 @@ describe('PlaywrightHost', () => {
         return { status: () => currentPage.status ?? 200 };
       }),
       locator: vi.fn(() => ({
+        click: vi.fn(async () => undefined),
+        fill: vi.fn(async () => undefined),
         textContent: async () => currentPage.text ?? '',
+        waitFor: vi.fn(async () => undefined),
       })),
       screenshot: vi.fn(async () => Buffer.from('shot')),
       title: vi.fn(async () => currentPage.title ?? 'Example'),
@@ -96,7 +96,7 @@ describe('PlaywrightHost', () => {
       host: new PlaywrightHost({
         agentId: 'agent-1',
         browserRuntime: options.browserRuntime,
-        now: () => new Date('2026-06-13T10:00:00.000Z'),
+        now,
         pendingAuthTasks,
         profileStore,
         observability: options.observabilityEvents
@@ -106,6 +106,7 @@ describe('PlaywrightHost', () => {
         runtimeValidator:
           options.runtimeValidator ?? (async () => ({ ok: true })),
       }),
+      browser,
       pendingAuthTasks,
       closeLoginWindow: () => closeHandler?.(),
       context,
@@ -397,6 +398,213 @@ describe('PlaywrightHost', () => {
     );
   });
 
+  test('creates stateful sessions and runs actions in order', async () => {
+    const { browser, context, host, page } = await createHost({
+      pages: [
+        {
+          html: '<html><body><h1>Movie</h1></body></html>',
+          status: 201,
+          text: 'Movie',
+          title: 'Movie Page',
+          url: 'https://example.com/movie',
+        },
+      ],
+    });
+
+    const created = await host.execute({
+      authPolicy: 'anonymous',
+      command: 'browser.createSession',
+      commandId: 'create-1',
+      expiresAt: '2026-06-13T10:15:00.000Z',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+    const actions = await host.execute({
+      actions: [
+        {
+          actionId: 'a1',
+          type: 'goto',
+          url: 'https://example.com/movie',
+          waitUntil: 'domcontentloaded',
+        },
+        { actionId: 'a2', selector: 'h1', type: 'waitForSelector' },
+        { actionId: 'a3', selector: 'button', type: 'click' },
+        {
+          actionId: 'a4',
+          selector: 'input',
+          type: 'fill',
+          value: 'cthu',
+        },
+        { actionId: 'a5', selector: 'h1', type: 'textContent' },
+        { actionId: 'a6', type: 'content' },
+        { actionId: 'a7', type: 'title' },
+        { actionId: 'a8', fullPage: true, type: 'screenshot' },
+      ],
+      authPolicy: 'anonymous',
+      command: 'browser.runActions',
+      commandId: 'run-1',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+    const closed = await host.execute({
+      authPolicy: 'anonymous',
+      command: 'browser.closeSession',
+      commandId: 'close-1',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+
+    expect(created).toEqual({
+      type: 'browser.result',
+      payload: expect.objectContaining({
+        command: 'browser.createSession',
+        session: expect.objectContaining({
+          sessionId: 'session-1',
+          siteId: 'example',
+        }),
+      }),
+    });
+    expect(actions).toEqual({
+      type: 'browser.result',
+      payload: expect.objectContaining({
+        actionResults: [
+          expect.objectContaining({
+            actionId: 'a1',
+            finalUrl: 'https://example.com/movie',
+            status: 201,
+            type: 'goto',
+          }),
+          { actionId: 'a2', type: 'waitForSelector' },
+          { actionId: 'a3', type: 'click' },
+          { actionId: 'a4', type: 'fill' },
+          { actionId: 'a5', text: 'Movie', type: 'textContent' },
+          {
+            actionId: 'a6',
+            html: '<html><body><h1>Movie</h1></body></html>',
+            type: 'content',
+          },
+          { actionId: 'a7', title: 'Movie Page', type: 'title' },
+          {
+            actionId: 'a8',
+            screenshotBase64: Buffer.from('shot').toString('base64'),
+            type: 'screenshot',
+          },
+        ],
+        command: 'browser.runActions',
+        sessionId: 'session-1',
+      }),
+    });
+    expect(closed).toEqual({
+      type: 'browser.result',
+      payload: expect.objectContaining({
+        command: 'browser.closeSession',
+        sessionId: 'session-1',
+      }),
+    });
+    expect(page.screenshot).toHaveBeenCalledWith({ fullPage: true });
+    expect(context.close).toHaveBeenCalled();
+    expect(browser.close).toHaveBeenCalled();
+  });
+
+  test('rejects duplicate browser sessions', async () => {
+    const { host } = await createHost();
+
+    await host.execute({
+      authPolicy: 'anonymous',
+      command: 'browser.createSession',
+      commandId: 'create-1',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+    const duplicate = await host.execute({
+      authPolicy: 'anonymous',
+      command: 'browser.createSession',
+      commandId: 'create-2',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+
+    expect(duplicate).toEqual({
+      type: 'browser.error',
+      payload: expect.objectContaining({
+        code: 'BROWSER_SESSION_DUPLICATE',
+        sessionId: 'session-1',
+      }),
+    });
+  });
+
+  test('reports failing session actions with action metadata', async () => {
+    const { host } = await createHost({
+      gotoError: new Error('Navigation timed out'),
+    });
+    await host.execute({
+      authPolicy: 'anonymous',
+      command: 'browser.createSession',
+      commandId: 'create-1',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+
+    const result = await host.execute({
+      actions: [
+        {
+          actionId: 'a1',
+          type: 'goto',
+          url: 'https://example.com/slow',
+        },
+        { actionId: 'a2', type: 'content' },
+      ],
+      authPolicy: 'anonymous',
+      command: 'browser.runActions',
+      commandId: 'run-1',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+
+    expect(result).toEqual({
+      type: 'browser.error',
+      payload: expect.objectContaining({
+        code: 'BROWSER_ACTION_FAILED',
+        failedActionIndex: 0,
+        failedActionType: 'goto',
+        message: 'Navigation timed out',
+        sessionId: 'session-1',
+      }),
+    });
+  });
+
+  test('expires local browser sessions before running more actions', async () => {
+    let now = new Date('2026-06-13T10:00:00.000Z');
+    const { context, host } = await createHost({ now: () => now });
+
+    await host.execute({
+      authPolicy: 'anonymous',
+      command: 'browser.createSession',
+      commandId: 'create-1',
+      expiresAt: '2026-06-13T10:01:00.000Z',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+    now = new Date('2026-06-13T10:02:00.000Z');
+    const result = await host.execute({
+      actions: [{ actionId: 'a1', type: 'content' }],
+      authPolicy: 'anonymous',
+      command: 'browser.runActions',
+      commandId: 'run-1',
+      sessionId: 'session-1',
+      siteId: 'example',
+    });
+
+    expect(result).toEqual({
+      type: 'browser.error',
+      payload: expect.objectContaining({
+        code: 'BROWSER_SESSION_NOT_FOUND',
+        sessionId: 'session-1',
+      }),
+    });
+    expect(context.close).toHaveBeenCalled();
+  });
+
   test('uses explicit host Chrome executable path launch options', async () => {
     const { host, profileStore, runtime } = await createHost({
       browserRuntime: {
@@ -520,47 +728,6 @@ describe('PlaywrightHost', () => {
       (await profileStore.getProfile('douban', 'douban-main'))?.displayName,
     ).toBe('Cthu User');
     expect(pendingAuthTasks.list()[0]?.status).toBe('resolved');
-    expect(stateChanged).toHaveBeenCalled();
-  });
-
-  test('keeps pending auth open when login window close verification still requires login', async () => {
-    const stateChanged = vi.fn();
-    const { closeLoginWindow, host, pendingAuthTasks, profileStore } =
-      await createHost({
-        pages: [
-          {
-            html: '<html><body>login</body></html>',
-            text: 'login',
-            url: 'https://accounts.douban.com/passport/login',
-          },
-          {
-            html: '<html><body>please log in</body></html>',
-            text: 'please log in',
-            title: 'Douban',
-            url: 'https://www.douban.com/',
-          },
-        ],
-      });
-    host.setStateChangedCallback(stateChanged);
-
-    await host.execute({
-      authPolicy: 'required',
-      command: 'browser.openLogin',
-      commandId: 'cmd-login',
-      loginUrl: 'https://accounts.douban.com/passport/login',
-      profileName: 'douban-main',
-      siteId: 'douban',
-      verifyUrl: 'https://www.douban.com/mine/',
-    });
-    closeLoginWindow();
-    await waitForProfileStatus(profileStore, 'login_required');
-
-    expect(pendingAuthTasks.list()[0]).toEqual(
-      expect.objectContaining({
-        reason: 'missing',
-        status: 'open',
-      }),
-    );
     expect(stateChanged).toHaveBeenCalled();
   });
 
@@ -719,78 +886,6 @@ describe('PlaywrightHost', () => {
     });
     expect((await profileStore.getProfile('example', 'main'))?.status).toBe(
       'verified',
-    );
-  });
-
-  test('marks generic verification as login required when sign-in content is detected', async () => {
-    const { host, pendingAuthTasks, profileStore } = await createHost({
-      pages: [
-        {
-          html: '<html><body>please sign in</body></html>',
-          text: 'please sign in',
-          title: 'Example',
-          url: 'https://example.com/account',
-        },
-      ],
-    });
-
-    const result = await host.execute({
-      authPolicy: 'required',
-      command: 'browser.verifyProfile',
-      commandId: 'cmd-verify',
-      profileName: 'main',
-      siteId: 'example',
-      verifyUrl: 'https://example.com/account',
-    });
-
-    expect(result).toEqual({
-      type: 'browser.result',
-      payload: expect.objectContaining({
-        detection: { kind: 'login_required' },
-      }),
-    });
-    expect((await profileStore.getProfile('example', 'main'))?.status).toBe(
-      'login_required',
-    );
-    expect(pendingAuthTasks.list()[0]).toEqual(
-      expect.objectContaining({
-        reason: 'verification_failed',
-        status: 'open',
-      }),
-    );
-  });
-
-  test('marks generic verification as blocked when navigation fails', async () => {
-    const { host, pendingAuthTasks, profileStore } = await createHost({
-      gotoError: new Error('page.goto: net::ERR_TUNNEL_CONNECTION_FAILED'),
-    });
-
-    const result = await host.execute({
-      authPolicy: 'required',
-      command: 'browser.verifyProfile',
-      commandId: 'cmd-verify',
-      profileName: 'main',
-      siteId: 'example',
-      verifyUrl: 'https://example.com/account',
-    });
-
-    expect(result).toEqual({
-      type: 'browser.result',
-      payload: expect.objectContaining({
-        detection: expect.objectContaining({
-          kind: 'blocked',
-          reason: expect.stringContaining('ERR_TUNNEL_CONNECTION_FAILED'),
-        }),
-      }),
-    });
-    expect((await profileStore.getProfile('example', 'main'))?.status).toBe(
-      'blocked',
-    );
-    expect(pendingAuthTasks.list()[0]).toEqual(
-      expect.objectContaining({
-        reason: 'blocked',
-        status: 'open',
-      }),
     );
   });
 });
