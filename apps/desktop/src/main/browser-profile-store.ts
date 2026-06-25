@@ -22,12 +22,15 @@ export type BrowserProfilePatch = Partial<
   >
 >;
 
+type RenameFile = typeof rename;
+
 export class BrowserProfileStore {
   private readonly saveQueues = new Map<string, Promise<void>>();
 
   constructor(
     private readonly rootDir: string,
     private readonly now: () => Date = () => new Date(),
+    private readonly renameFile: RenameFile = rename,
   ) {}
 
   isReady(): boolean {
@@ -85,7 +88,7 @@ export class BrowserProfileStore {
         `${JSON.stringify(next, null, 2)}\n`,
         'utf8',
       );
-      await replaceFile(tempMetaPath, metaPath);
+      await replaceFile(tempMetaPath, metaPath, this.renameFile);
       return next;
     });
   }
@@ -182,11 +185,12 @@ export class BrowserProfileStore {
 async function replaceFile(
   tempPath: string,
   targetPath: string,
+  renameFile: RenameFile,
 ): Promise<void> {
   let latestError: unknown;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
-      await rename(tempPath, targetPath);
+      await renameFile(tempPath, targetPath);
       return;
     } catch (error) {
       latestError = error;

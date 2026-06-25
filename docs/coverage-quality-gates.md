@@ -41,6 +41,13 @@ percentages are not threshold-gated yet:
 in this change because Bun coverage output differs from the Vitest package
 coverage configuration used by the initial gated packages.
 
+`@cthutool/desktop` remains visibility-only after expanding desktop runtime and
+renderer workflow tests. The recorded `pnpm --filter @cthutool/desktop
+test:cov` baseline is 80.97 statements, 80.57 branches, 84.10 functions, and
+80.97 lines. It is not threshold-gated yet because Electron entrypoints and
+preload bootstrap files still require more appropriate integration coverage
+before a package-wide percentage gate would be a stable signal.
+
 ## Graduation Criteria
 
 A visibility-only package can become threshold-gated when all of the following
