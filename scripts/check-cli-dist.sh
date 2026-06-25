@@ -17,8 +17,7 @@ if [ ! -f "$expected" ]; then
 fi
 
 (
-  cd "$repo_root/apps/cli"
-  bun build src/index.ts --outdir "$actual_dir" --target node --define process.env.NODE_ENV='"production"' >/dev/null
+  "$repo_root/scripts/build-cli-dist.sh" "$actual_dir"
 )
 
 if ! cmp -s "$expected" "$actual"; then
