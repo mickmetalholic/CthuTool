@@ -10,6 +10,10 @@ describe('bootstrap', () => {
     const app = { enableCors, useGlobalFilters, listen };
     const log = vi.fn();
     const error = vi.fn();
+    const startTracing = vi.fn().mockReturnValue({
+      enabled: true,
+      shutdown: vi.fn(),
+    });
     const config: ServiceConfiguration = {
       logLevel: 'info',
       nodeEnv: 'development',
@@ -21,6 +25,7 @@ describe('bootstrap', () => {
       parseConfig: vi.fn().mockReturnValue(ok(config)),
       loadEnv: vi.fn(),
       createLogger: vi.fn().mockReturnValue({ log, error }),
+      startTracing,
       exit: vi.fn(),
     });
 
@@ -31,10 +36,12 @@ describe('bootstrap', () => {
       'service started',
       expect.objectContaining({
         service: 'backend',
+        tracingEnabled: true,
         nodeEnv: 'development',
         port: 3000,
       }),
     );
+    expect(startTracing).toHaveBeenCalledWith(process.env);
   });
 
   it('logs and exits when configuration is invalid', async () => {

@@ -15,22 +15,16 @@ The backend SHALL assign or preserve a request context for HTTP entry points tha
 - **THEN** the backend preserves that identifier as the request context identifier unless validation rejects it as malformed
 
 ### Requirement: Structured backend events
-The backend SHALL emit structured observability events for request lifecycle, exceptions, browser content tasks, diagnostics persistence, agent command dispatch, and readiness checks.
+The backend SHALL emit structured observability events for request lifecycle, exceptions, browser content tasks, diagnostics persistence, agent command dispatch, readiness checks, and accepted client diagnostic events as JSON records suitable for stdout/stderr collection into Loki.
 
-#### Scenario: Request completion is logged
-- **WHEN** an HTTP request completes
-- **THEN** the backend emits a structured event containing the request identifier, route or path, status, duration, and error code when applicable
-
-#### Scenario: Sensitive artifacts are excluded
-- **WHEN** backend observability events include browser or diagnostics context
-- **THEN** the events do not include raw HTML, screenshots, cookies, storage-state values, tokens, or browser profile directories
-
-#### Scenario: Readiness evaluation is logged
-- **WHEN** the backend readiness endpoint evaluates browser agent and diagnostics storage dependencies
-- **THEN** the backend emits a structured readiness event with overall readiness, dependency status labels, and safe dependency identifiers without logging raw dependency payloads
+#### Scenario: Client event is logged safely
+- **WHEN** the backend accepts a client observability event
+- **THEN** the backend emits a structured JSON log record with event `client.event_received`
+- **AND** the record includes the backend ingestion request id, client source, client level, client event name, scope, route, status, duration, and safe error code when present
+- **AND** the record does not include raw HTML, screenshots, cookies, storage-state values, tokens, form values, or browser profile directories
 
 ### Requirement: Backend metrics and traces
-The backend SHALL define stable metric and trace names for request latency, browser task queue behavior, command dispatch outcomes, blocked detections, and readiness status.
+The backend SHALL define stable metric and trace names for request latency, browser task queue behavior, command dispatch outcomes, blocked detections, and readiness status, and SHALL export OpenTelemetry traces when an OTLP endpoint is configured.
 
 #### Scenario: Browser task metrics are recorded
 - **WHEN** a browser content task is queued, started, completed, timed out, or failed
@@ -39,6 +33,17 @@ The backend SHALL define stable metric and trace names for request latency, brow
 #### Scenario: Agent command metrics are recorded
 - **WHEN** the backend dispatches a command to a desktop agent
 - **THEN** backend observability records command type, timeout, completion, failure, and selected agent status without exposing raw WebSocket payloads
+
+#### Scenario: Backend traces are exported
+- **WHEN** the backend starts with OTLP trace export configured
+- **THEN** it initializes OpenTelemetry before creating the Nest application
+- **AND** it exports spans with service name `cthutool-backend` to the configured OTLP endpoint
+- **AND** tracing can be disabled by `OTEL_SDK_DISABLED=true`
+
+#### Scenario: Backend tracing is local-safe by default
+- **WHEN** the backend starts without an OTLP endpoint
+- **THEN** it does not start the OpenTelemetry SDK
+- **AND** existing request logs, metrics, and health endpoints continue to work
 
 ### Requirement: Backend readiness semantics
 The backend SHALL distinguish liveness from readiness, report dependency readiness for browser agent availability, diagnostics storage, and configured runtime dependencies, and expose readiness status through both the readiness response and structured observability events.
@@ -97,3 +102,21 @@ The backend SHALL expose a Prometheus-compatible `/metrics` endpoint so the GitO
 - **WHEN** the backend is deployed with the `/metrics` endpoint
 - **THEN** the existing GitOps-managed Prometheus scrape configuration can collect backend metrics through the annotated backend Service
 - **AND** `/metrics` is not used as the Kubernetes liveness or readiness probe
+
+### Requirement: Backend client event ingestion
+The backend SHALL expose a bounded client observability event ingestion endpoint for Web, Desktop, and CLI diagnostic summaries.
+
+#### Scenario: Client event is accepted
+- **WHEN** a client submits a valid event to `POST /api/client-events`
+- **THEN** the backend returns an accepted response containing the backend request id for the ingestion request
+- **AND** the backend logs the event through the structured backend observability logger
+
+#### Scenario: Client event is rejected
+- **WHEN** a client submits an event with an unsupported source, unsupported level, missing event name, missing message, malformed body, or oversized payload
+- **THEN** the backend rejects the request with a client error
+- **AND** the backend does not log the rejected client payload as an accepted client event
+
+#### Scenario: Client event rate limit is enforced
+- **WHEN** one client source and remote address submits too many events in the configured window
+- **THEN** the backend rejects additional events with a rate-limit response
+- **AND** the response still participates in backend request context logging

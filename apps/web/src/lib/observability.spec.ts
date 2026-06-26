@@ -1,4 +1,9 @@
-import { createWebLogger, redactDetails, sanitizeEvent } from './observability';
+import {
+  createWebClientEventReporter,
+  createWebLogger,
+  redactDetails,
+  sanitizeEvent,
+} from './observability';
 
 describe('web observability logger', () => {
   it('filters debug and info in production by default', () => {
@@ -15,6 +20,10 @@ describe('web observability logger', () => {
     expect(sink.debug).not.toHaveBeenCalled();
     expect(sink.info).not.toHaveBeenCalled();
     expect(sink.warn).toHaveBeenCalledTimes(1);
+    expect(sink.warn).toHaveBeenCalledWith(
+      '[cthutool:web]',
+      expect.objectContaining({ source: 'cthutool.web' }),
+    );
   });
 
   it('redacts sensitive diagnostic details', () => {
@@ -50,7 +59,91 @@ describe('web observability logger', () => {
       }),
     ).toMatchObject({
       route: '/api/items',
+      source: 'cthutool.web',
     });
+  });
+
+  it('reports sanitized warn and error events to the configured backend endpoint', () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 202 }));
+    const reporter = createWebClientEventReporter({
+      endpoint: 'http://localhost:3000/api/client-events',
+      fetch: fetchImpl as typeof fetch,
+    });
+    const logger = createWebLogger('web.test', {
+      clientEventReporter: reporter,
+      console: createSink(),
+      environment: 'test',
+    });
+
+    logger.warn({
+      details: {
+        safe: 'visible',
+        token: 'secret',
+      },
+      event: 'ui.warning',
+      message: 'warning',
+      route: '/projects?token=secret',
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://localhost:3000/api/client-events',
+      expect.objectContaining({
+        body: expect.any(String),
+        keepalive: true,
+        method: 'POST',
+      }),
+    );
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(init.body as string)).toEqual(
+      expect.objectContaining({
+        details: {
+          safe: 'visible',
+          token: '[Redacted]',
+        },
+        event: 'ui.warning',
+        level: 'warn',
+        route: '/projects',
+        source: 'cthutool.web',
+      }),
+    );
+  });
+
+  it('does not report events below the remote reporter threshold', () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 202 }));
+    const reporter = createWebClientEventReporter({
+      endpoint: 'http://localhost:3000/api/client-events',
+      fetch: fetchImpl as typeof fetch,
+      minLevel: 'error',
+    });
+    reporter.report({
+      event: 'ui.warning',
+      level: 'warn',
+      message: 'warning',
+      scope: 'web.test',
+    });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('swallows client event reporter failures', () => {
+    const reporter = createWebClientEventReporter({
+      endpoint: 'http://localhost:3000/api/client-events',
+      fetch: vi.fn(async () => {
+        throw new TypeError('network failed');
+      }) as typeof fetch,
+    });
+
+    expect(() =>
+      reporter.report({
+        event: 'ui.error',
+        level: 'error',
+        message: 'failed',
+        scope: 'web.test',
+      }),
+    ).not.toThrow();
   });
 });
 

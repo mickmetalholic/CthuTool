@@ -1,10 +1,16 @@
 # Prometheus Rule Extension Point
 
-Future CthuTool platform alert and recording rules should preferably be added
-through the `kube-prometheus-stack` chart's `additionalPrometheusRulesMap`
-values. If rules are later managed as standalone `PrometheusRule` manifests,
-verify they match the chart-managed Prometheus rule selector so built-in stack
-rules remain active.
+CthuTool platform alert and recording rules should preferably be added through
+the `kube-prometheus-stack` chart's `additionalPrometheusRulesMap` values. The
+current CthuTool backend alert group lives in
+`gitops/apps/observability-kube-prometheus-stack/application.yaml`.
+
+If rules are later managed as standalone `PrometheusRule` manifests, verify
+they match the chart-managed Prometheus rule selector so built-in stack rules
+remain active.
+
+Alertmanager receiver configuration is intentionally environment-specific and
+is not defined here yet.
 
 Use this project ownership label on CthuTool-specific rules:
 

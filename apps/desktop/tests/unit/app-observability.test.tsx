@@ -43,6 +43,7 @@ describe('desktop renderer observability', () => {
             event: 'browser.detection',
             level: 'warn',
             message: 'Browser host detected access problem',
+            source: 'cthutool.desktop',
             timestamp: '2026-06-13T10:00:00.000Z',
           },
           recentEvents: [
@@ -56,6 +57,7 @@ describe('desktop renderer observability', () => {
               event: 'browser.detection',
               level: 'warn',
               message: 'Browser host detected access problem',
+              source: 'cthutool.desktop',
               timestamp: '2026-06-13T10:00:00.000Z',
             },
           ],

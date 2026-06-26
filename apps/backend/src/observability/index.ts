@@ -2,6 +2,13 @@ export {
   type BackendObservabilityEvent,
   BackendObservabilityService,
 } from './backend-observability.service';
+export {
+  type ClientEventAcceptedResponse,
+  ClientEventsService,
+  type ClientObservabilityEvent,
+  type ClientObservabilityLevel,
+  type ClientObservabilitySource,
+} from './client-events.service';
 export { ObservabilityModule } from './observability.module';
 export { redactDetails } from './redaction';
 export {

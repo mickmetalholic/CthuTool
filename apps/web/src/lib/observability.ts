@@ -10,6 +10,7 @@ export type WebObservabilityLevel = (typeof WEB_OBSERVABILITY_LEVELS)[number];
 export type WebObservabilityDetails = Record<string, unknown>;
 
 export type WebObservabilityEvent = {
+  readonly source?: 'cthutool.web';
   readonly level: WebObservabilityLevel;
   readonly scope: string;
   readonly event: string;
@@ -26,8 +27,20 @@ export type WebObservabilityEvent = {
 };
 
 export type WebLoggerOptions = {
+  readonly clientEventReporter?: WebClientEventReporter;
   readonly console?: WebConsoleSink;
   readonly environment?: 'development' | 'production' | 'test';
+  readonly minLevel?: WebObservabilityLevel;
+};
+
+export type WebClientEventReporter = {
+  readonly report: (event: WebObservabilityEvent) => void;
+};
+
+export type WebClientEventReporterOptions = {
+  readonly endpoint?: string | URL;
+  readonly fetch?: typeof fetch;
+  readonly headers?: HeadersInit;
   readonly minLevel?: WebObservabilityLevel;
 };
 
@@ -82,6 +95,7 @@ export function createWebLogger(
   const minLevel =
     options.minLevel ?? (environment === 'production' ? 'warn' : 'debug');
   const sink = options.console ?? defaultConsole;
+  const clientEventReporter = options.clientEventReporter;
 
   const emit = (
     level: WebObservabilityLevel,
@@ -95,14 +109,17 @@ export function createWebLogger(
     const event = sanitizeEvent({
       ...input,
       level,
+      source: 'cthutool.web',
       scope: input.scope ?? activeScope,
     });
     sink[level]('[cthutool:web]', event);
+    clientEventReporter?.report(event);
   };
 
   return {
     child: (childScope) =>
       createWebLogger(`${scope}.${childScope}`, {
+        clientEventReporter,
         console: sink,
         environment,
         minLevel,
@@ -111,6 +128,33 @@ export function createWebLogger(
     error: (input) => emit('error', input),
     info: (input) => emit('info', input),
     warn: (input) => emit('warn', input),
+  };
+}
+
+export function createWebClientEventReporter(
+  options: WebClientEventReporterOptions = {},
+): WebClientEventReporter {
+  const endpoint = resolveClientEventEndpoint(options.endpoint);
+  const fetchImpl = options.fetch ?? globalThis.fetch?.bind(globalThis);
+  const minLevel = options.minLevel ?? 'warn';
+  const headers = options.headers;
+
+  return {
+    report: (event) => {
+      if (!endpoint || !fetchImpl || !shouldEmit(event.level, minLevel)) {
+        return;
+      }
+      const payload = sanitizeEvent(event);
+      void fetchImpl(endpoint, {
+        body: JSON.stringify(payload),
+        headers: {
+          'content-type': 'application/json',
+          ...headers,
+        },
+        keepalive: true,
+        method: 'POST',
+      }).catch(() => undefined);
+    },
   };
 }
 
@@ -165,6 +209,7 @@ export function sanitizeEvent(
     requestId: sanitizeScalar(event.requestId),
     route: sanitizeRoute(event.route),
     scope: sanitizeRequiredScalar(event.scope, 'web.unknown'),
+    source: 'cthutool.web',
     status: sanitizeNumber(event.status),
     traceId: sanitizeScalar(event.traceId),
   });
@@ -219,6 +264,23 @@ function resolveEnvironment(): 'development' | 'production' | 'test' {
     return 'test';
   }
   return 'development';
+}
+
+function resolveClientEventEndpoint(
+  endpoint: string | URL | undefined,
+): string | undefined {
+  if (endpoint) {
+    return String(endpoint);
+  }
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_CTHUTOOL_BACKEND_URL ??
+    process.env.CTHUTOOL_BACKEND_URL;
+  if (!baseUrl) {
+    return undefined;
+  }
+
+  return new URL('/api/client-events', baseUrl).toString();
 }
 
 function redactValue(value: unknown, depth: number): unknown {

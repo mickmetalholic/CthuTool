@@ -11,12 +11,9 @@ The repository SHALL define a GitOps-managed observability stack for the Kuberne
 - **THEN** they declare Prometheus for metrics collection and alerting foundations
 - **AND** they declare Grafana for dashboards
 - **AND** they declare Loki for structured log collection and query
+- **AND** they declare Tempo for trace storage
+- **AND** they declare an OpenTelemetry Collector for OTLP trace ingestion
 - **AND** they do not declare a custom `apps/observability` service
-
-#### Scenario: Stack is reconciled through GitOps
-- **WHEN** the cluster desired state is reviewed
-- **THEN** observability stack resources are represented under `gitops/`
-- **AND** CthuTool workload integration resources are represented under `k8s/` when they belong to the CthuTool application deployment
 
 ### Requirement: Prometheus metrics integration
 The observability stack SHALL provide platform-side Prometheus scrape integration for CthuTool workloads without requiring this change to implement backend metrics.
@@ -33,17 +30,13 @@ The observability stack SHALL provide platform-side Prometheus scrape integratio
 - **AND** initial alert rules can be added without changing backend application code
 
 ### Requirement: Grafana dashboards and data sources
-The observability stack SHALL configure Grafana to query Prometheus metrics and Loki logs for CthuTool operational views.
+The observability stack SHALL configure Grafana to query Prometheus metrics, Loki logs, and Tempo traces for CthuTool operational views.
 
 #### Scenario: Grafana data sources are configured
 - **WHEN** Grafana configuration is inspected
 - **THEN** Prometheus is available as a metrics data source
 - **AND** Loki is available as a logs data source
-
-#### Scenario: Starter dashboards are available
-- **WHEN** Grafana dashboards are inspected
-- **THEN** at least one dashboard surfaces Kubernetes workload health or Prometheus target status for CthuTool
-- **AND** at least one dashboard or explore link supports querying CthuTool structured logs from Loki
+- **AND** Tempo is available as a traces data source
 
 ### Requirement: Loki structured log collection
 The observability stack SHALL collect structured CthuTool Kubernetes logs into Loki using bounded labels and queryable structured fields.
@@ -59,17 +52,19 @@ The observability stack SHALL collect structured CthuTool Kubernetes logs into L
 - **AND** they are not promoted to Loki labels
 
 ### Requirement: Telemetry collector extension point
-The observability stack SHALL reserve an OpenTelemetry Collector or Grafana Alloy ingestion point for future telemetry pipelines without requiring Tempo tracing in this change.
+The observability stack SHALL provide an OpenTelemetry Collector ingestion point for backend trace export while keeping metrics and logs on their existing Prometheus and Loki paths.
 
-#### Scenario: Collector ingress is reserved
+#### Scenario: Collector accepts backend traces
 - **WHEN** observability configuration is inspected
-- **THEN** it documents or declares where future OTLP metrics, logs, and traces can be sent
-- **AND** it identifies whether the first supported collector path is OpenTelemetry Collector, Grafana Alloy, or both
+- **THEN** an OpenTelemetry Collector is configured with OTLP HTTP and gRPC receivers
+- **AND** its trace pipeline exports to Tempo
+- **AND** it does not require backend metrics or logs to be exported through OpenTelemetry
 
-#### Scenario: Tempo is deferred
-- **WHEN** the observability stack for this change is inspected
-- **THEN** it does not require Tempo to be deployed
-- **AND** trace storage, sampling, and trace dashboards are left for a later tracing change
+#### Scenario: Tempo stores traces
+- **WHEN** observability configuration is inspected
+- **THEN** Tempo is deployed through GitOps
+- **AND** Tempo accepts OTLP trace export from the collector
+- **AND** trace retention is bounded for the starter deployment
 
 ### Requirement: Kubernetes readiness probe semantics
 CthuTool Kubernetes readiness checks SHALL use the backend readiness endpoint instead of the liveness endpoint.
@@ -83,3 +78,26 @@ CthuTool Kubernetes readiness checks SHALL use the backend readiness endpoint in
 - **WHEN** Prometheus scrape or alerting configuration is inspected
 - **THEN** readiness probe configuration remains separate from metrics scraping
 - **AND** `/metrics` is not used as a Kubernetes readiness probe
+
+### Requirement: CthuTool Prometheus alert rules
+The GitOps-managed observability stack SHALL define CthuTool-specific Prometheus alert rules for backend availability, readiness, latency, error rate, browser task timeout, and desktop agent command failure signals using existing metrics and bounded labels.
+
+#### Scenario: Backend target alert is configured
+- **WHEN** the kube-prometheus-stack GitOps Application values are inspected
+- **THEN** they include an alert that fires when the CthuTool backend scrape target is down for a sustained window
+
+#### Scenario: Backend readiness alert is configured
+- **WHEN** backend readiness metrics report degraded state for a sustained window
+- **THEN** Prometheus has a CthuTool alert rule that can notify Alertmanager of readiness degradation
+
+#### Scenario: Backend request health alerts are configured
+- **WHEN** backend HTTP request metrics show elevated error rate or high p95 latency
+- **THEN** Prometheus has CthuTool alert rules for those symptoms using bounded metric labels
+
+#### Scenario: Browser and agent operation alerts are configured
+- **WHEN** browser task timeout metrics or agent command unavailable/timeout metrics are observed for a sustained window
+- **THEN** Prometheus has CthuTool alert rules for those operational symptoms
+
+#### Scenario: Notification receivers are deferred
+- **WHEN** CthuTool alert rules are configured
+- **THEN** they do not require environment-specific Alertmanager receiver secrets or external notification endpoints in this change
