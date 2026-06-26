@@ -16,7 +16,6 @@ describe("CI workflow contract", () => {
     expect(yml).toMatch(/typecheck:/);
     expect(yml).toMatch(/test:/);
     expect(yml).toMatch(/build:/);
-    expect(yml).toMatch(/cli-dist-changes:/);
     expect(yml).toMatch(/cli-dist:/);
     expect(yml).toMatch(/coverage:/);
 
@@ -29,28 +28,15 @@ describe("CI workflow contract", () => {
     expect(yml).toMatch(/pnpm\s+run\s+test:cov/);
   });
 
-  it("runs CLI distribution checks only when bundle inputs change", () => {
+  it("keeps CLI distribution checks required-safe when bundle inputs are unchanged", () => {
     const yml = readWorkflow("ci.yml");
 
-    expect(yml).toContain("uses: dorny/paths-filter@v3");
-    expect(yml).toContain("changed: ${{ steps.filter.outputs.cli-dist }}");
-    expect(yml).toContain("needs: cli-dist-changes");
-    expect(yml).toContain(
-      "if: needs.cli-dist-changes.outputs.changed == 'true'",
-    );
-
-    for (const path of [
-      ".github/workflows/ci.yml",
-      "apps/cli/**",
-      "scripts/build-cli-dist.sh",
-      "scripts/check-cli-dist.sh",
-      "scripts/run-bun.sh",
-      "package.json",
-      "pnpm-lock.yaml",
-      "pnpm-workspace.yaml",
-    ]) {
-      expect(yml).toContain(`- "${path}"`);
-    }
+    expect(yml).toContain("node scripts/ci/affected-workflow.mjs cli-dist");
+    expect(yml).toContain("Skip CLI distribution check");
+    expect(yml).toContain("if: steps.affected.outputs.changed != 'true'");
+    expect(yml).toContain("if: steps.affected.outputs.changed == 'true'");
+    expect(yml).not.toContain("cli-dist-changes:");
+    expect(yml).not.toContain("dorny/paths-filter");
   });
 
   it("restores Turbo cache for jobs that run Turbo tasks", () => {
@@ -102,10 +88,12 @@ describe("CI workflow contract", () => {
 
     expect(yml).toContain("macos-latest");
     expect(yml).toContain("windows-latest");
-    expect(yml).toContain("packages/app-shell/**");
-    expect(yml).toContain("packages/ui/**");
-    expect(yml).toContain("tsconfig.json");
-    expect(yml).toContain("turbo.json");
+    expect(yml).toContain(
+      "node scripts/ci/affected-workflow.mjs desktop-artifacts",
+    );
+    expect(yml).toContain("Skip desktop artifact package");
+    expect(yml).toContain("if: steps.affected.outputs.changed != 'true'");
+    expect(yml).toContain("if: steps.affected.outputs.changed == 'true'");
     expect(yml).toMatch(/turbo\s+run\s+typecheck\s+test\s+build/);
     expect(yml).toContain("--filter=@cthutool/desktop...");
     expect(yml).toMatch(/@cthutool\/desktop\s+package:win:from-build/);
@@ -119,6 +107,13 @@ describe("CI workflow contract", () => {
     expect(yml).toMatch(/pull_request:/);
     expect(yml).toMatch(/validate:/);
     expect(yml).toMatch(/build-and-push:/);
+    expect(yml).toContain(
+      "node scripts/ci/affected-workflow.mjs backend-image",
+    );
+    expect(yml).toContain("Skip backend image validation");
+    expect(yml).toContain("Skip backend image publish");
+    expect(yml).toContain("if: steps.affected.outputs.changed != 'true'");
+    expect(yml).toContain("if: steps.affected.outputs.changed == 'true'");
     expect(yml).toContain("push: false");
     expect(yml).toContain("if: github.event_name != 'pull_request'");
     expect(yml).toContain("${{ env.IMAGE_NAME }}:main");
