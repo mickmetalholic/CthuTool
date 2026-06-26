@@ -18,6 +18,7 @@ the current package `test:cov` commands.
 | `@cthutool/obsidian-enhancer` | 81.91 | 73.13 | 94.44 | 81.91 | 75 | 65 | 85 | 75 |
 | `@cthutool/app-shell` | 53.44 | 72.97 | 38.88 | 53.44 | 50 | 65 | 35 | 50 |
 | `@cthutool/ui` | 84.22 | 92.50 | 81.08 | 84.22 | 80 | 85 | 75 | 80 |
+| `@cthutool/browser-client` | 74.49 | 67.39 | 88.09 | 74.49 | 70 | 65 | 85 | 70 |
 
 Thresholds are configured in each package's Vitest coverage configuration, not
 in hidden CI shell logic. The root coverage command fails when a threshold-gated
@@ -65,6 +66,13 @@ component interactions, disabled states, class composition, and utility edge
 cases. App-shell thresholds track the current larger shell source surface after
 the workflow-layout rebase and remain conservative relative to the recorded
 baseline above.
+
+`@cthutool/browser-client` is threshold-gated after adding browser API client
+request and response handling tests for session creation, action execution,
+session closing, validation failures, and HTTP error mapping. Its thresholds
+start below the recorded package baseline so the new SDK keeps package-local
+coverage visibility without requiring unrelated test expansion in the initial
+browser API change.
 
 `@cthutool/web` remains visibility-only after expanding utility, metadata, root
 layout, and page shell tests. The recorded `pnpm --filter @cthutool/web

@@ -58,6 +58,15 @@ const thresholdGatedPackages = {
       lines: 80,
     },
   },
+  "@cthutool/browser-client": {
+    configPath: "packages/browser-client/vitest.config.ts",
+    thresholds: {
+      statements: 70,
+      branches: 65,
+      functions: 85,
+      lines: 70,
+    },
+  },
 } as const;
 
 const visibilityOnlyPackages = [
@@ -173,9 +182,12 @@ describe("coverage quality gate policy", () => {
 
     expect(policy).toContain("@cthutool/app-shell");
     expect(policy).toContain("@cthutool/ui");
+    expect(policy).toContain("@cthutool/browser-client");
     expect(policy).toContain("frontend behavior tests");
+    expect(policy).toContain("request and response handling tests");
     expect(policy).toContain("| `@cthutool/app-shell` | 53.44 | 72.97 | 38.88 | 53.44 | 50 | 65 | 35 | 50 |");
     expect(policy).toContain("| `@cthutool/ui` | 84.22 | 92.50 | 81.08 | 84.22 | 80 | 85 | 75 | 80 |");
+    expect(policy).toContain("| `@cthutool/browser-client` | 74.49 | 67.39 | 88.09 | 74.49 | 70 | 65 | 85 | 70 |");
   });
 
   it("documents web and docs baselines while keeping them visibility-only", () => {
