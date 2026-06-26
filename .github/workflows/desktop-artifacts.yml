@@ -3,31 +3,9 @@ name: Desktop Artifacts
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - ".github/workflows/desktop-artifacts.yml"
-      - "apps/desktop/**"
-      - "packages/agent-protocol/**"
-      - "packages/app-shell/**"
-      - "packages/ui/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "tsconfig.json"
-      - "turbo.json"
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/desktop-artifacts.yml"
-      - "apps/desktop/**"
-      - "packages/agent-protocol/**"
-      - "packages/app-shell/**"
-      - "packages/ui/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "tsconfig.json"
-      - "turbo.json"
 
 permissions:
   contents: read
@@ -47,19 +25,32 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect desktop artifact changes
+        id: affected
+        run: node scripts/ci/affected-workflow.mjs desktop-artifacts
+
+      - name: Skip desktop artifact package
+        if: steps.affected.outputs.changed != 'true'
+        run: echo "Desktop artifact inputs are unchanged; skipping package."
 
       - name: Set up pnpm
+        if: steps.affected.outputs.changed == 'true'
         uses: pnpm/action-setup@v4
         with:
           version: 9.15.4
 
       - name: Set up Node.js
+        if: steps.affected.outputs.changed == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 24.14.1
           cache: pnpm
 
       - name: Restore Turbo cache
+        if: steps.affected.outputs.changed == 'true'
         uses: actions/cache@v4
         with:
           path: .turbo/cache
@@ -69,20 +60,23 @@ jobs:
             turbo-${{ runner.os }}-
 
       - name: Install dependencies
+        if: steps.affected.outputs.changed == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Validate desktop dependency graph
+        if: steps.affected.outputs.changed == 'true'
         run: pnpm turbo run typecheck test build --filter=@cthutool/desktop...
 
       - name: Package Windows desktop
-        if: matrix.os == 'windows-latest'
+        if: steps.affected.outputs.changed == 'true' && matrix.os == 'windows-latest'
         run: pnpm --filter @cthutool/desktop package:win:from-build
 
       - name: Package macOS desktop
-        if: matrix.os == 'macos-latest'
+        if: steps.affected.outputs.changed == 'true' && matrix.os == 'macos-latest'
         run: pnpm --filter @cthutool/desktop package:mac:from-build
 
       - name: Upload desktop artifact
+        if: steps.affected.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: cthudesktop-${{ runner.os }}
