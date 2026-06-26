@@ -2,29 +2,9 @@ name: Backend Image
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/backend-image.yml"
-      - "apps/backend/**"
-      - "packages/agent-protocol/**"
-      - "packages/config/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "tsconfig.json"
-      - "k8s/**"
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/backend-image.yml"
-      - "apps/backend/**"
-      - "packages/agent-protocol/**"
-      - "packages/config/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "tsconfig.json"
-      - "k8s/**"
   workflow_dispatch:
 
 env:
@@ -35,16 +15,31 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: read
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect backend image changes
+        id: affected
+        run: node scripts/ci/affected-workflow.mjs backend-image
+
+      - name: Skip backend image validation
+        if: steps.affected.outputs.changed != 'true'
+        run: echo "Backend image inputs are unchanged; skipping image validation."
 
       - name: Set up Docker Buildx
+        if: steps.affected.outputs.changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Build backend image
+        if: steps.affected.outputs.changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -65,11 +60,23 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect backend image changes
+        id: affected
+        run: node scripts/ci/affected-workflow.mjs backend-image
+
+      - name: Skip backend image publish
+        if: steps.affected.outputs.changed != 'true'
+        run: echo "Backend image inputs are unchanged; skipping image publish."
 
       - name: Set up Docker Buildx
+        if: steps.affected.outputs.changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
+        if: steps.affected.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -77,6 +84,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push backend image
+        if: steps.affected.outputs.changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -89,6 +97,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Pin deployment manifest to commit image
+        if: steps.affected.outputs.changed == 'true'
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -110,6 +119,7 @@ jobs:
           PY
 
       - name: Commit deployment manifest update
+        if: steps.affected.outputs.changed == 'true'
         run: |
           if git diff --quiet -- k8s/deployment.yaml; then
             echo "Deployment manifest already points at ${{ github.sha }}"

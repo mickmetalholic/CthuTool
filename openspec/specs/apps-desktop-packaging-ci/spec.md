@@ -53,16 +53,22 @@ The repository SHALL include a GitHub Actions workflow that builds and uploads C
 - **THEN** desktop artifact packaging can remain in a dedicated workflow rather than adding heavy packaging work to the existing coverage job
 
 ### Requirement: Desktop artifact workflow tracks desktop dependency changes
-The desktop artifact workflow SHALL run when changes affect the desktop package or root-managed packages that contribute to the desktop build.
+The desktop artifact workflow SHALL expose stable platform packaging checks and SHALL run packaging work only when changes affect the desktop package or root-managed packages that contribute to the desktop build.
 
 #### Scenario: Desktop dependency package changes trigger artifacts workflow
-- **WHEN** a pull request changes `apps/desktop/**`, `packages/agent-protocol/**`, `packages/app-shell/**`, or `packages/ui/**`
-- **THEN** the desktop artifact workflow is eligible to run
+- **WHEN** a pull request changes `apps/desktop/**`, `packages/agent-protocol/**`, `packages/app-shell/**`, `packages/ui/**`, or recursive workspace dependencies of `@cthutool/desktop`
+- **THEN** the desktop artifact workflow runs platform packaging jobs
 - **AND** the workflow validates desktop packaging before the pull request is considered artifact-ready
 
 #### Scenario: Shared workspace configuration changes trigger artifacts workflow
-- **WHEN** a pull request changes root package manifests, workspace configuration, lockfile, Turbo configuration, or the desktop artifact workflow itself
-- **THEN** the desktop artifact workflow is eligible to run
+- **WHEN** a pull request changes root package manifests, workspace configuration, lockfile, TypeScript configuration, Turbo configuration, or the desktop artifact workflow itself
+- **THEN** the desktop artifact workflow runs platform packaging jobs
+
+#### Scenario: Unrelated changes skip desktop artifacts successfully
+- **WHEN** a pull request changes files that cannot affect desktop artifacts
+- **THEN** the desktop artifact workflow still exposes the macOS and Windows platform check names
+- **AND** each platform job completes successfully without installing dependencies, running Turbo graph validation, packaging artifacts, or uploading artifacts
+- **AND** each platform job output states that desktop artifact inputs are unchanged
 
 ### Requirement: Desktop validation uses Turbo filtered dependency graph
 The desktop artifact workflow SHALL validate the desktop package through the Turborepo dependency graph before running platform-specific packaging commands.
@@ -78,3 +84,12 @@ The desktop artifact workflow SHALL validate the desktop package through the Tur
 - **WHEN** desktop graph build validation has already produced the package build output
 - **THEN** Windows and macOS packaging commands reuse the existing build output where package scripts support it
 - **AND** the workflow does not intentionally rebuild the same desktop output more than once per platform job
+
+### Requirement: Desktop workflow uses area filename and explicit display name
+The desktop artifact workflow SHALL be stored in an area-named workflow file while presenting a descriptive workflow name in GitHub.
+
+#### Scenario: Desktop workflow file is area named
+- **WHEN** repository workflow files are inspected
+- **THEN** desktop artifact behavior is defined in `.github/workflows/desktop.yml`
+- **AND** the workflow display name identifies desktop artifact behavior
+- **AND** the old `.github/workflows/desktop-artifacts.yml` file is not retained as a duplicate workflow
