@@ -11,7 +11,7 @@ const targets = {
   'backend-image': {
     workspacePackage: '@cthutool/backend',
     extraPaths: [
-      '.github/workflows/backend-image.yml',
+      '.github/workflows/backend.yml',
       'k8s/**',
       'package.json',
       'pnpm-lock.yaml',
@@ -22,7 +22,7 @@ const targets = {
   'desktop-artifacts': {
     workspacePackage: '@cthutool/desktop',
     extraPaths: [
-      '.github/workflows/desktop-artifacts.yml',
+      '.github/workflows/desktop.yml',
       'package.json',
       'pnpm-lock.yaml',
       'pnpm-workspace.yaml',
@@ -33,13 +33,14 @@ const targets = {
   'cli-dist': {
     workspacePackage: '@cthutool/cli',
     extraPaths: [
-      '.github/workflows/ci.yml',
+      '.github/workflows/cli.yml',
       'package.json',
       'pnpm-lock.yaml',
       'pnpm-workspace.yaml',
       'scripts/build-cli-dist.sh',
       'scripts/check-cli-dist.sh',
       'scripts/run-bun.sh',
+      'tsconfig.json',
     ],
   },
 };

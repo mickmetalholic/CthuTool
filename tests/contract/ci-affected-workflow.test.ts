@@ -31,6 +31,7 @@ describe("CI affected workflow detector", () => {
     expectChanged("backend-image", ["apps/backend/src/main.ts"]);
     expectChanged("backend-image", ["packages/agent-protocol/src/index.ts"]);
     expectChanged("backend-image", ["packages/config/src/index.ts"]);
+    expectChanged("backend-image", [".github/workflows/backend.yml"]);
     expectChanged("backend-image", ["k8s/deployment.yaml"]);
     expectUnchanged("backend-image", ["packages/ui/src/index.ts"]);
   });
@@ -40,14 +41,17 @@ describe("CI affected workflow detector", () => {
     expectChanged("desktop-artifacts", ["packages/agent-protocol/src/index.ts"]);
     expectChanged("desktop-artifacts", ["packages/app-shell/src/index.ts"]);
     expectChanged("desktop-artifacts", ["packages/ui/src/index.ts"]);
+    expectChanged("desktop-artifacts", [".github/workflows/desktop.yml"]);
     expectChanged("desktop-artifacts", ["tsconfig.json"]);
     expectUnchanged("desktop-artifacts", ["apps/backend/src/main.ts"]);
   });
 
   it("marks CLI distribution affected only by bundle inputs", () => {
     expectChanged("cli-dist", ["apps/cli/src/index.ts"]);
+    expectChanged("cli-dist", [".github/workflows/cli.yml"]);
     expectChanged("cli-dist", ["scripts/run-bun.sh"]);
     expectChanged("cli-dist", ["pnpm-lock.yaml"]);
+    expectChanged("cli-dist", ["tsconfig.json"]);
     expectUnchanged("cli-dist", ["apps/backend/src/main.ts"]);
   });
 });
