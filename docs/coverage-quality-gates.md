@@ -37,9 +37,20 @@ percentages are not threshold-gated yet:
 - `@cthutool/docs`
 - `@cthutool/web`
 
-`@cthutool/cli` intentionally remains on Bun coverage. It is not threshold-gated
-in this change because Bun coverage output differs from the Vitest package
-coverage configuration used by the initial gated packages.
+`@cthutool/cli` intentionally remains on Bun coverage. The recorded raw
+`pnpm --filter @cthutool/cli test:cov` baseline is 69.17 functions and 75.55
+lines. Bun's text reporter currently provides reliable function and line
+percentages for this package, while the root threshold-gated packages use
+Vitest coverage configuration with statements, branches, functions, and lines.
+CLI coverage artifacts are filtered after Bun writes `coverage/lcov.info` so
+the published LCOV artifact only includes package-owned `src/**` files. Bundled
+scripts under `src/scripts/**` count as package-owned CLI coverage; test setup
+files, external plugin scripts, and temporary `cthutool-script-*` execution
+paths are excluded from the artifact. The CLI is not threshold-gated yet because
+Bun does not provide the same package-local threshold configuration surface used
+by the Vitest packages, and the next useful improvements are broader behavioral
+tests around command entrypoints, completion candidates, self-update flows, and
+bundled script execution.
 
 `@cthutool/desktop` remains visibility-only after expanding desktop runtime and
 renderer workflow tests. The recorded `pnpm --filter @cthutool/desktop

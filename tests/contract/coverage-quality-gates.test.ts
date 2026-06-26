@@ -143,6 +143,27 @@ describe("coverage quality gate policy", () => {
     expect(policy).toContain("Bun coverage");
   });
 
+  it("documents CLI Bun coverage baseline and LCOV filtering decision", () => {
+    const policy = readText("docs/coverage-quality-gates.md");
+    const cliPackageJson = readText("apps/cli/package.json");
+    const filterScript = readText("apps/cli/tools/filter-coverage-lcov.mjs");
+
+    expect(policy).toContain("69.17 functions");
+    expect(policy).toContain("75.55");
+    expect(policy).toContain("package-owned `src/**` files");
+    expect(policy).toContain("`src/scripts/**`");
+    expect(policy).toContain("test setup");
+    expect(policy).toContain("external plugin scripts");
+    expect(policy).toContain("temporary `cthutool-script-*`");
+    expect(policy).toContain("not threshold-gated yet");
+
+    expect(cliPackageJson).toContain("bun test");
+    expect(cliPackageJson).toContain("--coverage");
+    expect(cliPackageJson).toContain("filter-coverage-lcov.mjs");
+    expect(filterScript).toContain("SF:src/");
+    expect(filterScript).not.toContain("cthutool-script-");
+  });
+
   it("documents shared frontend package baselines and threshold decisions", () => {
     const policy = readText("docs/coverage-quality-gates.md");
 
