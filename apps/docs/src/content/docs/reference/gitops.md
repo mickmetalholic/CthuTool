@@ -12,6 +12,7 @@ Use this page as a path and resource lookup for the homelab deployment model.
 | `gitops/README.md` | Cluster GitOps conventions and manual bootstrap notes |
 | `gitops/namespaces/` | Namespace resources, one file per deployed app |
 | `gitops/apps/<app-name>/application.yaml` | ArgoCD Application CR for each app |
+| `gitops/observability/` | Observability stack docs, dashboard notes, and alert rule extension points |
 | `gitops/bootstrap/` | Placeholder for future ArgoCD self-management manifests |
 | `k8s/` | CthuTool backend Kubernetes resources consumed by the `cthutool` Application |
 
@@ -24,6 +25,19 @@ Use this page as a path and resource lookup for the homelab deployment model.
 | ConfigMap `cthutool-backend` | `k8s/configmap.yaml` |
 | Deployment `cthutool-backend` | `k8s/deployment.yaml` |
 | Service `cthutool-backend` | `k8s/service.yaml` |
+
+## Observability GitOps Resources
+
+| Resource | Source |
+| --- | --- |
+| Namespace `observability` | `gitops/namespaces/observability.yaml` |
+| Prometheus and Grafana Application | `gitops/apps/observability-kube-prometheus-stack/application.yaml` |
+| Loki Application | `gitops/apps/observability-loki/application.yaml` |
+| Grafana Alloy Application | `gitops/apps/observability-alloy/application.yaml` |
+| Tempo Application | `gitops/apps/observability-tempo/application.yaml` |
+| OpenTelemetry Collector Application | `gitops/apps/observability-otel-collector/application.yaml` |
+
+The observability stack uses upstream Helm charts and does not add a custom `apps/observability` service. See `gitops/observability/README.md` for dashboard, alert-rule, and telemetry-ingestion boundaries.
 
 The Application points to:
 
@@ -70,4 +84,5 @@ After publishing, the workflow rewrites `k8s/deployment.yaml` to use the commit-
 - `openspec/specs/gitops-argo-applications/spec.md`
 - `openspec/specs/gitops-bootstrap/spec.md`
 - `openspec/specs/gitops-cluster-namespaces/spec.md`
+- `openspec/specs/gitops-observability-stack/spec.md`
 - `openspec/specs/apps-docs-site/spec.md`

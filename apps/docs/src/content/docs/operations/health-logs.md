@@ -17,13 +17,17 @@ To call the backend health endpoint without a permanent ingress:
 ```bash
 kubectl -n cthutool port-forward service/cthutool-backend 3000:3000
 curl http://localhost:3000/health
+curl http://localhost:3000/health/ready
 ```
 
 For normal client use, call the URL exposed by your homelab networking layer:
 
 ```bash
 curl http://<homelab-backend-url>/health
+curl http://<homelab-backend-url>/health/ready
 ```
+
+`/health` checks process liveness. `/health/ready` checks dependency readiness and is the Kubernetes readiness probe path.
 
 ## Backend Logs
 
@@ -51,6 +55,16 @@ GET /api/browser/pending-auth-tasks
 ```
 
 These endpoints expose public status only.
+
+## Metrics Check
+
+When the backend Service is reachable, verify the Prometheus exposition endpoint:
+
+```bash
+curl http://localhost:3000/metrics
+```
+
+`/metrics` is scrape output for Prometheus, not a Kubernetes liveness or readiness probe.
 
 ## Local Development Diagnostics
 

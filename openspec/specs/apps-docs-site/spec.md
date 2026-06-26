@@ -33,14 +33,9 @@ The docs application SHALL render CthuTool documentation from Markdown or MDX co
 ### Requirement: Documentation source boundaries
 The docs site SHALL distinguish canonical source documentation from curated docs-site pages.
 
-#### Scenario: Existing docs remain source controlled
-- **WHEN** package README files, root docs, and OpenSpec specs are represented in the docs site
-- **THEN** the docs site identifies or preserves their source file locations
-- **AND** it does not require moving normative OpenSpec requirements out of `openspec/specs/`
-
-#### Scenario: Duplication is controlled
-- **WHEN** a docs-site page summarizes an existing README or spec
-- **THEN** the page links back to the source document or documents the source boundary
+#### Scenario: Runtime source boundaries are visible
+- **WHEN** architecture or repository map docs mention observability, browser SDK, or GitOps resources
+- **THEN** they identify the source directories and package README files that own implementation details
 
 ### Requirement: OpenSpec capability browsing
 The docs site SHALL expose current OpenSpec capability specs as a browsable documentation section.
@@ -80,49 +75,41 @@ The docs site SHALL document Kubernetes/GitOps as the official user-facing deplo
 
 #### Scenario: Reader deploys homelab services
 - **WHEN** a reader follows the homelab deployment documentation
-- **THEN** the documentation identifies Kubernetes or k3s prerequisites, ArgoCD prerequisites, GitOps namespace and Application resources, backend image delivery, Kubernetes service configuration, health checks, upgrade flow, and troubleshooting entry points
+- **THEN** the documentation identifies Kubernetes or k3s prerequisites, ArgoCD prerequisites, GitOps namespace and Application resources, backend image delivery, Kubernetes service configuration, liveness and readiness health checks, metrics scraping, upgrade flow, and troubleshooting entry points
 
-#### Scenario: Reader identifies runtime placement
-- **WHEN** a reader reviews deployment overview material
-- **THEN** the documentation explains which components run in the Kubernetes cluster, which components run on client computers, and which repository directories define GitOps or Kubernetes resources
-
-#### Scenario: Reader sees local commands in deployment docs
-- **WHEN** a deployment page mentions local checkout commands such as `pnpm --filter @cthutool/backend`
-- **THEN** the page identifies them as development or debugging commands
-- **AND** it does not present them as the official homelab deployment path
-
-#### Scenario: Reader reviews GitOps rollout behavior
-- **WHEN** a reader follows deployment or operations docs for backend rollout
-- **THEN** the documentation explains the GitHub Actions image publication, GHCR image tag, `k8s/deployment.yaml` image pin, and ArgoCD reconciliation flow
+#### Scenario: Reader reviews GitOps observability behavior
+- **WHEN** a reader follows deployment, operations, or reference docs for observability
+- **THEN** the documentation identifies the GitOps-managed observability namespace, ArgoCD Applications, Prometheus metrics scrape path, Loki log collection path, Tempo trace storage path, and OpenTelemetry Collector ingestion path
 
 ### Requirement: Client installation documentation
 The docs site SHALL document how users install, update, and remove CthuTool client tools on client computers.
 
-#### Scenario: Reader installs client tooling
-- **WHEN** a reader opens client installation documentation
-- **THEN** the documentation provides separate entry points for the desktop client and CLI tool
+#### Scenario: Reader installs CLI tooling
+- **WHEN** a reader opens CLI installation documentation
+- **THEN** the documentation explains target-machine prerequisites, public raw installer usage, committed bundle runtime behavior, remote install mode, local checkout install mode, and supported override environment variables
 
-#### Scenario: Reader manages installed clients
-- **WHEN** a reader needs to update or uninstall client tooling
-- **THEN** the documentation explains the supported update and uninstall paths or links to the authoritative package-specific source
+#### Scenario: Reader manages installed CLI tooling
+- **WHEN** a reader needs to update CLI tooling
+- **THEN** the documentation presents `chc update` as the primary update command
+- **AND** it identifies `chc self-update` as a backwards-compatible alias
 
 ### Requirement: Module usage documentation
 The docs site SHALL provide module-oriented usage documentation for major CthuTool product areas.
 
-#### Scenario: Reader chooses a product module
-- **WHEN** a reader opens the modules section
-- **THEN** the documentation lists supported modules with purpose, expected runtime location, and links to setup or usage pages
-
-#### Scenario: Module source boundaries are visible
-- **WHEN** a module page summarizes behavior owned by a package README or OpenSpec spec
-- **THEN** the page identifies the authoritative source path for development or requirements details
+#### Scenario: Reader chooses CLI module
+- **WHEN** a reader opens CLI module documentation
+- **THEN** the documentation reflects the current install/update/runtime model and links to command reference and package-local development sources
 
 ### Requirement: Architecture documentation with OpenSpec references
 The docs site SHALL explain the implementation architecture while preserving OpenSpec specs as the authoritative requirements source.
 
 #### Scenario: Reader reviews system architecture
-- **WHEN** a reader opens the architecture overview
-- **THEN** the documentation explains the homelab machine, backend service, web console, desktop client, CLI tool, browser runtime, and shared packages at a high level
+- **WHEN** a reader opens the architecture overview or topology pages
+- **THEN** the documentation explains the Kubernetes backend, GitOps rollout flow, observability stack, public browser API, browser client SDK, desktop client, CLI tool, browser runtime, and shared packages at a high level
+
+#### Scenario: Reader reviews runtime placement
+- **WHEN** a reader opens runtime placement documentation
+- **THEN** the documentation distinguishes Kubernetes services, GitOps desired state, observability stack components, client computer runtimes, third-party browser SDK consumers, and repository development source
 
 #### Scenario: Reader needs normative requirements
 - **WHEN** an architecture or module page discusses capability requirements
@@ -131,13 +118,10 @@ The docs site SHALL explain the implementation architecture while preserving Ope
 ### Requirement: OpenSpec capability index synchronization
 The docs site SHALL keep the browsable OpenSpec capability index aligned with current specs under `openspec/specs/`.
 
-#### Scenario: Capability specs change
-- **WHEN** capability spec directories are added, removed, or renamed under `openspec/specs/`
-- **THEN** the docs capability index is generated from those directories or a validation command fails until the index is updated
-
-#### Scenario: Docs validation runs
-- **WHEN** focused docs validation is run
-- **THEN** the validation includes the docs build and the OpenSpec capability index generation or drift check
+#### Scenario: Observability specs exist
+- **WHEN** observability-related specs are present under `openspec/specs/`
+- **THEN** the docs capability index includes those specs
+- **AND** operations or reference pages link to the relevant observability requirement sources
 
 ### Requirement: Documentation duplication control
 The docs site SHALL be the most complete prose source for user-facing deployment, installation, module usage, operations, and architecture documentation.
@@ -170,4 +154,48 @@ The docs site SHALL keep local runtime commands separate from user-facing homela
 #### Scenario: Reader compares deployment and development paths
 - **WHEN** a reader opens deployment overview or source-boundary documentation
 - **THEN** the documentation distinguishes official homelab deployment from local package development commands
+
+### Requirement: Observability operations documentation
+The docs site SHALL document the operator-facing observability path for Kubernetes-managed CthuTool services.
+
+#### Scenario: Operator checks backend health and metrics
+- **WHEN** an operator opens observability or health operations docs
+- **THEN** the docs distinguish `/health` liveness from `/health/ready` readiness
+- **AND** they identify `/metrics` as the Prometheus scrape endpoint rather than a Kubernetes probe
+
+#### Scenario: Operator reviews telemetry flow
+- **WHEN** an operator reviews observability docs
+- **THEN** the docs describe backend structured logs to Loki, Prometheus metrics, OTLP trace export through the OpenTelemetry Collector, and Tempo trace storage
+
+#### Scenario: Operator reviews observability safety
+- **WHEN** observability docs describe metrics, logs, or traces
+- **THEN** the docs state that sensitive browser state and high-cardinality values must not become metric labels or log labels
+
+### Requirement: Browser public API reference documentation
+The docs site SHALL document the trusted public browser session API and its safety boundaries.
+
+#### Scenario: Reader finds session endpoints
+- **WHEN** a reader opens backend API reference documentation
+- **THEN** the docs list session create, run-actions, and close endpoints
+- **AND** they explain that the backend stores only routing metadata while desktop owns browser state
+
+#### Scenario: Reader understands browser API limitations
+- **WHEN** public browser API docs describe supported actions
+- **THEN** they state that the API supports a bounded Playwright-like action DSL and not arbitrary Playwright script execution
+- **AND** they state that sensitive browser state is not returned
+
+### Requirement: Browser client SDK documentation
+The docs site SHALL document `@cthutool/browser-client` for third-party applications using the backend public browser API.
+
+#### Scenario: Reader uses the SDK
+- **WHEN** a reader opens browser client SDK docs
+- **THEN** the docs include install/build context, a minimal `CthuBrowserClient` example, session lifecycle, supported page methods, and limitations
+
+### Requirement: CLI installer mode documentation
+The docs site SHALL document CLI installer mode selection for user and development install paths.
+
+#### Scenario: Reader compares remote and local mode
+- **WHEN** a reader reviews CLI installation docs
+- **THEN** the documentation explains that raw/stdin installer usage selects remote mode and checkout script execution selects local mode by default
+- **AND** it documents `CHC_INSTALL_MODE=remote` as the way to restore the global command to the managed checkout after local development
 

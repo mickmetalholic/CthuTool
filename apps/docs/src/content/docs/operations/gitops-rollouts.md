@@ -41,6 +41,7 @@ Make durable changes in:
 - `k8s/configmap.yaml` for backend environment values
 - `k8s/deployment.yaml` for image, resources, and probes
 - `k8s/service.yaml` for Service shape
+- `gitops/apps/observability-*` for observability stack Applications
 - `gitops/apps/cthutool/application.yaml` for ArgoCD sync behavior
 
 ## Kubernetes Rollout Checks
@@ -59,12 +60,12 @@ Read pod logs when the rollout does not become ready:
 kubectl -n cthutool logs deployment/cthutool-backend
 ```
 
-## Health Probes
+## Health Probes and Metrics
 
-The backend Deployment uses `/health` for both liveness and readiness:
+The backend Deployment separates process liveness from dependency readiness:
 
-- readiness starts after 5 seconds and runs every 5 seconds
-- liveness starts after 10 seconds and runs every 15 seconds
+- liveness uses `GET /health`, starts after 10 seconds, and runs every 15 seconds
+- readiness uses `GET /health/ready`, starts after 5 seconds, and runs every 5 seconds
 - both use timeout 3 seconds and failure threshold 3
 
 For an admin check without ingress:
@@ -72,7 +73,11 @@ For an admin check without ingress:
 ```bash
 kubectl -n cthutool port-forward service/cthutool-backend 3000:3000
 curl http://localhost:3000/health
+curl http://localhost:3000/health/ready
+curl http://localhost:3000/metrics
 ```
+
+Prometheus scrapes `/metrics` through Service annotations in `k8s/service.yaml`. `/metrics` is not used as a Kubernetes probe.
 
 ## Image Pin Troubleshooting
 

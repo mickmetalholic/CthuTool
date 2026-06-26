@@ -9,9 +9,15 @@ Install `chc` from [CLI Tool](/client/cli/) before using these commands.
 
 ```bash
 chc --help
+chc version
+chc status
+chc update
+chc update --ref v0.1.0
 chc self-update
 chc self-update --ref v0.1.0
 ```
+
+`chc update` is the primary update command. `chc self-update` remains a backwards-compatible alias.
 
 ## Shared Flags
 

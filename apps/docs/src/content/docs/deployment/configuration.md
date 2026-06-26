@@ -23,6 +23,12 @@ Current values:
 NODE_ENV: "production"
 PORT: "3000"
 LOG_LEVEL: "info"
+OTEL_SERVICE_NAME: "cthutool-backend"
+OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4318"
+OTEL_TRACES_EXPORTER: "otlp"
+OTEL_METRICS_EXPORTER: "none"
+OTEL_LOGS_EXPORTER: "none"
+OTEL_PROPAGATORS: "tracecontext,baggage"
 ```
 
 The Deployment consumes these values with `envFrom.configMapRef.name: cthutool-backend`.
@@ -44,11 +50,22 @@ The Deployment also defines:
 - CPU request `100m` and limit `500m`
 - memory request `256Mi` and limit `512Mi`
 - liveness probe `GET /health`
-- readiness probe `GET /health`
+- readiness probe `GET /health/ready`
 
 ## Backend Service
 
 `k8s/service.yaml` creates `Service/cthutool-backend` as `ClusterIP` on port `3000`, targeting the backend container port `3000`.
+
+The Service is annotated for Prometheus scraping:
+
+```yaml
+prometheus.io/scrape: "true"
+prometheus.io/path: /metrics
+prometheus.io/port: "3000"
+prometheus.io/scheme: http
+```
+
+Prometheus uses `/metrics` for scraping. Kubernetes probes use `/health` and `/health/ready`.
 
 Use your cluster's existing ingress, reverse proxy, load balancer, or port-forward workflow to expose the backend to client computers. The repository does not currently define an ingress or TLS manifest.
 

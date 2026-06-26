@@ -12,6 +12,7 @@ CthuTool modules are grouped by what the user is trying to do, not by repository
 | [Web Console](/modules/web-console/) | Browser-hosted management console scaffold | Homelab/web host | `apps/web/README.md` |
 | [Browser Auth](/modules/browser-auth/) | Browser profile ownership and login flow | Backend plus desktop | `docs/browser-auth.md` |
 | [Browser Automation](/modules/browser-automation/) | Structured browser work routed to desktop agents | Backend plus desktop | `openspec/specs/apps-backend-browser-automation/spec.md` |
+| [Browser Client SDK](/modules/browser-client-sdk/) | Trusted third-party browser sessions through the backend public API | Third-party app plus backend plus desktop | `packages/browser-client/README.md` |
 | [Codex Plugin](/modules/codex-plugin/) | Repository-managed Codex plugin assets | User/Codex environment | `codex/plugins/cthu-codex/README.md` |
 | [Douban Movie Info](/modules/douban-movie-info/) | Douban movie information capability | Backend and desktop surfaces | `openspec/specs/apps-backend-douban-movie-info/spec.md` |
 | [Collection Hub](/modules/collection-hub/) | Collection workspace and import workflows | Scratch workspace | `scratches/collection-hub/` |
