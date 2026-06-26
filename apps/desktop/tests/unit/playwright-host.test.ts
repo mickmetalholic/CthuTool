@@ -21,7 +21,12 @@ describe('PlaywrightHost', () => {
 
   afterEach(async () => {
     if (tempDir) {
-      await rm(tempDir, { force: true, recursive: true });
+      await rm(tempDir, {
+        force: true,
+        maxRetries: 5,
+        recursive: true,
+        retryDelay: 20,
+      });
       tempDir = undefined;
     }
   });
