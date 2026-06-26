@@ -1,6 +1,9 @@
 import { Injectable, Optional } from '@nestjs/common';
 // Nest DI needs runtime class reference; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
+import { BackendMetricsService } from '../../metrics';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
 import { BackendObservabilityService } from '../../observability';
 // Nest DI needs runtime class references; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
@@ -42,6 +45,8 @@ export class HealthService {
     private readonly diagnosticsStore?: BrowserDiagnosticsStore,
     @Optional()
     private readonly observability?: BackendObservabilityService,
+    @Optional()
+    private readonly metrics?: BackendMetricsService,
   ) {}
 
   getStatus(): HealthStatus {
@@ -91,6 +96,11 @@ export class HealthService {
         diagnosticsStoreStatus: diagnosticsStatus,
         status: result.status,
       },
+    });
+    this.metrics?.recordReadiness({
+      browserAgentStatus,
+      diagnosticsStoreStatus: diagnosticsStatus,
+      status: result.status,
     });
 
     return result;

@@ -14,6 +14,7 @@ describe('HealthService', () => {
 
   it('returns degraded readiness when browser agent is unavailable', async () => {
     const observability = { record: vi.fn() };
+    const metrics = { recordReadiness: vi.fn() };
     const service = new HealthService(
       {
         getStatus: vi.fn(async () => ({
@@ -28,6 +29,7 @@ describe('HealthService', () => {
         })),
       } as never,
       observability as never,
+      metrics as never,
     );
 
     await expect(service.getReadiness()).resolves.toMatchObject({
@@ -52,10 +54,16 @@ describe('HealthService', () => {
         status: 'degraded',
       },
     });
+    expect(metrics.recordReadiness).toHaveBeenCalledWith({
+      browserAgentStatus: 'degraded',
+      diagnosticsStoreStatus: 'ok',
+      status: 'degraded',
+    });
   });
 
   it('returns ready when dependencies are available', async () => {
     const observability = { record: vi.fn() };
+    const metrics = { recordReadiness: vi.fn() };
     const service = new HealthService(
       {
         getStatus: vi.fn(async () => ({
@@ -71,6 +79,7 @@ describe('HealthService', () => {
         })),
       } as never,
       observability as never,
+      metrics as never,
     );
 
     await expect(service.getReadiness()).resolves.toMatchObject({
@@ -90,6 +99,11 @@ describe('HealthService', () => {
         diagnosticsStoreStatus: 'ok',
         status: 'ready',
       },
+    });
+    expect(metrics.recordReadiness).toHaveBeenCalledWith({
+      browserAgentStatus: 'ok',
+      diagnosticsStoreStatus: 'ok',
+      status: 'ready',
     });
   });
 });

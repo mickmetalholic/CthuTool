@@ -73,8 +73,9 @@ describe('AgentCommandGateway', () => {
 
   it('emits command dispatch and completion events', async () => {
     const observability = { record: vi.fn() };
+    const metrics = createMetricsMock();
     const socket = createSocketMock();
-    const gateway = createGateway(socket, true, observability);
+    const gateway = createGateway(socket, true, observability, metrics);
 
     await gateway.sendCommand('agent-1', createCommandRequest('cmd-1'));
 
@@ -90,16 +91,27 @@ describe('AgentCommandGateway', () => {
         details: expect.objectContaining({ commandId: 'cmd-1' }),
       }),
     );
+    expect(metrics.recordAgentCommandDispatched).toHaveBeenCalledWith({
+      commandType: undefined,
+    });
+    expect(metrics.recordAgentCommandCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandType: undefined,
+        responseType: 'agent.commandResult',
+      }),
+    );
   });
 
   it('emits command failure events', async () => {
     const observability = { record: vi.fn() };
+    const metrics = createMetricsMock();
     const gateway = createGateway(
       createSocketMockWithImplementation(async () => {
         throw new Error('socket closed');
       }),
       true,
       observability,
+      metrics,
     );
 
     await expect(
@@ -113,6 +125,12 @@ describe('AgentCommandGateway', () => {
           commandId: 'cmd-1',
           errorCode: 'AGENT_NOT_AVAILABLE',
         }),
+      }),
+    );
+    expect(metrics.recordAgentCommandFailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandType: undefined,
+        errorCode: 'AGENT_NOT_AVAILABLE',
       }),
     );
   });
@@ -173,6 +191,7 @@ function createGateway(
   socket: SocketMock = createSocketMock(),
   registerAgent = true,
   observability?: { readonly record: Mock },
+  metrics?: ReturnType<typeof createMetricsMock>,
 ): AgentCommandGateway {
   const registry = new AgentRegistryService();
   if (registerAgent) {
@@ -191,7 +210,16 @@ function createGateway(
     registry,
     socket as unknown as AgentWebSocketServer,
     observability as never,
+    metrics as never,
   );
+}
+
+function createMetricsMock() {
+  return {
+    recordAgentCommandCompleted: vi.fn(),
+    recordAgentCommandDispatched: vi.fn(),
+    recordAgentCommandFailed: vi.fn(),
+  };
 }
 
 function createSocketMock(
