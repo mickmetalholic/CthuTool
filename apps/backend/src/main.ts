@@ -6,6 +6,10 @@ import { config as loadDotenv } from 'dotenv';
 import { AppModule } from './app.module';
 import { parseServiceConfiguration } from './config/service-configuration';
 import { HttpExceptionFilter } from './filters/http-exception.filter';
+import {
+  type BackendTracingHandle,
+  startBackendTracing,
+} from './observability/tracing';
 
 type BootstrapLogger = Pick<Logger, 'error' | 'log'>;
 
@@ -14,6 +18,7 @@ type BootstrapDeps = {
   parseConfig: typeof parseServiceConfiguration;
   loadEnv: () => unknown;
   createLogger: (context: string) => BootstrapLogger;
+  startTracing?: (env: NodeJS.ProcessEnv) => BackendTracingHandle;
   exit: (code: number) => unknown;
 };
 
@@ -22,6 +27,7 @@ const defaultBootstrapDeps: BootstrapDeps = {
   parseConfig: parseServiceConfiguration,
   loadEnv: () => loadDotenv({ path: resolveEnvFilePath() }),
   createLogger: (context) => new Logger(context),
+  startTracing: startBackendTracing,
   exit: (code) => process.exit(code),
 };
 
@@ -59,6 +65,7 @@ export async function bootstrap(
   }
 
   const config = configResult.value;
+  const tracing = (deps.startTracing ?? startBackendTracing)(process.env);
 
   const app = await deps.createApp(AppModule);
 
@@ -67,6 +74,7 @@ export async function bootstrap(
   await app.listen(config.port);
   logger.log('service started', {
     service: 'backend',
+    tracingEnabled: tracing.enabled,
     nodeEnv: config.nodeEnv,
     port: config.port,
     timestamp: new Date().toISOString(),

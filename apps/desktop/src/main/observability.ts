@@ -51,6 +51,7 @@ export type DesktopObservabilityEvent = {
   readonly level: DesktopObservabilityLevel;
   readonly details: DesktopObservabilityDetails;
   readonly message: string;
+  readonly source: 'cthutool.desktop';
   readonly timestamp: string;
 };
 
@@ -125,6 +126,7 @@ export function createDesktopObservabilityEvent(input: {
     level: input.level ?? 'info',
     details: sanitizeObservabilityDetails(input.details ?? {}),
     message: input.message,
+    source: 'cthutool.desktop',
     timestamp: (input.now ?? (() => new Date()))().toISOString(),
   };
 }
