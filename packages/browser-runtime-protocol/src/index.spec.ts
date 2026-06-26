@@ -122,12 +122,12 @@ describe('browser runtime protocol', () => {
       ok: true,
       value: request,
     });
-    expect(validateBrowserRuntimeResponse('browser.runActions', response)).toEqual(
-      {
-        ok: true,
-        value: response,
-      },
-    );
+    expect(
+      validateBrowserRuntimeResponse('browser.runActions', response),
+    ).toEqual({
+      ok: true,
+      value: response,
+    });
   });
 
   it('validates typed browser success responses', () => {
