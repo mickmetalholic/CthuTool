@@ -153,6 +153,21 @@ describe("coverage quality gate policy", () => {
     expect(policy).toContain("| `@cthutool/ui` | 84.22 | 92.50 | 81.08 | 84.22 | 80 | 85 | 75 | 80 |");
   });
 
+  it("documents web and docs baselines while keeping them visibility-only", () => {
+    const policy = readText("docs/coverage-quality-gates.md");
+
+    expect(policy).toContain("@cthutool/web");
+    expect(policy).toContain("@cthutool/docs");
+    expect(policy).toContain("current web application surface");
+    expect(policy).toContain("very small source baseline");
+    expect(policy).toContain("too little source surface");
+    expect(policy).toContain("stable percentage");
+    expect(policy).toMatch(
+      /100 statements,\s+100 branches,\s+100 functions,\s+and 100\s+lines/,
+    );
+    expect(policy).toMatch(/100\s+statements and 100 lines/);
+  });
+
   it("keeps coverage thresholds out of hidden CI shell logic", () => {
     const ci = readText(".github/workflows/ci.yml");
 
