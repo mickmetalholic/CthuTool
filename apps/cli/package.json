@@ -9,7 +9,7 @@
     "test": "pnpm run test:unit && pnpm run test:integration",
     "test:unit": "../../scripts/run-bun.sh test --timeout 30000 --preload ./tests/setup.ts tests/unit src/tests/scripts/convert-to-cbz/unit",
     "test:integration": "../../scripts/run-bun.sh test --timeout 30000 --preload ./tests/setup.ts tests/integration src/tests/scripts/convert-to-cbz/integration",
-    "test:cov": "../../scripts/run-bun.sh test --timeout 30000 --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage --preload ./tests/setup.ts",
+    "test:cov": "../../scripts/run-bun.sh test --timeout 30000 --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage --preload ./tests/setup.ts && node ./tools/filter-coverage-lcov.mjs",
     "typecheck": "../../scripts/run-bun.sh x tsc --noEmit",
     "lint": "biome check ."
   },

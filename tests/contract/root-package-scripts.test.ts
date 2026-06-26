@@ -242,6 +242,7 @@ describe("root package.json scripts contract", () => {
         expect(testCoverage).toContain("--coverage");
         expect(testCoverage).toContain("--coverage-reporter=lcov");
         expect(testCoverage).toContain("--coverage-dir=coverage");
+        expect(testCoverage).toContain("filter-coverage-lcov.mjs");
       } else {
         expect(testCoverage).toContain("vitest");
         expect(testCoverage).toContain("--coverage");
