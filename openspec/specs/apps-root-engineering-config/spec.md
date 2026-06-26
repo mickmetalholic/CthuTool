@@ -163,9 +163,9 @@ The root engineering configuration SHALL refresh and stage the committed CLI run
 - **THEN** generated bundle staging does not cause source-formatting hooks to fail because the generated bundle is ignored by the source formatter
 
 ### Requirement: Primary CI validates complete root workspace health
-The primary CI workflow SHALL validate the complete health of root-managed workspace packages before a pull request or main branch push is considered successful.
+The primary CI workflow SHALL validate the complete health of root-managed workspace packages before a pull request or main branch push is considered successful, while artifact-specific validation can live in dedicated area workflows.
 
-#### Scenario: Pull request runs complete validation
+#### Scenario: Pull request runs complete root validation
 - **WHEN** the primary CI workflow runs for a pull request
 - **THEN** it installs dependencies with the frozen lockfile
 - **AND** it validates commit messages for the pull request range
@@ -173,12 +173,13 @@ The primary CI workflow SHALL validate the complete health of root-managed works
 - **AND** it runs root-managed typecheck validation
 - **AND** it runs root-managed runtime tests
 - **AND** it runs root-managed build validation
-- **AND** it runs the CLI distribution integrity check
+- **AND** CLI distribution integrity is validated by the dedicated CLI distribution workflow rather than the primary CI workflow
 
-#### Scenario: Main branch push runs complete validation
+#### Scenario: Main branch push runs complete root validation
 - **WHEN** the primary CI workflow runs for a push to `main`
 - **THEN** it validates commit messages for the pushed commit
-- **AND** it runs root-managed lint, typecheck, test, build, and CLI distribution gates before required CI succeeds
+- **AND** it runs root-managed lint, typecheck, test, and build gates before required CI succeeds
+- **AND** CLI distribution integrity is validated by the dedicated CLI distribution workflow rather than the primary CI workflow
 
 ### Requirement: Root workspace validation uses Turbo orchestration
 Root package validation SHALL use Turborepo task orchestration for workspace package tasks so packages run in parallel while respecting workspace dependency order.
@@ -233,3 +234,22 @@ Root engineering contract tests SHALL verify that each root-managed workspace pa
 - **WHEN** root engineering contract tests inspect the primary CI workflow
 - **THEN** the workflow is required to include lint, typecheck, test, build, CLI distribution, and coverage validation
 - **AND** the contract distinguishes required correctness gates from non-blocking external coverage upload behavior when applicable
+
+### Requirement: Pull request workflows cancel superseded runs
+Pull request workflows SHALL cancel superseded runs for the same pull request or branch so repeated pushes do not waste runner capacity.
+
+#### Scenario: Superseded pull request run is cancelled
+- **WHEN** a pull request branch receives a new commit while an older run of the same workflow is still running
+- **THEN** the newer workflow run uses the same concurrency group for that pull request or branch
+- **AND** the older in-progress run is cancelled
+
+### Requirement: Workflow files use area names
+Repository GitHub Actions workflow files SHALL use short area names while their display names describe the workflow purpose.
+
+#### Scenario: Area workflow names are inspectable
+- **WHEN** GitHub Actions workflow files are inspected
+- **THEN** root validation behavior is defined in `.github/workflows/ci.yml`
+- **AND** CLI distribution behavior is defined in `.github/workflows/cli.yml`
+- **AND** backend behavior is defined in `.github/workflows/backend.yml`
+- **AND** desktop behavior is defined in `.github/workflows/desktop.yml`
+- **AND** workflow display names remain descriptive enough to identify the purpose in GitHub checks

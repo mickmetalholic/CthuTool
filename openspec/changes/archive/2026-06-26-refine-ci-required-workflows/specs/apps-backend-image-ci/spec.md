@@ -1,8 +1,5 @@
-# apps-backend-image-ci Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change improve-ci-coverage-and-speed. Update Purpose after archive.
-## Requirements
 ### Requirement: Backend image CI validates pull request Docker builds
 The backend image workflow SHALL expose a stable pull request validation job and SHALL build backend Docker images only when affected inputs change.
 
@@ -36,26 +33,7 @@ The backend image workflow SHALL publish backend container images for qualifying
 - **AND** it does not push image tags
 - **AND** it does not update `k8s/deployment.yaml`
 
-### Requirement: Backend deployment manifest updates are concurrency safe
-The backend image workflow SHALL protect deployment manifest update runs from overlapping writes.
-
-#### Scenario: Main branch image publishing is serialized
-- **WHEN** multiple backend image publishing runs are queued for `main`
-- **THEN** the workflow uses a stable concurrency group for backend image publishing
-- **AND** deployment manifest update steps do not run concurrently against `k8s/deployment.yaml`
-
-#### Scenario: Deployment manifest pins commit image
-- **WHEN** the backend image publish succeeds for a main branch commit
-- **THEN** the workflow updates `k8s/deployment.yaml` to reference the triggering commit SHA image tag
-- **AND** the committed manifest update does not retrigger the full CI pipeline unnecessarily
-
-### Requirement: Backend image build uses pinned workspace tool versions
-Backend Docker builds SHALL use the repository-pinned package manager version.
-
-#### Scenario: Dockerfile pins pnpm version
-- **WHEN** the backend Dockerfile prepares pnpm with Corepack
-- **THEN** it uses the exact pnpm version declared by the repository package manager configuration
-- **AND** Docker image dependency installation remains compatible with the frozen pnpm lockfile
+## ADDED Requirements
 
 ### Requirement: Backend workflow uses area filename and explicit display name
 The backend image workflow SHALL be stored in an area-named workflow file while presenting a descriptive workflow name in GitHub.
@@ -65,4 +43,3 @@ The backend image workflow SHALL be stored in an area-named workflow file while 
 - **THEN** backend image behavior is defined in `.github/workflows/backend.yml`
 - **AND** the workflow display name identifies backend image behavior
 - **AND** the old `.github/workflows/backend-image.yml` file is not retained as a duplicate workflow
-
