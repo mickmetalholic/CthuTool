@@ -106,12 +106,12 @@ describe('AgentCommandGateway', () => {
       }),
     );
     expect(metrics.recordAgentCommandDispatched).toHaveBeenCalledWith({
-      commandType: undefined,
+      commandType: 'test.echo',
     });
     expect(metrics.recordAgentCommandCompleted).toHaveBeenCalledWith(
       expect.objectContaining({
-        commandType: undefined,
-        responseType: 'agent.commandResult',
+        commandType: 'test.echo',
+        responseType: 'jsonrpc.result',
       }),
     );
   });
@@ -143,7 +143,7 @@ describe('AgentCommandGateway', () => {
     );
     expect(metrics.recordAgentCommandFailed).toHaveBeenCalledWith(
       expect.objectContaining({
-        commandType: undefined,
+        commandType: 'test.echo',
         errorCode: 'AGENT_NOT_AVAILABLE',
       }),
     );

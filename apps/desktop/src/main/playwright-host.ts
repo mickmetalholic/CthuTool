@@ -370,7 +370,9 @@ export class PlaywrightHost {
       );
     }
     if (command.command === 'browser.runActions') {
-      return this.runActions(command as BrowserHostCommand<'browser.runActions'>);
+      return this.runActions(
+        command as BrowserHostCommand<'browser.runActions'>,
+      );
     }
     if (command.command === 'browser.closeSession') {
       return this.closeSession(
@@ -418,16 +420,16 @@ export class PlaywrightHost {
     return createBrowserRuntimeSuccessResponse<'browser.createSession'>(
       command.commandId,
       {
-      capturedAt: createdAt,
-      detection: { kind: 'ok' },
-      session: {
-        createdAt,
-        expiresAt,
-        ...(command.profileName ? { profileName: command.profileName } : {}),
+        capturedAt: createdAt,
+        detection: { kind: 'ok' },
+        session: {
+          createdAt,
+          expiresAt,
+          ...(command.profileName ? { profileName: command.profileName } : {}),
+          sessionId: command.sessionId,
+          siteId: command.siteId,
+        },
         sessionId: command.sessionId,
-        siteId: command.siteId,
-      },
-      sessionId: command.sessionId,
       },
     );
   }

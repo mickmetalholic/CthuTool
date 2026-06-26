@@ -37,7 +37,12 @@ export type DesktopObservabilityDetails = {
   readonly durationMs?: number;
   readonly lastError?: string;
   readonly operation?: string;
-  readonly outcome?: 'success' | 'error' | 'blocked' | 'unavailable' | 'invalid';
+  readonly outcome?:
+    | 'success'
+    | 'error'
+    | 'blocked'
+    | 'unavailable'
+    | 'invalid';
   readonly profileName?: string;
   readonly reasonCode?: string;
   readonly requestId?: string;

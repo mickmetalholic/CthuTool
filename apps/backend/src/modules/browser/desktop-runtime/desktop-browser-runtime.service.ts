@@ -433,7 +433,11 @@ export class DesktopBrowserRuntimeService {
       };
     }
     if ('error' in parsed.value) {
-      return this.toChallengeOrError(parsed.value.error.data, context);
+      return this.toChallengeOrError(
+        parsed.value.error.data,
+        context,
+        parsed.value.error.message,
+      );
     }
     return {
       ok: true,
@@ -449,11 +453,12 @@ export class DesktopBrowserRuntimeService {
       readonly loginUrl?: string;
       readonly verifyUrl?: string;
     },
+    message = 'Browser command failed',
   ): DesktopBrowserRuntimeResult<never> {
     if (!error) {
       return {
         ok: false,
-        error: 'Browser command failed',
+        error: message,
         code: 'COMMAND_FAILED',
       };
     }
@@ -470,7 +475,7 @@ export class DesktopBrowserRuntimeService {
 
     return {
       ok: false,
-      error: 'Browser command failed',
+      error: message,
       code: error.code,
     };
   }

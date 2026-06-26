@@ -1235,7 +1235,6 @@ function buildBrowserAttentionItems({
       reason: profile ? 'Profile needs verification' : 'Missing profile',
       siteId: site.siteId,
       siteName: site.displayName,
-      source: 'profile',
       status: profile?.status,
     });
   }
