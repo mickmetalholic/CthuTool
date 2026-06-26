@@ -182,7 +182,37 @@ jobs:
       - name: Build
         run: pnpm run build
 
+  cli-dist-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      changed: ${{ steps.filter.outputs.cli-dist }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect CLI distribution changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            cli-dist:
+              - ".github/workflows/ci.yml"
+              - "apps/cli/**"
+              - "scripts/build-cli-dist.sh"
+              - "scripts/check-cli-dist.sh"
+              - "scripts/run-bun.sh"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+
   cli-dist:
+    needs: cli-dist-changes
+    if: needs.cli-dist-changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

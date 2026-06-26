@@ -16,6 +16,7 @@ describe("CI workflow contract", () => {
     expect(yml).toMatch(/typecheck:/);
     expect(yml).toMatch(/test:/);
     expect(yml).toMatch(/build:/);
+    expect(yml).toMatch(/cli-dist-changes:/);
     expect(yml).toMatch(/cli-dist:/);
     expect(yml).toMatch(/coverage:/);
 
@@ -26,6 +27,30 @@ describe("CI workflow contract", () => {
     expect(yml).toMatch(/pnpm\s+run\s+build/);
     expect(yml).toMatch(/pnpm\s+run\s+check:cli-dist/);
     expect(yml).toMatch(/pnpm\s+run\s+test:cov/);
+  });
+
+  it("runs CLI distribution checks only when bundle inputs change", () => {
+    const yml = readWorkflow("ci.yml");
+
+    expect(yml).toContain("uses: dorny/paths-filter@v3");
+    expect(yml).toContain("changed: ${{ steps.filter.outputs.cli-dist }}");
+    expect(yml).toContain("needs: cli-dist-changes");
+    expect(yml).toContain(
+      "if: needs.cli-dist-changes.outputs.changed == 'true'",
+    );
+
+    for (const path of [
+      ".github/workflows/ci.yml",
+      "apps/cli/**",
+      "scripts/build-cli-dist.sh",
+      "scripts/check-cli-dist.sh",
+      "scripts/run-bun.sh",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+    ]) {
+      expect(yml).toContain(`- "${path}"`);
+    }
   });
 
   it("restores Turbo cache for jobs that run Turbo tasks", () => {
