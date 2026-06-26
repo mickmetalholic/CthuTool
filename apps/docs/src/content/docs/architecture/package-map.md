@@ -12,11 +12,12 @@ description: Repository package layout and ownership map.
 | `apps/docs` | Astro Starlight documentation site |
 | `packages/app-shell` | shared app shell pieces |
 | `packages/agent-protocol` | shared agent protocol package |
+| `packages/browser-client` | TypeScript SDK for backend public browser sessions |
 | `packages/config` | shared configuration package |
 | `packages/ui` | shared UI components |
 | `packages/obsidian-enhancer` | Obsidian plugin package |
 | `codex/plugins/cthu-codex` | repository-managed Codex plugin |
-| `gitops` | cluster GitOps namespaces and ArgoCD Application CRs |
+| `gitops` | cluster GitOps namespaces, ArgoCD Application CRs, and observability stack manifests |
 | `k8s` | CthuTool backend Kubernetes resources reconciled by ArgoCD |
 | `openspec/specs` | authoritative capability requirements |
 

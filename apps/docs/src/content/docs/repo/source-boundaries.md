@@ -9,6 +9,8 @@ The docs site is the primary user and operator reading surface. It should reduce
 
 - User-facing deployment, installation, module usage, operations, and architecture docs live in `apps/docs/src/content/docs/`.
 - Official homelab deployment desired state lives in `gitops/` and `k8s/`, with user/operator explanation in this docs site.
+- Observability platform desired state lives in `gitops/apps/observability-*` and `gitops/observability/`, with operator explanation in this docs site.
+- Browser client SDK development details live in `packages/browser-client/README.md`; user integration guidance lives in this docs site.
 - Repository setup and workspace conventions remain in `README.md`.
 - Legacy cross-package runtime source notes remain in `docs/` until migrated or retired.
 - Package-local development commands remain in package README files.

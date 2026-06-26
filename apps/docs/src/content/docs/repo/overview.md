@@ -9,6 +9,8 @@ The repository has several documentation layers:
 | --- | --- |
 | User deployment, install, module usage, operations, architecture | `apps/docs/src/content/docs/` |
 | Homelab deployment desired state | `gitops/` and `k8s/` |
+| Browser client SDK development details | `packages/browser-client/README.md` |
+| Observability stack desired state | `gitops/observability/` and `gitops/apps/observability-*` |
 | Repository setup and workspace conventions | `README.md` |
 | Cross-package legacy/source notes | `docs/` |
 | Package-local development commands | nearest package `README.md` |

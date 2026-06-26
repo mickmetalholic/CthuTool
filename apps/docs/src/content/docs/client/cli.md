@@ -3,41 +3,67 @@ title: CLI Tool
 description: Install, update, and remove the `chc` command-line tool.
 ---
 
-The CLI is exposed as `chc`.
+The CLI is exposed as `chc` and runs on client computers.
+
+## Target Prerequisites
+
+Target machines need:
+
+- `git`
+- Node.js 24.x
+- `npm`
+
+Target machines do not need `pnpm` or `bun` for normal install/update. The installer uses the committed `apps/cli/dist/index.js` bundle and globally installs the root package that exposes `chc`.
 
 ## Install from GitHub
+
+For personal use from GitHub:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash
 chc --help
 ```
 
-The installer clones or updates the repository under `~/.cthutool/source/CthuTool`, installs dependencies, builds `@cthutool/cli`, and globally installs the root package that exposes `chc`.
+Raw/stdin installer usage selects remote mode. It clones or updates `https://github.com/mickmetalholic/CthuTool.git` into `~/.cthutool/source/CthuTool`, checks out the selected ref, verifies the committed CLI bundle, and runs `npm install -g --ignore-scripts`.
 
 Override source or version:
 
 ```bash
-CHC_REF=v0.1.0 scripts/install-chc.sh
-CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_INSTALL_DIR="$HOME/.cthutool/source/CthuTool" scripts/install-chc.sh
+curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | CHC_REF=v0.1.0 bash
+CHC_INSTALL_MODE=remote CHC_REF=v0.1.0 scripts/install-chc.sh
+CHC_INSTALL_MODE=remote CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_INSTALL_DIR="$HOME/.cthutool/source/CthuTool" scripts/install-chc.sh
 ```
 
-The global command runs the built JavaScript bundle with Node. Bun is used by repository build and test scripts, not by the installed runtime.
+## Install from a Local Checkout
+
+Run the installer from a checkout when you want global `chc` to follow that checkout:
+
+```bash
+scripts/install-chc.sh
+pnpm --filter @cthutool/cli dev
+chc --help
+```
+
+Local file execution selects local mode by default. It installs from the checkout containing `scripts/install-chc.sh` instead of cloning or updating the managed checkout.
+
+To restore global `chc` to the managed remote checkout:
+
+```bash
+CHC_INSTALL_MODE=remote scripts/install-chc.sh
+```
+
+`CHC_INSTALL_MODE` accepts `auto`, `local`, or `remote`. In `auto` mode, raw/stdin execution selects `remote` and local file execution selects `local`.
 
 ## Update
 
 ```bash
-chc self-update
-chc self-update --ref v0.1.0
+chc version
+chc status
+chc update
+chc update --ref v0.1.0
 ```
 
-## Local Development Install
-
-From a checkout:
-
-```bash
-npm install -g .
-chc --help
-```
+`chc self-update` remains available as a backwards-compatible alias for `chc update`.
 
 ## Uninstall
 

@@ -45,6 +45,7 @@ export default defineConfig({
             { label: 'Web Console', slug: 'modules/web-console' },
             { label: 'Browser Auth', slug: 'modules/browser-auth' },
             { label: 'Browser Automation', slug: 'modules/browser-automation' },
+            { label: 'Browser Client SDK', slug: 'modules/browser-client-sdk' },
             { label: 'Codex Plugin', slug: 'modules/codex-plugin' },
             { label: 'Douban Movie Info', slug: 'modules/douban-movie-info' },
             { label: 'Collection Hub', slug: 'modules/collection-hub' },
@@ -55,6 +56,7 @@ export default defineConfig({
           label: 'Operations',
           items: [
             { label: 'Operations Overview', slug: 'operations' },
+            { label: 'Observability', slug: 'operations/observability' },
             { label: 'GitOps Rollouts', slug: 'operations/gitops-rollouts' },
             { label: 'Health and Logs', slug: 'operations/health-logs' },
             { label: 'Data and Security', slug: 'operations/data-security' },

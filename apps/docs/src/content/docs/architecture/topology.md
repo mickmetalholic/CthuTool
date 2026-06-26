@@ -1,16 +1,23 @@
 ---
 title: Topology
-description: Homelab cluster and client runtime topology.
+description: Homelab cluster, observability, browser session, and client runtime topology.
 ---
 
 ```text
 GitHub Actions -> GHCR backend image -> k8s/deployment.yaml image pin -> ArgoCD -> Kubernetes Deployment
+
+Third-party App -> @cthutool/browser-client -> Backend Public Browser API -> Desktop Browser Agent
 
 Desktop App -- WebSocket agent connection --> Backend Service
 Desktop App -- HTTP APIs ------------------> Backend Service
 Backend ---- structured browser command ---> Desktop Playwright Host
 CLI ------- local command execution -------> User machine / repository checkout
 Web Console -------------------------------> Backend APIs
+
+Backend Service -- /metrics --------------> Prometheus
+Backend Pods ---- stdout/stderr ----------> Alloy -> Loki
+Backend --------- OTLP traces ------------> OpenTelemetry Collector -> Tempo
+Grafana -------- Prometheus/Loki/Tempo ---> Operator dashboards
 ```
 
 ## Homelab Cluster
@@ -23,6 +30,16 @@ The homelab Kubernetes cluster runs the backend Deployment in namespace `cthutoo
 
 The backend Service is currently in-cluster `ClusterIP` on port `3000`. LAN exposure, ingress, and TLS are cluster/networking concerns outside the current manifests.
 
+## Browser Integration
+
+CthuDesktop owns host Chrome, Playwright contexts, browser pages, and local browser profile storage. The backend can route bounded browser commands to an online desktop agent.
+
+Trusted third-party applications can use `@cthutool/browser-client` to call the backend public browser API. The SDK stores only public session IDs; backend stores routing metadata; desktop owns the actual browser runtime state.
+
+## Observability
+
+The `observability` namespace runs upstream components through GitOps-managed Applications. Prometheus scrapes backend `/metrics`, Alloy collects backend pod logs into Loki, the backend exports OTLP traces to the OpenTelemetry Collector, and Tempo stores trace data for Grafana.
+
 ## Image Delivery
 
 Backend images are built by `.github/workflows/backend-image.yml` from `apps/backend/Dockerfile`. The workflow pushes GHCR tags and commits the immutable commit-sha tag back into `k8s/deployment.yaml`. ArgoCD then rolls out the pinned image.
@@ -34,6 +51,10 @@ The client host runs CthuDesktop and `chc`. Browser profile directories remain l
 ## Requirements Sources
 
 - Backend image delivery: `openspec/specs/apps-backend-image-delivery/spec.md`
+- Backend public browser API: `openspec/specs/apps-backend-browser-public-api/spec.md`
+- Browser client SDK: `openspec/specs/packages-browser-client-sdk/spec.md`
+- Backend observability: `openspec/specs/apps-backend-observability/spec.md`
+- GitOps observability stack: `openspec/specs/gitops-observability-stack/spec.md`
 - ArgoCD Applications: `openspec/specs/gitops-argo-applications/spec.md`
 - Cluster namespaces: `openspec/specs/gitops-cluster-namespaces/spec.md`
 - Agent registry: `openspec/specs/apps-backend-agent-registry/spec.md`
