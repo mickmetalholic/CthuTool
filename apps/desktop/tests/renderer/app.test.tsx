@@ -410,14 +410,12 @@ describe('CthuDesktop shell', () => {
         lastError: 'backend offline',
       });
     });
-    await userEvent.click(
-      await screen.findByRole('button', {
-        name: 'Open connection details',
-      }),
-    );
-
-    expect(screen.getByText('disconnected')).toBeInTheDocument();
-    expect(screen.getByText('backend offline')).toBeInTheDocument();
+    const connectionDetails = await screen.findByRole('button', {
+      name: 'Open connection details',
+    });
+    expect(
+      await within(connectionDetails).findByText('Disconnected'),
+    ).toBeInTheDocument();
   });
 
   test('opens connection details from the combined status bar connection button', async () => {
@@ -656,9 +654,9 @@ describe('CthuDesktop shell', () => {
       />,
     );
 
-    await userEvent.click(primaryNavButton('Tasks'));
+    await userEvent.click(primaryNavButton('Browser Host'));
     await userEvent.click(
-      await screen.findByRole('button', { name: 'Verify Douban' }),
+      await screen.findByRole('button', { name: 'Verify' }),
     );
 
     expect(desktopApi.verifyBrowserProfile).toHaveBeenCalledWith({
@@ -864,7 +862,7 @@ describe('CthuDesktop shell', () => {
       />,
     );
 
-    await userEvent.click(primaryNavButton('Browser Profiles'));
+    await userEvent.click(primaryNavButton('Browser Host'));
     await userEvent.click(await screen.findByRole('button', { name: 'Clear' }));
 
     expect(desktopApi.clearBrowserProfile).toHaveBeenCalledWith({

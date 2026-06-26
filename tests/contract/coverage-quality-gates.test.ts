@@ -91,6 +91,10 @@ function thresholdRegex(metric: string, value: number): RegExp {
   return new RegExp(`${metric}:\\s*${value}\\b`);
 }
 
+function expectBunTestRunner(scriptConfig: string): void {
+  expect(scriptConfig).toMatch(/(bun|run-bun\.sh)\s+test/);
+}
+
 describe("coverage quality gate policy", () => {
   it("documents the initial threshold-gated package list", () => {
     const policy = readText("docs/coverage-quality-gates.md");
@@ -122,7 +126,7 @@ describe("coverage quality gate policy", () => {
 
       const config = readText(pkg.configPath);
       if (pkg.runner === "bun") {
-        expect(config).toContain("bun test");
+        expectBunTestRunner(config);
         expect(config).toContain("--coverage");
       } else {
         expect(config, pkg.name).toContain("coverage");
@@ -157,7 +161,7 @@ describe("coverage quality gate policy", () => {
     expect(policy).toContain("temporary `cthutool-script-*`");
     expect(policy).toContain("not threshold-gated yet");
 
-    expect(cliPackageJson).toContain("bun test");
+    expectBunTestRunner(cliPackageJson);
     expect(cliPackageJson).toContain("--coverage");
     expect(cliPackageJson).toContain("filter-coverage-lcov.mjs");
     expect(filterScript).toContain("SF:src/");
