@@ -2,6 +2,9 @@ import { Injectable, type NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 // Nest DI needs runtime class reference; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
+import { BackendMetricsService } from '../metrics';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
 import { BackendObservabilityService } from './backend-observability.service';
 import {
   createRequestContext,
@@ -11,7 +14,10 @@ import {
 
 @Injectable()
 export class BackendRequestContextMiddleware implements NestMiddleware {
-  constructor(private readonly observability: BackendObservabilityService) {}
+  constructor(
+    private readonly observability: BackendObservabilityService,
+    private readonly metrics: BackendMetricsService,
+  ) {}
 
   use(request: Request, response: Response, next: NextFunction): void {
     const context = createRequestContext(request);
@@ -37,6 +43,12 @@ export class BackendRequestContextMiddleware implements NestMiddleware {
             path: context.path,
             status,
           },
+        });
+        this.metrics.recordHttpRequest({
+          durationMs,
+          method: context.method,
+          path: context.path,
+          status,
         });
       });
       next();

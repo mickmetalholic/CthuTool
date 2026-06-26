@@ -4,11 +4,13 @@ import {
   Module,
   type NestModule,
 } from '@nestjs/common';
+import { MetricsModule } from '../metrics';
 import { BackendObservabilityService } from './backend-observability.service';
 import { BackendRequestContextMiddleware } from './request-context.middleware';
 
 @Global()
 @Module({
+  imports: [MetricsModule],
   exports: [BackendObservabilityService],
   providers: [BackendObservabilityService, BackendRequestContextMiddleware],
 })

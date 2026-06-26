@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MetricsModule } from './metrics';
 import { AgentModule } from './modules/agent/agent.module';
 import { BrowserAuthModule } from './modules/browser/auth/browser-auth.module';
 import { BrowserContentModule } from './modules/browser/content/browser-content.module';
@@ -10,6 +11,7 @@ import { ObservabilityModule } from './observability';
 
 @Module({
   imports: [
+    MetricsModule,
     ObservabilityModule,
     AgentModule,
     BrowserAuthModule,

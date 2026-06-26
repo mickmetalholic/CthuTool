@@ -57,6 +57,7 @@ describe('BrowserTaskRunner', () => {
 
   it('emits queue, completion, and failure observability events', async () => {
     const observability = { record: vi.fn() };
+    const metrics = createMetricsMock();
     const runner = new BrowserTaskRunner(
       {
         defaultDelayMs: 0,
@@ -64,6 +65,7 @@ describe('BrowserTaskRunner', () => {
         maxConcurrency: 1,
       },
       observability as never,
+      metrics as never,
     );
 
     await expect(runner.run('fast', async () => 'done')).resolves.toBe('done');
@@ -82,5 +84,29 @@ describe('BrowserTaskRunner', () => {
     expect(observability.record).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'browser.task_failed' }),
     );
+    expect(metrics.recordBrowserTaskQueued).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'fast', queueLength: 1 }),
+    );
+    expect(metrics.recordBrowserTaskStarted).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'fast' }),
+    );
+    expect(metrics.recordBrowserTaskCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'fast' }),
+    );
+    expect(metrics.recordBrowserTaskFailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: 'NAVIGATION_TIMEOUT',
+        label: 'slow',
+      }),
+    );
   });
 });
+
+function createMetricsMock() {
+  return {
+    recordBrowserTaskCompleted: vi.fn(),
+    recordBrowserTaskFailed: vi.fn(),
+    recordBrowserTaskQueued: vi.fn(),
+    recordBrowserTaskStarted: vi.fn(),
+  };
+}
