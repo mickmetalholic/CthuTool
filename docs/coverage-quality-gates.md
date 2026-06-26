@@ -54,6 +54,20 @@ component interactions, disabled states, class composition, and utility edge
 cases. Their thresholds are package-local and conservative relative to the
 recorded baselines above.
 
+`@cthutool/web` remains visibility-only after expanding utility, metadata, root
+layout, and page shell tests. The recorded `pnpm --filter @cthutool/web
+test:cov` baseline is 100 statements, 100 branches, 100 functions, and 100
+lines. It is not threshold-gated yet because the current web application surface
+is still a scaffold with a very small source baseline.
+
+`@cthutool/docs` remains visibility-only after expanding content metadata,
+route, internal link, generated-output exclusion, and Starlight content config
+tests. The recorded `pnpm --filter @cthutool/docs test:cov` baseline is 100
+statements and 100 lines, with no branch or function denominator in the current
+source coverage. It is not threshold-gated yet because the package is primarily
+content validation and has too little source surface for a stable percentage
+gate.
+
 ## Graduation Criteria
 
 A visibility-only package can become threshold-gated when all of the following
