@@ -104,6 +104,7 @@ describe("CI workflow contract", () => {
     expect(yml).toContain("windows-latest");
     expect(yml).toContain("packages/app-shell/**");
     expect(yml).toContain("packages/ui/**");
+    expect(yml).toContain("tsconfig.json");
     expect(yml).toContain("turbo.json");
     expect(yml).toMatch(/turbo\s+run\s+typecheck\s+test\s+build/);
     expect(yml).toContain("--filter=@cthutool/desktop...");
