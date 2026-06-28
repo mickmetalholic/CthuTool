@@ -4,5 +4,6 @@
     "types": ["vitest/globals", "node"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["coverage", "dist", "out", "build", "release"]
 }
