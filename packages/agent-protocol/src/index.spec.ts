@@ -9,12 +9,17 @@ import {
   createJsonRpcSuccessResponse,
   isAgentLifecycleMessage,
   isJsonRpcErrorResponse,
+  isJsonRpcRequest,
+  isJsonRpcResponse,
   JSON_RPC_INVALID_PARAMS,
   parseAgentClientMessageJson,
+  parseAgentLifecycleMessage,
   parseAgentServerMessageJson,
+  validateAgentClientLifecycleMessage,
   validateAgentClientMessage,
   validateAgentHeartbeatMessage,
   validateAgentHelloMessage,
+  validateAgentServerLifecycleMessage,
   validateAgentServerMessage,
   validateJsonRpcRequest,
   validateJsonRpcResponse,
@@ -100,6 +105,14 @@ describe('agent protocol validation', () => {
       ok: true,
       value: heartbeat,
     });
+    expect(validateAgentClientLifecycleMessage(heartbeat)).toEqual({
+      ok: true,
+      value: heartbeat,
+    });
+    expect(parseAgentLifecycleMessage(heartbeat)).toEqual({
+      ok: true,
+      value: heartbeat,
+    });
     expect(isAgentLifecycleMessage(heartbeat)).toBe(true);
   });
 
@@ -122,6 +135,10 @@ describe('agent protocol validation', () => {
     const error = createAgentErrorMessage('BAD_HELLO', 'Invalid hello');
 
     expect(validateAgentServerMessage(registered)).toEqual({
+      ok: true,
+      value: registered,
+    });
+    expect(validateAgentServerLifecycleMessage(registered)).toEqual({
       ok: true,
       value: registered,
     });
@@ -169,6 +186,7 @@ describe('agent protocol validation', () => {
       ok: true,
       value: request,
     });
+    expect(isJsonRpcRequest(request)).toBe(true);
     expect(validateAgentServerMessage(request)).toEqual({
       ok: true,
       value: request,
@@ -176,6 +194,10 @@ describe('agent protocol validation', () => {
     expect(parseAgentServerMessageJson(JSON.stringify(request))).toEqual({
       ok: true,
       value: request,
+    });
+    expect(parseAgentServerMessageJson('{')).toEqual({
+      ok: false,
+      message: 'agent server message must be valid JSON',
     });
   });
 
@@ -211,6 +233,7 @@ describe('agent protocol validation', () => {
       ok: true,
       value: success,
     });
+    expect(isJsonRpcResponse(success)).toBe(true);
     expect(validateAgentClientMessage(success)).toEqual({
       ok: true,
       value: success,
@@ -220,6 +243,37 @@ describe('agent protocol validation', () => {
       value: failure,
     });
     expect(isJsonRpcErrorResponse(failure)).toBe(true);
+  });
+
+  it('omits optional JSON-RPC fields when they are not provided', () => {
+    const request = createJsonRpcRequest({
+      id: 1,
+      method: 'agent.ping',
+    });
+    const success = createJsonRpcSuccessResponse(1, null);
+    const failure = createJsonRpcErrorResponse(1, {
+      code: JSON_RPC_INVALID_PARAMS,
+      message: 'Invalid params',
+    });
+
+    expect(request).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'agent.ping',
+    });
+    expect(success).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      result: null,
+    });
+    expect(failure).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      error: {
+        code: JSON_RPC_INVALID_PARAMS,
+        message: 'Invalid params',
+      },
+    });
   });
 
   it('rejects unsupported observability metadata fields', () => {
@@ -232,6 +286,28 @@ describe('agent protocol validation', () => {
           requestId: 'req-1',
           rawHeaders: {},
         },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateAgentServerMessage({
+        jsonrpc: '2.0',
+        id: 'cmd-1',
+        method: 'browser.capturePage',
+        params: {
+          nested: {
+            observability: {
+              rawHeaders: {},
+            },
+          },
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateAgentServerMessage({
+        jsonrpc: '2.0',
+        id: 'cmd-1',
+        method: 'browser.capturePage',
+        observability: null,
       }).ok,
     ).toBe(false);
   });
