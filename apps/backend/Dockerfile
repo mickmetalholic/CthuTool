@@ -9,14 +9,17 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json ./
 COPY apps/backend/package.json apps/backend/
 COPY packages/agent-protocol/package.json packages/agent-protocol/
+COPY packages/browser-runtime-protocol/package.json packages/browser-runtime-protocol/
 COPY packages/config/package.json packages/config/
 RUN pnpm install --frozen-lockfile
 
 # Copy source and build workspace dependencies first, then backend
 COPY packages/agent-protocol/ packages/agent-protocol/
+COPY packages/browser-runtime-protocol/ packages/browser-runtime-protocol/
 COPY packages/config/ packages/config/
 COPY apps/backend/ apps/backend/
 RUN pnpm --filter @cthutool/agent-protocol build
+RUN pnpm --filter @cthutool/browser-runtime-protocol build
 RUN pnpm --filter @cthutool/config build
 RUN pnpm --filter @cthutool/backend build
 
@@ -32,6 +35,8 @@ COPY --from=builder /app/package.json ./
 # Workspace packages (built output + package.json for module resolution)
 COPY --from=builder /app/packages/agent-protocol/dist ./packages/agent-protocol/dist
 COPY --from=builder /app/packages/agent-protocol/package.json ./packages/agent-protocol/
+COPY --from=builder /app/packages/browser-runtime-protocol/dist ./packages/browser-runtime-protocol/dist
+COPY --from=builder /app/packages/browser-runtime-protocol/package.json ./packages/browser-runtime-protocol/
 COPY --from=builder /app/packages/config/dist ./packages/config/dist
 COPY --from=builder /app/packages/config/package.json ./packages/config/
 
