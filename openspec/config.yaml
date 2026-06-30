@@ -1,15 +1,11 @@
 schema: spec-driven
 
 context: |
-  CthuTool is a monorepo with root-managed apps and packages plus some
-  intentionally separate experimental workspaces.
+  CthuTool is a monorepo with root-managed apps and packages.
 
   Name main specs under openspec/specs/<capability> with a monorepo area prefix
   so ownership is visible. Prefer prefixes such as apps-cli-*, apps-backend-*,
-  apps-desktop-*, apps-web-*, packages-<package>-*, or
-  scratches-collection-hub-* instead of generic names. Keep existing clear area
-  prefixes, such as collection-hub-*, unless a broader rename is explicitly
-  requested.
+  apps-desktop-*, apps-web-*, or packages-<package>-* instead of generic names.
 
   Keep each OpenSpec change scoped to one task or one change. Do not archive,
   sync, or commit neighboring OpenSpec changes unless explicitly requested.

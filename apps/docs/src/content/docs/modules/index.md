@@ -15,7 +15,6 @@ CthuTool modules are grouped by what the user is trying to do, not by repository
 | [Browser Client SDK](/modules/browser-client-sdk/) | Trusted third-party browser sessions through the backend public API | Third-party app plus backend plus desktop | `packages/browser-client/README.md` |
 | [Codex Plugin](/modules/codex-plugin/) | Repository-managed Codex plugin assets | User/Codex environment | `codex/plugins/cthu-codex/README.md` |
 | [Douban Movie Info](/modules/douban-movie-info/) | Douban movie information capability | Backend and desktop surfaces | `openspec/specs/apps-backend-douban-movie-info/spec.md` |
-| [Collection Hub](/modules/collection-hub/) | Collection workspace and import workflows | Scratch workspace | `scratches/collection-hub/` |
 | [Obsidian Enhancer](/modules/obsidian-enhancer/) | Obsidian plugin utilities | Obsidian client | `packages/obsidian-enhancer/README.md` |
 
 Module pages summarize current behavior and link to source files for development and requirements detail.

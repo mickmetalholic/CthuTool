@@ -48,7 +48,6 @@ export default defineConfig({
             { label: 'Browser Client SDK', slug: 'modules/browser-client-sdk' },
             { label: 'Codex Plugin', slug: 'modules/codex-plugin' },
             { label: 'Douban Movie Info', slug: 'modules/douban-movie-info' },
-            { label: 'Collection Hub', slug: 'modules/collection-hub' },
             { label: 'Obsidian Enhancer', slug: 'modules/obsidian-enhancer' },
           ],
         },

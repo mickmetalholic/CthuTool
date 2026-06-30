@@ -127,7 +127,6 @@ pnpm run check:cli-dist
 
 - **`apps/`** — application packages (`apps/*` are matched by `pnpm-workspace.yaml`), including backend, CLI, and desktop apps.
 - **`packages/`** — libraries and tooling packages (`packages/*`), including shared protocol and package tooling.
-- **`scratches/collection-hub/`** — experimental nested workspace. It is intentionally outside the root `pnpm-workspace.yaml`; verify it from that directory with its own workspace commands such as `pnpm run check`.
 - **Package names** — use the `@cthutool/*` scope (see **Naming** below).
 
 ### Naming and directories
