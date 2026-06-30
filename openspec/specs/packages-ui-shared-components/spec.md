@@ -1,7 +1,8 @@
 # packages-ui-shared-components Specification
 
 ## Purpose
-TBD - created by archiving change apps-desktop-shared-ui-foundation. Update Purpose after archive.
+Define the shared React UI package for workspace UI primitives, semantic tokens, accessibility behavior, shell controls, and scan-friendly layout patterns.
+
 ## Requirements
 ### Requirement: Shared UI package
 The repository SHALL provide a shared React UI package for workspace applications that need CthuTool interface primitives.

@@ -1,5 +1,8 @@
+# collection-hub-workspace Specification
+
 ## Purpose
 Define the isolated Collection Hub prototype workspace, package boundaries, shared contracts package, and local development commands.
+
 ## Requirements
 ### Requirement: Isolated nested workspace
 The system SHALL create an isolated pnpm workspace at `scratches/collection-hub` for the Collection Hub prototype.

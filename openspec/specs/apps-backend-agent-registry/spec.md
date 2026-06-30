@@ -1,7 +1,8 @@
 # apps-backend-agent-registry Specification
 
 ## Purpose
-TBD - created by archiving change apps-desktop-agent-console. Update Purpose after archive.
+Define the backend desktop agent registry for WebSocket registration, heartbeat freshness, connected-agent status, diagnostics, and transport-only delegation.
+
 ## Requirements
 ### Requirement: Agent WebSocket endpoint
 The backend SHALL expose a WebSocket endpoint that accepts desktop agent connections.

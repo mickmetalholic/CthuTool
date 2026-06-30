@@ -1,7 +1,8 @@
 # apps-desktop-browser-host Specification
 
 ## Purpose
-TBD - created by archiving change apps-browser-agent-auth. Update Purpose after archive.
+Define CthuDesktop browser host behavior for controlled browser commands, local profiles, login and verification flows, runtime limits, and site-aware browser execution.
+
 ## Requirements
 ### Requirement: Desktop browser capability
 CthuDesktop SHALL advertise a browser capability after it can receive controlled browser commands from the backend and execute them through its local Playwright host.

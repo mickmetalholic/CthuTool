@@ -1,3 +1,5 @@
+# collection-hub-import-api Specification
+
 ## Purpose
 Define the Collection Hub local API behavior for validating imports, persisting fixed destination collections, exposing dashboard data, and mutating imported items.
 

@@ -1,3 +1,5 @@
+# apps-cli-self-installation Specification
+
 ## Purpose
 Define GitHub-based personal installation, lifecycle status, and update behavior for the `chc` CLI.
 

@@ -2,6 +2,7 @@
 
 ## Purpose
 Define the backend API and parsing contract for retrieving Douban movie information by subject id through the controlled browser content pipeline.
+
 ## Requirements
 ### Requirement: Douban movie info API
 The backend SHALL provide a Douban movie info API that retrieves one movie by Douban subject id.

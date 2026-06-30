@@ -1,7 +1,8 @@
 # gitops-argo-applications Specification
 
 ## Purpose
-TBD - created by archiving change add-homelab-gitops. Update Purpose after archive.
+Define GitOps ArgoCD Application custom resources for deployed applications, source wiring, destination namespaces, auto-sync, retry, and organization.
+
 ## Requirements
 ### Requirement: ArgoCD Application CR per deployed app
 

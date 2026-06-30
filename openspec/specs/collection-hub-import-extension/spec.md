@@ -1,5 +1,8 @@
+# collection-hub-import-extension Specification
+
 ## Purpose
 Define the Collection Hub browser extension behavior for matching source pages, extracting collection items, and submitting imports to the local API.
+
 ## Requirements
 ### Requirement: Configurable page activation
 The extension SHALL activate collection extraction only on pages matching user-configured match patterns.
@@ -259,4 +262,3 @@ The extension SHALL include a DOM adapter for rendered Bilibili favlist pages on
 - **THEN** the extension content script is not injected into those local development pages
 - **AND** extension development hot reloads do not refresh the Collection Hub frontend
 - **AND** the content script manifest targets supported source sites instead of all URLs
-

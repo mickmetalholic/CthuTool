@@ -1,7 +1,8 @@
 # apps-cli-distribution-ci Specification
 
 ## Purpose
-TBD - created by archiving change refine-ci-required-workflows. Update Purpose after archive.
+Define CLI distribution CI behavior for required-safe bundle validation, affected inputs, and workflow naming.
+
 ## Requirements
 ### Requirement: CLI distribution workflow is required-safe
 The repository SHALL validate the committed CLI distribution bundle through a dedicated GitHub Actions workflow whose check can be marked required.
@@ -37,4 +38,3 @@ The CLI distribution workflow SHALL be stored in an area-named workflow file whi
 - **THEN** CLI distribution behavior is defined in `.github/workflows/cli.yml`
 - **AND** the workflow display name identifies CLI distribution behavior
 - **AND** `.github/workflows/ci.yml` does not define the `cli-dist` job
-

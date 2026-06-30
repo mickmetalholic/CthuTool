@@ -1,7 +1,8 @@
 # packages-config-browser-sites Specification
 
 ## Purpose
-TBD - created by archiving change packages-config-browser-sites. Update Purpose after archive.
+Define the browser sites configuration package for versioned site JSON schema, file loading, deterministic merge behavior, and sensitive-data exclusion.
+
 ## Requirements
 ### Requirement: Browser sites JSON schema
 The config package SHALL define a versioned browser sites JSON format that represents site identifiers, display names, auth policy, default profile names, allowed origins, login URLs, verification URLs, default timeout, and default resource blocking.

@@ -1,7 +1,8 @@
 # codex-plugins-cthu-codex-english-expression-skill Specification
 
 ## Purpose
-TBD - created by archiving change add-cthu-codex-english-expression-skill. Update Purpose after archive.
+Define the CthuCodex English expression card skill for parsing source sentences, generating Anki note candidates, handling tags, and using Anki MCP creation tools.
+
 ## Requirements
 ### Requirement: Plugin-local English expression card skill
 CthuCodex SHALL provide a plugin-local explicit-only skill for creating `English Expression` Anki notes from user-provided English sentences, excerpts, and target expressions.
@@ -108,4 +109,3 @@ The skill SHALL use existing CthuCodex Anki MCP tools to validate and create Eng
 - **WHEN** the note is successfully created
 - **THEN** the skill requests post-create review by using `openAfterCreate: true`
 - **AND** Browser-opening warnings do not turn successful note creation into a failure
-

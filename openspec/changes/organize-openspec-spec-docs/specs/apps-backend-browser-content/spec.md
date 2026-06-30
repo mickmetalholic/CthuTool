@@ -1,9 +1,5 @@
-# apps-backend-browser-content Specification
+## MODIFIED Requirements
 
-## Purpose
-Define backend browser content workflow behavior exposed through BrowserService, including site policy, controlled capture, detection, diagnostics, and observability.
-
-## Requirements
 ### Requirement: Browser content module
 The backend SHALL expose browser page content retrieval through `BrowserService`; any content-specific providers SHALL be internal implementation details that do not own public browser API routes, browser profile reporting routes, site configuration storage, browser auth coordination, or concrete agent/browser runtime command execution.
 

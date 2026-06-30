@@ -1,7 +1,8 @@
 # packages-app-shell-runtime Specification
 
 ## Purpose
-TBD - created by archiving change apps-desktop-shared-ui-foundation. Update Purpose after archive.
+Define the shared app-shell runtime package for host-neutral runtime contracts, shared page composition, adapters, page frames, and status patterns.
+
 ## Requirements
 ### Requirement: Host-neutral runtime contract
 The shared app-shell runtime package SHALL define a runtime contract that describes host capabilities and host actions without depending on Electron.
@@ -112,4 +113,3 @@ The shared app-shell runtime SHALL allow shared pages to use a host-provided fro
 #### Scenario: Shared page logs through runtime
 - **WHEN** a shared page emits a diagnostic event
 - **THEN** it uses the runtime-provided logger or a safe no-op/default logger rather than directly depending on a host-specific console implementation
-

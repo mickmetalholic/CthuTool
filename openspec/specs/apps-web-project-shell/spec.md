@@ -1,7 +1,8 @@
 # apps-web-project-shell Specification
 
 ## Purpose
-TBD - created by archiving change apps-web-project-scaffold. Update Purpose after archive.
+Define the apps/web project shell, Next.js scaffold, styling baseline, shared page readiness, script integration, documentation naming, and diagnostics baseline.
+
 ## Requirements
 ### Requirement: Web App Workspace
 

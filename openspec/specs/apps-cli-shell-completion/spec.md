@@ -1,5 +1,8 @@
+# apps-cli-shell-completion Specification
+
 ## Purpose
 Define PowerShell and zsh shell completion behavior for the `chc` CLI.
+
 ## Requirements
 ### Requirement: Completion command group
 The CLI SHALL expose a `completion` command group for shell completion setup scripts.

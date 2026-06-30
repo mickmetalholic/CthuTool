@@ -2,6 +2,7 @@
 
 ## Purpose
 CthuTool provides an Astro Starlight documentation site under `apps/docs` as the primary user and operator documentation surface for homelab deployment, client installation, module usage, operations, architecture, reference material, and OpenSpec capability discovery.
+
 ## Requirements
 ### Requirement: Docs workspace application
 The repository SHALL include a first-class documentation site package under `apps/docs`.

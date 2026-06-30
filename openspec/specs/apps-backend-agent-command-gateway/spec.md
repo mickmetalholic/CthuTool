@@ -1,7 +1,8 @@
 # apps-backend-agent-command-gateway Specification
 
 ## Purpose
-TBD - created by archiving change apps-backend-agent-browser-layer-split. Update Purpose after archive.
+Define the backend command gateway boundary for JSON-RPC command dispatch, response correlation, transport hiding, capability neutrality, and command observability.
+
 ## Requirements
 ### Requirement: Agent command gateway
 The backend SHALL provide an agent command gateway that dispatches JSON-RPC 2.0-compatible command requests to registered desktop agents and correlates JSON-RPC success or error responses without exposing raw WebSocket internals or capability-specific business logic to callers.
@@ -69,4 +70,3 @@ The agent command gateway SHALL emit observable command lifecycle events that co
 #### Scenario: Command timeout is observable
 - **WHEN** a pending command times out
 - **THEN** the gateway records a timeout event and removes the pending correlation entry without exposing raw WebSocket internals to business modules
-

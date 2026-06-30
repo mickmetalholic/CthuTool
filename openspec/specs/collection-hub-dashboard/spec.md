@@ -1,3 +1,5 @@
+# collection-hub-dashboard Specification
+
 ## Purpose
 Define the Collection Hub web dashboard behavior for browsing imported collections, authors, rating filters, and item triage actions.
 

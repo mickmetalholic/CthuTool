@@ -1,7 +1,8 @@
 # apps-backend-browser-auth Specification
 
 ## Purpose
-TBD - created by archiving change apps-backend-agent-browser-layer-split. Update Purpose after archive.
+Define backend browser auth workflow behavior exposed through BrowserService, including runtime profile status, login verification, and interaction challenges.
+
 ## Requirements
 ### Requirement: Browser auth workflow service
 The backend SHALL keep browser login workflow semantics behind `BrowserService` while desktop remains the source of truth for actual browser login state and browser profile status is queried on demand through the desktop browser runtime.
@@ -39,4 +40,3 @@ The backend browser auth workflow exposed through `BrowserService` SHALL return 
 #### Scenario: Login challenge is resolved
 - **WHEN** a caller asks desktop to open login or verify the profile for a challenge
 - **THEN** `BrowserService` dispatches the request through `DesktopBrowserRuntimeModule` and returns public verification status
-

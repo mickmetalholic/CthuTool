@@ -1,7 +1,8 @@
 # apps-desktop-agent-console Specification
 
 ## Purpose
-TBD - created by archiving change apps-desktop-agent-console. Update Purpose after archive.
+Define the CthuDesktop agent console application, backend connection configuration, WebSocket agent connection, home page, and observable state.
+
 ## Requirements
 ### Requirement: Desktop workspace application
 The system SHALL add a first-class Electron desktop application package under the root workspace.
@@ -84,4 +85,3 @@ The desktop agent console SHALL display agent and browser capability status usin
 #### Scenario: Browser capability status is visible
 - **WHEN** browser capability is unavailable or degraded
 - **THEN** the agent console displays a safe runtime diagnostic summary and does not expose local profile internals
-

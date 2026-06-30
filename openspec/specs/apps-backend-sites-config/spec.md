@@ -2,6 +2,7 @@
 
 ## Purpose
 Define the backend-owned module and service boundary for effective site configuration loading, override merging, lookup, and browser automation consumer compatibility.
+
 ## Requirements
 ### Requirement: Backend sites config module
 The backend SHALL provide a `SitesConfigModule` that owns effective site configuration loading and lookup without depending on browser runtime, agent state, browser command dispatch, profile storage, pending auth tasks, or diagnostics.

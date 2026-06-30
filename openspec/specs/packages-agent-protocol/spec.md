@@ -1,7 +1,8 @@
 # packages-agent-protocol Specification
 
 ## Purpose
-TBD - created by archiving change apps-browser-runtime-protocol-hardening. Update Purpose after archive.
+Define the shared agent protocol package for capability-neutral lifecycle messages, JSON-RPC command envelopes, and browser-contract separation.
+
 ## Requirements
 ### Requirement: Generic agent lifecycle protocol
 The `@cthutool/agent-protocol` package SHALL define only capability-neutral agent lifecycle messages, public agent metadata, public agent status, and command transport primitives.

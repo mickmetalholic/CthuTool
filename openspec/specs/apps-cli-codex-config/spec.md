@@ -1,5 +1,8 @@
+# apps-cli-codex-config Specification
+
 ## Purpose
 Define apps/cli behavior for reproducible Codex configuration maintenance, safe repository-managed Codex state, and machine-readable output.
+
 ## Requirements
 ### Requirement: Codex command group
 The CLI SHALL expose a `codex` command group for Codex maintenance commands.
