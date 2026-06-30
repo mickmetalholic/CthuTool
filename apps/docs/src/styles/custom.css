@@ -1,4 +1,440 @@
 :root {
-  --sl-content-width: 54rem;
+  --sl-content-width: 68rem;
   --sl-text-h1: 2.6rem;
+  --cthu-accent: #35b879;
+  --cthu-accent-strong: #0d8f5f;
+  --cthu-ink: #182230;
+  --cthu-muted: #667085;
+  --cthu-panel: #ffffff;
+  --cthu-panel-soft: #f7faf8;
+  --cthu-border: #dce8e2;
+  --cthu-command-bg: #101828;
+  --cthu-command-fg: #d0fadf;
+  --cthu-warm: #f7b955;
+}
+
+:root[data-theme="dark"] {
+  --cthu-ink: #eef4f1;
+  --cthu-muted: #a9b8b1;
+  --cthu-panel: #111826;
+  --cthu-panel-soft: #172033;
+  --cthu-border: #263746;
+  --cthu-command-bg: #080d16;
+  --cthu-command-fg: #bbf7d0;
+}
+
+.cthu-home {
+  --cthu-shadow: 0 18px 60px rgb(16 24 40 / 12%);
+  display: grid;
+  gap: 2.25rem;
+  margin: -1.5rem auto 0;
+  padding: 0.5rem 0 3rem;
+}
+
+.cthu-home :is(h1, h2, p) {
+  margin: 0;
+}
+
+body:has(.cthu-home) main .content-panel:first-child {
+  display: none;
+}
+
+body:has(.cthu-home) .sidebar,
+body:has(.cthu-home) .right-sidebar-container {
+  display: none;
+}
+
+body:has(.cthu-home) .main-frame,
+body:has(.cthu-home) .main-pane {
+  width: 100%;
+}
+
+.cthu-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(18rem, 0.92fr);
+  gap: 2rem;
+  align-items: center;
+  min-height: clamp(29rem, 62vh, 38rem);
+  padding: clamp(1.75rem, 4vw, 3.5rem);
+  overflow: hidden;
+  border: 1px solid var(--cthu-border);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 12% 10%, rgb(53 184 121 / 18%), transparent 28rem),
+    linear-gradient(
+      135deg,
+      var(--cthu-panel) 0%,
+      var(--cthu-panel-soft) 62%,
+      rgb(247 185 85 / 14%) 100%
+    );
+  box-shadow: var(--cthu-shadow);
+}
+
+.cthu-hero::after {
+  position: absolute;
+  right: -5rem;
+  bottom: -8rem;
+  width: 22rem;
+  height: 22rem;
+  border: 1px solid rgb(53 184 121 / 24%);
+  border-radius: 999px;
+  content: "";
+}
+
+.cthu-hero-copy,
+.cthu-command-panel {
+  position: relative;
+  z-index: 1;
+}
+
+.cthu-hero-copy {
+  display: grid;
+  gap: 1.4rem;
+  max-width: 42rem;
+}
+
+.cthu-eyebrow {
+  color: var(--cthu-accent-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cthu-hero h1 {
+  max-width: 15ch;
+  color: var(--cthu-ink);
+  font-size: clamp(2.8rem, 6vw, 4.7rem);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.cthu-lede {
+  max-width: 42rem;
+  color: var(--cthu-muted);
+  font-size: clamp(1.02rem, 1.9vw, 1.24rem);
+  line-height: 1.7;
+}
+
+.cthu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  padding-top: 0.4rem;
+}
+
+.cthu-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.72rem 1.05rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.cthu-button-primary {
+  background: var(--cthu-accent);
+  color: #052e1f;
+  box-shadow: 0 12px 28px rgb(53 184 121 / 30%);
+}
+
+.cthu-button-secondary {
+  border-color: var(--cthu-border);
+  background: rgb(255 255 255 / 68%);
+  color: var(--cthu-ink);
+}
+
+:root[data-theme="dark"] .cthu-button-secondary {
+  background: rgb(255 255 255 / 6%);
+}
+
+.cthu-button:hover,
+.cthu-card:hover,
+.cthu-path:hover {
+  transform: translateY(-2px);
+}
+
+.cthu-command-panel {
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  background: var(--cthu-command-bg);
+  box-shadow: 0 24px 70px rgb(16 24 40 / 26%);
+}
+
+.cthu-window-bar {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  height: 2.4rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  background: rgb(255 255 255 / 4%);
+}
+
+.cthu-window-bar span {
+  width: 0.68rem;
+  height: 0.68rem;
+  border-radius: 999px;
+  background: #ff6b6b;
+}
+
+.cthu-window-bar span:nth-child(2) {
+  background: var(--cthu-warm);
+}
+
+.cthu-window-bar span:nth-child(3) {
+  background: var(--cthu-accent);
+}
+
+.cthu-command-panel pre,
+.cthu-local-dev pre {
+  margin: 0;
+  padding: 1.35rem;
+  overflow-x: auto;
+  background: transparent;
+  border: 0;
+}
+
+.cthu-command-panel code,
+.cthu-local-dev code {
+  color: var(--cthu-command-fg);
+  font-size: 0.88rem;
+  line-height: 1.75;
+}
+
+.cthu-link-grid,
+.cthu-path-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.cthu-card,
+.cthu-path {
+  display: grid;
+  gap: 0.75rem;
+  min-height: 12rem;
+  padding: 1.25rem;
+  border: 1px solid var(--cthu-border);
+  border-radius: 8px;
+  background: var(--cthu-panel);
+  color: var(--cthu-muted);
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.cthu-card:hover,
+.cthu-path:hover {
+  border-color: rgb(53 184 121 / 58%);
+  box-shadow: 0 16px 34px rgb(16 24 40 / 10%);
+}
+
+.cthu-card-featured {
+  background: linear-gradient(145deg, rgb(53 184 121 / 14%), var(--cthu-panel));
+}
+
+.cthu-card-kicker,
+.cthu-path span {
+  color: var(--cthu-accent-strong);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cthu-card strong,
+.cthu-path strong {
+  color: var(--cthu-ink);
+  font-size: 1.1rem;
+  line-height: 1.35;
+}
+
+.cthu-card span:last-child {
+  line-height: 1.6;
+}
+
+.cthu-card code {
+  font-size: 0.9em;
+}
+
+.cthu-section {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.cthu-section-heading {
+  display: grid;
+  gap: 0.8rem;
+  max-width: 44rem;
+}
+
+.cthu-section-heading h2,
+.cthu-workflow h2,
+.cthu-local-dev h2 {
+  color: var(--cthu-ink);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.cthu-section-heading p:last-child {
+  color: var(--cthu-muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+.cthu-path-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cthu-path {
+  min-height: 10rem;
+}
+
+.cthu-workflow,
+.cthu-local-dev {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 2rem;
+  align-items: start;
+  padding: 2rem;
+  border: 1px solid var(--cthu-border);
+  border-radius: 8px;
+  background: var(--cthu-panel-soft);
+}
+
+.cthu-workflow > div,
+.cthu-local-dev > div {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.cthu-workflow ol {
+  display: grid;
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: cthu-flow;
+}
+
+.cthu-workflow li {
+  position: relative;
+  padding: 1rem 1rem 1rem 3.2rem;
+  border: 1px solid var(--cthu-border);
+  border-radius: 8px;
+  background: var(--cthu-panel);
+  color: var(--cthu-muted);
+  line-height: 1.6;
+  counter-increment: cthu-flow;
+}
+
+.cthu-workflow li::before {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--cthu-accent);
+  color: #052e1f;
+  content: counter(cthu-flow);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.5rem;
+  text-align: center;
+}
+
+.cthu-workflow li span {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--cthu-ink);
+  font-weight: 800;
+}
+
+.cthu-local-dev {
+  align-items: center;
+  background: linear-gradient(
+    135deg,
+    var(--cthu-command-bg),
+    #173327 58%,
+    #332918
+  );
+}
+
+.cthu-local-dev .cthu-eyebrow,
+.cthu-local-dev h2 {
+  color: #ffffff;
+}
+
+.cthu-local-dev pre {
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 20%);
+}
+
+@media (max-width: 58rem) {
+  .cthu-home {
+    gap: 1.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .cthu-hero,
+  .cthu-workflow,
+  .cthu-local-dev {
+    grid-template-columns: 1fr;
+  }
+
+  .cthu-hero {
+    min-height: auto;
+    padding: 2rem;
+  }
+
+  .cthu-hero h1 {
+    max-width: 14ch;
+    font-size: clamp(2.5rem, 12vw, 4rem);
+  }
+
+  .cthu-link-grid,
+  .cthu-path-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cthu-card,
+  .cthu-path {
+    min-height: auto;
+  }
+
+  .cthu-command-panel {
+    max-height: 10.5rem;
+  }
+
+  .cthu-command-panel pre {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 34rem) {
+  .cthu-hero,
+  .cthu-workflow,
+  .cthu-local-dev {
+    padding: 1.25rem;
+  }
+
+  .cthu-actions {
+    flex-direction: column;
+  }
+
+  .cthu-button {
+    justify-content: center;
+    width: 100%;
+  }
 }
