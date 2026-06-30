@@ -1,7 +1,8 @@
 # packages-app-shell-observability Specification
 
 ## Purpose
-TBD - created by archiving change packages-app-shell-observability-semantics. Update Purpose after archive.
+Define shared app-shell observability semantics for frontend logging and observable status presentation.
+
 ## Requirements
 ### Requirement: Shared frontend logger
 The app-shell package SHALL define shared frontend logger semantics for levels, scopes, event names, correlation fields, safe contextual details, and environment-specific console behavior.
@@ -24,4 +25,3 @@ The app-shell package SHALL define host-neutral presentation semantics for backe
 #### Scenario: Diagnostics link is safe
 - **WHEN** a shared page displays a diagnostics identifier or link
 - **THEN** it presents only safe identifiers and summaries, not raw artifacts or local paths
-

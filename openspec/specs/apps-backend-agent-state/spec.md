@@ -1,7 +1,8 @@
 # apps-backend-agent-state Specification
 
 ## Purpose
-TBD - created by archiving change apps-backend-agent-browser-layer-split. Update Purpose after archive.
+Define the backend agent state boundary that keeps capability-specific browser, auth, page, and diagnostic state out of generic agent status.
+
 ## Requirements
 ### Requirement: Agent state excludes capability state
 The backend SHALL NOT use agent state modules to store capability-specific browser profiles, pending auth tasks, page state, diagnostics, or site-specific browser status.
@@ -13,4 +14,3 @@ The backend SHALL NOT use agent state modules to store capability-specific brows
 #### Scenario: Agent status is needed
 - **WHEN** a caller needs connected desktop client status
 - **THEN** it reads registry-owned public agent status containing only client metadata, online state, freshness, and capabilities
-

@@ -1,7 +1,8 @@
 # apps-desktop-observability Specification
 
 ## Purpose
-TBD - created by archiving change apps-desktop-observability-semantics. Update Purpose after archive.
+Define CthuDesktop observability behavior for agent lifecycle, browser host operations, safe local diagnostics, and shared observability contracts.
+
 ## Requirements
 ### Requirement: Desktop agent observability
 CthuDesktop SHALL define structured observability events for agent connection lifecycle, registration, reconnect attempts, heartbeat state, backend rejection, and local stop/start transitions.
@@ -44,4 +45,3 @@ The Desktop app SHALL emit structured local diagnostics that align with the shar
 - **WHEN** Desktop observability records a diagnostic event
 - **THEN** the event includes a stable source, level, event name, message, timestamp, and safe details
 - **AND** the event is not sent to `POST /api/client-events` by default
-

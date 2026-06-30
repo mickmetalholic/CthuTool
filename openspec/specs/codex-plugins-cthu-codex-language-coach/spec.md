@@ -1,7 +1,8 @@
 # codex-plugins-cthu-codex-language-coach Specification
 
 ## Purpose
-TBD - created by archiving change codex-plugins-cthu-codex-language-coach-detector. Update Purpose after archive.
+Define the CthuCodex language-coach prompt hook, English prose detection, non-user-prose filtering, Chinese workflow silence, and trailing-intent handling.
+
 ## Requirements
 ### Requirement: Language coach hook emits coaching only for English prose intent
 The CthuCodex language-coach hook SHALL inject English coaching context only when the latest user prompt contains English prose intent after local filtering.
@@ -71,4 +72,3 @@ The language-coach detector SHALL evaluate a short trailing user-authored segmen
 #### Scenario: Balanced multi-sentence prompt is evaluated as a whole
 - **WHEN** the prompt contains multiple normal-length prose segments without a short-tail pattern
 - **THEN** the detector evaluates the full cleaned prompt
-

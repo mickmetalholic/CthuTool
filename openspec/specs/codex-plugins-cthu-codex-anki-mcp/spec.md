@@ -1,7 +1,8 @@
 # codex-plugins-cthu-codex-anki-mcp Specification
 
 ## Purpose
-TBD - created by archiving change add-cthu-codex-anki-mcp-server. Update Purpose after archive.
+Define the CthuCodex Anki MCP server integration, AnkiConnect status, schema discovery, note lookup, candidate validation, note creation, media storage, and browser opening workflows.
+
 ## Requirements
 ### Requirement: Plugin-bundled Anki MCP server
 CthuCodex SHALL bundle a stdio MCP server for Anki card creation utilities without changing the existing language-coach hook behavior.

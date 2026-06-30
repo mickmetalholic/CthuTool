@@ -2,6 +2,7 @@
 
 ## Purpose
 Define backend request context, structured event, readiness, metrics, and trace semantics so CthuTool backend operations can be safely correlated and monitored.
+
 ## Requirements
 ### Requirement: Backend request context
 The backend SHALL assign or preserve a request context for HTTP entry points that includes a request identifier, start time, method, route or path, response status, duration, and optional upstream correlation metadata.

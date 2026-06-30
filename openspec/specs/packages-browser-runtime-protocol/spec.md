@@ -1,7 +1,8 @@
 # packages-browser-runtime-protocol Specification
 
 ## Purpose
-TBD - created by archiving change apps-browser-runtime-protocol-hardening. Update Purpose after archive.
+Define the browser runtime protocol package for typed browser methods, payload schemas, JSON-RPC helpers, and operation-scoped challenges.
+
 ## Requirements
 ### Requirement: Browser runtime protocol package
 The browser runtime protocol boundary SHALL define browser method names, params, results, public browser status metadata, detections, application error codes, and operation-scoped interaction challenges outside the generic agent protocol package.

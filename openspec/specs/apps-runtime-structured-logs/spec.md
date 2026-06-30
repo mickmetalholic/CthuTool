@@ -1,7 +1,8 @@
 # apps-runtime-structured-logs Specification
 
 ## Purpose
-TBD - created by archiving change apps-runtime-structured-logs. Update Purpose after archive.
+Define shared structured log envelope semantics and local-first runtime diagnostics across CthuTool applications.
+
 ## Requirements
 ### Requirement: Shared runtime log envelope
 CthuTool application runtimes SHALL use a shared structured log envelope for application diagnostics so events can be correlated across backend, web, desktop, and CLI without relying on runtime-specific formatting.

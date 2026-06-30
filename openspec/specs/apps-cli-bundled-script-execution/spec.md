@@ -1,3 +1,5 @@
+# apps-cli-bundled-script-execution Specification
+
 ## Purpose
 Define how apps/cli discovers and invokes bundled scripts, forwards script arguments, preserves interactive selection, and exposes JSON-safe execution behavior.
 

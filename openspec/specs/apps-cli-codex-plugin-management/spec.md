@@ -1,5 +1,8 @@
+# apps-cli-codex-plugin-management Specification
+
 ## Purpose
 Define apps/cli repository-owned Codex plugin discovery, status reporting, local installation, cache synchronization, and CthuCodex language-coach hook behavior through the current `chc codex status` and `chc codex install` command surface.
+
 ## Requirements
 ### Requirement: Repository plugin status reporting
 The `chc codex status` command SHALL report repository-owned Codex plugin state without exposing a separate `chc codex plugins` command.

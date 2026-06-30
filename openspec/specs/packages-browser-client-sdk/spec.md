@@ -1,7 +1,8 @@
 # packages-browser-client-sdk Specification
 
 ## Purpose
-TBD - created by archiving change packages-browser-client-sdk. Update Purpose after archive.
+Define the TypeScript browser client SDK for trusted applications using the backend public browser API.
+
 ## Requirements
 ### Requirement: Browser client package
 The repository SHALL provide a TypeScript browser client SDK package for
@@ -95,4 +96,3 @@ lifecycle, and supported page methods.
 - **THEN** it states that the SDK talks to the CthuTool backend, does not connect
   to Playwright directly, does not expose raw browser storage, and assumes a
   trusted backend deployment until API authentication is added
-

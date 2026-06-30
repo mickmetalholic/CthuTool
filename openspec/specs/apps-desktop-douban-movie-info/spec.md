@@ -2,6 +2,7 @@
 
 ## Purpose
 Define the CthuDesktop user interface contract for looking up Douban movie information by subject id or subject URL.
+
 ## Requirements
 ### Requirement: Desktop Douban movie lookup panel
 CthuDesktop SHALL provide a simple Douban movie lookup panel for fetching movie information by subject id.

@@ -1,7 +1,8 @@
 # apps-backend-desktop-browser-runtime Specification
 
 ## Purpose
-TBD - created by archiving change apps-backend-agent-transport-boundary. Update Purpose after archive.
+Define the backend desktop browser runtime client for typed browser operations, session lifecycle commands, runtime errors, challenges, and observability.
+
 ## Requirements
 ### Requirement: Desktop browser runtime module
 The backend SHALL provide a `DesktopBrowserRuntimeModule` that exposes desktop browser capability operations without exposing agent transport internals or backend-local Playwright APIs.

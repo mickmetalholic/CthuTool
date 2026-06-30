@@ -2,6 +2,7 @@
 
 ## Purpose
 Define CLI command, bundled script, stderr diagnostics, JSON-safe, and redaction semantics for apps/cli observability.
+
 ## Requirements
 ### Requirement: CLI invocation observability
 The CLI SHALL define structured invocation diagnostics for every top-level command, including source, command name, subcommand, script id when applicable, mode, duration, exit code, and stable error code, and those diagnostics MUST NOT prevent deterministic command termination.

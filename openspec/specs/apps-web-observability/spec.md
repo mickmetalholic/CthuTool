@@ -2,6 +2,7 @@
 
 ## Purpose
 Define the web frontend observability contract for API correlation, safe console diagnostics, and UI error reporting in the browser-hosted CthuTool management console.
+
 ## Requirements
 ### Requirement: Web API correlation
 The web app SHALL route production frontend API requests through structured API observability so requests are correlated with backend request identifiers, route or action labels, response status, duration, and safe error codes.

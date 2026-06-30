@@ -1,7 +1,8 @@
 # apps-backend-image-delivery Specification
 
 ## Purpose
-TBD - created by archiving change add-homelab-gitops. Update Purpose after archive.
+Define backend container image publishing to GitHub Container Registry and downstream deployment image consumption.
+
 ## Requirements
 ### Requirement: Backend image is published to GHCR
 

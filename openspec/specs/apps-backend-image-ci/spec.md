@@ -1,7 +1,8 @@
 # apps-backend-image-ci Specification
 
 ## Purpose
-TBD - created by archiving change improve-ci-coverage-and-speed. Update Purpose after archive.
+Define backend container image CI validation, affected-input handling, deployment manifest updates, pinned tool versions, and workflow naming.
+
 ## Requirements
 ### Requirement: Backend image CI validates pull request Docker builds
 The backend image workflow SHALL expose a stable pull request validation job and SHALL build backend Docker images only when affected inputs change.
@@ -65,4 +66,3 @@ The backend image workflow SHALL be stored in an area-named workflow file while 
 - **THEN** backend image behavior is defined in `.github/workflows/backend.yml`
 - **AND** the workflow display name identifies backend image behavior
 - **AND** the old `.github/workflows/backend-image.yml` file is not retained as a duplicate workflow
-

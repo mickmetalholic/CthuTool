@@ -1,7 +1,8 @@
 # apps-desktop-product-shell Specification
 
 ## Purpose
-TBD - created by archiving change apps-desktop-product-shell. Update Purpose after archive.
+Define the CthuDesktop product shell, app identity, window chrome, navigation, settings, visual system, runtime status, and desktop page patterns.
+
 ## Requirements
 ### Requirement: CthuDesktop app identity
 The desktop application SHALL present itself as CthuDesktop in product chrome, package metadata, and renderer-visible app identity.

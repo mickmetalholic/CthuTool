@@ -1,7 +1,8 @@
 # apps-root-engineering-config Specification
 
 ## Purpose
-TBD - created by archiving change apps-root-engineering-config-governance. Update Purpose after archive.
+Define root monorepo engineering configuration for validation scripts, CI gates, package governance, Turbo orchestration, generated adapter policy, and OpenSpec ownership.
+
 ## Requirements
 ### Requirement: Root lint gate passes for managed workspace
 The root workspace SHALL provide a lint command that validates all root-managed source files under `apps/*` and `packages/*` without failing on supported syntax used by those packages.

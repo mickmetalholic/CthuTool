@@ -1,5 +1,8 @@
+# apps-cli-agent-contract Specification
+
 ## Purpose
 Define the apps/cli shared runtime contract for interactivity, JSON output, quiet output, prompt suppression, and stable command errors.
+
 ## Requirements
 ### Requirement: Shared CLI Context
 The CLI SHALL derive a shared command context containing TTY state, interactivity, JSON output mode, and quiet output mode before command implementations perform prompt or rendering decisions.

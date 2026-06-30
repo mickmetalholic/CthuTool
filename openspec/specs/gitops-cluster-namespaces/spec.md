@@ -1,7 +1,8 @@
 # gitops-cluster-namespaces Specification
 
 ## Purpose
-TBD - created by archiving change add-homelab-gitops. Update Purpose after archive.
+Define GitOps-managed Kubernetes namespace manifests for deployed applications and namespace labeling conventions.
+
 ## Requirements
 ### Requirement: Namespace for each deployed application
 

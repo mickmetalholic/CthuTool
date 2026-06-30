@@ -1,7 +1,8 @@
 # gitops-bootstrap Specification
 
 ## Purpose
-TBD - created by archiving change add-homelab-gitops. Update Purpose after archive.
+Define the GitOps bootstrap scaffold reserved for future ArgoCD self-management manifests.
+
 ## Requirements
 ### Requirement: Bootstrap directory scaffold exists
 

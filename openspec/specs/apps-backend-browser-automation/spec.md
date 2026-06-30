@@ -1,5 +1,8 @@
+# apps-backend-browser-automation Specification
+
 ## Purpose
 Define backend-owned browser automation services, browser auth profiles, controlled diagnostics, and CLI auth helper behavior for internal page content retrieval.
+
 ## Requirements
 ### Requirement: Browser automation composition module retired
 The backend SHALL NOT expose `BrowserAutomationModule` as a standalone browser domain or composition module, and the `apps/backend/src/modules/browser-automation/` directory SHALL be removed after surviving errors, types, auth helpers, and stores move under browser-owned module boundaries.

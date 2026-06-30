@@ -2,6 +2,7 @@
 
 ## Purpose
 Define the GitOps-managed Kubernetes observability stack for CthuTool, including metrics, dashboards, log collection, platform integration boundaries, and future telemetry ingestion extension points.
+
 ## Requirements
 ### Requirement: GitOps-managed observability stack
 The repository SHALL define a GitOps-managed observability stack for the Kubernetes cluster using existing open source components rather than a custom CthuTool observability or logging service.

@@ -1,7 +1,8 @@
 # apps-desktop-packaging-ci Specification
 
 ## Purpose
-TBD - created by archiving change apps-desktop-product-shell. Update Purpose after archive.
+Define desktop icon assets, packaging configuration, artifact workflows, dependency-aware validation, and desktop workflow naming.
+
 ## Requirements
 ### Requirement: Desktop icon assets
 The repository SHALL provide CthuDesktop icon assets suitable for renderer display and desktop packaging.
