@@ -8,9 +8,8 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 
 ### Agent Transport
 
-- [apps-backend-agent-registry](apps-backend-agent-registry/spec.md): connected desktop agent registration, heartbeat, status, and command delegation boundaries.
+- [apps-backend-agent-registry](apps-backend-agent-registry/spec.md): connected desktop agent registration, heartbeat, status, command delegation boundaries, and generic agent-state exclusion.
 - [apps-backend-agent-command-gateway](apps-backend-agent-command-gateway/spec.md): typed command dispatch and response correlation over agent transport.
-- [apps-backend-agent-state](apps-backend-agent-state/spec.md): boundary marker that keeps capability-specific state out of generic agent state. Consolidation candidate for a later registry or transport-boundary change.
 
 ### Browser Workflows
 
@@ -20,14 +19,11 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 - [apps-backend-browser-public-api](apps-backend-browser-public-api/spec.md): trusted third-party browser session and action API surface.
 - [apps-backend-desktop-browser-runtime](apps-backend-desktop-browser-runtime/spec.md): lower-level backend client for typed desktop browser runtime operations.
 - [apps-backend-sites-config](apps-backend-sites-config/spec.md): backend effective site configuration loading, lookup, and browser consumer compatibility.
-- [apps-backend-browser-agent-capture](apps-backend-browser-agent-capture/spec.md): retired browser capture marker. Consolidation candidate for a later browser runtime/service cleanup.
-- [apps-backend-browser-automation](apps-backend-browser-automation/spec.md): retired browser automation composition marker. Consolidation candidate for a later browser service/runtime cleanup.
 
 ### Backend Domains And Delivery
 
 - [apps-backend-douban-movie-info](apps-backend-douban-movie-info/spec.md): Douban movie information retrieval and parsing through controlled browser content.
-- [apps-backend-image-ci](apps-backend-image-ci/spec.md): backend image CI build and verification behavior.
-- [apps-backend-image-delivery](apps-backend-image-delivery/spec.md): backend image publishing and deployment consumption behavior.
+- [apps-backend-image-ci](apps-backend-image-ci/spec.md): backend image CI build, verification, publishing, and deployment image pinning behavior.
 - [apps-backend-observability](apps-backend-observability/spec.md): backend request context, events, readiness, metrics, and trace semantics.
 
 ## CLI
@@ -60,10 +56,8 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 
 ## Packages
 
-- [packages-agent-protocol](packages-agent-protocol/spec.md): shared agent protocol envelopes, command messages, and compatibility behavior.
-- [packages-agent-protocol-observability](packages-agent-protocol-observability/spec.md): agent protocol observability metadata, validation, and redaction.
-- [packages-app-shell-runtime](packages-app-shell-runtime/spec.md): host-neutral app shell runtime contracts and shared page composition.
-- [packages-app-shell-observability](packages-app-shell-observability/spec.md): app shell observability semantics.
+- [packages-agent-protocol](packages-agent-protocol/spec.md): shared agent protocol envelopes, command messages, compatibility behavior, and protocol observability metadata.
+- [packages-app-shell-runtime](packages-app-shell-runtime/spec.md): host-neutral app shell runtime contracts, shared page composition, and frontend observability semantics.
 - [packages-browser-runtime-protocol](packages-browser-runtime-protocol/spec.md): typed browser runtime method names, payload schemas, JSON-RPC helpers, and operation challenges.
 - [packages-browser-client-sdk](packages-browser-client-sdk/spec.md): TypeScript SDK for the backend public browser API.
 - [packages-config-browser-sites](packages-config-browser-sites/spec.md): versioned browser sites JSON schema, loading, merge behavior, and sensitive-data exclusion.
@@ -78,16 +72,7 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 - [codex-plugins-cthu-codex-japanese-vocabulary-skill](codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md): Japanese vocabulary Anki note skill.
 - [codex-plugins-cthu-codex-language-coach](codex-plugins-cthu-codex-language-coach/spec.md): prompt-time English prose coaching hook behavior.
 
-## Collection Hub
-
-- [collection-hub-workspace](collection-hub-workspace/spec.md): isolated experimental Collection Hub workspace, package boundaries, and local development commands.
-- [collection-hub-import-api](collection-hub-import-api/spec.md): local API import validation, persistence, dashboard data, and item mutations.
-- [collection-hub-import-extension](collection-hub-import-extension/spec.md): browser extension page matching, extraction, and local API submission.
-- [collection-hub-dashboard](collection-hub-dashboard/spec.md): dashboard browsing, author views, rating filters, and item triage.
-
 ## GitOps
 
-- [gitops-argo-applications](gitops-argo-applications/spec.md): ArgoCD Application resources for deployed apps. Consolidation candidate for a later GitOps delivery cleanup.
-- [gitops-bootstrap](gitops-bootstrap/spec.md): bootstrap scaffold for future ArgoCD self-management manifests. Consolidation candidate for a later GitOps delivery cleanup.
-- [gitops-cluster-namespaces](gitops-cluster-namespaces/spec.md): Kubernetes namespace resources for deployed applications. Consolidation candidate for a later GitOps delivery cleanup.
+- [gitops-delivery](gitops-delivery/spec.md): GitOps bootstrap, namespace, and ArgoCD Application delivery resources for deployed apps.
 - [gitops-observability-stack](gitops-observability-stack/spec.md): GitOps-managed Kubernetes observability stack and telemetry extension boundaries.

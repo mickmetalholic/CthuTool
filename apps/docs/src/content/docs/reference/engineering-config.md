@@ -20,7 +20,7 @@ CI runs lint, typecheck, and test for pull requests and pushes to `main`.
 
 ## Workspace Boundary
 
-The root `pnpm-workspace.yaml` includes root package globs for `apps/*` and `packages/*`. It intentionally does not include `scratches/collection-hub`, which is a nested experimental workspace with its own commands.
+The root `pnpm-workspace.yaml` includes root package globs for `apps/*` and `packages/*`.
 
 ## Turbo Outputs
 

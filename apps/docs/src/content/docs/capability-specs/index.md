@@ -12,16 +12,13 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 <!-- openspec-index:start -->
 - `apps-backend-agent-command-gateway`
 - `apps-backend-agent-registry`
-- `apps-backend-agent-state`
-- `apps-backend-browser-agent-capture`
 - `apps-backend-browser-auth`
-- `apps-backend-browser-automation`
 - `apps-backend-browser-content`
 - `apps-backend-browser-public-api`
+- `apps-backend-browser-service`
 - `apps-backend-desktop-browser-runtime`
 - `apps-backend-douban-movie-info`
 - `apps-backend-image-ci`
-- `apps-backend-image-delivery`
 - `apps-backend-observability`
 - `apps-backend-sites-config`
 - `apps-cli-agent-contract`
@@ -52,26 +49,17 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 - `codex-plugins-cthu-codex-japanese-vocabulary-skill`
 - `codex-plugins-cthu-codex-language-coach`
 
-## Collection Hub
-
-- `collection-hub-dashboard`
-- `collection-hub-import-api`
-- `collection-hub-import-extension`
-- `collection-hub-workspace`
-
 ## GitOps
 
-- `gitops-argo-applications`
-- `gitops-bootstrap`
-- `gitops-cluster-namespaces`
+- `gitops-delivery`
 - `gitops-observability-stack`
 
 ## Packages
 
-- `packages-agent-protocol-observability`
-- `packages-app-shell-observability`
+- `packages-agent-protocol`
 - `packages-app-shell-runtime`
 - `packages-browser-client-sdk`
+- `packages-browser-runtime-protocol`
 - `packages-config-browser-sites`
 - `packages-config-observability`
 - `packages-ui-shared-components`

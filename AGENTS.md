@@ -6,8 +6,7 @@
 ## OpenSpec Naming
 
 - Name `openspec/specs/<capability>` directories with a monorepo area prefix so ownership is visible from the directory name.
-- Use prefixes such as `apps-cli-*`, `packages-<package>-*`, or `scratches-collection-hub-*` instead of generic names when creating or syncing main specs.
-- Keep existing clear area prefixes, such as `collection-hub-*`, unless a broader rename is explicitly requested.
+- Use prefixes such as `apps-cli-*`, `apps-backend-*`, `apps-desktop-*`, `apps-web-*`, or `packages-<package>-*` instead of generic names when creating or syncing main specs.
 
 ## Worktree Policy
 
@@ -16,7 +15,3 @@
 - Keep each worktree scoped to one task or one OpenSpec change.
 - Do not archive, sync, or commit neighboring OpenSpec changes unless explicitly requested.
 - Verify the current directory and branch before running tests or committing.
-
-## Collection Hub
-
-- For work under `scratches/collection-hub`, read `scratches/collection-hub/AGENTS.md`.

@@ -99,8 +99,8 @@ chc --help</code></pre>
       </li>
       <li>
         <span>Choose a module</span>
-        Move into browser automation, Codex plugin assets, Collection Hub, or
-        the package-specific references.
+        Move into browser automation, Codex plugin assets, or the
+        package-specific references.
       </li>
     </ol>
   </section>

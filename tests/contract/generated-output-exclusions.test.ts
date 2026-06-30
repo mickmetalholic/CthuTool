@@ -68,11 +68,7 @@ describe("generated output validation exclusions", () => {
     const wsRaw = readFileSync(join(root, "pnpm-workspace.yaml"), "utf8");
     const ws = parseYaml(wsRaw) as { packages?: string[] };
 
-    expect(ws.packages).toEqual(
-      expect.arrayContaining(["apps/*", "packages/*"]),
-    );
-    expect(ws.packages ?? []).not.toContain("scratches/collection-hub");
-    expect(ws.packages ?? []).not.toContain("scratches/collection-hub/*");
+    expect(ws.packages).toEqual(["apps/*", "packages/*"]);
   });
 
   it("excludes generated outputs from Biome validation inputs", () => {

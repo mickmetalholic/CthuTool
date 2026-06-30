@@ -12,10 +12,10 @@ The root workspace SHALL provide a lint command that validates all root-managed 
 - **THEN** the command exits successfully for the root-managed workspace
 - **AND** supported package syntax such as Tailwind CSS directives does not cause parser failures
 
-#### Scenario: Experimental workspace is not linted by root command
+#### Scenario: Root-managed workspace is linted by root command
 - **WHEN** the root lint command is inspected
 - **THEN** it targets the root-managed workspace under `apps/*` and `packages/*`
-- **AND** it does not require `scratches/collection-hub` files to satisfy the root lint gate
+- **AND** it does not depend on deleted scratch workspace paths
 
 ### Requirement: CI typecheck gate
 The primary CI check workflow SHALL run the root typecheck command as a required quality gate.
@@ -349,7 +349,7 @@ Root-managed validation SHALL exclude generated output directories from source v
 #### Scenario: Generated-output policy preserves workspace boundary
 - **WHEN** root engineering contract tests inspect generated-output exclusions
 - **THEN** the policy applies to root-managed packages under `apps/*` and `packages/*`
-- **AND** it does not require `scratches/collection-hub` to follow root validation orchestration
+- **AND** it does not rely on deleted scratch workspace paths
 
 ### Requirement: Test layer scripts are standardized
 Root-managed packages SHALL use a consistent test layer script vocabulary when they expose narrower test commands in addition to the package `test` script.
@@ -423,7 +423,6 @@ Each root workspace package SHALL expose the standard scripts needed by root orc
 #### Scenario: Root commands remain canonical
 - **WHEN** a developer verifies the root workspace after dependency installation
 - **THEN** root commands for lint, typecheck, build, tests, and coverage orchestrate the root workspace without requiring package-specific command knowledge
-- **AND** root commands preserve the explicit boundary that excludes `scratches/collection-hub`
 - **AND** optional package test layer scripts do not replace the canonical root `test` command
 
 #### Scenario: Package commands remain usable outside root orchestration
@@ -432,16 +431,16 @@ Each root workspace package SHALL expose the standard scripts needed by root orc
 - **AND** root orchestration optimizations do not silently remove the package's local development workflow
 
 ### Requirement: Root workspace boundary is explicit
-The root workspace configuration and contract checks SHALL make the boundary between root-managed packages and experimental nested workspaces explicit.
+The root workspace configuration and contract checks SHALL make the boundary of root-managed packages explicit.
 
 #### Scenario: Root workspace package globs stay focused
 - **WHEN** `pnpm-workspace.yaml` is inspected at the repository root
 - **THEN** it includes root package globs for `apps/*` and `packages/*`
-- **AND** it does not include `scratches/collection-hub`
+- **AND** it does not include deleted scratch workspace paths
 
 #### Scenario: Boundary regressions are caught
 - **WHEN** root engineering contract tests run
-- **THEN** they verify that root workspace orchestration does not accidentally absorb `scratches/collection-hub`
+- **THEN** they verify that root workspace orchestration is limited to root-managed `apps/*` and `packages/*` packages
 
 ### Requirement: OpenSpec project guidance is configured
 The repository SHALL configure OpenSpec project context and artifact rules so
@@ -518,7 +517,6 @@ Root package validation SHALL use Turborepo task orchestration for workspace pac
 - **WHEN** root validation commands for lint, typecheck, test, coverage, or build are inspected
 - **THEN** package-level workspace execution is delegated to Turborepo tasks
 - **AND** the commands preserve the explicit root workspace boundary for `apps/*` and `packages/*`
-- **AND** the commands do not require `scratches/collection-hub` packages to participate in root CI
 
 #### Scenario: Turbo dependency graph is used for package builds
 - **WHEN** root build validation runs in CI
