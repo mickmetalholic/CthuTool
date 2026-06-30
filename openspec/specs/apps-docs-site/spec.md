@@ -64,10 +64,12 @@ The docs site SHALL organize its primary documentation around user and operator 
 
 #### Scenario: Reader starts from the docs home page
 - **WHEN** a reader opens the docs site home page
-- **THEN** the page presents entry points for homelab deployment, client installation, module usage, operations, architecture, and reference material
+- **THEN** the page presents a modern, responsive entry experience with a first-viewport hero, primary calls to action, and links for homelab deployment, client installation, module usage, operations, architecture, and reference material
+- **AND** the first viewport includes a preview of the shortest documented deployment or CLI verification path
+- **AND** the page provides visible continuation into the next documentation section on desktop and mobile viewports
 
 #### Scenario: Reader uses the sidebar navigation
-- **WHEN** a reader inspects the primary docs navigation
+- **WHEN** a reader inspects the primary docs navigation outside the home page landing experience
 - **THEN** the navigation includes sections for Start, Homelab Deployment, Client Installation, Modules, Operations, Architecture, and Reference
 
 ### Requirement: Homelab deployment documentation
@@ -198,4 +200,3 @@ The docs site SHALL document CLI installer mode selection for user and developme
 - **WHEN** a reader reviews CLI installation docs
 - **THEN** the documentation explains that raw/stdin installer usage selects remote mode and checkout script execution selects local mode by default
 - **AND** it documents `CHC_INSTALL_MODE=remote` as the way to restore the global command to the managed checkout after local development
-

@@ -3,25 +3,115 @@ title: CthuTool Docs
 description: Start here for CthuTool homelab deployment, client installation, module usage, and architecture documentation.
 ---
 
-CthuTool is a homelab-oriented toolkit with server-side services, client-side desktop and CLI tools, browser automation support, and Codex-facing assets.
+<div class="cthu-home">
+  <section class="cthu-hero" aria-labelledby="cthu-home-title">
+    <div class="cthu-hero-copy">
+      <p class="cthu-eyebrow">Homelab toolkit documentation</p>
+      <h1 id="cthu-home-title">CthuTool Docs</h1>
+      <p class="cthu-lede">
+        Ship a personal automation stack from one clear map. These docs cover
+        homelab services, desktop clients, the CLI, browser automation, and
+        Codex-facing assets.
+      </p>
+      <div class="cthu-actions" aria-label="Primary documentation links">
+        <a class="cthu-button cthu-button-primary" href="/quick-start/">Get started</a>
+        <a class="cthu-button cthu-button-secondary" href="/what-runs-where/">View topology</a>
+      </div>
+    </div>
+    <div class="cthu-command-panel" aria-label="Quick start command preview">
+      <div class="cthu-window-bar" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <pre><code>kubectl apply -f gitops/namespaces/
+kubectl apply -f gitops/apps/ --recursive
 
-This site is the primary user and operator documentation surface. Package READMEs remain development references, and OpenSpec remains the authoritative requirements source.
+curl http://&lt;homelab-backend-url&gt;/health
 
-## Start Here
+curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash
+chc --help</code></pre>
+    </div>
+  </section>
 
-- [Quick Start](/quick-start/) gives the shortest path through install, deployment, and verification.
-- [What Runs Where](/what-runs-where/) explains the homelab machine, client computers, and shared boundaries.
-- [Homelab Deployment](/deployment/) covers backend and web service setup.
-- [Client Installation](/client/) covers the desktop app and `chc` CLI.
-- [Modules](/modules/) describes the supported product areas and their source boundaries.
-- [Architecture](/architecture/) explains implementation structure and links to authoritative OpenSpec specs.
+  <section class="cthu-link-grid" aria-label="Start paths">
+    <a class="cthu-card cthu-card-featured" href="/quick-start/">
+      <span class="cthu-card-kicker">01</span>
+      <strong>Quick Start</strong>
+      <span>Deploy services, install the CLI, and verify the first working path.</span>
+    </a>
+    <a class="cthu-card" href="/deployment/">
+      <span class="cthu-card-kicker">02</span>
+      <strong>Homelab Deployment</strong>
+      <span>Bootstrap Kubernetes, ArgoCD, backend resources, and rollout checks.</span>
+    </a>
+    <a class="cthu-card" href="/client/">
+      <span class="cthu-card-kicker">03</span>
+      <strong>Client Installation</strong>
+      <span>Set up CthuDesktop and the <code>chc</code> command-line tool on user machines.</span>
+    </a>
+  </section>
 
-## Local Development
+  <section class="cthu-section" aria-labelledby="cthu-platform-title">
+    <div class="cthu-section-heading">
+      <p class="cthu-eyebrow">Platform map</p>
+      <h2 id="cthu-platform-title">Know which surface owns each job.</h2>
+      <p>
+        The docs are organized by operating context first, then by module, so
+        setup and debugging follow the same boundaries as the runtime.
+      </p>
+    </div>
+    <div class="cthu-path-grid">
+      <a href="/modules/" class="cthu-path">
+        <span>Modules</span>
+        <strong>Browse the product areas and source boundaries.</strong>
+      </a>
+      <a href="/architecture/" class="cthu-path">
+        <span>Architecture</span>
+        <strong>Trace backend, desktop, CLI, browser auth, and package contracts.</strong>
+      </a>
+      <a href="/operations/" class="cthu-path">
+        <span>Operations</span>
+        <strong>Keep observability, GitOps rollouts, data, and logs understandable.</strong>
+      </a>
+      <a href="/reference/" class="cthu-path">
+        <span>Reference</span>
+        <strong>Jump into commands, configuration, APIs, repository maps, and specs.</strong>
+      </a>
+    </div>
+  </section>
 
-For docs-site development from a repository checkout:
+  <section class="cthu-workflow" aria-labelledby="cthu-workflow-title">
+    <div>
+      <p class="cthu-eyebrow">Recommended flow</p>
+      <h2 id="cthu-workflow-title">Read in the order you operate.</h2>
+    </div>
+    <ol>
+      <li>
+        <span>Plan the topology</span>
+        Start with where the cluster, client computers, browser sessions, and
+        shared APIs live.
+      </li>
+      <li>
+        <span>Install the surfaces</span>
+        Bring up backend services first, then connect desktop clients and the
+        CLI from user machines.
+      </li>
+      <li>
+        <span>Choose a module</span>
+        Move into browser automation, Codex plugin assets, Collection Hub, or
+        the package-specific references.
+      </li>
+    </ol>
+  </section>
 
-```bash
-pnpm --filter @cthutool/docs dev
+  <section class="cthu-local-dev" aria-labelledby="cthu-local-dev-title">
+    <div>
+      <p class="cthu-eyebrow">Docs development</p>
+      <h2 id="cthu-local-dev-title">Run the documentation site locally.</h2>
+    </div>
+    <pre><code>pnpm --filter @cthutool/docs dev
 pnpm --filter @cthutool/docs build
-pnpm --filter @cthutool/docs validate
-```
+pnpm --filter @cthutool/docs validate</code></pre>
+  </section>
+</div>
