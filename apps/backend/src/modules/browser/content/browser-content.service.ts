@@ -2,18 +2,18 @@ import { Injectable, Optional } from '@nestjs/common';
 // Nest DI needs runtime class reference; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BackendObservabilityService } from '../../../observability';
-import { BrowserAutomationError } from '../../browser-automation/browser-automation.errors';
+// biome-ignore lint/style/useImportType: constructor injection token
+import { SitesConfigService } from '../../sites-config/sites-config.service';
+// biome-ignore lint/style/useImportType: constructor injection token
+import { DesktopBrowserRuntimeService } from '../desktop-runtime/desktop-browser-runtime.service';
+import { BrowserWorkflowError } from '../shared/browser.errors';
 import type {
   BrowserAuthUsage,
   BrowserCaptureSnapshot,
   BrowserContentRequest,
   BrowserContentResult,
   BrowserSiteConfig,
-} from '../../browser-automation/browser-automation.types';
-// biome-ignore lint/style/useImportType: constructor injection token
-import { SitesConfigService } from '../../sites-config/sites-config.service';
-// biome-ignore lint/style/useImportType: constructor injection token
-import { DesktopBrowserRuntimeService } from '../desktop-runtime/desktop-browser-runtime.service';
+} from '../shared/browser.types';
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserBlockDetector } from './browser-block-detector';
 // biome-ignore lint/style/useImportType: constructor injection token
@@ -48,7 +48,7 @@ export class BrowserContentService {
         level: 'warn',
         details: {
           errorCode:
-            error instanceof BrowserAutomationError
+            error instanceof BrowserWorkflowError
               ? error.code
               : 'ORIGIN_REJECTED',
           siteId: site?.siteId ?? request.siteId,
@@ -144,7 +144,7 @@ export class BrowserContentService {
     }
 
     if ('challenge' in result) {
-      throw new BrowserAutomationError(
+      throw new BrowserWorkflowError(
         'AUTH_PROFILE_REQUIRED',
         `${result.challenge.reason === 'profile_expired' ? 'Browser profile expired' : 'Browser login required'} for site "${result.challenge.siteId}"`,
         {
@@ -157,7 +157,7 @@ export class BrowserContentService {
       );
     }
 
-    throw new BrowserAutomationError(
+    throw new BrowserWorkflowError(
       result.code === 'AGENT_NOT_AVAILABLE'
         ? 'BROWSER_UNAVAILABLE'
         : 'BROWSER_AGENT_COMMAND_FAILED',
@@ -182,7 +182,7 @@ export class BrowserContentService {
           url: request.url,
         },
       });
-      throw new BrowserAutomationError(
+      throw new BrowserWorkflowError(
         'SITE_NOT_CONFIGURED',
         request.siteId
           ? `Browser site "${request.siteId}" is not configured`
@@ -269,7 +269,7 @@ export function assertAllowedOrigin(
 ): void {
   const origin = new URL(url).origin;
   if (!allowedOrigins.includes(origin)) {
-    throw new BrowserAutomationError(
+    throw new BrowserWorkflowError(
       'ORIGIN_NOT_ALLOWED',
       `URL origin "${origin}" is not allowed`,
       { allowedOrigins },

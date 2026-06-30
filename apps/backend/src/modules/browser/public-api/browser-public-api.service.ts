@@ -5,7 +5,7 @@ import {
   BROWSER_RESOURCE_TYPES,
   type BrowserAction,
   type BrowserActionResult,
-} from '@cthutool/agent-protocol';
+} from '@cthutool/browser-runtime-protocol';
 import {
   Injectable,
   type OnModuleDestroy,

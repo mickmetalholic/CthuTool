@@ -1,3 +1,7 @@
+import {
+  createJsonRpcRequest,
+  createJsonRpcSuccessResponse,
+} from '@cthutool/agent-protocol';
 import type { AgentRegistryLogger } from '../registry/agent-registry.logger';
 import { AgentRegistryService } from '../registry/agent-registry.service';
 import { AgentWebSocketServer } from './agent-websocket.server';
@@ -53,39 +57,55 @@ describe('AgentWebSocketServer', () => {
     );
   });
 
+  it('rejects unknown lifecycle messages without registering agent state', () => {
+    const { registry, server, socket, state } = createHarness();
+
+    handleMessage(server, socket, state, {
+      type: 'agent.browserState',
+      payload: {
+        agentId: 'agent-1',
+        profiles: [],
+      },
+    });
+
+    expect(socket.closed).toEqual(
+      expect.objectContaining({ code: 1008, reason: 'invalid agent message' }),
+    );
+    expect(registry.listOnlineAgents()).toEqual([]);
+  });
+
   it('routes command response for a pending command', () => {
     const { server, socket, state } = createHarness();
     handleMessage(server, socket, state, helloMessage());
 
-    const sendPromise = server.sendCommand('agent-1', {
-      commandId: 'cmd-1',
-      message: {
-        type: 'browser.command',
-        payload: {
+    const sendPromise = server.sendCommand(
+      'agent-1',
+      createJsonRpcRequest({
+        id: 'cmd-1',
+        method: 'browser.capturePage',
+        params: {
           authPolicy: 'anonymous',
-          command: 'browser.capturePage',
-          commandId: 'cmd-1',
           siteId: 'test',
           url: 'https://example.com/',
         },
-      },
-    });
+      }),
+    );
 
-    handleMessage(server, socket, state, {
-      type: 'browser.result',
-      payload: {
-        command: 'browser.capturePage',
-        commandId: 'cmd-1',
+    handleMessage(
+      server,
+      socket,
+      state,
+      createJsonRpcSuccessResponse('cmd-1', {
         capturedAt: new Date().toISOString(),
         detection: { kind: 'ok' },
         finalUrl: 'https://example.com/',
         status: 200,
-      },
-    });
+      }),
+    );
 
     return expect(sendPromise).resolves.toMatchObject({
-      type: 'browser.result',
-      payload: expect.objectContaining({ commandId: 'cmd-1' }),
+      id: 'cmd-1',
+      result: expect.objectContaining({ status: 200 }),
     });
   });
 
@@ -93,16 +113,17 @@ describe('AgentWebSocketServer', () => {
     const { server, socket, state } = createHarness();
 
     handleMessage(server, socket, state, helloMessage());
-    handleMessage(server, socket, state, {
-      type: 'browser.result',
-      payload: {
-        commandId: 'unknown-cmd',
+    handleMessage(
+      server,
+      socket,
+      state,
+      createJsonRpcSuccessResponse('unknown-cmd', {
         capturedAt: new Date().toISOString(),
         detection: { kind: 'ok' },
         finalUrl: 'https://example.com/',
         status: 200,
-      },
-    });
+      }),
+    );
 
     expect(socket.closed).toEqual(expect.objectContaining({ code: 1008 }));
   });

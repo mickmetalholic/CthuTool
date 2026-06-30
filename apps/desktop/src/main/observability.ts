@@ -1,8 +1,8 @@
+import type { AgentObservabilityMetadata } from '@cthutool/agent-protocol';
 import type {
-  AgentObservabilityMetadata,
-  BrowserCommandName,
   BrowserDetection,
-} from '@cthutool/agent-protocol';
+  BrowserRuntimeMethod,
+} from '@cthutool/browser-runtime-protocol';
 
 export type DesktopObservabilityLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -30,14 +30,19 @@ export type DesktopObservabilityDetails = {
   readonly agentId?: string;
   readonly backendUrl?: string;
   readonly browserRuntimeMessage?: string;
-  readonly command?: BrowserCommandName;
+  readonly command?: BrowserRuntimeMethod;
   readonly commandId?: string;
   readonly connectionStatus?: string;
   readonly detectionKind?: BrowserDetection['kind'];
   readonly durationMs?: number;
   readonly lastError?: string;
   readonly operation?: string;
-  readonly outcome?: 'success' | 'error' | 'blocked' | 'unavailable';
+  readonly outcome?:
+    | 'success'
+    | 'error'
+    | 'blocked'
+    | 'unavailable'
+    | 'invalid';
   readonly profileName?: string;
   readonly reasonCode?: string;
   readonly requestId?: string;
@@ -138,7 +143,10 @@ export function observabilityDetailsFromMetadata(
     return {};
   }
   return {
-    commandId: observability.commandId,
+    commandId:
+      observability.commandId === undefined
+        ? undefined
+        : String(observability.commandId),
     operation: observability.operation,
     requestId: observability.requestId,
     traceId: observability.traceId,

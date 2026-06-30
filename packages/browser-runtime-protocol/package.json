@@ -1,0 +1,25 @@
+{
+  "name": "@cthutool/browser-runtime-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build:deps": "pnpm --filter @cthutool/agent-protocol build",
+    "build": "pnpm run build:deps && tsc -p tsconfig.json",
+    "test": "pnpm run build:deps && vitest run",
+    "test:cov": "pnpm run build:deps && vitest run --coverage",
+    "typecheck": "pnpm run build:deps && tsc -p tsconfig.json --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@cthutool/agent-protocol": "workspace:*",
+    "valibot": "^1.0.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
+    "@types/node": "^22.13.10",
+    "typescript": "5.9.2",
+    "vitest": "^2.1.9"
+  }
+}

@@ -2,7 +2,6 @@
 
 ## Purpose
 Define the CthuDesktop user interface contract for looking up Douban movie information by subject id or subject URL.
-
 ## Requirements
 ### Requirement: Desktop Douban movie lookup panel
 CthuDesktop SHALL provide a simple Douban movie lookup panel for fetching movie information by subject id.
@@ -35,7 +34,7 @@ CthuDesktop SHALL display Douban movie lookup results below the lookup form.
 - **THEN** the desktop UI replaces the previous result with the latest movie information
 
 ### Requirement: Desktop lookup states
-CthuDesktop SHALL provide clear loading and error states for Douban movie lookup.
+CthuDesktop SHALL provide clear loading, error, and browser interaction challenge states for Douban movie lookup.
 
 #### Scenario: Loading state is shown
 - **WHEN** a movie lookup request is in progress
@@ -46,8 +45,12 @@ CthuDesktop SHALL provide clear loading and error states for Douban movie lookup
 - **THEN** the desktop UI shows an input error without sending a backend request
 
 #### Scenario: Backend failure is shown
-- **WHEN** the backend returns auth-required, captcha-required, rate-limited, blocked, not-found, browser-unavailable, or parse-failed status
+- **WHEN** the backend returns captcha-required, rate-limited, blocked, not-found, browser-unavailable, or parse-failed status
 - **THEN** the desktop UI shows a readable error message below the form and preserves the input for correction or retry
+
+#### Scenario: Browser challenge is shown
+- **WHEN** the backend returns an operation-scoped browser runtime challenge for missing login, expired login, or verification required
+- **THEN** the desktop UI shows the challenge below the form and offers the relevant browser runtime action without reading task-center pending auth state
 
 #### Scenario: Raw browser data is not displayed
 - **WHEN** the desktop UI renders lookup status or results

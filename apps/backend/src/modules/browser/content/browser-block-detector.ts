@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   BrowserCaptureSnapshot,
   BrowserDetection,
-} from '../../browser-automation/browser-automation.types';
+} from '../shared/browser.types';
 
 @Injectable()
 export class BrowserBlockDetector {

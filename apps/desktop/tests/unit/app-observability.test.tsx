@@ -69,7 +69,6 @@ describe('desktop renderer observability', () => {
       }),
       getConfig: async () => config,
       getConnectionState: async () => connection,
-      getLocalPendingAuthTasks: async () => [],
       onConnectionStateChange: () => () => undefined,
       openBrowserLogin: async () => undefined,
       saveConfig: async () => config,
@@ -77,7 +76,6 @@ describe('desktop renderer observability', () => {
       windowAction: async () => undefined,
     };
     const emptyBrowserStatus: BrowserStatus = {
-      pendingAuthTasks: [],
       profiles: [],
       sites: [],
     };

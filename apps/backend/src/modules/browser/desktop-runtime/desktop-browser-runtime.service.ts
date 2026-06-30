@@ -2,9 +2,16 @@ import { randomUUID } from 'node:crypto';
 import {
   BROWSER_CAPABILITY,
   type BrowserAction,
-  type BrowserCommandPayload,
-  createBrowserCommandMessage,
-} from '@cthutool/agent-protocol';
+  type BrowserChallenge,
+  type BrowserResourceType,
+  type BrowserRuntimeErrorData,
+  type BrowserRuntimeMethod,
+  type BrowserRuntimeParamsByMethod,
+  type BrowserRuntimeResponse,
+  type BrowserRuntimeResultByMethod,
+  createBrowserRuntimeRequest,
+  validateBrowserRuntimeResponse,
+} from '@cthutool/browser-runtime-protocol';
 import { Injectable, Optional } from '@nestjs/common';
 // Nest DI needs runtime class reference; `import type` strips metadata.
 // biome-ignore lint/style/useImportType: constructor injection token
@@ -26,6 +33,8 @@ import type {
   DesktopBrowserRuntimeResult,
   DesktopBrowserRuntimeStatus,
   DesktopBrowserSessionMetadata,
+  InteractionChallenge,
+  InteractionChallengeReason,
 } from './desktop-browser-runtime.types';
 
 @Injectable()
@@ -50,113 +59,49 @@ export class DesktopBrowserRuntimeService {
     readonly loginUrl?: string;
     readonly verifyUrl?: string;
   }): Promise<DesktopBrowserRuntimeResult<DesktopBrowserCaptureResult>> {
-    const startedAt = Date.now();
-    const agent =
-      this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
-    if (!agent) {
-      this.observability?.record({
-        event: 'desktop_browser_runtime.unavailable',
-        level: 'warn',
-        details: {
-          code: 'AGENT_NOT_AVAILABLE',
-          operation: 'browser.capturePage',
-          url: options.url,
-        },
-      });
-      return {
-        ok: false,
-        error: 'No online desktop agent with browser capability',
-        code: 'AGENT_NOT_AVAILABLE',
-      };
+    const response = await this.sendBrowserRequest('browser.capturePage', {
+      authPolicy: options.authPolicy ?? 'anonymous',
+      blockResources: options.blockResources
+        ? ([...options.blockResources] as BrowserResourceType[])
+        : undefined,
+      includeHtml: options.includeHtml,
+      includeScreenshot: options.includeScreenshot,
+      includeText: options.includeText,
+      loginUrl: options.loginUrl,
+      profileName: options.profileName,
+      siteId: options.siteId ?? 'default',
+      timeoutMs: options.timeoutMs,
+      url: options.url,
+      verifyUrl: options.verifyUrl,
+      waitUntil: options.waitUntil,
+    });
+    if (!response.ok) {
+      return response;
     }
 
-    try {
-      const commandId = randomUUID();
-      const response = await this.commandGateway.sendCommand(
-        agent.agentId,
-        createBrowserCommand({
-          authPolicy: options.authPolicy ?? 'anonymous',
-          blockResources: options.blockResources
-            ? ([
-                ...options.blockResources,
-              ] as BrowserCommandPayload['blockResources'])
-            : undefined,
-          command: 'browser.capturePage',
-          commandId,
-          includeHtml: options.includeHtml,
-          includeScreenshot: options.includeScreenshot,
-          includeText: options.includeText,
-          loginUrl: options.loginUrl,
-          profileName: options.profileName,
-          siteId: options.siteId ?? 'default',
-          timeoutMs: options.timeoutMs,
-          url: options.url,
-          verifyUrl: options.verifyUrl,
-          waitUntil: options.waitUntil,
-        }),
-        options.timeoutMs,
-      );
-
-      if (response.type === 'browser.error') {
-        this.recordRuntimeCommand('desktop_browser_runtime.command_failed', {
-          agentId: agent.agentId,
-          commandId,
-          commandType: 'browser.capturePage',
-          durationMs: Date.now() - startedAt,
-          errorCode: response.payload.code,
-          siteId: options.siteId,
-        });
-        return this.toChallengeOrError(response, {
-          siteId: options.siteId ?? 'default',
-          profileName: options.profileName,
-          loginUrl: options.loginUrl,
-          verifyUrl: options.verifyUrl,
-        });
-      }
-
-      this.recordRuntimeCommand('desktop_browser_runtime.command_completed', {
-        agentId: agent.agentId,
-        commandId,
-        commandType: 'browser.capturePage',
-        detectionKind: response.payload.detection?.kind,
-        durationMs: Date.now() - startedAt,
-        siteId: options.siteId,
-        status: response.payload.status,
-      });
-      return {
-        ok: true,
-        value: {
-          capturedAt: response.payload.capturedAt,
-          detection: response.payload.detection ?? { kind: 'ok' },
-          finalUrl: response.payload.finalUrl ?? '',
-          html: response.payload.html,
-          screenshotBase64: response.payload.screenshotBase64,
-          status: response.payload.status,
-          text: response.payload.text,
-          title: response.payload.title,
-        },
-      };
-    } catch (error) {
-      this.recordRuntimeCommand('desktop_browser_runtime.command_failed', {
-        agentId: agent.agentId,
-        commandType: 'browser.capturePage',
-        durationMs: Date.now() - startedAt,
-        errorCode: 'AGENT_NOT_AVAILABLE',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Desktop browser runtime is not available',
-        siteId: options.siteId,
-      });
-      return {
-        ok: false,
-        error:
-          error instanceof AgentCommandGatewayError
-            ? error.message
-            : 'Desktop browser runtime is not available',
-        code: 'AGENT_NOT_AVAILABLE',
-      };
+    const parsed = this.parseResponse('browser.capturePage', response.value, {
+      siteId: options.siteId ?? 'default',
+      profileName: options.profileName,
+      loginUrl: options.loginUrl,
+      verifyUrl: options.verifyUrl,
+    });
+    if (!parsed.ok) {
+      return parsed;
     }
+
+    return {
+      ok: true,
+      value: {
+        capturedAt: parsed.value.capturedAt,
+        detection: parsed.value.detection ?? { kind: 'ok' },
+        finalUrl: parsed.value.finalUrl ?? '',
+        html: parsed.value.html,
+        screenshotBase64: parsed.value.screenshotBase64,
+        status: parsed.value.status,
+        text: parsed.value.text,
+        title: parsed.value.title,
+      },
+    };
   }
 
   async createSession(options: {
@@ -177,36 +122,35 @@ export class DesktopBrowserRuntimeService {
         code: 'AGENT_NOT_AVAILABLE',
       };
     }
-
-    const result = await this.sendSessionCommand<DesktopBrowserSessionMetadata>(
+    const response = await this.sendBrowserRequestToAgent(
       agent.agentId,
+      'browser.createSession',
       {
         authPolicy: options.authPolicy ?? 'anonymous',
         blockResources: options.blockResources
-          ? ([
-              ...options.blockResources,
-            ] as BrowserCommandPayload['blockResources'])
+          ? ([...options.blockResources] as BrowserResourceType[])
           : undefined,
-        command: 'browser.createSession',
-        commandId: randomUUID(),
         expiresAt: options.expiresAt,
         profileName: options.profileName,
         sessionId: options.sessionId,
         siteId: options.siteId,
         timeoutMs: options.timeoutMs,
       },
-      {
-        siteId: options.siteId,
-        profileName: options.profileName,
-      },
     );
-    if (!result.ok) {
-      return result;
+    if (!response.ok) {
+      return response;
+    }
+    const parsed = this.parseResponse('browser.createSession', response.value, {
+      siteId: options.siteId,
+      profileName: options.profileName,
+    });
+    if (!parsed.ok) {
+      return parsed;
     }
     return {
       ok: true,
       value: {
-        ...result.value,
+        ...parsed.value.session,
         agentId: agent.agentId,
       },
     };
@@ -221,23 +165,36 @@ export class DesktopBrowserRuntimeService {
     readonly actions: readonly BrowserAction[];
     readonly timeoutMs?: number;
   }): Promise<DesktopBrowserRuntimeResult<DesktopBrowserRunActionsResult>> {
-    return this.sendSessionCommand<DesktopBrowserRunActionsResult>(
+    const response = await this.sendBrowserRequestToAgent(
       options.agentId,
+      'browser.runActions',
       {
         actions: [...options.actions],
         authPolicy: options.authPolicy ?? 'anonymous',
-        command: 'browser.runActions',
-        commandId: randomUUID(),
         profileName: options.profileName,
         sessionId: options.sessionId,
         siteId: options.siteId,
         timeoutMs: options.timeoutMs,
       },
-      {
-        siteId: options.siteId,
-        profileName: options.profileName,
-      },
     );
+    if (!response.ok) {
+      return response;
+    }
+    const parsed = this.parseResponse('browser.runActions', response.value, {
+      siteId: options.siteId,
+      profileName: options.profileName,
+    });
+    if (!parsed.ok) {
+      return parsed;
+    }
+    return {
+      ok: true,
+      value: {
+        actionResults: parsed.value.actionResults,
+        capturedAt: parsed.value.capturedAt,
+        sessionId: parsed.value.sessionId,
+      },
+    };
   }
 
   async closeSession(options: {
@@ -248,30 +205,30 @@ export class DesktopBrowserRuntimeService {
     readonly authPolicy?: 'anonymous' | 'required';
     readonly timeoutMs?: number;
   }): Promise<DesktopBrowserRuntimeResult<{ readonly sessionId: string }>> {
-    const result = await this.sendSessionCommand<{
-      readonly sessionId: string;
-    }>(
+    const response = await this.sendBrowserRequestToAgent(
       options.agentId,
+      'browser.closeSession',
       {
         authPolicy: options.authPolicy ?? 'anonymous',
-        command: 'browser.closeSession',
-        commandId: randomUUID(),
         profileName: options.profileName,
         sessionId: options.sessionId,
         siteId: options.siteId,
         timeoutMs: options.timeoutMs,
       },
-      {
-        siteId: options.siteId,
-        profileName: options.profileName,
-      },
     );
-    if (!result.ok) {
-      return result;
+    if (!response.ok) {
+      return response;
+    }
+    const parsed = this.parseResponse('browser.closeSession', response.value, {
+      siteId: options.siteId,
+      profileName: options.profileName,
+    });
+    if (!parsed.ok) {
+      return parsed;
     }
     return {
       ok: true,
-      value: { sessionId: result.value.sessionId },
+      value: { sessionId: parsed.value.sessionId },
     };
   }
 
@@ -281,19 +238,13 @@ export class DesktopBrowserRuntimeService {
     readonly loginUrl?: string;
     readonly timeoutMs?: number;
   }): Promise<DesktopBrowserRuntimeResult<DesktopBrowserProfileStatus>> {
-    return this.sendAuthCommand(
-      {
-        commandId: randomUUID(),
-        command: 'browser.openLogin',
-        authPolicy: 'required',
-        siteId: options.siteId,
-        profileName: options.profileName,
-        loginUrl: options.loginUrl,
-        url: options.loginUrl ?? '',
-        timeoutMs: options.timeoutMs,
-      },
-      options,
-    );
+    return this.sendProfileOperation('browser.openLogin', {
+      authPolicy: 'required',
+      loginUrl: options.loginUrl,
+      profileName: options.profileName,
+      siteId: options.siteId,
+      timeoutMs: options.timeoutMs,
+    });
   }
 
   async verifyProfile(options: {
@@ -302,19 +253,13 @@ export class DesktopBrowserRuntimeService {
     readonly verifyUrl?: string;
     readonly timeoutMs?: number;
   }): Promise<DesktopBrowserRuntimeResult<DesktopBrowserProfileStatus>> {
-    return this.sendAuthCommand(
-      {
-        commandId: randomUUID(),
-        command: 'browser.verifyProfile',
-        authPolicy: 'required',
-        siteId: options.siteId,
-        profileName: options.profileName,
-        verifyUrl: options.verifyUrl,
-        url: options.verifyUrl ?? '',
-        timeoutMs: options.timeoutMs,
-      },
-      options,
-    );
+    return this.sendProfileOperation('browser.verifyProfile', {
+      authPolicy: 'required',
+      profileName: options.profileName,
+      siteId: options.siteId,
+      timeoutMs: options.timeoutMs,
+      verifyUrl: options.verifyUrl,
+    });
   }
 
   async getStatus(): Promise<DesktopBrowserRuntimeStatus> {
@@ -344,16 +289,42 @@ export class DesktopBrowserRuntimeService {
     };
   }
 
-  private async sendAuthCommand(
-    commandPayload: BrowserCommandPayload & { readonly commandId?: string },
-    context: {
-      readonly siteId: string;
-      readonly profileName: string;
-      readonly loginUrl?: string;
-      readonly verifyUrl?: string;
-    },
+  private async sendProfileOperation<
+    TMethod extends 'browser.openLogin' | 'browser.verifyProfile',
+  >(
+    method: TMethod,
+    params: BrowserRuntimeParamsByMethod[TMethod],
   ): Promise<DesktopBrowserRuntimeResult<DesktopBrowserProfileStatus>> {
-    const startedAt = Date.now();
+    const response = await this.sendBrowserRequest(method, params);
+    if (!response.ok) {
+      return response;
+    }
+
+    const parsed = this.parseResponse(method, response.value, {
+      siteId: params.siteId,
+      profileName: params.profileName,
+      loginUrl: params.loginUrl,
+      verifyUrl: params.verifyUrl,
+    });
+    if (!parsed.ok) {
+      return parsed;
+    }
+
+    const profile = parsed.value.profile;
+    return {
+      ok: true,
+      value: {
+        profileName: profile?.profileName ?? params.profileName ?? 'default',
+        status: toDesktopProfileStatus(profile?.status),
+        updatedAt: profile?.updatedAt,
+      },
+    };
+  }
+
+  private async sendBrowserRequest<TMethod extends BrowserRuntimeMethod>(
+    method: TMethod,
+    params: BrowserRuntimeParamsByMethod[TMethod],
+  ): Promise<DesktopBrowserRuntimeResult<BrowserRuntimeResponse<TMethod>>> {
     const agent =
       this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
     if (!agent) {
@@ -362,8 +333,8 @@ export class DesktopBrowserRuntimeService {
         level: 'warn',
         details: {
           code: 'AGENT_NOT_AVAILABLE',
-          operation: commandPayload.command,
-          siteId: context.siteId,
+          operation: method,
+          siteId: params.siteId,
         },
       });
       return {
@@ -372,61 +343,65 @@ export class DesktopBrowserRuntimeService {
         code: 'AGENT_NOT_AVAILABLE',
       };
     }
+    return this.sendBrowserRequestToAgent(agent.agentId, method, params);
+  }
 
+  private async sendBrowserRequestToAgent<TMethod extends BrowserRuntimeMethod>(
+    agentId: string,
+    method: TMethod,
+    params: BrowserRuntimeParamsByMethod[TMethod],
+  ): Promise<DesktopBrowserRuntimeResult<BrowserRuntimeResponse<TMethod>>> {
+    const startedAt = Date.now();
     try {
-      const commandId = commandPayload.commandId ?? randomUUID();
-      const response = await this.commandGateway.sendCommand(
-        agent.agentId,
-        createBrowserCommand({
-          ...commandPayload,
-          commandId,
-        }),
-        commandPayload.timeoutMs,
-      );
-
-      if (response.type === 'browser.error') {
-        this.recordRuntimeCommand('desktop_browser_runtime.command_failed', {
-          agentId: agent.agentId,
-          commandId,
-          commandType: commandPayload.command,
-          durationMs: Date.now() - startedAt,
-          errorCode: response.payload.code,
-          siteId: context.siteId,
-        });
-        return this.toChallengeOrError(response, context);
-      }
-
-      const profile = response.payload.profile;
-      this.recordRuntimeCommand('desktop_browser_runtime.command_completed', {
-        agentId: agent.agentId,
-        commandId,
-        commandType: commandPayload.command,
-        detectionKind: response.payload.detection?.kind,
-        durationMs: Date.now() - startedAt,
-        siteId: context.siteId,
-        status: response.payload.status,
+      const commandId = randomUUID();
+      const observability = currentObservabilityMetadata({
+        commandId: String(commandId),
+        operation: method,
       });
+      const response = await this.commandGateway.sendCommand<
+        BrowserRuntimeResponse<TMethod>
+      >(
+        agentId,
+        {
+          ...createBrowserRuntimeRequest(commandId, method, params),
+          observability,
+        },
+        params.timeoutMs,
+      );
+      if ('error' in response) {
+        this.recordRuntimeCommand('desktop_browser_runtime.command_failed', {
+          agentId,
+          commandId,
+          commandType: method,
+          durationMs: Date.now() - startedAt,
+          errorCode: response.error.data?.code ?? response.error.code,
+          siteId: params.siteId,
+        });
+      } else {
+        this.recordRuntimeCommand('desktop_browser_runtime.command_completed', {
+          agentId,
+          commandId,
+          commandType: method,
+          durationMs: Date.now() - startedAt,
+          responseType: 'jsonrpc.result',
+          siteId: params.siteId,
+        });
+      }
       return {
         ok: true,
-        value: {
-          profileName: profile?.profileName ?? context.profileName,
-          status:
-            (profile?.status as DesktopBrowserProfileStatus['status']) ??
-            'available',
-          updatedAt: profile?.updatedAt,
-        },
+        value: response,
       };
     } catch (error) {
       this.recordRuntimeCommand('desktop_browser_runtime.command_failed', {
-        agentId: agent.agentId,
-        commandType: commandPayload.command,
+        agentId,
+        commandType: method,
         durationMs: Date.now() - startedAt,
         errorCode: 'AGENT_NOT_AVAILABLE',
         message:
           error instanceof Error
             ? error.message
             : 'Desktop browser runtime is not available',
-        siteId: context.siteId,
+        siteId: params.siteId,
       });
       return {
         ok: false,
@@ -439,101 +414,69 @@ export class DesktopBrowserRuntimeService {
     }
   }
 
-  private async sendSessionCommand<
-    TResult extends
-      | DesktopBrowserSessionMetadata
-      | DesktopBrowserRunActionsResult
-      | { readonly sessionId: string },
-  >(
-    agentId: string,
-    commandPayload: BrowserCommandPayload & { readonly commandId?: string },
+  private parseResponse<TMethod extends BrowserRuntimeMethod>(
+    method: TMethod,
+    response: BrowserRuntimeResponse<TMethod>,
     context: {
       readonly siteId: string;
       readonly profileName?: string;
       readonly loginUrl?: string;
       readonly verifyUrl?: string;
     },
-  ): Promise<DesktopBrowserRuntimeResult<TResult>> {
-    try {
-      const response = await this.commandGateway.sendCommand(
-        agentId,
-        createBrowserCommand({
-          ...commandPayload,
-          commandId: commandPayload.commandId ?? randomUUID(),
-        }),
-        commandPayload.timeoutMs,
-      );
-
-      if (response.type === 'browser.error') {
-        return this.toChallengeOrError(response, context);
-      }
-
-      return {
-        ok: true,
-        value: sessionResponseToRuntimeValue(response.payload) as TResult,
-      };
-    } catch (error) {
+  ): DesktopBrowserRuntimeResult<BrowserRuntimeResultByMethod[TMethod]> {
+    const parsed = validateBrowserRuntimeResponse(method, response);
+    if (!parsed.ok) {
       return {
         ok: false,
-        error:
-          error instanceof AgentCommandGatewayError
-            ? error.message
-            : 'Desktop browser runtime is not available',
-        code: 'AGENT_NOT_AVAILABLE',
+        error: parsed.message,
+        code: 'INVALID_BROWSER_RUNTIME_RESPONSE',
       };
     }
+    if ('error' in parsed.value) {
+      return this.toChallengeOrError(
+        parsed.value.error.data,
+        context,
+        parsed.value.error.message,
+      );
+    }
+    return {
+      ok: true,
+      value: parsed.value.result,
+    };
   }
 
   private toChallengeOrError(
-    response: {
-      readonly payload: {
-        readonly code?: string;
-        readonly message?: string;
-        readonly profileStatus?: string;
-      };
-    },
+    error: BrowserRuntimeErrorData | undefined,
     context: {
       readonly siteId: string;
       readonly profileName?: string;
       readonly loginUrl?: string;
       readonly verifyUrl?: string;
     },
+    message = 'Browser command failed',
   ): DesktopBrowserRuntimeResult<never> {
-    const code = response.payload.code;
-    const profileStatus = response.payload.profileStatus;
-
-    if (code === 'AUTH_PROFILE_REQUIRED' || profileStatus === 'missing') {
+    if (!error) {
       return {
         ok: false,
-        challenge: {
-          siteId: context.siteId,
-          profileName: context.profileName ?? 'default',
-          action: 'login',
-          reason: 'login_required',
-          loginUrl: context.loginUrl,
-          verifyUrl: context.verifyUrl,
-        },
+        error: message,
+        code: 'COMMAND_FAILED',
       };
     }
 
-    if (code === 'AUTH_PROFILE_EXPIRED' || profileStatus === 'expired') {
+    const challenge = error.challenge
+      ? toInteractionChallenge(error.challenge, context)
+      : fallbackChallenge(error, context);
+    if (challenge) {
       return {
         ok: false,
-        challenge: {
-          siteId: context.siteId,
-          profileName: context.profileName ?? 'default',
-          action: 'verify',
-          reason: 'profile_expired',
-          loginUrl: context.loginUrl,
-          verifyUrl: context.verifyUrl,
-        },
+        challenge,
       };
     }
 
     return {
       ok: false,
-      error: response.payload.message ?? 'Browser command failed',
-      code: code ?? 'COMMAND_FAILED',
+      error: message,
+      code: error.code,
     };
   }
 
@@ -549,46 +492,106 @@ export class DesktopBrowserRuntimeService {
   }
 }
 
-function createBrowserCommand(payload: BrowserCommandPayload) {
-  const observability =
-    payload.observability ??
-    currentObservabilityMetadata({
-      commandId: payload.commandId,
-      operation: payload.command,
-    });
+function toInteractionChallenge(
+  challenge: BrowserChallenge,
+  context: {
+    readonly siteId: string;
+    readonly profileName?: string;
+    readonly loginUrl?: string;
+    readonly verifyUrl?: string;
+  },
+): InteractionChallenge {
+  const reason = toInteractionChallengeReason(challenge.kind);
   return {
-    commandId: payload.commandId,
-    observability,
-    message: createBrowserCommandMessage({
-      ...payload,
-      observability,
-    }),
+    siteId: challenge.siteId || context.siteId,
+    profileName: challenge.profileName ?? context.profileName ?? 'default',
+    action: reason === 'login_required' ? 'login' : 'verify',
+    reason,
+    loginUrl: challenge.loginUrl ?? context.loginUrl,
+    verifyUrl: challenge.verifyUrl ?? context.verifyUrl,
   };
 }
 
-function sessionResponseToRuntimeValue(response: {
-  readonly actionResults?: readonly unknown[];
-  readonly capturedAt?: string;
-  readonly session?: {
-    readonly createdAt: string;
-    readonly expiresAt: string;
-    readonly profileName?: string;
-    readonly sessionId: string;
+function fallbackChallenge(
+  error: BrowserRuntimeErrorData,
+  context: {
     readonly siteId: string;
-  };
-  readonly sessionId?: string;
-}) {
-  if (response.session) {
-    return response.session;
-  }
-  if (response.actionResults) {
+    readonly profileName?: string;
+    readonly loginUrl?: string;
+    readonly verifyUrl?: string;
+  },
+): InteractionChallenge | undefined {
+  if (
+    error.code === 'AUTH_PROFILE_REQUIRED' ||
+    error.profileStatus === 'missing'
+  ) {
     return {
-      actionResults: response.actionResults,
-      capturedAt: response.capturedAt ?? new Date().toISOString(),
-      sessionId: response.sessionId ?? '',
+      siteId: context.siteId,
+      profileName: context.profileName ?? 'default',
+      action: 'login',
+      reason: 'login_required',
+      loginUrl: context.loginUrl,
+      verifyUrl: context.verifyUrl,
     };
   }
-  return {
-    sessionId: response.sessionId ?? '',
-  };
+
+  if (
+    error.code === 'AUTH_PROFILE_EXPIRED' ||
+    error.code === 'BROWSER_PROFILE_EXPIRED' ||
+    error.profileStatus === 'expired'
+  ) {
+    return {
+      siteId: context.siteId,
+      profileName: context.profileName ?? 'default',
+      action: 'verify',
+      reason: 'profile_expired',
+      loginUrl: context.loginUrl,
+      verifyUrl: context.verifyUrl,
+    };
+  }
+
+  return undefined;
+}
+
+function toInteractionChallengeReason(
+  kind: BrowserChallenge['kind'],
+): InteractionChallengeReason {
+  switch (kind) {
+    case 'login_required':
+      return 'login_required';
+    case 'login_expired':
+      return 'profile_expired';
+    case 'verification_failed':
+      return 'verification_failed';
+    case 'captcha_required':
+      return 'captcha_required';
+    case 'blocked':
+      return 'blocked';
+    case 'rate_limited':
+      return 'rate_limited';
+  }
+}
+
+function toDesktopProfileStatus(
+  status?:
+    | 'missing'
+    | 'login_required'
+    | 'verifying'
+    | 'verified'
+    | 'expired'
+    | 'blocked',
+): DesktopBrowserProfileStatus['status'] {
+  switch (status) {
+    case 'verified':
+      return 'available';
+    case 'missing':
+      return 'missing';
+    case 'expired':
+      return 'expired';
+    case 'login_required':
+    case 'verifying':
+    case 'blocked':
+    case undefined:
+      return 'invalid';
+  }
 }

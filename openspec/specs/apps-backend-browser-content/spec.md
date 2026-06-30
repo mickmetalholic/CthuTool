@@ -4,19 +4,19 @@
 TBD - created by archiving change apps-backend-browser-content-module. Update Purpose after archive.
 ## Requirements
 ### Requirement: Browser content module
-The backend SHALL provide a `BrowserContentModule` that owns internal browser page content retrieval orchestration without owning public browser API routes, browser profile reporting routes, site configuration storage, browser auth coordination, or concrete agent browser command execution.
+The backend SHALL expose browser page content retrieval through `BrowserService`; any content-specific providers SHALL be internal implementation details that do not own public browser API routes, browser profile reporting routes, site configuration storage, browser auth coordination, or concrete agent/browser runtime command execution.
 
 #### Scenario: Module exports content service
 - **WHEN** another backend module needs controlled browser page content retrieval
-- **THEN** it imports `BrowserContentModule` and receives `BrowserContentService` from that module
+- **THEN** it imports `BrowserModule` and receives `BrowserService` rather than importing `BrowserContentModule` or `BrowserContentService` directly
 
-#### Scenario: Module imports capture and site dependencies
-- **WHEN** `BrowserContentService` is constructed
-- **THEN** its browser capture provider comes from `BrowserAgentCaptureModule` and its site configuration dependency comes from `SitesConfigModule`
+#### Scenario: Module imports runtime and site dependencies
+- **WHEN** `BrowserService` is constructed
+- **THEN** its browser execution dependency comes from `DesktopBrowserRuntimeModule` and its site configuration dependency comes from `SitesConfigModule`
 
 #### Scenario: Module owns content pipeline providers
-- **WHEN** `BrowserContentModule` is compiled
-- **THEN** it registers the content service, task runner, block detector, and diagnostics store providers needed by the content retrieval pipeline
+- **WHEN** `BrowserModule` is compiled
+- **THEN** it registers or imports the internal task runner, block detector, and diagnostics store providers needed by content and screenshot workflows
 
 ### Requirement: Browser content orchestration
 The backend SHALL retrieve controlled page content snapshots through `BrowserContentModule` while preserving the existing content request and result contract.
@@ -97,18 +97,18 @@ The browser content module SHALL execute browser capture through `DesktopBrowser
 - **THEN** it does not access agent registry, raw WebSocket objects, command correlation maps, or agent state projection services
 
 ### Requirement: Browser content reports interaction challenges
-The browser content module SHALL surface auth-required runtime outcomes as detection results or interaction challenges without mutating backend agent state.
+Browser content workflows exposed through `BrowserService` SHALL surface auth-required runtime outcomes as detection results or interaction challenges without mutating backend agent state or desktop pending task state.
 
 #### Scenario: Required login is reported
 - **WHEN** desktop browser runtime reports that login or profile verification is required for a content request
-- **THEN** `BrowserContentService` returns a login-required detection and public interaction challenge metadata without creating a pending auth task
+- **THEN** `BrowserService` returns a login-required detection and public interaction challenge metadata without creating a pending auth task
 
 #### Scenario: Content is captured
 - **WHEN** desktop browser runtime returns captured content
-- **THEN** `BrowserContentService` continues to return the controlled content snapshot without exposing raw browser storage or transport internals
+- **THEN** `BrowserService` continues to return the controlled content snapshot without exposing raw browser storage or transport internals
 
 ### Requirement: Browser content observability
-The browser content module SHALL emit observable events and metrics for site resolution, origin rejection, queueing, task execution, detection outcomes, timeouts, and diagnostics references.
+The browser content workflow SHALL emit observable events and metrics for site resolution, origin rejection, queueing, task execution, detection outcomes, timeouts, and diagnostics references.
 
 #### Scenario: Blocked detection is correlated
 - **WHEN** a browser content result reports a blocked, login-required, captcha-required, or rate-limited detection
@@ -117,4 +117,3 @@ The browser content module SHALL emit observable events and metrics for site res
 #### Scenario: Origin rejection is observable
 - **WHEN** a browser content request is rejected before dispatch because its origin is not allowed
 - **THEN** the backend records an observable failure using a stable error code without navigating the browser runtime
-

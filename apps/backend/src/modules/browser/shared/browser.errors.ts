@@ -1,4 +1,4 @@
-export type BrowserAutomationErrorCode =
+export type BrowserWorkflowErrorCode =
   | 'AUTH_STATE_MISSING'
   | 'AUTH_PROFILE_REQUIRED'
   | 'AUTH_PROFILE_EXPIRED'
@@ -12,13 +12,13 @@ export type BrowserAutomationErrorCode =
   | 'SITE_NOT_CONFIGURED'
   | 'PAGE_PARSE_FAILED';
 
-export class BrowserAutomationError extends Error {
+export class BrowserWorkflowError extends Error {
   constructor(
-    readonly code: BrowserAutomationErrorCode,
+    readonly code: BrowserWorkflowErrorCode,
     message: string,
     readonly details?: Record<string, unknown>,
   ) {
     super(message);
-    this.name = 'BrowserAutomationError';
+    this.name = 'BrowserWorkflowError';
   }
 }

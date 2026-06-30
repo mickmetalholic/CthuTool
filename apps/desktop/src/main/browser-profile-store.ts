@@ -9,7 +9,7 @@ import {
 } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { BrowserProfileSummary } from '@cthutool/agent-protocol';
+import type { BrowserProfileSummary } from '@cthutool/browser-runtime-protocol';
 
 export type BrowserProfileStatus = BrowserProfileSummary['status'];
 
@@ -145,14 +145,8 @@ export class BrowserProfileStore {
     });
   }
 
-  toPublicProfile(
-    agentId: string,
-    profile: LocalBrowserProfile,
-  ): BrowserProfileSummary {
-    return {
-      agentId,
-      ...profile,
-    };
+  toPublicProfile(profile: LocalBrowserProfile): BrowserProfileSummary {
+    return profile;
   }
 
   private metaPath(siteId: string, profileName: string): string {

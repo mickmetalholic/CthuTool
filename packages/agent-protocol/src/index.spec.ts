@@ -1,20 +1,28 @@
 import {
-  BROWSER_CAPABILITY,
-  createBrowserCommandMessage,
-  createBrowserErrorMessage,
-  createBrowserProfileStatusMessage,
-  createBrowserResultMessage,
-  createBrowserStateSnapshotMessage,
+  AGENT_CLIENT_LIFECYCLE_MESSAGE_TYPES,
+  AGENT_LIFECYCLE_MESSAGE_TYPES,
+  AGENT_SERVER_LIFECYCLE_MESSAGE_TYPES,
+  createAgentErrorMessage,
+  createAgentRegisteredMessage,
+  createJsonRpcErrorResponse,
+  createJsonRpcRequest,
+  createJsonRpcSuccessResponse,
+  isAgentLifecycleMessage,
+  isJsonRpcErrorResponse,
+  isJsonRpcRequest,
+  isJsonRpcResponse,
+  JSON_RPC_INVALID_PARAMS,
   parseAgentClientMessageJson,
+  parseAgentLifecycleMessage,
   parseAgentServerMessageJson,
+  validateAgentClientLifecycleMessage,
   validateAgentClientMessage,
   validateAgentHeartbeatMessage,
   validateAgentHelloMessage,
+  validateAgentServerLifecycleMessage,
   validateAgentServerMessage,
-  validateBrowserCommandMessage,
-  validateBrowserErrorMessage,
-  validateBrowserResultMessage,
-  validateBrowserStateSnapshotMessage,
+  validateJsonRpcRequest,
+  validateJsonRpcResponse,
 } from './index';
 
 describe('agent protocol validation', () => {
@@ -29,6 +37,23 @@ describe('agent protocol validation', () => {
     },
   };
 
+  it('normalizes lifecycle message type constants', () => {
+    expect(AGENT_LIFECYCLE_MESSAGE_TYPES).toEqual([
+      'agent.hello',
+      'agent.heartbeat',
+      'agent.registered',
+      'agent.error',
+    ]);
+    expect(AGENT_CLIENT_LIFECYCLE_MESSAGE_TYPES).toEqual([
+      'agent.hello',
+      'agent.heartbeat',
+    ]);
+    expect(AGENT_SERVER_LIFECYCLE_MESSAGE_TYPES).toEqual([
+      'agent.registered',
+      'agent.error',
+    ]);
+  });
+
   it('accepts a valid hello message with empty capabilities', () => {
     expect(validateAgentHelloMessage(hello)).toEqual({
       ok: true,
@@ -36,12 +61,12 @@ describe('agent protocol validation', () => {
     });
   });
 
-  it('preserves syntactically valid unknown future capabilities', () => {
+  it('preserves syntactically valid unknown future capabilities as metadata', () => {
     const input = {
       ...hello,
       payload: {
         ...hello.payload,
-        capabilities: [BROWSER_CAPABILITY, 'future.capability'],
+        capabilities: ['browser', 'future.capability'],
       },
     };
 
@@ -80,9 +105,18 @@ describe('agent protocol validation', () => {
       ok: true,
       value: heartbeat,
     });
+    expect(validateAgentClientLifecycleMessage(heartbeat)).toEqual({
+      ok: true,
+      value: heartbeat,
+    });
+    expect(parseAgentLifecycleMessage(heartbeat)).toEqual({
+      ok: true,
+      value: heartbeat,
+    });
+    expect(isAgentLifecycleMessage(heartbeat)).toBe(true);
   });
 
-  it('parses JSON client messages', () => {
+  it('parses JSON client lifecycle messages', () => {
     expect(parseAgentClientMessageJson(JSON.stringify(hello))).toEqual({
       ok: true,
       value: hello,
@@ -93,461 +127,211 @@ describe('agent protocol validation', () => {
     });
   });
 
-  it('accepts browser capture page commands from the server', () => {
-    const command = createBrowserCommandMessage({
-      authPolicy: 'required',
-      blockResources: ['image', 'font'],
-      command: 'browser.capturePage',
-      commandId: 'cmd-1',
-      includeHtml: true,
-      includeText: true,
-      profileName: 'douban-main',
-      siteId: 'douban',
-      timeoutMs: 30000,
-      url: 'https://movie.douban.com/subject/1292052/',
-      waitUntil: 'domcontentloaded',
-    });
+  it('accepts server lifecycle messages', () => {
+    const registered = createAgentRegisteredMessage(
+      'homelab-mac',
+      '2026-06-13T12:00:00.000Z',
+    );
+    const error = createAgentErrorMessage('BAD_HELLO', 'Invalid hello');
 
-    expect(validateBrowserCommandMessage(command)).toEqual({
+    expect(validateAgentServerMessage(registered)).toEqual({
       ok: true,
-      value: command,
+      value: registered,
     });
-    expect(validateAgentServerMessage(command)).toEqual({
+    expect(validateAgentServerLifecycleMessage(registered)).toEqual({
       ok: true,
-      value: command,
+      value: registered,
     });
-    expect(parseAgentServerMessageJson(JSON.stringify(command))).toEqual({
+    expect(validateAgentServerMessage(error)).toEqual({
       ok: true,
-      value: command,
+      value: error,
     });
   });
 
-  it('accepts optional observability metadata on browser commands', () => {
-    const command = createBrowserCommandMessage({
-      authPolicy: 'anonymous',
-      command: 'browser.capturePage',
-      commandId: 'cmd-1',
+  it('accepts optional observability metadata on lifecycle messages', () => {
+    const heartbeat = {
+      type: 'agent.heartbeat',
+      payload: {
+        agentId: 'homelab-mac',
+        observability: {
+          requestId: 'req-1',
+          traceId: 'trace-1',
+          operation: 'agent.heartbeat',
+        },
+      },
+    };
+
+    expect(validateAgentHeartbeatMessage(heartbeat)).toEqual({
+      ok: true,
+      value: heartbeat,
+    });
+  });
+
+  it('accepts JSON-RPC command requests from the server', () => {
+    const request = createJsonRpcRequest({
+      id: 'cmd-1',
+      method: 'browser.capturePage',
+      params: {
+        siteId: 'douban',
+        url: 'https://movie.douban.com/subject/1292052/',
+      },
       observability: {
         commandId: 'cmd-1',
         operation: 'browser.capturePage',
-        parentId: 'parent-1',
-        requestId: 'req-1',
-        traceId: 'trace-1',
-      },
-      siteId: 'example',
-      url: 'https://example.com/',
-    });
-
-    expect(validateBrowserCommandMessage(command)).toEqual({
-      ok: true,
-      value: command,
-    });
-    expect(parseAgentServerMessageJson(JSON.stringify(command))).toEqual({
-      ok: true,
-      value: command,
-    });
-  });
-
-  it('accepts controlled profile management commands', () => {
-    const commands = [
-      createBrowserCommandMessage({
-        authPolicy: 'required',
-        command: 'browser.verifyProfile',
-        commandId: 'verify-1',
-        profileName: 'zhihu-main',
-        siteId: 'zhihu',
-        verifyUrl: 'https://www.zhihu.com/',
-      }),
-      createBrowserCommandMessage({
-        authPolicy: 'required',
-        command: 'browser.openLogin',
-        commandId: 'login-1',
-        loginUrl: 'https://www.zhihu.com/signin',
-        profileName: 'zhihu-main',
-        siteId: 'zhihu',
-      }),
-      createBrowserCommandMessage({
-        authPolicy: 'required',
-        command: 'browser.clearProfile',
-        commandId: 'clear-1',
-        profileName: 'zhihu-main',
-        siteId: 'zhihu',
-      }),
-    ];
-
-    for (const command of commands) {
-      expect(validateBrowserCommandMessage(command)).toEqual({
-        ok: true,
-        value: command,
-      });
-    }
-  });
-
-  it('accepts browser session commands from the server', () => {
-    const commands = [
-      createBrowserCommandMessage({
-        authPolicy: 'required',
-        command: 'browser.createSession',
-        commandId: 'create-1',
-        expiresAt: '2026-06-13T12:15:00.000Z',
-        profileName: 'douban-main',
-        sessionId: 'session-1',
-        siteId: 'douban',
-      }),
-      createBrowserCommandMessage({
-        actions: [
-          {
-            actionId: 'action-1',
-            type: 'goto',
-            url: 'https://movie.douban.com/subject/1292052/',
-          },
-          {
-            actionId: 'action-2',
-            selector: 'h1',
-            type: 'textContent',
-          },
-        ],
-        authPolicy: 'required',
-        command: 'browser.runActions',
-        commandId: 'run-1',
-        profileName: 'douban-main',
-        sessionId: 'session-1',
-        siteId: 'douban',
-      }),
-      createBrowserCommandMessage({
-        authPolicy: 'required',
-        command: 'browser.closeSession',
-        commandId: 'close-1',
-        profileName: 'douban-main',
-        sessionId: 'session-1',
-        siteId: 'douban',
-      }),
-    ];
-
-    for (const command of commands) {
-      expect(validateBrowserCommandMessage(command)).toEqual({
-        ok: true,
-        value: command,
-      });
-      expect(validateAgentServerMessage(command)).toEqual({
-        ok: true,
-        value: command,
-      });
-    }
-  });
-
-  it('accepts browser results and errors from the agent', () => {
-    const result = createBrowserResultMessage({
-      capturedAt: '2026-06-13T12:00:00.000Z',
-      command: 'browser.capturePage',
-      commandId: 'cmd-1',
-      detection: { kind: 'ok' },
-      finalUrl: 'https://movie.douban.com/subject/1292052/',
-      status: 200,
-      text: 'The Shawshank Redemption',
-      title: '肖申克的救赎',
-    });
-    const error = createBrowserErrorMessage({
-      code: 'AUTH_PROFILE_REQUIRED',
-      command: 'browser.capturePage',
-      commandId: 'cmd-2',
-      message: 'Douban login is required',
-      profileStatus: 'missing',
-    });
-
-    expect(validateBrowserResultMessage(result)).toEqual({
-      ok: true,
-      value: result,
-    });
-    expect(validateBrowserErrorMessage(error)).toEqual({
-      ok: true,
-      value: error,
-    });
-    expect(validateAgentClientMessage(result)).toEqual({
-      ok: true,
-      value: result,
-    });
-    expect(validateAgentClientMessage(error)).toEqual({
-      ok: true,
-      value: error,
-    });
-  });
-
-  it('preserves observability metadata on browser results and errors', () => {
-    const observability = {
-      commandId: 'cmd-1',
-      operation: 'browser.capturePage',
-      requestId: 'req-1',
-      traceId: 'trace-1',
-    };
-    const result = createBrowserResultMessage({
-      capturedAt: '2026-06-13T12:00:00.000Z',
-      command: 'browser.capturePage',
-      commandId: 'cmd-1',
-      detection: { kind: 'ok' },
-      finalUrl: 'https://example.com/',
-      observability,
-    });
-    const error = createBrowserErrorMessage({
-      code: 'BROWSER_COMMAND_FAILED',
-      command: 'browser.capturePage',
-      commandId: 'cmd-1',
-      message: 'Browser command failed',
-      observability,
-    });
-
-    expect(validateBrowserResultMessage(result)).toEqual({
-      ok: true,
-      value: result,
-    });
-    expect(validateBrowserErrorMessage(error)).toEqual({
-      ok: true,
-      value: error,
-    });
-    expect(parseAgentClientMessageJson(JSON.stringify(result))).toEqual({
-      ok: true,
-      value: result,
-    });
-    expect(parseAgentClientMessageJson(JSON.stringify(error))).toEqual({
-      ok: true,
-      value: error,
-    });
-  });
-
-  it('accepts browser session results and action errors from the agent', () => {
-    const create = createBrowserResultMessage({
-      capturedAt: '2026-06-13T12:00:00.000Z',
-      command: 'browser.createSession',
-      commandId: 'create-1',
-      detection: { kind: 'ok' },
-      session: {
-        createdAt: '2026-06-13T12:00:00.000Z',
-        expiresAt: '2026-06-13T12:15:00.000Z',
-        profileName: 'douban-main',
-        sessionId: 'session-1',
-        siteId: 'douban',
-      },
-      sessionId: 'session-1',
-    });
-    const run = createBrowserResultMessage({
-      actionResults: [
-        {
-          actionId: 'action-1',
-          finalUrl: 'https://movie.douban.com/subject/1292052/',
-          status: 200,
-          type: 'goto',
-        },
-        {
-          actionId: 'action-2',
-          text: 'The Shawshank Redemption',
-          type: 'textContent',
-        },
-      ],
-      capturedAt: '2026-06-13T12:00:01.000Z',
-      command: 'browser.runActions',
-      commandId: 'run-1',
-      detection: { kind: 'ok' },
-      sessionId: 'session-1',
-    });
-    const error = createBrowserErrorMessage({
-      code: 'BROWSER_ACTION_FAILED',
-      command: 'browser.runActions',
-      commandId: 'run-2',
-      failedActionIndex: 1,
-      failedActionType: 'click',
-      message: 'Selector was not found',
-      sessionId: 'session-1',
-    });
-
-    for (const message of [create, run]) {
-      expect(validateBrowserResultMessage(message)).toEqual({
-        ok: true,
-        value: message,
-      });
-      expect(validateAgentClientMessage(message)).toEqual({
-        ok: true,
-        value: message,
-      });
-    }
-    expect(validateBrowserErrorMessage(error)).toEqual({
-      ok: true,
-      value: error,
-    });
-    expect(validateAgentClientMessage(error)).toEqual({
-      ok: true,
-      value: error,
-    });
-  });
-
-  it('accepts public browser profile status reports', () => {
-    const message = createBrowserProfileStatusMessage({
-      agentId: 'homelab-mac',
-      displayName: 'Mick',
-      externalUserId: '123456',
-      profileName: 'douban-main',
-      siteId: 'douban',
-      status: 'verified',
-      updatedAt: '2026-06-13T12:00:00.000Z',
-      verifiedAt: '2026-06-13T12:00:00.000Z',
-    });
-
-    expect(validateAgentClientMessage(message)).toEqual({
-      ok: true,
-      value: message,
-    });
-  });
-
-  it('accepts public browser state snapshots from the agent', () => {
-    const message = createBrowserStateSnapshotMessage({
-      agentId: 'homelab-mac',
-      pendingAuthTasks: [
-        {
-          agentId: 'homelab-mac',
-          createdAt: '2026-06-13T12:00:00.000Z',
-          id: 'homelab-mac:douban:douban-main',
-          loginUrl: 'https://accounts.douban.com/passport/login',
-          profileName: 'douban-main',
-          reason: 'missing',
-          siteId: 'douban',
-          updatedAt: '2026-06-13T12:00:00.000Z',
-          verifyUrl: 'https://www.douban.com/mine/',
-        },
-      ],
-      profiles: [
-        {
-          agentId: 'homelab-mac',
-          displayName: 'Mick',
-          externalUserId: '123456',
-          profileName: 'douban-main',
-          siteId: 'douban',
-          status: 'verified',
-          updatedAt: '2026-06-13T12:00:00.000Z',
-          verifiedAt: '2026-06-13T12:00:00.000Z',
-        },
-      ],
-    });
-
-    expect(validateBrowserStateSnapshotMessage(message)).toEqual({
-      ok: true,
-      value: message,
-    });
-    expect(validateAgentClientMessage(message)).toEqual({
-      ok: true,
-      value: message,
-    });
-  });
-
-  it('accepts observability metadata on browser state snapshots', () => {
-    const message = createBrowserStateSnapshotMessage({
-      agentId: 'homelab-mac',
-      observability: {
-        operation: 'browser.stateSnapshot',
         requestId: 'req-1',
       },
-      pendingAuthTasks: [],
-      profiles: [],
     });
 
-    expect(validateBrowserStateSnapshotMessage(message)).toEqual({
+    expect(validateJsonRpcRequest(request)).toEqual({
       ok: true,
-      value: message,
+      value: request,
     });
-    expect(validateAgentClientMessage(message)).toEqual({
+    expect(isJsonRpcRequest(request)).toBe(true);
+    expect(validateAgentServerMessage(request)).toEqual({
       ok: true,
-      value: message,
+      value: request,
+    });
+    expect(parseAgentServerMessageJson(JSON.stringify(request))).toEqual({
+      ok: true,
+      value: request,
+    });
+    expect(parseAgentServerMessageJson('{')).toEqual({
+      ok: false,
+      message: 'agent server message must be valid JSON',
     });
   });
 
-  it('rejects malformed or raw browser state snapshots', () => {
-    const rawSnapshot = {
-      type: 'browser.stateSnapshot',
-      payload: {
-        agentId: 'homelab-mac',
-        pendingAuthTasks: [],
-        profiles: [
-          {
-            agentId: 'homelab-mac',
-            cookies: [],
-            profileName: 'douban-main',
-            siteId: 'douban',
-            status: 'verified',
-            updatedAt: '2026-06-13T12:00:00.000Z',
-          },
-        ],
+  it('accepts JSON-RPC success and error responses from the client', () => {
+    const success = createJsonRpcSuccessResponse(
+      'cmd-1',
+      {
+        ok: true,
       },
-    };
-    const malformedSnapshot = {
-      type: 'browser.stateSnapshot',
-      payload: {
-        agentId: 'homelab-mac',
-        pendingAuthTasks: [],
-        profiles: [
-          {
-            agentId: 'homelab-mac',
-            profileName: 'douban-main',
-            siteId: 'douban',
-            status: 'verified',
-          },
-        ],
+      {
+        commandId: 'cmd-1',
+        operation: 'browser.capturePage',
+        requestId: 'req-1',
       },
-    };
-
-    expect(validateBrowserStateSnapshotMessage(rawSnapshot).ok).toBe(false);
-    expect(validateAgentClientMessage(rawSnapshot).ok).toBe(false);
-    expect(validateBrowserStateSnapshotMessage(malformedSnapshot).ok).toBe(
-      false,
     );
+    const failure = createJsonRpcErrorResponse(
+      'cmd-2',
+      {
+        code: JSON_RPC_INVALID_PARAMS,
+        message: 'Invalid params',
+        data: {
+          code: 'INVALID_BROWSER_COMMAND',
+        },
+      },
+      {
+        commandId: 'cmd-2',
+        operation: 'browser.capturePage',
+        requestId: 'req-1',
+      },
+    );
+
+    expect(validateJsonRpcResponse(success)).toEqual({
+      ok: true,
+      value: success,
+    });
+    expect(isJsonRpcResponse(success)).toBe(true);
+    expect(validateAgentClientMessage(success)).toEqual({
+      ok: true,
+      value: success,
+    });
+    expect(validateAgentClientMessage(failure)).toEqual({
+      ok: true,
+      value: failure,
+    });
+    expect(isJsonRpcErrorResponse(failure)).toBe(true);
   });
 
-  it('accepts messages without observability metadata for compatibility', () => {
-    const command = createBrowserCommandMessage({
-      authPolicy: 'anonymous',
-      command: 'browser.capturePage',
-      commandId: 'cmd-1',
-      siteId: 'example',
-      url: 'https://example.com/',
+  it('omits optional JSON-RPC fields when they are not provided', () => {
+    const request = createJsonRpcRequest({
+      id: 1,
+      method: 'agent.ping',
+    });
+    const success = createJsonRpcSuccessResponse(1, null);
+    const failure = createJsonRpcErrorResponse(1, {
+      code: JSON_RPC_INVALID_PARAMS,
+      message: 'Invalid params',
     });
 
-    expect(validateAgentServerMessage(command)).toEqual({
-      ok: true,
-      value: command,
+    expect(request).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'agent.ping',
+    });
+    expect(success).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      result: null,
+    });
+    expect(failure).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      error: {
+        code: JSON_RPC_INVALID_PARAMS,
+        message: 'Invalid params',
+      },
     });
   });
 
   it('rejects unsupported observability metadata fields', () => {
-    const command = createBrowserCommandMessage({
-      authPolicy: 'anonymous',
-      command: 'browser.capturePage',
-      commandId: 'cmd-1',
-      observability: {
-        commandId: 'cmd-1',
-        details: { cookie: 'secret' },
-        operation: 'browser.capturePage',
-      } as never,
-      siteId: 'example',
-      url: 'https://example.com/',
-    });
-
-    expect(validateBrowserCommandMessage(command)).toEqual({
-      ok: false,
-      message: 'observability metadata contains unsupported fields',
-    });
+    expect(
+      validateAgentServerMessage({
+        jsonrpc: '2.0',
+        id: 'cmd-1',
+        method: 'browser.capturePage',
+        observability: {
+          requestId: 'req-1',
+          rawHeaders: {},
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateAgentServerMessage({
+        jsonrpc: '2.0',
+        id: 'cmd-1',
+        method: 'browser.capturePage',
+        params: {
+          nested: {
+            observability: {
+              rawHeaders: {},
+            },
+          },
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateAgentServerMessage({
+        jsonrpc: '2.0',
+        id: 'cmd-1',
+        method: 'browser.capturePage',
+        observability: null,
+      }).ok,
+    ).toBe(false);
   });
 
-  it('rejects malformed observability metadata values', () => {
-    const command = createBrowserCommandMessage({
-      authPolicy: 'anonymous',
-      command: 'browser.capturePage',
-      commandId: 'cmd-1',
-      observability: {
-        commandId: 'cmd-1',
-        operation: 'Browser Capture',
-        requestId: 'req-1',
-      },
-      siteId: 'example',
-      url: 'https://example.com/',
-    });
-
-    expect(validateBrowserCommandMessage(command).ok).toBe(false);
+  it('rejects browser-specific legacy messages in the generic agent protocol', () => {
+    expect(
+      validateAgentClientMessage({
+        type: 'browser.stateSnapshot',
+        payload: {
+          agentId: 'homelab-mac',
+          profiles: [],
+          pendingAuthTasks: [],
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateAgentServerMessage({
+        type: 'browser.command',
+        payload: {
+          command: 'browser.capturePage',
+          commandId: 'cmd-1',
+          siteId: 'douban',
+        },
+      }).ok,
+    ).toBe(false);
   });
 });

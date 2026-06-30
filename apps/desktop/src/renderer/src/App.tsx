@@ -39,11 +39,6 @@ import {
 } from './desktop-api';
 import { createDesktopRuntimeAdapter } from './desktop-runtime';
 import {
-  buildDesktopTasks,
-  countActionableTasks,
-  type LocalPendingAuthTask,
-} from './desktop-tasks';
-import {
   ActivityBar,
   DesktopStatusBar,
   DesktopTitlebar,
@@ -76,22 +71,17 @@ type BrowserActionState = {
 };
 type BrowserSite = BrowserStatus['sites'][number];
 type BrowserProfile = BrowserStatus['profiles'][number];
-type BrowserPendingAuth =
-  | BrowserStatus['pendingAuthTasks'][number]
-  | LocalPendingAuthTask;
 type BrowserAttentionItem = {
   readonly key: string;
   readonly profileName: string;
   readonly reason: string;
   readonly siteId: string;
   readonly siteName: string;
-  readonly source: string;
   readonly status?: string;
 };
 type BrowserProfileRow = {
   readonly actionState?: BrowserActionState;
   readonly key: string;
-  readonly pendingTask?: BrowserPendingAuth;
   readonly profile?: BrowserProfile;
   readonly site: BrowserSite;
   readonly source: 'backend' | 'local';
@@ -99,7 +89,6 @@ type BrowserProfileRow = {
 };
 type BrowserHostDisplayModel = {
   readonly attentionItems: readonly BrowserAttentionItem[];
-  readonly localOnlyRows: readonly BrowserProfileRow[];
   readonly profileRows: readonly BrowserProfileRow[];
   readonly runtimeKind: string;
   readonly runtimeMessage: string;
@@ -149,7 +138,6 @@ export function App({
   const [agents, setAgents] = useState<PublicAgentStatus[]>([]);
   const [agentsError, setAgentsError] = useState<string | undefined>();
   const [browserStatus, setBrowserStatus] = useState<BrowserStatus>({
-    pendingAuthTasks: [],
     profiles: [],
     sites: [],
   });
@@ -157,9 +145,6 @@ export function App({
     string | undefined
   >();
   const [browserStatusLoading, setBrowserStatusLoading] = useState(false);
-  const [localPendingAuthTasks, setLocalPendingAuthTasks] = useState<
-    LocalPendingAuthTask[]
-  >([]);
   const [browserActionState, setBrowserActionState] =
     useState<BrowserActionState>({ status: 'idle' });
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>(
@@ -214,10 +199,6 @@ export function App({
     };
   }, [desktopApi]);
 
-  const refreshAppInfo = useCallback(async () => {
-    setAppInfo(await desktopApi.getAppInfo());
-  }, [desktopApi]);
-
   useEffect(() => {
     document.documentElement.dataset.theme =
       config?.appearance.colorScheme ?? 'dracula';
@@ -265,10 +246,6 @@ export function App({
     }
   }, [backendUrl, fetchBrowserStatus]);
 
-  const refreshLocalPendingAuthTasks = useCallback(async () => {
-    setLocalPendingAuthTasks(await desktopApi.getLocalPendingAuthTasks());
-  }, [desktopApi]);
-
   const runBrowserSiteAction = useCallback(
     async (action: BrowserProfileActionName, site: BrowserSite) => {
       const targetKey = browserSiteKey(site);
@@ -288,7 +265,6 @@ export function App({
         const runAction = resolveBrowserAction(runtime.actions, action);
         const result = await runAction(input);
         assertBrowserActionResult(result);
-        await refreshAppInfo();
         setBrowserActionState({
           action,
           message:
@@ -298,7 +274,6 @@ export function App({
           targetKey,
         });
       } catch (error) {
-        await refreshAppInfo();
         setBrowserActionState({
           action,
           message:
@@ -309,28 +284,20 @@ export function App({
           targetKey,
         });
       }
-      await refreshLocalPendingAuthTasks();
       await refreshBrowserStatus();
     },
-    [
-      refreshAppInfo,
-      refreshBrowserStatus,
-      refreshLocalPendingAuthTasks,
-      runtime.actions,
-    ],
+    [refreshBrowserStatus, runtime.actions],
   );
 
   useEffect(() => {
     void refreshAgents();
     void refreshBrowserStatus();
-    void refreshLocalPendingAuthTasks();
     const timer = setInterval(() => {
       void refreshAgents();
       void refreshBrowserStatus();
-      void refreshLocalPendingAuthTasks();
     }, 5000);
     return () => clearInterval(timer);
-  }, [refreshAgents, refreshBrowserStatus, refreshLocalPendingAuthTasks]);
+  }, [refreshAgents, refreshBrowserStatus]);
 
   const saveConfig = async () => {
     setSaveState('saving');
@@ -385,14 +352,6 @@ export function App({
         return 'Disconnected';
     }
   }, [connection.status]);
-  const desktopTasks = useMemo(
-    () =>
-      buildDesktopTasks({
-        browserStatus,
-        localPendingAuthTasks,
-      }),
-    [browserStatus, localPendingAuthTasks],
-  );
   const openConnectionSettings = () => {
     setWorkspace('settings');
     setSettingsView('service');
@@ -448,18 +407,16 @@ export function App({
                   view: mainView,
                   agents,
                   agentsError,
-                  appInfo,
                   browserStatus,
                   browserStatusError,
                   browserStatusLoading,
                   browserActionState,
-                  localPendingAuthTasks,
-                  desktopTasks,
                   refreshAgents,
                   refreshBrowserStatus,
                   runBrowserSiteAction,
                   config,
                   connection,
+                  appInfo,
                   statusLabel,
                   onOpenBrowserHost: () => setMainView('browser'),
                 })
@@ -497,31 +454,26 @@ function renderMainWorkspace({
   view,
   agents,
   agentsError,
-  appInfo,
   browserStatus,
   browserStatusError,
   browserStatusLoading,
   browserActionState,
-  localPendingAuthTasks,
-  desktopTasks,
   refreshAgents,
   refreshBrowserStatus,
   runBrowserSiteAction,
   config,
   connection,
+  appInfo,
   statusLabel,
   onOpenBrowserHost,
 }: {
   readonly view: MainView;
   readonly agents: readonly PublicAgentStatus[];
   readonly agentsError: string | undefined;
-  readonly appInfo: DesktopAppInfo;
   readonly browserStatus: BrowserStatus;
   readonly browserStatusError: string | undefined;
   readonly browserStatusLoading: boolean;
   readonly browserActionState: BrowserActionState;
-  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
-  readonly desktopTasks: ReturnType<typeof buildDesktopTasks>;
   readonly refreshAgents: () => Promise<void>;
   readonly refreshBrowserStatus: () => Promise<void>;
   readonly runBrowserSiteAction: (
@@ -530,6 +482,7 @@ function renderMainWorkspace({
   ) => Promise<void>;
   readonly config: DesktopConfig | undefined;
   readonly connection: AgentConnectionState;
+  readonly appInfo: DesktopAppInfo;
   readonly statusLabel: string;
   readonly onOpenBrowserHost: () => void;
 }) {
@@ -542,7 +495,6 @@ function renderMainWorkspace({
           browserStatusError={browserStatusError}
           browserStatusLoading={browserStatusLoading}
           browserActionState={browserActionState}
-          localPendingAuthTasks={localPendingAuthTasks}
           runBrowserSiteAction={runBrowserSiteAction}
         />
       </WorkspacePanel>
@@ -554,8 +506,6 @@ function renderMainWorkspace({
       <AgentsPanel
         agents={agents}
         agentsError={agentsError}
-        appInfo={appInfo}
-        connection={connection}
         refreshAgents={refreshAgents}
         refreshBrowserStatus={refreshBrowserStatus}
       />
@@ -567,7 +517,7 @@ function renderMainWorkspace({
       <HomeReadinessPanel
         agents={agents}
         appInfo={appInfo}
-        attentionCount={countActionableTasks(desktopTasks)}
+        attentionCount={countPendingBrowserAuthItems({ browserStatus })}
         browserStatus={browserStatus}
         config={config}
         connection={connection}
@@ -686,6 +636,14 @@ function HomeReadinessPanel({
   );
 }
 
+function countPendingBrowserAuthItems({
+  browserStatus,
+}: {
+  readonly browserStatus: BrowserStatus;
+}): number {
+  return buildBrowserAttentionItems({ browserStatus }).length;
+}
+
 function browserRuntimeLabel(appInfo: DesktopAppInfo): string {
   const runtime = appInfo.browserRuntime;
   if (!runtime) return 'Unknown';
@@ -702,7 +660,6 @@ function BrowserHostPanel({
   browserStatusError,
   browserStatusLoading,
   browserActionState,
-  localPendingAuthTasks,
   runBrowserSiteAction,
 }: {
   readonly appInfo: DesktopAppInfo;
@@ -710,7 +667,6 @@ function BrowserHostPanel({
   readonly browserStatusError: string | undefined;
   readonly browserStatusLoading: boolean;
   readonly browserActionState: BrowserActionState;
-  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
   readonly runBrowserSiteAction: (
     action: BrowserProfileActionName,
     site: BrowserSite,
@@ -720,7 +676,6 @@ function BrowserHostPanel({
     appInfo,
     browserActionState,
     browserStatus,
-    localPendingAuthTasks,
   });
   return (
     <div className="browser-host">
@@ -752,7 +707,7 @@ function BrowserHostPanel({
           <strong>{browserStatus.profiles.length}</strong>
         </div>
         <div className="metric compact">
-          <span>Pending Auth</span>
+          <span>Auth Attention</span>
           <strong>{model.attentionItems.length}</strong>
         </div>
       </section>
@@ -768,7 +723,7 @@ function BrowserHostPanel({
 
       <BrowserAttentionPanel items={model.attentionItems} />
       <BrowserManagedProfilesPanel
-        rows={[...model.profileRows, ...model.localOnlyRows]}
+        rows={model.profileRows}
         runBrowserSiteAction={runBrowserSiteAction}
       />
     </div>
@@ -1012,19 +967,14 @@ function WorkspacePanel({
 function AgentsPanel({
   agents,
   agentsError,
-  appInfo,
-  connection,
   refreshAgents,
   refreshBrowserStatus,
 }: {
   readonly agents: readonly PublicAgentStatus[];
   readonly agentsError: string | undefined;
-  readonly appInfo: DesktopAppInfo;
-  readonly connection: AgentConnectionState;
   readonly refreshAgents: () => Promise<void>;
   readonly refreshBrowserStatus: () => Promise<void>;
 }) {
-  const diagnostics = diagnosticsSnapshot(appInfo);
   return (
     <WorkspacePanel title="Agents" eyebrow="Main">
       <div className="panel-toolbar">
@@ -1042,26 +992,6 @@ function AgentsPanel({
         </button>
       </div>
       {agentsError ? <p className="error-text">{agentsError}</p> : null}
-      <section className="mini-status">
-        <h2>Local Agent</h2>
-        <div className="mini-status-list">
-          <div className="mini-status-row">
-            <strong>{connection.deviceName || 'Local device'}</strong>
-            <span>{connection.status}</span>
-            <small>{connection.lastHeartbeatAt ?? 'No heartbeat'}</small>
-          </div>
-          <div className="mini-status-row">
-            <strong>Browser Runtime</strong>
-            <span>{appInfo.browserRuntime?.status ?? 'unknown'}</span>
-            <small>{appInfo.browserRuntime?.message ?? 'Not available'}</small>
-          </div>
-          <div className="mini-status-row">
-            <strong>Last Diagnostic</strong>
-            <span>{diagnostics.lastEvent?.event ?? 'No diagnostics'}</span>
-            <small>{diagnostics.lastEvent?.message ?? 'No events'}</small>
-          </div>
-        </div>
-      </section>
       <table className="agent-table">
         <thead>
           <tr className="agent-row header">
@@ -1135,8 +1065,7 @@ function BrowserAttentionPanel({
                 <small>{item.profileName}</small>
               </div>
               <div className="site-profile-summary">
-                <span>Pending {item.reason}</span>
-                <span>{item.source}</span>
+                <span>{item.reason}</span>
                 {item.status ? <span>{item.status}</span> : null}
               </div>
               <small>Next actions: Open, Verify, Clear</small>
@@ -1213,8 +1142,8 @@ function BrowserManagedProfileRow({
           {row.profile?.verifiedAt ? (
             <span>{formatTimestamp(row.profile.verifiedAt)}</span>
           ) : null}
-          {row.pendingTask ? (
-            <span>Pending {row.pendingTask.reason}</span>
+          {row.site.authPolicy === 'required' && !row.profile ? (
+            <span>Missing profile</span>
           ) : null}
           {row.source === 'local' ? <span>Local fallback</span> : null}
         </div>
@@ -1245,56 +1174,29 @@ function buildBrowserHostDisplayModel({
   appInfo,
   browserActionState,
   browserStatus,
-  localPendingAuthTasks,
 }: {
   readonly appInfo: DesktopAppInfo;
   readonly browserActionState: BrowserActionState;
   readonly browserStatus: BrowserStatus;
-  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
 }): BrowserHostDisplayModel {
   const profileRows = browserStatus.sites.map((site): BrowserProfileRow => {
     const profile = findSiteProfile(browserStatus, site);
-    const pendingTask = findSitePendingAuthTask(
-      browserStatus,
-      localPendingAuthTasks,
-      site,
-    );
     const key = browserSiteKey(site);
     return {
       actionState:
         browserActionState.targetKey === key ? browserActionState : undefined,
       key,
-      pendingTask,
       profile,
       site,
       source: 'backend',
       statusLabel:
-        profile?.status ?? (pendingTask ? 'attention' : site.authPolicy),
-    };
-  });
-  const localOnlyRows = getLocalOnlyAuthTasks(
-    browserStatus,
-    localPendingAuthTasks,
-  ).map((task): BrowserProfileRow => {
-    const site = siteFromLocalPendingAuthTask(task);
-    const key = browserSiteKey(site);
-    return {
-      actionState:
-        browserActionState.targetKey === key ? browserActionState : undefined,
-      key,
-      pendingTask: task,
-      site,
-      source: 'local',
-      statusLabel: task.status,
+        profile?.status ??
+        (site.authPolicy === 'required' ? 'missing' : site.authPolicy),
     };
   });
 
   return {
-    attentionItems: buildBrowserAttentionItems({
-      browserStatus,
-      localPendingAuthTasks,
-    }),
-    localOnlyRows,
+    attentionItems: buildBrowserAttentionItems({ browserStatus }),
     profileRows,
     runtimeKind: browserRuntimeLabel(appInfo),
     runtimeMessage: browserRuntimeMessage(appInfo),
@@ -1314,98 +1216,33 @@ function findSiteProfile(
   );
 }
 
-function findSitePendingAuthTask(
-  browserStatus: BrowserStatus,
-  localPendingAuthTasks: readonly LocalPendingAuthTask[],
-  site: BrowserSite,
-): BrowserPendingAuth | undefined {
-  return [...browserStatus.pendingAuthTasks, ...localPendingAuthTasks].find(
-    (task) =>
-      task.siteId === site.siteId &&
-      (!site.profileName || task.profileName === site.profileName) &&
-      (!('status' in task) ||
-        task.status === 'open' ||
-        task.status === 'in_progress'),
-  );
-}
-
 function buildBrowserAttentionItems({
   browserStatus,
-  localPendingAuthTasks,
 }: {
   readonly browserStatus: BrowserStatus;
-  readonly localPendingAuthTasks: readonly LocalPendingAuthTask[];
 }): BrowserAttentionItem[] {
-  const siteNames = new Map(
-    browserStatus.sites.map((site) => [site.siteId, site.displayName]),
-  );
   const items = new Map<string, BrowserAttentionItem>();
-  for (const task of browserStatus.pendingAuthTasks) {
-    const key = browserTaskKey(task);
+  for (const site of browserStatus.sites) {
+    if (site.authPolicy !== 'required') continue;
+
+    const profile = findSiteProfile(browserStatus, site);
+    if (profile?.status === 'verified') continue;
+
+    const key = browserSiteKey(site);
     items.set(key, {
       key,
-      profileName: task.profileName,
-      reason: task.reason,
-      siteId: task.siteId,
-      siteName: siteNames.get(task.siteId) ?? task.siteId,
-      source: 'backend',
-    });
-  }
-  for (const task of localPendingAuthTasks.filter(
-    isActiveLocalPendingAuthTask,
-  )) {
-    const key = browserTaskKey(task);
-    const existing = items.get(key);
-    items.set(key, {
-      key,
-      profileName: task.profileName,
-      reason: existing?.reason ?? task.reason,
-      siteId: task.siteId,
-      siteName: existing?.siteName ?? siteNames.get(task.siteId) ?? task.siteId,
-      source: existing ? `${existing.source} + ${task.source}` : task.source,
-      status: task.status,
+      profileName: site.profileName ?? 'anonymous',
+      reason: profile ? 'Profile needs verification' : 'Missing profile',
+      siteId: site.siteId,
+      siteName: site.displayName,
+      status: profile?.status,
     });
   }
   return [...items.values()];
 }
 
-function getLocalOnlyAuthTasks(
-  browserStatus: BrowserStatus,
-  localPendingAuthTasks: readonly LocalPendingAuthTask[],
-): LocalPendingAuthTask[] {
-  return localPendingAuthTasks.filter(
-    (task) =>
-      isActiveLocalPendingAuthTask(task) &&
-      !browserStatus.sites.some(
-        (site) =>
-          site.siteId === task.siteId &&
-          (!site.profileName || site.profileName === task.profileName),
-      ),
-  );
-}
-
-function isActiveLocalPendingAuthTask(task: LocalPendingAuthTask): boolean {
-  return task.status === 'open' || task.status === 'in_progress';
-}
-
-function siteFromLocalPendingAuthTask(task: LocalPendingAuthTask): BrowserSite {
-  return {
-    allowedOrigins: [],
-    authPolicy: 'required',
-    displayName: task.siteId,
-    loginUrl: task.loginUrl,
-    profileName: task.profileName,
-    siteId: task.siteId,
-    verifyUrl: task.verifyUrl,
-  };
-}
-
 function browserSiteKey(site: BrowserSite): string {
   return `${site.siteId}:${site.profileName ?? 'anonymous'}`;
-}
-
-function browserTaskKey(task: BrowserPendingAuth): string {
-  return `${task.siteId}:${task.profileName}`;
 }
 
 function formatTimestamp(value: string): string {
@@ -1493,10 +1330,13 @@ function localPathValue(value: string): string {
   return value || 'Restart CthuDesktop to load path info';
 }
 
-function diagnosticsSnapshot(
-  appInfo: DesktopAppInfo,
-): DesktopDiagnosticsSnapshot {
-  return appInfo.diagnostics ?? { recentEvents: [] };
+function diagnosticsSnapshot(appInfo: DesktopAppInfo): {
+  readonly lastEvent?: DesktopDiagnosticsSnapshot['recentEvents'][number];
+} {
+  const recentEvents = appInfo.diagnostics?.recentEvents ?? [];
+  return {
+    lastEvent: recentEvents[0],
+  };
 }
 
 function SaveButton({
