@@ -570,6 +570,7 @@ function toInteractionChallengeReason(
     case 'rate_limited':
       return 'rate_limited';
   }
+  return 'blocked';
 }
 
 function toDesktopProfileStatus(

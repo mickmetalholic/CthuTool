@@ -117,6 +117,77 @@ describe('BrowserPublicApiService', () => {
     expect(runtime.runActions).not.toHaveBeenCalled();
   });
 
+  it('accepts crawler actions and preserves ordered routing', async () => {
+    const { runtime, service } = createHarness();
+    await service.createSession({ siteId: 'douban' });
+
+    await service.runActions('session-1', {
+      actions: [
+        { state: 'load', type: 'waitForLoadState' },
+        {
+          target: { url: 'https://movie.douban.com/subject/1292052/' },
+          type: 'waitForURL',
+        },
+        {
+          target: { pattern: '/subject/1292052', status: 200 },
+          type: 'waitForResponse',
+        },
+        { type: 'url' },
+        { selector: 'h1', type: 'innerText' },
+        { selector: '#content', type: 'innerHTML' },
+        { name: 'href', selector: 'a', type: 'getAttribute' },
+        { selector: '.item', type: 'locatorCount' },
+        { selector: '.item', type: 'allTextContents' },
+        { selector: '.item', type: 'exists' },
+        { key: 'Enter', selector: 'input', type: 'press' },
+        { selector: '.item', type: 'hover' },
+        { selector: 'select', type: 'selectOption', value: 'new' },
+        { selector: '#agree', type: 'check' },
+        { selector: '#agree', type: 'uncheck' },
+        { target: 'page', type: 'scroll', y: 600 },
+        {
+          fields: { title: { selector: '.title', type: 'text' } },
+          itemSelector: '.item',
+          type: 'extractList',
+        },
+        { selector: 'a', type: 'extractLinks' },
+        { type: 'extractMeta' },
+        { type: 'extractJsonLd' },
+      ],
+    });
+
+    expect(runtime.runActions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actions: expect.arrayContaining([
+          expect.objectContaining({ type: 'waitForLoadState' }),
+          expect.objectContaining({ type: 'extractList' }),
+          expect.objectContaining({ type: 'extractJsonLd' }),
+        ]),
+      }),
+    );
+  });
+
+  it('rejects concrete wait URL targets outside the configured allowlist', async () => {
+    const { runtime, service } = createHarness();
+    await service.createSession({ siteId: 'douban' });
+
+    await expect(
+      service.runActions('session-1', {
+        actions: [
+          {
+            target: { url: 'https://evil.example/page' },
+            type: 'waitForURL',
+          },
+        ],
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        code: 'INVALID_BROWSER_REQUEST',
+      }),
+    );
+    expect(runtime.runActions).not.toHaveBeenCalled();
+  });
+
   it('rejects unsupported action types', async () => {
     const { runtime, service } = createHarness();
     await service.createSession({ siteId: 'douban' });
@@ -124,6 +195,34 @@ describe('BrowserPublicApiService', () => {
     await expect(
       service.runActions('session-1', {
         actions: [{ type: 'evaluate', script: 'document.cookie' }],
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        code: 'INVALID_BROWSER_REQUEST',
+      }),
+    );
+    expect(runtime.runActions).not.toHaveBeenCalled();
+  });
+
+  it('rejects nested executable action payloads', async () => {
+    const { runtime, service } = createHarness();
+    await service.createSession({ siteId: 'douban' });
+
+    await expect(
+      service.runActions('session-1', {
+        actions: [
+          {
+            fields: {
+              title: {
+                script: 'document.cookie',
+                selector: '.title',
+                type: 'text',
+              },
+            },
+            itemSelector: '.item',
+            type: 'extractList',
+          },
+        ],
       }),
     ).rejects.toEqual(
       expect.objectContaining({

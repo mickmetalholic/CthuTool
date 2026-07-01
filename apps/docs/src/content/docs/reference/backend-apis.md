@@ -61,13 +61,14 @@ DELETE /api/browser/sessions/{sessionId}
 
 These endpoints are for trusted third-party applications that need controlled browser work through an online CthuDesktop agent. They do not expose the desktop agent WebSocket protocol.
 
-Session creation selects a browser-capable desktop agent, creates a desktop-owned browser session, and returns an opaque public session ID. Action requests use a bounded Playwright-like action DSL for navigation, selector interactions, extraction, screenshots, and close operations. Close requests release the backend routing record and ask the owning desktop agent to close its browser session.
+Session creation selects a browser-capable desktop agent, creates a desktop-owned browser session, and returns an opaque public session ID. Action requests use a bounded crawler-focused Playwright-like action DSL for navigation, load and URL waiting, bounded response waiting, selector interactions, scrolling, text and HTML extraction, attribute extraction, list extraction, link/meta/JSON-LD extraction, screenshots, and close operations. Close requests release the backend routing record and ask the owning desktop agent to close its browser session.
 
 Current safety constraints:
 
 - no API key authentication is added yet; keep the backend behind a trusted network boundary
 - navigation must stay within the configured site's `allowedOrigins`
 - responses do not include cookies, localStorage, Playwright storage-state contents, desktop profile paths, raw WebSocket objects, or raw Playwright handles
+- the API does not expose arbitrary `evaluate`, route interception, browser context storage, downloads, uploads, or Playwright Test assertions
 - expired, closed, or missing sessions return structured errors instead of broadcasting to all agents
 
 ## Client Events
