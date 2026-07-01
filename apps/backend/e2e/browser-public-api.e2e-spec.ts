@@ -71,6 +71,26 @@ describe('Browser public API (e2e)', () => {
     });
   });
 
+  it('routes crawler action requests', async () => {
+    const body = {
+      actions: [
+        { state: 'load', type: 'waitForLoadState' },
+        {
+          fields: { title: { selector: '.title', type: 'text' } },
+          itemSelector: '.item',
+          type: 'extractList',
+        },
+      ],
+    };
+
+    await request(app.getHttpServer())
+      .post('/api/browser/sessions/session-1/actions')
+      .send(body)
+      .expect(201);
+
+    expect(service.runActions).toHaveBeenCalledWith('session-1', body);
+  });
+
   it('routes session close requests', async () => {
     await request(app.getHttpServer())
       .delete('/api/browser/sessions/session-1')

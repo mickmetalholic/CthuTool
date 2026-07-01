@@ -18,9 +18,9 @@ The backend sends structured browser commands for supported work such as capture
 
 Trusted third-party applications can use the backend public browser session API instead of the desktop agent WebSocket protocol. The backend creates a session on one online CthuDesktop browser agent, stores only thin routing metadata, and routes later action lists back to that same agent.
 
-Supported public session actions are a bounded Playwright-like DSL: navigation, selector waiting, click, fill, text extraction, page content, title, screenshot, and close. The API rejects unsupported action types before dispatching desktop work.
+Supported public session actions are a bounded crawler-focused Playwright-like DSL: navigation, load and URL waiting, bounded response waiting, selector waiting, click, fill, keyboard input, hover, option selection, checkbox controls, scrolling, text and HTML extraction, attribute extraction, list extraction, link/meta/JSON-LD extraction, page content, title, screenshot, and close. The API rejects unsupported action types before dispatching desktop work.
 
-The public API is intended for trusted deployments first. It does not add API key authentication yet, and it does not expose cookies, localStorage, Playwright storage-state contents, desktop profile paths, or raw browser handles.
+The public API is intended for trusted deployments first. It does not add API key authentication yet, and it does not expose cookies, localStorage, Playwright storage-state contents, desktop profile paths, raw browser handles, arbitrary `evaluate`, route interception, downloads, uploads, or Playwright Test assertions.
 
 ## Related Modules
 

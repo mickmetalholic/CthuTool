@@ -30,12 +30,32 @@ export const BROWSER_RUNTIME_METHODS = [
 export const BROWSER_ACTION_TYPES = [
   'goto',
   'waitForSelector',
+  'waitForLoadState',
+  'waitForURL',
+  'waitForResponse',
+  'url',
   'click',
   'fill',
+  'press',
+  'hover',
+  'selectOption',
+  'check',
+  'uncheck',
+  'scroll',
   'textContent',
+  'innerText',
+  'innerHTML',
+  'getAttribute',
+  'locatorCount',
+  'allTextContents',
+  'exists',
   'content',
   'title',
   'screenshot',
+  'extractList',
+  'extractLinks',
+  'extractMeta',
+  'extractJsonLd',
 ] as const;
 export const BROWSER_AUTH_POLICIES = ['anonymous', 'required'] as const;
 export const BROWSER_RESOURCE_TYPES = [
@@ -132,6 +152,41 @@ const BrowserSelectorSchema = v.pipe(
   v.minLength(1),
   v.maxLength(2048),
 );
+const NonEmptyBrowserStringSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(2048),
+);
+const ExtractFieldTypeSchema = v.picklist([
+  'text',
+  'innerText',
+  'html',
+  'attribute',
+  'exists',
+  'count',
+]);
+const ExtractFieldSchema = v.object({
+  selector: v.optional(BrowserSelectorSchema),
+  type: ExtractFieldTypeSchema,
+  attribute: v.optional(NonEmptyBrowserStringSchema),
+  required: v.optional(v.boolean()),
+});
+const ExtractFieldsSchema = v.record(
+  NonEmptyBrowserStringSchema,
+  ExtractFieldSchema,
+);
+const UrlMatchSchema = v.object({
+  url: v.optional(HttpUrlSchema),
+  pattern: v.optional(NonEmptyBrowserStringSchema),
+});
+const ResponseMatchSchema = v.object({
+  url: v.optional(HttpUrlSchema),
+  pattern: v.optional(NonEmptyBrowserStringSchema),
+  method: v.optional(NonEmptyBrowserStringSchema),
+  status: v.optional(v.pipe(v.number(), v.integer())),
+});
+const ScrollTargetSchema = v.picklist(['page', 'selector']);
 const WaitUntilSchema = v.picklist(['domcontentloaded', 'load', 'networkidle']);
 
 const BaseBrowserParamsEntries = {
@@ -162,6 +217,25 @@ export const BrowserActionSchema = v.variant('type', [
   }),
   v.object({
     ...BrowserActionBaseSchema.entries,
+    type: v.literal('waitForLoadState'),
+    state: WaitUntilSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('waitForURL'),
+    target: UrlMatchSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('waitForResponse'),
+    target: ResponseMatchSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('url'),
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
     type: v.literal('click'),
     selector: BrowserSelectorSchema,
   }),
@@ -173,7 +247,73 @@ export const BrowserActionSchema = v.variant('type', [
   }),
   v.object({
     ...BrowserActionBaseSchema.entries,
+    type: v.literal('press'),
+    selector: BrowserSelectorSchema,
+    key: NonEmptyBrowserStringSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('hover'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('selectOption'),
+    selector: BrowserSelectorSchema,
+    value: NonEmptyBrowserStringSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('check'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('uncheck'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('scroll'),
+    target: v.optional(ScrollTargetSchema),
+    selector: v.optional(BrowserSelectorSchema),
+    x: v.optional(v.pipe(v.number(), v.integer())),
+    y: v.optional(v.pipe(v.number(), v.integer())),
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
     type: v.literal('textContent'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('innerText'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('innerHTML'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('getAttribute'),
+    selector: BrowserSelectorSchema,
+    name: NonEmptyBrowserStringSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('locatorCount'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('allTextContents'),
+    selector: BrowserSelectorSchema,
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('exists'),
     selector: BrowserSelectorSchema,
   }),
   v.object({
@@ -189,7 +329,29 @@ export const BrowserActionSchema = v.variant('type', [
     type: v.literal('screenshot'),
     fullPage: v.optional(v.boolean()),
   }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('extractList'),
+    itemSelector: BrowserSelectorSchema,
+    fields: ExtractFieldsSchema,
+    limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('extractLinks'),
+    selector: v.optional(BrowserSelectorSchema),
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('extractMeta'),
+  }),
+  v.object({
+    ...BrowserActionBaseSchema.entries,
+    type: v.literal('extractJsonLd'),
+  }),
 ]);
+
+const JsonRecordSchema = v.record(v.string(), v.unknown());
 
 export const BrowserActionResultSchema = v.object({
   actionId: v.optional(BrowserActionIdSchema),
@@ -199,6 +361,16 @@ export const BrowserActionResultSchema = v.object({
   title: v.optional(v.string()),
   html: v.optional(v.string()),
   text: v.optional(v.string()),
+  texts: v.optional(v.array(v.string())),
+  attribute: v.optional(v.nullable(v.string())),
+  count: v.optional(v.pipe(v.number(), v.integer())),
+  exists: v.optional(v.boolean()),
+  url: v.optional(HttpUrlSchema),
+  items: v.optional(v.array(JsonRecordSchema)),
+  links: v.optional(v.array(JsonRecordSchema)),
+  meta: v.optional(JsonRecordSchema),
+  jsonLd: v.optional(v.array(v.unknown())),
+  response: v.optional(JsonRecordSchema),
   screenshotBase64: v.optional(v.string()),
 });
 
@@ -497,6 +669,15 @@ export function validateBrowserRuntimeRequest(
   if (!isBrowserRuntimeMethod(input.method)) {
     return { ok: false, message: 'unsupported browser runtime method' };
   }
+  if (
+    input.method === 'browser.runActions' &&
+    containsExecutablePayload(input.params)
+  ) {
+    return {
+      ok: false,
+      message: 'browser actions must not contain executable script payloads',
+    };
+  }
   const params = parseBrowserRuntimeParams(input.method, input.params);
   if (!params.ok) {
     return params;
@@ -675,4 +856,28 @@ function parseSchema<TSchema extends v.GenericSchema>(
 
 function isRecord(input: unknown): input is Record<string, unknown> {
   return typeof input === 'object' && input !== null;
+}
+
+function containsExecutablePayload(input: unknown): boolean {
+  if (Array.isArray(input)) {
+    return input.some(containsExecutablePayload);
+  }
+  if (!isRecord(input)) {
+    return typeof input === 'function';
+  }
+  for (const [key, value] of Object.entries(input)) {
+    const normalized = key.toLowerCase();
+    if (
+      normalized === 'script' ||
+      normalized === 'function' ||
+      normalized === 'predicate' ||
+      normalized === 'evaluate'
+    ) {
+      return true;
+    }
+    if (containsExecutablePayload(value)) {
+      return true;
+    }
+  }
+  return false;
 }

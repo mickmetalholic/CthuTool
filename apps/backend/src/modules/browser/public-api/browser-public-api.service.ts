@@ -153,6 +153,12 @@ export class BrowserPublicApiService implements OnModuleInit, OnModuleDestroy {
       if (action.type === 'goto') {
         assertAllowedOrigin(action.url, site.allowedOrigins);
       }
+      if (action.type === 'waitForURL' && action.target.url) {
+        assertAllowedOrigin(action.target.url, site.allowedOrigins);
+      }
+      if (action.type === 'waitForResponse' && action.target.url) {
+        assertAllowedOrigin(action.target.url, site.allowedOrigins);
+      }
     }
     const result = await this.desktopRuntime.runActions({
       actions,
@@ -300,6 +306,7 @@ function parseRunActionsRequest(input: unknown): BrowserAction[] {
 
 function parseBrowserAction(input: unknown): BrowserAction {
   const action = requireObject(input);
+  rejectExecutablePayload(action);
   const type = requirePicklist(
     action.type,
     BROWSER_ACTION_TYPES,
@@ -338,13 +345,98 @@ function parseBrowserAction(input: unknown): BrowserAction {
   if (
     type === 'waitForSelector' ||
     type === 'click' ||
-    type === 'textContent'
+    type === 'textContent' ||
+    type === 'innerText' ||
+    type === 'innerHTML' ||
+    type === 'locatorCount' ||
+    type === 'allTextContents' ||
+    type === 'exists' ||
+    type === 'hover' ||
+    type === 'check' ||
+    type === 'uncheck'
   ) {
     return {
       ...base,
       selector: requireString(action.selector, 'action.selector'),
       type,
     } as BrowserAction;
+  }
+  if (type === 'waitForLoadState') {
+    return {
+      ...base,
+      state: requirePicklist(
+        action.state,
+        ['domcontentloaded', 'load', 'networkidle'] as const,
+        'action.state',
+      ),
+      type,
+    };
+  }
+  if (type === 'waitForURL') {
+    return {
+      ...base,
+      target: parseUrlMatch(action.target, 'action.target'),
+      type,
+    } as BrowserAction;
+  }
+  if (type === 'waitForResponse') {
+    return {
+      ...base,
+      target: parseResponseMatch(action.target, 'action.target'),
+      type,
+    } as BrowserAction;
+  }
+  if (type === 'press') {
+    return {
+      ...base,
+      key: requireString(action.key, 'action.key'),
+      selector: requireString(action.selector, 'action.selector'),
+      type,
+    };
+  }
+  if (type === 'selectOption') {
+    return {
+      ...base,
+      selector: requireString(action.selector, 'action.selector'),
+      type,
+      value: requireString(action.value, 'action.value'),
+    };
+  }
+  if (type === 'scroll') {
+    return {
+      ...base,
+      ...(action.target === undefined
+        ? {}
+        : {
+            target: requirePicklist(
+              action.target,
+              ['page', 'selector'] as const,
+              'action.target',
+            ),
+          }),
+      ...(action.selector === undefined
+        ? {}
+        : { selector: requireString(action.selector, 'action.selector') }),
+      ...(action.x === undefined
+        ? {}
+        : {
+            x: requireInteger(action.x, 'action.x'),
+          }),
+      ...(action.y === undefined
+        ? {}
+        : {
+            y: requireInteger(action.y, 'action.y'),
+          }),
+      type,
+    } as BrowserAction;
+  }
+  if (type === 'getAttribute') {
+    return {
+      ...base,
+      name: requireString(action.name, 'action.name'),
+      selector: requireString(action.selector, 'action.selector'),
+      type,
+    };
   }
   if (type === 'fill') {
     return {
@@ -363,7 +455,94 @@ function parseBrowserAction(input: unknown): BrowserAction {
         : { fullPage: requireBoolean(action.fullPage, 'action.fullPage') }),
     };
   }
+  if (type === 'extractList') {
+    return {
+      ...base,
+      fields: parseExtractFields(action.fields),
+      itemSelector: requireString(action.itemSelector, 'action.itemSelector'),
+      ...(action.limit === undefined
+        ? {}
+        : {
+            limit: requirePositiveInteger(action.limit, 'action.limit', 1000),
+          }),
+      type,
+    } as BrowserAction;
+  }
+  if (type === 'extractLinks') {
+    return {
+      ...base,
+      ...(action.selector === undefined
+        ? {}
+        : { selector: requireString(action.selector, 'action.selector') }),
+      type,
+    } as BrowserAction;
+  }
   return { ...base, type } as BrowserAction;
+}
+
+function parseUrlMatch(input: unknown, field: string) {
+  const target = requireObject(input);
+  return {
+    ...(target.url === undefined ? {} : { url: requireUrl(target.url, field) }),
+    ...(target.pattern === undefined
+      ? {}
+      : { pattern: requireString(target.pattern, `${field}.pattern`) }),
+  };
+}
+
+function parseResponseMatch(input: unknown, field: string) {
+  const target = parseUrlMatch(input, field);
+  const body = requireObject(input);
+  return {
+    ...target,
+    ...(body.method === undefined
+      ? {}
+      : { method: requireString(body.method, `${field}.method`) }),
+    ...(body.status === undefined
+      ? {}
+      : { status: requireInteger(body.status, `${field}.status`) }),
+  };
+}
+
+function parseExtractFields(input: unknown) {
+  const fields = requireObject(input);
+  const output: Record<string, unknown> = {};
+  for (const [name, rawField] of Object.entries(fields)) {
+    const field = requireObject(rawField);
+    const type = requirePicklist(
+      field.type,
+      ['text', 'innerText', 'html', 'attribute', 'exists', 'count'] as const,
+      `action.fields.${name}.type`,
+    );
+    output[name] = {
+      ...(field.selector === undefined
+        ? {}
+        : {
+            selector: requireString(
+              field.selector,
+              `action.fields.${name}.selector`,
+            ),
+          }),
+      type,
+      ...(field.attribute === undefined
+        ? {}
+        : {
+            attribute: requireString(
+              field.attribute,
+              `action.fields.${name}.attribute`,
+            ),
+          }),
+      ...(field.required === undefined
+        ? {}
+        : {
+            required: requireBoolean(
+              field.required,
+              `action.fields.${name}.required`,
+            ),
+          }),
+    };
+  }
+  return output;
 }
 
 function runtimeErrorToPublicError(
@@ -483,6 +662,16 @@ function requirePositiveInteger(
   return input;
 }
 
+function requireInteger(input: unknown, field: string): number {
+  if (typeof input !== 'number' || !Number.isInteger(input)) {
+    throw browserPublicApiError(
+      'INVALID_BROWSER_REQUEST',
+      `${field} must be an integer`,
+    );
+  }
+  return input;
+}
+
 function requirePicklist<const T extends readonly string[]>(
   input: unknown,
   values: T,
@@ -495,4 +684,37 @@ function requirePicklist<const T extends readonly string[]>(
     );
   }
   return input;
+}
+
+function rejectExecutablePayload(input: Record<string, unknown>): void {
+  if (containsExecutablePayload(input)) {
+    throw browserPublicApiError(
+      'INVALID_BROWSER_REQUEST',
+      'browser actions must not contain executable script payloads',
+    );
+  }
+}
+
+function containsExecutablePayload(input: unknown): boolean {
+  if (Array.isArray(input)) {
+    return input.some(containsExecutablePayload);
+  }
+  if (!input || typeof input !== 'object') {
+    return typeof input === 'function';
+  }
+  for (const [key, value] of Object.entries(input)) {
+    const normalized = key.toLowerCase();
+    if (
+      normalized === 'script' ||
+      normalized === 'function' ||
+      normalized === 'predicate' ||
+      normalized === 'evaluate'
+    ) {
+      return true;
+    }
+    if (containsExecutablePayload(value)) {
+      return true;
+    }
+  }
+  return false;
 }

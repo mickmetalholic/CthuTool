@@ -33,20 +33,46 @@ import {
 
 type RuntimeResponse = {
   readonly status: () => number;
+  readonly url?: () => string;
+  readonly request?: () => { readonly method?: () => string };
+  readonly headers?: () => Record<string, string>;
 };
 
 type RuntimeLocator = {
+  readonly allTextContents: () => Promise<string[]>;
+  readonly check: (options?: { readonly timeout?: number }) => Promise<void>;
   readonly click: (options?: { readonly timeout?: number }) => Promise<void>;
+  readonly count: () => Promise<number>;
   readonly fill: (
     value: string,
     options?: { readonly timeout?: number },
   ) => Promise<void>;
+  readonly getAttribute: (name: string) => Promise<string | null>;
+  readonly hover: (options?: { readonly timeout?: number }) => Promise<void>;
+  readonly innerHTML: () => Promise<string>;
+  readonly innerText: () => Promise<string>;
+  readonly press: (
+    key: string,
+    options?: { readonly timeout?: number },
+  ) => Promise<void>;
+  readonly scrollIntoViewIfNeeded: (options?: {
+    readonly timeout?: number;
+  }) => Promise<void>;
+  readonly selectOption: (
+    value: string,
+    options?: { readonly timeout?: number },
+  ) => Promise<unknown>;
   readonly textContent: () => Promise<string | null>;
+  readonly uncheck: (options?: { readonly timeout?: number }) => Promise<void>;
   readonly waitFor: (options?: { readonly timeout?: number }) => Promise<void>;
 };
 
 type RuntimePage = {
   readonly content: () => Promise<string>;
+  readonly evaluate: <T>(
+    pageFunction: (arg: unknown) => T,
+    arg?: unknown,
+  ) => Promise<T>;
   readonly goto: (
     url: string,
     options: {
@@ -60,6 +86,18 @@ type RuntimePage = {
   }) => Promise<Buffer>;
   readonly title: () => Promise<string>;
   readonly url: () => string;
+  readonly waitForLoadState: (
+    state: 'load' | 'domcontentloaded' | 'networkidle',
+    options?: { readonly timeout?: number },
+  ) => Promise<void>;
+  readonly waitForResponse: (
+    predicate: (response: RuntimeResponse) => boolean,
+    options?: { readonly timeout?: number },
+  ) => Promise<RuntimeResponse>;
+  readonly waitForURL: (
+    predicate: string | RegExp | ((url: URL) => boolean),
+    options?: { readonly timeout?: number },
+  ) => Promise<void>;
 };
 
 type RuntimeContext = {
@@ -879,15 +917,117 @@ export class PlaywrightHost {
         .waitFor({ timeout: action.timeoutMs });
       return { actionId: action.actionId, type: action.type };
     }
+    if (action.type === 'waitForLoadState') {
+      await page.waitForLoadState(action.state, { timeout: action.timeoutMs });
+      return {
+        actionId: action.actionId,
+        finalUrl: page.url(),
+        type: action.type,
+      };
+    }
+    if (action.type === 'waitForURL') {
+      await page.waitForURL(toUrlPredicate(action.target), {
+        timeout: action.timeoutMs,
+      });
+      return {
+        actionId: action.actionId,
+        finalUrl: page.url(),
+        type: action.type,
+      };
+    }
+    if (action.type === 'waitForResponse') {
+      const response = await page.waitForResponse(
+        (candidate) => matchesResponse(candidate, action.target),
+        { timeout: action.timeoutMs },
+      );
+      return {
+        actionId: action.actionId,
+        response: responseSummary(response),
+        type: action.type,
+      };
+    }
+    if (action.type === 'url') {
+      return {
+        actionId: action.actionId,
+        type: action.type,
+        url: page.url(),
+      };
+    }
     if (action.type === 'click') {
       await page.locator(action.selector).click({ timeout: action.timeoutMs });
-      return { actionId: action.actionId, type: action.type };
+      return {
+        actionId: action.actionId,
+        finalUrl: page.url(),
+        type: action.type,
+      };
     }
     if (action.type === 'fill') {
       await page
         .locator(action.selector)
         .fill(action.value, { timeout: action.timeoutMs });
       return { actionId: action.actionId, type: action.type };
+    }
+    if (action.type === 'press') {
+      await page
+        .locator(action.selector)
+        .press(action.key, { timeout: action.timeoutMs });
+      return {
+        actionId: action.actionId,
+        finalUrl: page.url(),
+        type: action.type,
+      };
+    }
+    if (action.type === 'hover') {
+      await page.locator(action.selector).hover({ timeout: action.timeoutMs });
+      return { actionId: action.actionId, type: action.type };
+    }
+    if (action.type === 'selectOption') {
+      await page
+        .locator(action.selector)
+        .selectOption(action.value, { timeout: action.timeoutMs });
+      return {
+        actionId: action.actionId,
+        finalUrl: page.url(),
+        type: action.type,
+      };
+    }
+    if (action.type === 'check') {
+      await page.locator(action.selector).check({ timeout: action.timeoutMs });
+      return {
+        actionId: action.actionId,
+        finalUrl: page.url(),
+        type: action.type,
+      };
+    }
+    if (action.type === 'uncheck') {
+      await page
+        .locator(action.selector)
+        .uncheck({ timeout: action.timeoutMs });
+      return {
+        actionId: action.actionId,
+        finalUrl: page.url(),
+        type: action.type,
+      };
+    }
+    if (action.type === 'scroll') {
+      if (action.selector) {
+        await page
+          .locator(action.selector)
+          .scrollIntoViewIfNeeded({ timeout: action.timeoutMs });
+      } else {
+        await page.evaluate(
+          (input) => {
+            const value = input as { readonly x?: number; readonly y?: number };
+            window.scrollBy(value.x ?? 0, value.y ?? 0);
+          },
+          { x: action.x, y: action.y },
+        );
+      }
+      return {
+        actionId: action.actionId,
+        finalUrl: page.url(),
+        type: action.type,
+      };
     }
     if (action.type === 'textContent') {
       return {
@@ -896,6 +1036,59 @@ export class PlaywrightHost {
           (await page.locator(action.selector).textContent()) ?? '',
           this.maxPayloadBytes,
         ),
+        type: action.type,
+      };
+    }
+    if (action.type === 'innerText') {
+      return {
+        actionId: action.actionId,
+        text: capPayload(
+          await page.locator(action.selector).innerText(),
+          this.maxPayloadBytes,
+        ),
+        type: action.type,
+      };
+    }
+    if (action.type === 'innerHTML') {
+      return {
+        actionId: action.actionId,
+        html: capPayload(
+          await page.locator(action.selector).innerHTML(),
+          this.maxPayloadBytes,
+        ),
+        type: action.type,
+      };
+    }
+    if (action.type === 'getAttribute') {
+      return {
+        actionId: action.actionId,
+        attribute: await page
+          .locator(action.selector)
+          .getAttribute(action.name),
+        type: action.type,
+      };
+    }
+    if (action.type === 'locatorCount') {
+      return {
+        actionId: action.actionId,
+        count: await page.locator(action.selector).count(),
+        type: action.type,
+      };
+    }
+    if (action.type === 'allTextContents') {
+      return {
+        actionId: action.actionId,
+        texts: capStringArray(
+          await page.locator(action.selector).allTextContents(),
+          this.maxPayloadBytes,
+        ),
+        type: action.type,
+      };
+    }
+    if (action.type === 'exists') {
+      return {
+        actionId: action.actionId,
+        exists: (await page.locator(action.selector).count()) > 0,
         type: action.type,
       };
     }
@@ -921,6 +1114,52 @@ export class PlaywrightHost {
         actionId: action.actionId,
         screenshotBase64: capPayload(
           screenshot.toString('base64'),
+          this.maxPayloadBytes,
+        ),
+        type: action.type,
+      };
+    }
+    if (action.type === 'extractList') {
+      return {
+        actionId: action.actionId,
+        items: capJsonArray(
+          await page.evaluate(extractListFromPage, {
+            fields: action.fields,
+            itemSelector: action.itemSelector,
+            limit: action.limit,
+          }),
+          this.maxPayloadBytes,
+        ),
+        type: action.type,
+      };
+    }
+    if (action.type === 'extractLinks') {
+      return {
+        actionId: action.actionId,
+        links: capJsonArray(
+          await page.evaluate(extractLinksFromPage, {
+            selector: action.selector,
+          }),
+          this.maxPayloadBytes,
+        ),
+        type: action.type,
+      };
+    }
+    if (action.type === 'extractMeta') {
+      return {
+        actionId: action.actionId,
+        meta: capJsonObject(
+          await page.evaluate(extractMetaFromPage),
+          this.maxPayloadBytes,
+        ),
+        type: action.type,
+      };
+    }
+    if (action.type === 'extractJsonLd') {
+      return {
+        actionId: action.actionId,
+        jsonLd: capJsonArray(
+          await page.evaluate(extractJsonLdFromPage),
           this.maxPayloadBytes,
         ),
         type: action.type,
@@ -1393,10 +1632,207 @@ async function safeGoto(
   }
 }
 
+function toUrlPredicate(input: {
+  readonly pattern?: string;
+  readonly url?: string;
+}): string | ((url: URL) => boolean) {
+  if (input.url) {
+    return input.url;
+  }
+  const pattern = input.pattern ?? '';
+  return (url) => url.toString().includes(pattern);
+}
+
+function matchesResponse(
+  response: RuntimeResponse,
+  input: {
+    readonly method?: string;
+    readonly pattern?: string;
+    readonly status?: number;
+    readonly url?: string;
+  },
+): boolean {
+  const url = response.url?.() ?? '';
+  const method = response.request?.().method?.();
+  if (input.url && url !== input.url) {
+    return false;
+  }
+  if (input.pattern && !url.includes(input.pattern)) {
+    return false;
+  }
+  if (input.method && method?.toUpperCase() !== input.method.toUpperCase()) {
+    return false;
+  }
+  if (input.status !== undefined && response.status() !== input.status) {
+    return false;
+  }
+  return true;
+}
+
+function responseSummary(response: RuntimeResponse): Record<string, unknown> {
+  const headers = response.headers?.() ?? {};
+  return {
+    ...(response.url ? { url: response.url() } : {}),
+    ...(response.request?.().method
+      ? { method: response.request().method?.() }
+      : {}),
+    status: response.status(),
+    ...(headers['content-type']
+      ? { contentType: headers['content-type'] }
+      : {}),
+  };
+}
+
+type ExtractFieldInput = {
+  readonly attribute?: string;
+  readonly required?: boolean;
+  readonly selector?: string;
+  readonly type: string;
+};
+
+type ExtractListInput = {
+  readonly fields: Record<string, ExtractFieldInput>;
+  readonly itemSelector: string;
+  readonly limit?: number;
+};
+
+function extractListFromPage(input: unknown): Record<string, unknown>[] {
+  const { fields, itemSelector, limit } = input as ExtractListInput;
+  const items = Array.from(document.querySelectorAll(itemSelector)).slice(
+    0,
+    limit ?? 100,
+  );
+  return items.map((item) => {
+    const record: Record<string, unknown> = {};
+    for (const [name, field] of Object.entries(fields)) {
+      record[name] = extractFieldValue(item, field);
+    }
+    return record;
+  });
+}
+
+function extractFieldValue(root: Element, field: ExtractFieldInput): unknown {
+  const element = field.selector ? root.querySelector(field.selector) : root;
+  if (field.type === 'exists') {
+    return element !== null;
+  }
+  if (field.type === 'count') {
+    return field.selector ? root.querySelectorAll(field.selector).length : 1;
+  }
+  if (!element) {
+    return null;
+  }
+  if (field.type === 'html') {
+    return element.innerHTML;
+  }
+  if (field.type === 'attribute') {
+    return field.attribute ? element.getAttribute(field.attribute) : null;
+  }
+  if (field.type === 'innerText' && 'innerText' in element) {
+    return String((element as HTMLElement).innerText).trim();
+  }
+  return (element.textContent ?? '').trim();
+}
+
+function extractLinksFromPage(input: unknown): Record<string, unknown>[] {
+  const selector =
+    typeof input === 'object' && input !== null && 'selector' in input
+      ? ((input as { readonly selector?: string }).selector ?? 'a')
+      : 'a';
+  return Array.from(document.querySelectorAll(selector))
+    .filter(
+      (element): element is HTMLAnchorElement =>
+        element instanceof HTMLAnchorElement,
+    )
+    .map((anchor) => ({
+      href: anchor.href,
+      text: (anchor.textContent ?? '').trim(),
+    }));
+}
+
+function extractMetaFromPage(): Record<string, unknown> {
+  const meta: Record<string, unknown> = {};
+  const title = document.querySelector('title')?.textContent?.trim();
+  if (title) {
+    meta.title = title;
+  }
+  const canonical = document
+    .querySelector('link[rel="canonical"]')
+    ?.getAttribute('href');
+  if (canonical) {
+    meta.canonical = canonical;
+  }
+  for (const element of Array.from(document.querySelectorAll('meta'))) {
+    const key =
+      element.getAttribute('name') ?? element.getAttribute('property');
+    const content = element.getAttribute('content');
+    if (key && content) {
+      meta[key] = content;
+    }
+  }
+  return meta;
+}
+
+function extractJsonLdFromPage(): unknown[] {
+  const values: unknown[] = [];
+  for (const element of Array.from(
+    document.querySelectorAll('script[type="application/ld+json"]'),
+  )) {
+    const raw = element.textContent?.trim();
+    if (!raw) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        values.push(...parsed);
+      } else {
+        values.push(parsed);
+      }
+    } catch {
+      // Ignore malformed page-provided JSON-LD blocks.
+    }
+  }
+  return values;
+}
+
 function capPayload(value: string, maxBytes: number): string {
   return Buffer.byteLength(value, 'utf8') > maxBytes
     ? value.slice(0, maxBytes)
     : value;
+}
+
+function capStringArray(values: readonly string[], maxBytes: number): string[] {
+  return capJsonArray(values, maxBytes);
+}
+
+function capJsonObject(
+  value: Record<string, unknown>,
+  maxBytes: number,
+): Record<string, unknown> {
+  const output = { ...value };
+  const keys = Object.keys(output);
+  while (
+    keys.length > 0 &&
+    Buffer.byteLength(JSON.stringify(output), 'utf8') > maxBytes
+  ) {
+    const key = keys.pop();
+    if (key) {
+      delete output[key];
+    }
+  }
+  return output;
+}
+
+function capJsonArray<T>(values: readonly T[], maxBytes: number): T[] {
+  const output = [...values];
+  while (
+    output.length > 0 &&
+    Buffer.byteLength(JSON.stringify(output), 'utf8') > maxBytes
+  ) {
+    output.pop();
+  }
+  return output;
 }
 
 function addMilliseconds(date: Date, milliseconds: number): string {

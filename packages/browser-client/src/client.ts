@@ -4,13 +4,25 @@ import type {
   BrowserAction,
   BrowserActionResult,
   BrowserActionSuccessResult,
+  BrowserExtractFields,
+  BrowserExtractListOptions,
+  BrowserExtractRecord,
   BrowserGotoOptions,
+  BrowserInteractionOptions,
+  BrowserLinkRecord,
+  BrowserResponseMatch,
+  BrowserResponseSummary,
   BrowserRunActionsOptions,
   BrowserScreenshot,
   BrowserScreenshotOptions,
+  BrowserScrollOptions,
   BrowserSelectorOptions,
   BrowserSession,
   BrowserSessionOptions,
+  BrowserUrlMatch,
+  BrowserWaitForLoadStateOptions,
+  BrowserWaitForResponseOptions,
+  BrowserWaitForUrlOptions,
   CthuBrowserClientOptions,
 } from './types';
 
@@ -130,6 +142,54 @@ export class BrowserPage {
     });
   }
 
+  async waitForLoadState(
+    state: 'domcontentloaded' | 'load' | 'networkidle',
+    options: BrowserWaitForLoadStateOptions = {},
+  ): Promise<BrowserActionSuccessResult> {
+    return this.runSingleAction({
+      state,
+      timeoutMs: options.timeoutMs,
+      type: 'waitForLoadState',
+    });
+  }
+
+  async waitForURL(
+    target: string | BrowserUrlMatch,
+    options: BrowserWaitForUrlOptions = {},
+  ): Promise<BrowserActionSuccessResult> {
+    return this.runSingleAction({
+      target: normalizeUrlMatch(target),
+      timeoutMs: options.timeoutMs,
+      type: 'waitForURL',
+    });
+  }
+
+  async waitForResponse(
+    target: string | BrowserResponseMatch,
+    options: BrowserWaitForResponseOptions = {},
+  ): Promise<BrowserResponseSummary> {
+    const result = await this.runSingleAction({
+      target: normalizeResponseMatch(target),
+      timeoutMs: options.timeoutMs,
+      type: 'waitForResponse',
+    });
+    if (isRecord(result.response)) {
+      return result.response as BrowserResponseSummary;
+    }
+    throw malformedActionResult('waitForResponse');
+  }
+
+  async url(): Promise<string> {
+    const result = await this.runSingleAction({ type: 'url' });
+    if (typeof result.url === 'string') {
+      return result.url;
+    }
+    if (typeof result.value === 'string') {
+      return result.value;
+    }
+    throw malformedActionResult('url');
+  }
+
   async click(
     selector: string,
     options: BrowserSelectorOptions = {},
@@ -151,6 +211,80 @@ export class BrowserPage {
       timeoutMs: options.timeoutMs,
       type: 'fill',
       value,
+    });
+  }
+
+  async press(
+    selector: string,
+    key: string,
+    options: BrowserInteractionOptions = {},
+  ): Promise<BrowserActionSuccessResult> {
+    return this.runSingleAction({
+      key,
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'press',
+    });
+  }
+
+  async hover(
+    selector: string,
+    options: BrowserInteractionOptions = {},
+  ): Promise<BrowserActionSuccessResult> {
+    return this.runSingleAction({
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'hover',
+    });
+  }
+
+  async selectOption(
+    selector: string,
+    value: string,
+    options: BrowserInteractionOptions = {},
+  ): Promise<BrowserActionSuccessResult> {
+    return this.runSingleAction({
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'selectOption',
+      value,
+    });
+  }
+
+  async check(
+    selector: string,
+    options: BrowserInteractionOptions = {},
+  ): Promise<BrowserActionSuccessResult> {
+    return this.runSingleAction({
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'check',
+    });
+  }
+
+  async uncheck(
+    selector: string,
+    options: BrowserInteractionOptions = {},
+  ): Promise<BrowserActionSuccessResult> {
+    return this.runSingleAction({
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'uncheck',
+    });
+  }
+
+  async scroll(
+    target: 'page' | string = 'page',
+    options: BrowserScrollOptions = {},
+  ): Promise<BrowserActionSuccessResult> {
+    const selector = target === 'page' ? undefined : target;
+    return this.runSingleAction({
+      selector,
+      target: selector ? 'selector' : 'page',
+      timeoutMs: options.timeoutMs,
+      type: 'scroll',
+      x: options.x,
+      y: options.y,
     });
   }
 
@@ -182,6 +316,156 @@ export class BrowserPage {
       return result.value;
     }
     throw malformedActionResult('content');
+  }
+
+  async innerText(
+    selector: string,
+    options: BrowserSelectorOptions = {},
+  ): Promise<string> {
+    const result = await this.runSingleAction({
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'innerText',
+    });
+    if (typeof result.text === 'string') {
+      return result.text;
+    }
+    throw malformedActionResult('innerText');
+  }
+
+  async innerHTML(
+    selector: string,
+    options: BrowserSelectorOptions = {},
+  ): Promise<string> {
+    const result = await this.runSingleAction({
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'innerHTML',
+    });
+    if (typeof result.html === 'string') {
+      return result.html;
+    }
+    throw malformedActionResult('innerHTML');
+  }
+
+  async getAttribute(
+    selector: string,
+    name: string,
+    options: BrowserSelectorOptions = {},
+  ): Promise<string | null> {
+    const result = await this.runSingleAction({
+      name,
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'getAttribute',
+    });
+    if (typeof result.attribute === 'string' || result.attribute === null) {
+      return result.attribute;
+    }
+    return null;
+  }
+
+  async locatorCount(
+    selector: string,
+    options: BrowserSelectorOptions = {},
+  ): Promise<number> {
+    const result = await this.runSingleAction({
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'locatorCount',
+    });
+    if (typeof result.count === 'number') {
+      return result.count;
+    }
+    throw malformedActionResult('locatorCount');
+  }
+
+  async allTextContents(
+    selector: string,
+    options: BrowserSelectorOptions = {},
+  ): Promise<readonly string[]> {
+    const result = await this.runSingleAction({
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'allTextContents',
+    });
+    if (Array.isArray(result.texts)) {
+      return result.texts;
+    }
+    throw malformedActionResult('allTextContents');
+  }
+
+  async exists(
+    selector: string,
+    options: BrowserSelectorOptions = {},
+  ): Promise<boolean> {
+    const result = await this.runSingleAction({
+      selector,
+      timeoutMs: options.timeoutMs,
+      type: 'exists',
+    });
+    if (typeof result.exists === 'boolean') {
+      return result.exists;
+    }
+    throw malformedActionResult('exists');
+  }
+
+  async extractList(
+    itemSelector: string,
+    fields: BrowserExtractFields,
+    options: BrowserExtractListOptions = {},
+  ): Promise<readonly BrowserExtractRecord[]> {
+    const result = await this.runSingleAction({
+      fields,
+      itemSelector,
+      limit: options.limit,
+      timeoutMs: options.timeoutMs,
+      type: 'extractList',
+    });
+    if (Array.isArray(result.items)) {
+      return result.items;
+    }
+    throw malformedActionResult('extractList');
+  }
+
+  async extractLinks(
+    options: { readonly selector?: string; readonly timeoutMs?: number } = {},
+  ): Promise<readonly BrowserLinkRecord[]> {
+    const result = await this.runSingleAction({
+      selector: options.selector,
+      timeoutMs: options.timeoutMs,
+      type: 'extractLinks',
+    });
+    if (Array.isArray(result.links)) {
+      return result.links;
+    }
+    throw malformedActionResult('extractLinks');
+  }
+
+  async extractMeta(
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<BrowserExtractRecord> {
+    const result = await this.runSingleAction({
+      timeoutMs: options.timeoutMs,
+      type: 'extractMeta',
+    });
+    if (isRecord(result.meta)) {
+      return result.meta as BrowserExtractRecord;
+    }
+    throw malformedActionResult('extractMeta');
+  }
+
+  async extractJsonLd(
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<readonly unknown[]> {
+    const result = await this.runSingleAction({
+      timeoutMs: options.timeoutMs,
+      type: 'extractJsonLd',
+    });
+    if (Array.isArray(result.jsonLd)) {
+      return result.jsonLd;
+    }
+    throw malformedActionResult('extractJsonLd');
   }
 
   async title(): Promise<string> {
@@ -299,6 +583,31 @@ function malformedActionResult(actionType: string): BrowserClientError {
     code: 'MALFORMED_RESPONSE',
     message: `Browser API action "${actionType}" returned an unexpected result`,
   });
+}
+
+function normalizeUrlMatch(target: string | BrowserUrlMatch): BrowserUrlMatch {
+  if (typeof target !== 'string') {
+    return target;
+  }
+  return isHttpUrl(target) ? { url: target } : { pattern: target };
+}
+
+function normalizeResponseMatch(
+  target: string | BrowserResponseMatch,
+): BrowserResponseMatch {
+  if (typeof target !== 'string') {
+    return target;
+  }
+  return normalizeUrlMatch(target);
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

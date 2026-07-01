@@ -56,16 +56,59 @@ const title = await client.withPage({ siteId: 'douban' }, async (page) => {
 });
 ```
 
+## Crawler Usage
+
+Crawler workflows can use Playwright-like waits and crawler-native extraction in
+one backend-routed browser session:
+
+```ts
+const rows = await client.withPage({ siteId: 'example_public' }, async (page) => {
+  await page.goto('https://example.com/list', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle');
+  await page.scroll('page', { y: 800 });
+
+  const items = await page.extractList('.result', {
+    title: { selector: '.title', type: 'text' },
+    href: { selector: 'a', type: 'attribute', attribute: 'href' },
+    summary: { selector: '.summary', type: 'innerText' },
+  });
+  const meta = await page.extractMeta();
+  const links = await page.extractLinks({ selector: '.result a' });
+
+  return { items, links, meta };
+});
+```
+
 ## Supported Page Methods
 
 - `page.goto(url, options)`
 - `page.waitForSelector(selector, options)`
+- `page.waitForLoadState(state, options)`
+- `page.waitForURL(target, options)`
+- `page.waitForResponse(target, options)`
+- `page.url()`
 - `page.click(selector, options)`
 - `page.fill(selector, value, options)`
+- `page.press(selector, key, options)`
+- `page.hover(selector, options)`
+- `page.selectOption(selector, value, options)`
+- `page.check(selector, options)`
+- `page.uncheck(selector, options)`
+- `page.scroll(target, options)`
 - `page.textContent(selector, options)`
+- `page.innerText(selector, options)`
+- `page.innerHTML(selector, options)`
+- `page.getAttribute(selector, name, options)`
+- `page.locatorCount(selector, options)`
+- `page.allTextContents(selector, options)`
+- `page.exists(selector, options)`
 - `page.content()`
 - `page.title()`
 - `page.screenshot(options)`
+- `page.extractList(itemSelector, fields, options)`
+- `page.extractLinks(options)`
+- `page.extractMeta(options)`
+- `page.extractJsonLd(options)`
 - `page.close()`
 
 Low-level callers can use `client.createSession()`, `client.runActions()`, and
@@ -98,8 +141,12 @@ browser session.
 ## Limitations
 
 - Talks only to the CthuTool backend public browser API.
-- Does not expose raw Playwright objects or arbitrary Playwright script
+- Provides a crawler-focused Playwright-like subset, not full Playwright API
+  compatibility.
+- Does not expose raw Playwright objects or arbitrary `evaluate` script
   execution.
+- Does not expose route interception, browser context storage, downloads,
+  uploads, or Playwright Test assertions.
 - Does not connect to CthuDesktop agents, CDP, or browser WebSocket endpoints.
 - Does not expose cookies, localStorage, Playwright storage-state contents,
   desktop profile paths, or raw browser handles.
