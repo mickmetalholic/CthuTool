@@ -10,7 +10,7 @@ CthuTool server-side services deploy to a homelab Kubernetes cluster through Git
 | Runtime | Where it runs | Deployment owner |
 | --- | --- | --- |
 | Backend service | Kubernetes namespace `cthutool` | `gitops/` Application plus `k8s/` manifests |
-| Backend image | GHCR | `.github/workflows/backend-image.yml` |
+| Backend image | GHCR | `.github/workflows/backend.yml` |
 | CthuDesktop | Client computers | Desktop installer or local development build |
 | `chc` CLI | Client computers | `scripts/install-chc.sh` and CLI update commands |
 | Web console | Browser/client surface | `apps/web` project shell; deployment is not yet the primary path |
@@ -30,8 +30,8 @@ ArgoCD watches `https://github.com/mickmetalholic/CthuTool`, target revision `ma
 1. A backend-relevant change lands on `main`.
 2. GitHub Actions builds `apps/backend/Dockerfile`.
 3. The workflow pushes `ghcr.io/mickmetalholic/cthutool-backend:main` and `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`.
-4. The workflow updates `k8s/deployment.yaml` to pin the Deployment to the commit image tag.
-5. ArgoCD observes the manifest change and rolls out the backend Deployment.
+4. `k8s/deployment.yaml` already references `ghcr.io/mickmetalholic/cthutool-backend:main` with `imagePullPolicy: Always`.
+5. Argo CD Image Updater with digest tracking, or an equivalent rollout trigger, restarts the backend Deployment so Pods pull the current `:main` image.
 
 ## Deployment Path
 

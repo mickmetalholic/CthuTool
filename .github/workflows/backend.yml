@@ -55,7 +55,7 @@ jobs:
       group: backend-image-main
       cancel-in-progress: false
     permissions:
-      contents: write
+      contents: read
       packages: write
     steps:
       - name: Check out repository
@@ -95,39 +95,3 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Pin deployment manifest to commit image
-        if: steps.affected.outputs.changed == 'true'
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          deployment = Path("k8s/deployment.yaml")
-          text = deployment.read_text()
-          old = text
-          prefix = "image: ghcr.io/mickmetalholic/cthutool-backend:"
-          lines = [
-              f"{line[: len(line) - len(line.lstrip())]}{prefix}${{ github.sha }}"
-              if line.strip().startswith(prefix)
-              else line
-              for line in text.splitlines()
-          ]
-          text = "\n".join(lines) + "\n"
-          if text == old:
-              raise SystemExit("Deployment image reference was not updated")
-          deployment.write_text(text)
-          PY
-
-      - name: Commit deployment manifest update
-        if: steps.affected.outputs.changed == 'true'
-        run: |
-          if git diff --quiet -- k8s/deployment.yaml; then
-            echo "Deployment manifest already points at ${{ github.sha }}"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add k8s/deployment.yaml
-          git commit -m "chore(gitops): deploy backend image ${{ github.sha }} [skip ci]"
-          git push

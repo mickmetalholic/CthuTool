@@ -35,7 +35,7 @@ Observability Namespace
 
         ^
         |
-        | GitHub Actions -> GHCR -> k8s/deployment.yaml -> ArgoCD
+        | GitHub Actions -> GHCR -> ArgoCD/Image Updater
         |
 
 Repository Internals

@@ -35,13 +35,13 @@ The Deployment consumes these values with `envFrom.configMapRef.name: cthutool-b
 
 ## Backend Deployment
 
-`k8s/deployment.yaml` runs `Deployment/cthutool-backend` with one replica. The container image is pinned to an immutable GHCR commit tag:
+`k8s/deployment.yaml` runs `Deployment/cthutool-backend` with one replica. The container image uses the GHCR `main` tag:
 
 ```text
-ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>
+ghcr.io/mickmetalholic/cthutool-backend:main
 ```
 
-Do not manually change the live Deployment image with `kubectl set image`; ArgoCD will revert drift. The supported rollout path is to let `.github/workflows/backend-image.yml` build the image, push GHCR tags, and update the manifest pin on `main`.
+Do not manually change the live Deployment image with `kubectl set image`; ArgoCD will revert drift. The supported rollout path is to let `.github/workflows/backend.yml` build and push GHCR tags, then use Argo CD Image Updater digest tracking or an equivalent rollout trigger to restart Pods for the current `:main` digest.
 
 The Deployment also defines:
 

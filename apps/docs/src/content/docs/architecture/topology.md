@@ -4,7 +4,7 @@ description: Homelab cluster, observability, browser session, and client runtime
 ---
 
 ```text
-GitHub Actions -> GHCR backend image -> k8s/deployment.yaml image pin -> ArgoCD -> Kubernetes Deployment
+GitHub Actions -> GHCR backend image -> Argo CD Image Updater / rollout trigger -> Kubernetes Deployment
 
 Third-party App -> @cthutool/browser-client -> Backend Public Browser API -> Desktop Browser Agent
 
@@ -42,7 +42,7 @@ The `observability` namespace runs upstream components through GitOps-managed Ap
 
 ## Image Delivery
 
-Backend images are built by `.github/workflows/backend-image.yml` from `apps/backend/Dockerfile`. The workflow pushes GHCR tags and commits the immutable commit-sha tag back into `k8s/deployment.yaml`. ArgoCD then rolls out the pinned image.
+Backend images are built by `.github/workflows/backend.yml` from `apps/backend/Dockerfile`. The workflow pushes `:main` and commit-sha GHCR tags without committing deployment manifest changes back to `main`. `k8s/deployment.yaml` references `:main`; Argo CD Image Updater digest tracking or an equivalent rollout trigger is responsible for restarting Pods when that tag points at a new image digest.
 
 ## Client Host
 
@@ -50,7 +50,7 @@ The client host runs CthuDesktop and `chc`. Browser profile directories remain l
 
 ## Requirements Sources
 
-- Backend image delivery: `openspec/specs/apps-backend-image-delivery/spec.md`
+- Backend image delivery: `openspec/specs/apps-backend-image-ci/spec.md`
 - Backend public browser API: `openspec/specs/apps-backend-browser-public-api/spec.md`
 - Browser client SDK: `openspec/specs/packages-browser-client-sdk/spec.md`
 - Backend observability: `openspec/specs/apps-backend-observability/spec.md`
