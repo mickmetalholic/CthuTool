@@ -9,8 +9,8 @@ CthuTool backend upgrades are delivered through GitHub Actions, GHCR, Kubernetes
 
 1. Merge a backend-relevant change to `main`.
 2. Confirm the `Backend Image` workflow succeeds.
-3. Confirm the workflow pushed `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`.
-4. Confirm `k8s/deployment.yaml` on `main` was updated to that commit image tag.
+3. Confirm the workflow pushed `ghcr.io/mickmetalholic/cthutool-backend:main` and `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`.
+4. Confirm Argo CD Image Updater digest tracking, or an equivalent rollout trigger, detected the new `:main` digest.
 5. Watch ArgoCD sync the `cthutool` Application.
 6. Watch Kubernetes roll out `Deployment/cthutool-backend`.
 
@@ -40,9 +40,9 @@ If a reverse proxy or ingress is in front of the backend, verify both the Servic
 ## Image Did Not Change
 
 - Check the `Backend Image` GitHub Actions run for the relevant `main` commit.
-- Confirm the workflow had permission to push GHCR packages and commit back to `main`.
-- Confirm `k8s/deployment.yaml` contains `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`, not only the floating `main` tag.
-- Confirm ArgoCD synced after the manifest pin commit.
+- Confirm the workflow had permission to push GHCR packages.
+- Confirm `k8s/deployment.yaml` contains `ghcr.io/mickmetalholic/cthutool-backend:main`.
+- Confirm the Image Updater or equivalent rollout trigger detected the new `:main` digest and restarted the Deployment.
 
 ## Desktop Connectivity
 

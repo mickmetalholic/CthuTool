@@ -168,5 +168,12 @@ describe("CI workflow contract", () => {
     expect(yml).toContain("${{ env.IMAGE_NAME }}:${{ github.sha }}");
     expect(yml).toContain("group: backend-image-main");
     expect(yml).toContain("cancel-in-progress: false");
+    expect(yml).toMatch(
+      /build-and-push:\n(?:.|\n)*?permissions:\n\s+contents: read\n\s+packages: write/,
+    );
+    expect(yml).not.toContain("Pin deployment manifest to commit image");
+    expect(yml).not.toContain("Commit deployment manifest update");
+    expect(yml).not.toContain("git add k8s/deployment.yaml");
+    expect(yml).not.toContain("git push");
   });
 });

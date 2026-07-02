@@ -1,7 +1,7 @@
 # apps-backend-image-ci Specification
 
 ## Purpose
-Define backend container image CI validation, affected-input handling, deployment manifest updates, pinned tool versions, and workflow naming.
+Define backend container image CI validation, affected-input handling, image publishing, pinned tool versions, and workflow naming.
 
 ## Requirements
 ### Requirement: Backend image CI validates pull request Docker builds
@@ -29,6 +29,8 @@ The backend image workflow SHALL publish backend container images for qualifying
 - **AND** it builds the backend image
 - **AND** it pushes both the `main` tag and the triggering commit SHA tag
 - **AND** it uses Docker layer caching to speed repeated builds
+- **AND** it does not update `k8s/deployment.yaml`
+- **AND** it does not create or push a follow-up deployment manifest commit
 
 #### Scenario: Main branch push skips unaffected backend image publish
 - **WHEN** a push to `main` does not change backend image inputs
@@ -36,19 +38,6 @@ The backend image workflow SHALL publish backend container images for qualifying
 - **AND** it does not log in to the container registry
 - **AND** it does not push image tags
 - **AND** it does not update `k8s/deployment.yaml`
-
-### Requirement: Backend deployment manifest updates are concurrency safe
-The backend image workflow SHALL protect deployment manifest update runs from overlapping writes.
-
-#### Scenario: Main branch image publishing is serialized
-- **WHEN** multiple backend image publishing runs are queued for `main`
-- **THEN** the workflow uses a stable concurrency group for backend image publishing
-- **AND** deployment manifest update steps do not run concurrently against `k8s/deployment.yaml`
-
-#### Scenario: Deployment manifest pins commit image
-- **WHEN** the backend image publish succeeds for a main branch commit
-- **THEN** the workflow updates `k8s/deployment.yaml` to reference the triggering commit SHA image tag
-- **AND** the committed manifest update does not retrigger the full CI pipeline unnecessarily
 
 ### Requirement: Backend image build uses pinned workspace tool versions
 Backend Docker builds SHALL use the repository-pinned package manager version.
@@ -75,14 +64,9 @@ The repository SHALL build and publish the CthuTool backend container image to G
 - **THEN** the backend image workflow builds `apps/backend/Dockerfile`
 - **AND** pushes `ghcr.io/mickmetalholic/cthutool-backend:main`
 - **AND** pushes `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`
-
-#### Scenario: Workflow pins the deployment to the built image
-- **WHEN** the backend image workflow successfully publishes the commit image
-- **THEN** it updates `k8s/deployment.yaml` so the backend container image is `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`
-- **AND** commits the manifest update back to `main`
-- **AND** the commit message prevents a recursive workflow run
+- **AND** does not commit deployment manifest changes back to `main`
 
 #### Scenario: Deployment consumes the GHCR image
-- **WHEN** the CthuTool backend Deployment manifest is inspected after the image workflow has run
-- **THEN** its container image is pinned to `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`
-- **AND** ArgoCD observes the manifest change and rolls out the Deployment
+- **WHEN** the CthuTool backend Deployment manifest is inspected
+- **THEN** its container image is `ghcr.io/mickmetalholic/cthutool-backend:main`
+- **AND** its image pull policy ensures restarted Pods pull the current image for that tag

@@ -11,10 +11,10 @@ In homelab deployment, the backend runs as `Deployment/cthutool-backend` in the 
 
 Backend image delivery is automated:
 
-1. `.github/workflows/backend-image.yml` builds `apps/backend/Dockerfile`.
+1. `.github/workflows/backend.yml` builds `apps/backend/Dockerfile`.
 2. The workflow pushes GHCR `main` and commit-sha tags.
-3. The workflow pins `k8s/deployment.yaml` to the commit-sha image.
-4. ArgoCD syncs the `k8s/` path into the cluster.
+3. `k8s/deployment.yaml` references the `main` image tag.
+4. Argo CD Image Updater digest tracking, or an equivalent rollout trigger, restarts Pods for new `main` image digests.
 
 Operational endpoints include:
 
@@ -50,7 +50,7 @@ The public browser session API is intended for trusted deployments. It routes bo
 
 ## Requirements Sources
 
-- Backend image delivery: `openspec/specs/apps-backend-image-delivery/spec.md`
+- Backend image delivery: `openspec/specs/apps-backend-image-ci/spec.md`
 - Backend public browser API: `openspec/specs/apps-backend-browser-public-api/spec.md`
 - Backend observability: `openspec/specs/apps-backend-observability/spec.md`
 - ArgoCD Applications: `openspec/specs/gitops-argo-applications/spec.md`

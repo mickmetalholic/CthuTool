@@ -9,9 +9,9 @@ Use this page when a backend change has landed on `main` or when the cluster sta
 
 1. GitHub Actions builds `apps/backend/Dockerfile`.
 2. The workflow pushes `ghcr.io/mickmetalholic/cthutool-backend:main` and `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`.
-3. The workflow commits the new image tag into `k8s/deployment.yaml`.
-4. ArgoCD reconciles `gitops/apps/cthutool/application.yaml`, which points at `main` and path `k8s/`.
-5. Kubernetes rolls out `Deployment/cthutool-backend`.
+3. `k8s/deployment.yaml` references `ghcr.io/mickmetalholic/cthutool-backend:main`.
+4. Argo CD Image Updater digest tracking, or an equivalent rollout trigger, restarts the backend Deployment for the new `:main` digest.
+5. ArgoCD reconciles `gitops/apps/cthutool/application.yaml`, which points at `main` and path `k8s/`.
 
 ## ArgoCD Sync State
 
@@ -30,7 +30,7 @@ The CthuTool Application enables:
 - retry limit `5`
 - retry backoff from `5s` up to `3m`
 
-If sync is delayed, first confirm the commit with the image pin is present on `main`, then inspect the Application status.
+If rollout is delayed, first confirm the backend image workflow pushed a new `:main` digest, then inspect the Image Updater or rollout trigger status and the Application status.
 
 ## Drift Correction
 
@@ -79,12 +79,13 @@ curl http://localhost:3000/metrics
 
 Prometheus scrapes `/metrics` through Service annotations in `k8s/service.yaml`. `/metrics` is not used as a Kubernetes probe.
 
-## Image Pin Troubleshooting
+## Image Rollout Troubleshooting
 
 If a backend change exists but the cluster still runs an older image:
 
 1. Check the backend image workflow for the `main` commit.
 2. Confirm GHCR has the commit tag.
-3. Confirm `k8s/deployment.yaml` on `main` references that commit tag.
-4. Inspect ArgoCD Application sync status.
-5. Check the Kubernetes Deployment rollout and pod events.
+3. Confirm `k8s/deployment.yaml` on `main` references `ghcr.io/mickmetalholic/cthutool-backend:main`.
+4. Confirm Argo CD Image Updater digest tracking or the equivalent rollout trigger detected the new `:main` digest.
+5. Inspect ArgoCD Application sync status.
+6. Check the Kubernetes Deployment rollout and pod events.

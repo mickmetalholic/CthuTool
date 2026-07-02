@@ -76,11 +76,11 @@ Outputs:
 - `ghcr.io/mickmetalholic/cthutool-backend:main`
 - `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`
 
-After publishing, the workflow rewrites `k8s/deployment.yaml` to use the commit-sha image tag and commits that manifest update back to `main` with `[skip ci]`.
+`k8s/deployment.yaml` references `ghcr.io/mickmetalholic/cthutool-backend:main` with `imagePullPolicy: Always`. The workflow does not rewrite or commit this manifest after publishing; automatic redeploys require Argo CD Image Updater with digest tracking or an equivalent rollout trigger.
 
 ## Requirement Sources
 
-- `openspec/specs/apps-backend-image-delivery/spec.md`
+- `openspec/specs/apps-backend-image-ci/spec.md`
 - `openspec/specs/gitops-argo-applications/spec.md`
 - `openspec/specs/gitops-bootstrap/spec.md`
 - `openspec/specs/gitops-cluster-namespaces/spec.md`

@@ -23,7 +23,7 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 ### Backend Domains And Delivery
 
 - [apps-backend-douban-movie-info](apps-backend-douban-movie-info/spec.md): Douban movie information retrieval and parsing through controlled browser content.
-- [apps-backend-image-ci](apps-backend-image-ci/spec.md): backend image CI build, verification, publishing, and deployment image pinning behavior.
+- [apps-backend-image-ci](apps-backend-image-ci/spec.md): backend image CI build, verification, publishing, and deployment image behavior.
 - [apps-backend-observability](apps-backend-observability/spec.md): backend request context, events, readiness, metrics, and trace semantics.
 
 ## CLI
