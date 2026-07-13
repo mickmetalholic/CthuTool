@@ -6869,6 +6869,7 @@ function identity(value) {
 function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
   const human = !context.json && !context.quiet;
   const interactiveOutput = human && context.isTty && deps.isOutputTty();
+  const colors2 = import_picocolors5.default.createColors(interactiveOutput);
   let activeSpinner;
   let activePhase;
   let headerWritten = false;
@@ -6876,7 +6877,7 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
     if (!human || headerWritten)
       return;
     headerWritten = true;
-    deps.output.stdout.write(`${import_picocolors5.default.cyan("CthuTool update")}
+    deps.output.stdout.write(`${colors2.cyan("CthuTool update")}
 `);
   };
   const stopSpinner = (message, code) => {
@@ -6919,11 +6920,11 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
     if (!options.verbose)
       return;
     const cwd = event.cwd ? ` (cwd: ${event.cwd})` : "";
-    deps.output.stderr.write(`${import_picocolors5.default.dim(`$ ${event.command} ${event.args.join(" ")}${cwd}`)}
+    deps.output.stderr.write(`${colors2.dim(`$ ${event.command} ${event.args.join(" ")}${cwd}`)}
 `);
     for (const detail of [event.stderr, event.stdout]) {
       if (detail)
-        deps.output.stderr.write(`${import_picocolors5.default.dim(detail)}
+        deps.output.stderr.write(`${colors2.dim(detail)}
 `);
     }
   };
@@ -6963,7 +6964,7 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
       if (interactiveOutput) {
         stopSpinner(`${label} complete`);
       } else {
-        deps.output.stdout.write(`${import_picocolors5.default.green("✓")} ${label}
+        deps.output.stdout.write(`${colors2.green("✓")} ${label}
 `);
       }
     },
@@ -6971,13 +6972,13 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
       if (!human)
         return;
       if (plan.status === "up_to_date" && plan.target) {
-        deps.output.stdout.write(`${import_picocolors5.default.green("✓")} chc is already up to date · ${identity(plan.target)}
+        deps.output.stdout.write(`${colors2.green("✓")} chc is already up to date · ${identity(plan.target)}
 `);
       } else if (plan.status === "update_available" && plan.target) {
-        deps.output.stdout.write(`${import_picocolors5.default.cyan("Update available")} · ${identity(plan.target)}
+        deps.output.stdout.write(`${colors2.cyan("Update available")} · ${identity(plan.target)}
 `);
       } else if (plan.status === "install_required") {
-        deps.output.stdout.write(`${import_picocolors5.default.yellow("Managed installation required")} · run chc update
+        deps.output.stdout.write(`${colors2.yellow("Managed installation required")} · run chc update
 `);
       }
     },
@@ -6986,14 +6987,14 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
         return;
       const after = result.after ?? result.target;
       if (result.status === "up_to_date" && after) {
-        deps.output.stdout.write(`${import_picocolors5.default.green("✓")} chc is already up to date · ${identity(after)}
+        deps.output.stdout.write(`${colors2.green("✓")} chc is already up to date · ${identity(after)}
 `);
         return;
       }
       const before = result.before ? `${identity(result.before)} → ` : "";
       const target = after ? identity(after) : result.ref;
       const verb = result.status === "installed" ? "Installed" : "Updated";
-      deps.output.stdout.write(`${import_picocolors5.default.green("✓")} ${verb} chc successfully · ${before}${target}
+      deps.output.stdout.write(`${colors2.green("✓")} ${verb} chc successfully · ${before}${target}
 `);
       deps.output.stdout.write("  Run `chc status` for installation details.\n");
     },
