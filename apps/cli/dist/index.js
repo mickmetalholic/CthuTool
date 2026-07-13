@@ -2328,11 +2328,58 @@ async function runMain(cmd, opts = {}) {
 }
 
 // src/index.ts
-var import_picocolors5 = __toESM(require_picocolors(), 1);
+var import_picocolors7 = __toESM(require_picocolors(), 1);
+
+// src/command/command-discovery.ts
+var registrationsByCommand = new WeakMap;
+var positionalCandidatesByCommand = new WeakMap;
+var helpAppendixByCommand = new WeakMap;
+function buildRegisteredSubCommands(registrations) {
+  return Object.fromEntries(registrations.map((registration) => [
+    registration.name,
+    registration.command
+  ]));
+}
+function registerCommandGroup(command, registrations) {
+  registrationsByCommand.set(command, registrations);
+  return command;
+}
+function getCommandRegistrations(command) {
+  return registrationsByCommand.get(command);
+}
+function getCommandRegistration(command, name) {
+  return getCommandRegistrations(command)?.find((registration) => registration.name === name);
+}
+function normalizeRegisteredArgs(rootCommand, rawArgs) {
+  const [name, ...commandArgs] = rawArgs;
+  if (!name) {
+    return [...rawArgs];
+  }
+  const registration = getCommandRegistration(rootCommand, name);
+  if (!registration?.normalizeArgs) {
+    return [...rawArgs];
+  }
+  return [name, ...registration.normalizeArgs(commandArgs)];
+}
+function registerPositionalCandidates(command, provider) {
+  positionalCandidatesByCommand.set(command, provider);
+  return command;
+}
+function getPositionalCandidateProvider(command) {
+  return positionalCandidatesByCommand.get(command);
+}
+function registerCommandHelpAppendix(command, provider) {
+  helpAppendixByCommand.set(command, provider);
+  return command;
+}
+function getCommandHelpAppendixProvider(command) {
+  return helpAppendixByCommand.get(command);
+}
 
 // ../../node_modules/.pnpm/@clack+core@0.3.5/node_modules/@clack/core/dist/index.mjs
 var import_sisteransi = __toESM(require_src(), 1);
 import { stdin as $, stdout as k2 } from "node:process";
+import * as f3 from "node:readline";
 import _3 from "node:readline";
 import { WriteStream as U } from "node:tty";
 function q2({ onlyFirst: e2 = false } = {}) {
@@ -2686,6 +2733,27 @@ var $D2 = class extends x2 {
   }
 };
 var WD = globalThis.process.platform.startsWith("win");
+function OD({ input: e2 = $, output: u3 = k2, overwrite: F3 = true, hideCursor: t2 = true } = {}) {
+  const s2 = f3.createInterface({ input: e2, output: u3, prompt: "", tabSize: 1 });
+  f3.emitKeypressEvents(e2, s2), e2.isTTY && e2.setRawMode(true);
+  const C3 = (D2, { name: i2 }) => {
+    if (String(D2) === "\x03") {
+      t2 && u3.write(import_sisteransi.cursor.show), process.exit(0);
+      return;
+    }
+    if (!F3)
+      return;
+    let n2 = i2 === "return" ? 0 : -1, E = i2 === "return" ? -1 : 0;
+    f3.moveCursor(u3, n2, E, () => {
+      f3.clearLine(u3, 1, () => {
+        e2.once("keypress", C3);
+      });
+    });
+  };
+  return t2 && u3.write(import_sisteransi.cursor.hide), e2.once("keypress", C3), () => {
+    e2.off("keypress", C3), t2 && u3.write(import_sisteransi.cursor.show), e2.isTTY && !WD && e2.setRawMode(false), s2.terminal = false, s2.close();
+  };
+}
 
 // ../../node_modules/.pnpm/@clack+prompts@0.8.2/node_modules/@clack/prompts/dist/index.mjs
 var import_picocolors = __toESM(require_picocolors(), 1);
@@ -2735,9 +2803,9 @@ var E = (s2) => {
   let l3 = 0;
   n2 >= l3 + c3 - 3 ? l3 = Math.max(Math.min(n2 - c3 + 3, t2.length - c3), 0) : n2 < l3 + 2 && (l3 = Math.max(n2 - 2, 0));
   const d3 = c3 < t2.length && l3 > 0, p = c3 < t2.length && l3 + c3 < t2.length;
-  return t2.slice(l3, l3 + c3).map((S4, f3, x3) => {
-    const g4 = f3 === 0 && d3, m3 = f3 === x3.length - 1 && p;
-    return g4 || m3 ? import_picocolors.default.dim("...") : i2(S4, f3 + l3 === n2);
+  return t2.slice(l3, l3 + c3).map((S4, f4, x3) => {
+    const g4 = f4 === 0 && d3, m3 = f4 === x3.length - 1 && p;
+    return g4 || m3 ? import_picocolors.default.dim("...") : i2(S4, f4 + l3 === n2);
   });
 };
 var ce2 = (s2) => {
@@ -2794,6 +2862,34 @@ ${import_picocolors.default.cyan($2)}
 var pe = (s2 = "") => {
   process.stdout.write(`${import_picocolors.default.gray(Q3)}  ${s2}
 `);
+};
+var _4 = () => {
+  const s2 = C3 ? ["◒", "◐", "◓", "◑"] : ["•", "o", "O", "0"], n2 = C3 ? 80 : 120;
+  let t2, i2, r4 = false, o3 = "";
+  const c3 = (g4) => {
+    const m3 = g4 > 1 ? "Something went wrong" : "Canceled";
+    r4 && x3(m3, g4);
+  }, l3 = () => c3(2), d3 = () => c3(1), p = () => {
+    process.on("uncaughtExceptionMonitor", l3), process.on("unhandledRejection", l3), process.on("SIGINT", d3), process.on("SIGTERM", d3), process.on("exit", c3);
+  }, S4 = () => {
+    process.removeListener("uncaughtExceptionMonitor", l3), process.removeListener("unhandledRejection", l3), process.removeListener("SIGINT", d3), process.removeListener("SIGTERM", d3), process.removeListener("exit", c3);
+  }, f4 = (g4 = "") => {
+    r4 = true, t2 = OD(), o3 = g4.replace(/\.+$/, ""), process.stdout.write(`${import_picocolors.default.gray(a3)}
+`);
+    let m3 = 0, w3 = 0;
+    p(), i2 = setInterval(() => {
+      const L4 = import_picocolors.default.magenta(s2[m3]), O4 = ".".repeat(Math.floor(w3)).slice(0, 3);
+      process.stdout.write(import_sisteransi2.cursor.move(-999, 0)), process.stdout.write(import_sisteransi2.erase.down(1)), process.stdout.write(`${L4}  ${o3}${O4}`), m3 = m3 + 1 < s2.length ? m3 + 1 : 0, w3 = w3 < s2.length ? w3 + 0.125 : 0;
+    }, n2);
+  }, x3 = (g4 = "", m3 = 0) => {
+    o3 = g4 ?? o3, r4 = false, clearInterval(i2);
+    const w3 = m3 === 0 ? import_picocolors.default.green(M2) : m3 === 1 ? import_picocolors.default.red(P4) : import_picocolors.default.red(V3);
+    process.stdout.write(import_sisteransi2.cursor.move(-999, 0)), process.stdout.write(import_sisteransi2.erase.down(1)), process.stdout.write(`${w3}  ${o3}
+`), S4(), t2();
+  };
+  return { start: f4, stop: x3, message: (g4 = "") => {
+    o3 = g4 ?? o3;
+  } };
 };
 
 // src/command/codex.command.ts
@@ -4520,27 +4616,398 @@ var codexCommand = defineCommand({
 
 // src/command/completion.command.ts
 import { execFile } from "node:child_process";
-import { mkdir as mkdir3, readFile as readFile4, writeFile as writeFile3 } from "node:fs/promises";
+import { mkdir as mkdir3, readFile as readFile3, writeFile as writeFile3 } from "node:fs/promises";
 import { homedir as homedir2, platform as platform2 } from "node:os";
-import { dirname as dirname6, join as join5 } from "node:path";
+import { dirname as dirname5, join as join3 } from "node:path";
 import { promisify } from "node:util";
 
-// src/infra/bundled-scripts-root.ts
-import { existsSync as existsSync2 } from "node:fs";
-import { dirname as dirname5, join as join3 } from "node:path";
-import { fileURLToPath } from "node:url";
-function getBundledScriptsRoot() {
-  const moduleDir = dirname5(fileURLToPath(import.meta.url));
-  const candidates = [
-    join3(moduleDir, "../scripts"),
-    join3(moduleDir, "../src/scripts")
-  ];
-  return candidates.find((candidate) => existsSync2(candidate)) ?? candidates[0];
+// src/domain/completion-candidates.ts
+async function resolveValue2(value) {
+  if (typeof value === "function") {
+    return await value();
+  }
+  return await value;
+}
+function toKebabCase(value) {
+  return value.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
+}
+async function getSubCommands(command) {
+  const subCommands = await resolveValue2(command.subCommands);
+  if (!subCommands) {
+    return {};
+  }
+  const entries = await Promise.all(Object.entries(subCommands).map(async ([name, value]) => [
+    name,
+    await resolveValue2(value)
+  ]));
+  const publicNames = new Set(getCommandRegistrations(command)?.filter((registration) => registration.visibility === "public").map((registration) => registration.name));
+  return Object.fromEntries(publicNames.size === 0 ? entries : entries.filter(([name]) => publicNames.has(name)));
+}
+async function getArgs(command) {
+  return await resolveValue2(command.args) ?? {};
+}
+function isFlag(word) {
+  return word.startsWith("-");
+}
+function isCompleteFlag(word) {
+  return word.startsWith("--") && word.length > 2 && !word.includes("=");
+}
+function flagName(name, _arg) {
+  return `--${toKebabCase(name)}`;
+}
+async function traverseCommand(rootCommand, completedWords) {
+  let command = rootCommand;
+  const path = [];
+  let skipFlagValue = false;
+  for (const word of completedWords) {
+    if (skipFlagValue) {
+      skipFlagValue = false;
+      continue;
+    }
+    if (isFlag(word)) {
+      const args = await getArgs(command);
+      const arg = Object.entries(args).find(([name]) => flagName(name, args[name]) === word)?.[1];
+      skipFlagValue = arg?.type === "string";
+      continue;
+    }
+    const subCommands = await getSubCommands(command);
+    const next = subCommands[word];
+    if (!next) {
+      return { command, path };
+    }
+    command = next;
+    path.push(word);
+  }
+  return { command, path };
+}
+function filterByPrefix(candidates, prefix) {
+  return [...new Set(candidates)].filter((candidate) => candidate.startsWith(prefix)).sort((a4, b4) => a4.localeCompare(b4));
+}
+async function getFlagCandidates(command, completedWords, prefix) {
+  const args = await getArgs(command);
+  const used = new Set(completedWords.filter(isCompleteFlag));
+  const candidates = Object.entries(args).filter(([, arg]) => arg.type !== "positional").map(([name, arg]) => flagName(name, arg)).filter((candidate) => !used.has(candidate));
+  return filterByPrefix(candidates, prefix);
+}
+async function getCompletionCandidates({
+  rootCommand,
+  words
+}) {
+  const currentWord = words.at(-1) ?? "";
+  const completedWords = words.slice(0, -1);
+  const state = await traverseCommand(rootCommand, completedWords);
+  if (!state) {
+    return [];
+  }
+  if (currentWord.startsWith("-")) {
+    return getFlagCandidates(state.command, completedWords, currentWord);
+  }
+  const positionalCandidates = getPositionalCandidateProvider(state.command);
+  const subCommands = await getSubCommands(state.command);
+  const dynamicCandidates = positionalCandidates ? await positionalCandidates({
+    currentWord,
+    completedWords,
+    path: state.path
+  }) : [];
+  const staticCandidates = completedWords.length === state.path.length ? Object.keys(subCommands) : [];
+  return filterByPrefix([...staticCandidates, ...dynamicCandidates], currentWord);
 }
 
-// src/infra/discover-scripts.ts
-import { readdir as readdir3, readFile as readFile3, stat as stat2 } from "node:fs/promises";
-import { join as join4 } from "node:path";
+// src/command/completion.command.ts
+var supportedCompletionShells = ["powershell", "zsh"];
+var emptyCompletionWord = "__cthutool_empty_completion_word__";
+var powershellProfileEnv = "CHC_COMPLETION_POWERSHELL_PROFILE";
+var zshProfileEnv = "CHC_COMPLETION_ZSH_PROFILE";
+var powershellCompletionLoadLine = "chc completion powershell | Out-String | Invoke-Expression";
+var powershellCompletionReloadHint = `Restart PowerShell to load it, or run: ${powershellCompletionLoadLine}`;
+var legacyPowerShellCompletionComment = "# CthuTool CLI completion";
+var completionStartMarker = "# >>> cthutool chc completion >>>";
+var completionEndMarker = "# <<< cthutool chc completion <<<";
+var powershellCompletionBlock = `${completionStartMarker}
+${powershellCompletionLoadLine}
+${completionEndMarker}`;
+var zshCompletionLoadLine = "source <(chc completion zsh)";
+var zshCompletionBlock = `${completionStartMarker}
+if (( ! $+functions[compdef] )); then
+  autoload -Uz compinit
+  compinit
+fi
+${zshCompletionLoadLine}
+${completionEndMarker}`;
+var execFileAsync = promisify(execFile);
+var powershellScript = `Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
+  param($wordToComplete, $commandAst, $cursorPosition)
+  $words = @($commandAst.CommandElements | Select-Object -Skip 1 | ForEach-Object { $_.Extent.Text })
+  if ($words.Count -eq 0 -or $words[-1] -ne $wordToComplete) {
+    if ($wordToComplete -eq '') {
+      $words += '__cthutool_empty_completion_word__'
+    } else {
+      $words += $wordToComplete
+    }
+  }
+  chc __complete @words | ForEach-Object {
+    $completionText = if ($_.StartsWith('-')) { $_ } else { "$_ " }
+    [System.Management.Automation.CompletionResult]::new($completionText, $_, 'ParameterValue', $_)
+  }
+}
+`;
+var zshScript = `#compdef chc
+_chc_completion() {
+  local -a candidates
+  candidates=("\${(@f)$(chc __complete "\${words[@]:1}")}")
+  compadd -- "\${candidates[@]}"
+}
+compdef _chc_completion chc
+`;
+var completionShellScripts = {
+  powershell: powershellScript,
+  zsh: zshScript
+};
+function isCompletionShell(value) {
+  return supportedCompletionShells.some((shell) => shell === value);
+}
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function removeManagedCompletionBlock(content) {
+  const pattern = new RegExp(`${escapeRegExp(completionStartMarker)}\\r?\\n[\\s\\S]*?\\r?\\n${escapeRegExp(completionEndMarker)}\\r?\\n?`, "g");
+  const nextContent = content.replace(pattern, "");
+  return { content: nextContent, removed: nextContent !== content };
+}
+function removeLegacyCompletionBlock(content) {
+  const legacyBlockPattern = new RegExp(`${escapeRegExp(legacyPowerShellCompletionComment)}\\r?\\n${escapeRegExp(powershellCompletionLoadLine)}\\r?\\n?`, "g");
+  return content.replace(legacyBlockPattern, "");
+}
+function removeLegacyZshCompletionLine(content) {
+  const legacyLinePattern = new RegExp(`^${escapeRegExp(zshCompletionLoadLine)}\\r?\\n?`, "gm");
+  return content.replace(legacyLinePattern, "");
+}
+async function readTextIfExists(path) {
+  try {
+    return await readFile3(path, "utf8");
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return "";
+    }
+    throw error;
+  }
+}
+async function resolvePowerShellProfilePath() {
+  const override = process.env[powershellProfileEnv]?.trim();
+  if (override) {
+    return override;
+  }
+  for (const executable of ["pwsh", "powershell"]) {
+    try {
+      const { stdout: stdout2 } = await execFileAsync(executable, [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "$PROFILE.CurrentUserCurrentHost"
+      ]);
+      const profilePath = stdout2.trim();
+      if (profilePath.length > 0) {
+        return profilePath;
+      }
+    } catch {}
+  }
+  if (platform2() === "win32") {
+    return join3(process.env.USERPROFILE || homedir2(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
+  }
+  return join3(homedir2(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
+}
+function resolveZshProfilePath() {
+  const override = process.env[zshProfileEnv]?.trim();
+  if (override) {
+    return override;
+  }
+  const zdotdir = process.env.ZDOTDIR?.trim();
+  return join3(zdotdir || homedir2(), ".zshrc");
+}
+async function handlePowerShellProfileAction(action) {
+  const profilePath = await resolvePowerShellProfilePath();
+  const content = await readTextIfExists(profilePath);
+  const installed = content.includes(completionStartMarker) && content.includes(completionEndMarker);
+  if (action === "status") {
+    process.stdout.write(`PowerShell completion ${installed ? "enabled" : "disabled"}: ${profilePath}
+`);
+    if (installed) {
+      process.stdout.write(`${powershellCompletionReloadHint}
+`);
+    }
+    process.exitCode = 0;
+    return;
+  }
+  if (action === "disable") {
+    const cleaned2 = removeManagedCompletionBlock(content);
+    if (cleaned2.removed) {
+      await writeFile3(profilePath, cleaned2.content);
+    }
+    process.stdout.write(`PowerShell completion disabled: ${profilePath}
+`);
+    process.exitCode = 0;
+    return;
+  }
+  const cleaned = removeManagedCompletionBlock(content);
+  const migratedContent = removeLegacyCompletionBlock(cleaned.content);
+  const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
+`) ? migratedContent : `${migratedContent}
+`;
+  await mkdir3(dirname5(profilePath), { recursive: true });
+  await writeFile3(profilePath, `${prefix}${powershellCompletionBlock}
+`);
+  process.stdout.write(`PowerShell completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
+`);
+  process.stdout.write(`${powershellCompletionReloadHint}
+`);
+  process.exitCode = 0;
+}
+async function handleZshProfileAction(action) {
+  const profilePath = resolveZshProfilePath();
+  const content = await readTextIfExists(profilePath);
+  const installed = content.includes(completionStartMarker) && content.includes(completionEndMarker);
+  const reloadHint = `Restart zsh to load it, or run: source ${profilePath}`;
+  if (action === "status") {
+    process.stdout.write(`zsh completion ${installed ? "enabled" : "disabled"}: ${profilePath}
+`);
+    if (installed) {
+      process.stdout.write(`${reloadHint}
+`);
+    }
+    process.exitCode = 0;
+    return;
+  }
+  if (action === "disable") {
+    const cleaned2 = removeManagedCompletionBlock(content);
+    if (cleaned2.removed) {
+      await writeFile3(profilePath, cleaned2.content);
+    }
+    process.stdout.write(`zsh completion disabled: ${profilePath}
+`);
+    process.exitCode = 0;
+    return;
+  }
+  const cleaned = removeManagedCompletionBlock(content);
+  const migratedContent = removeLegacyZshCompletionLine(cleaned.content);
+  const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
+`) ? migratedContent : `${migratedContent}
+`;
+  await mkdir3(dirname5(profilePath), { recursive: true });
+  await writeFile3(profilePath, `${prefix}${zshCompletionBlock}
+`);
+  process.stdout.write(`zsh completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
+`);
+  process.stdout.write(`${reloadHint}
+`);
+  process.exitCode = 0;
+}
+function createCompletionShellCommand(shell) {
+  return defineCommand({
+    meta: {
+      name: shell,
+      description: `Print the ${shell} completion adapter.`
+    },
+    async run({ args }) {
+      await runObservedCliCommand(args, { command: "completion", subcommand: shell }, async () => {
+        process.stdout.write(completionShellScripts[shell]);
+        process.exitCode = 0;
+      });
+    }
+  });
+}
+function createCompletionProfileCommand(action) {
+  const command = defineCommand({
+    meta: {
+      name: action,
+      description: `${action[0]?.toUpperCase()}${action.slice(1)} persistent shell completion.`
+    },
+    args: {
+      shell: {
+        type: "positional",
+        description: "Shell profile to manage (powershell or zsh)",
+        required: true
+      }
+    },
+    async run({ args }) {
+      await runObservedCliCommand(args, { command: "completion", subcommand: action }, async ({ fail }) => {
+        const shell = typeof args.shell === "string" ? args.shell : "";
+        if (!isCompletionShell(shell)) {
+          const error = createCliError("invalid_option", `unsupported managed completion shell: ${shell || "<missing>"}`);
+          fail(error, { details: { action, shell } });
+          process.stderr.write(`${error.message}
+`);
+          process.exitCode = error.exitCode;
+          return;
+        }
+        try {
+          if (shell === "powershell") {
+            await handlePowerShellProfileAction(action);
+          } else {
+            await handleZshProfileAction(action);
+          }
+        } catch (error) {
+          const cliError = createCliError("invalid_option", error instanceof Error ? error.message : String(error));
+          fail(cliError, { details: { action, shell } });
+          process.stderr.write(`${cliError.message}
+`);
+          process.exitCode = cliError.exitCode;
+        }
+      });
+    }
+  });
+  return registerPositionalCandidates(command, ({ completedWords, path }) => completedWords.length === path.length ? supportedCompletionShells : []);
+}
+function createCompletionCommand() {
+  const registrations = [
+    ...supportedCompletionShells.map((shell) => ({
+      name: shell,
+      command: createCompletionShellCommand(shell),
+      visibility: "public",
+      bareBehavior: "run"
+    })),
+    ...["enable", "disable", "status"].map((action) => ({
+      name: action,
+      command: createCompletionProfileCommand(action),
+      visibility: "public",
+      bareBehavior: "run"
+    }))
+  ];
+  return registerCommandGroup(defineCommand({
+    meta: {
+      name: "completion",
+      description: "Print or manage shell completion setup."
+    },
+    subCommands: buildRegisteredSubCommands(registrations)
+  }), registrations);
+}
+function createInternalCompleteCommand(resolveRootCommand) {
+  return defineCommand({
+    meta: {
+      name: "__complete",
+      description: "Internal shell completion protocol."
+    },
+    async run({ rawArgs }) {
+      try {
+        const words = rawArgs.map((word) => word === emptyCompletionWord ? "" : word);
+        const candidates = await getCompletionCandidates({
+          rootCommand: resolveRootCommand(),
+          words
+        });
+        if (candidates.length > 0) {
+          process.stdout.write(`${candidates.join(`
+`)}
+`);
+        }
+        process.exitCode = 0;
+      } catch {
+        process.exitCode = 0;
+      }
+    }
+  });
+}
+
+// src/command/run-scripts.command.ts
+var import_picocolors4 = __toESM(require_picocolors(), 1);
 
 // ../../node_modules/.pnpm/neverthrow@8.2.0/node_modules/neverthrow/dist/index.cjs.js
 var defaultErrorConfig = {
@@ -4606,20 +5073,20 @@ function __asyncGenerator(thisArg, _arguments, generator) {
   return i2 = Object.create((typeof AsyncIterator === "function" ? AsyncIterator : Object).prototype), verb("next"), verb("throw"), verb("return", awaitReturn), i2[Symbol.asyncIterator] = function() {
     return this;
   }, i2;
-  function awaitReturn(f3) {
+  function awaitReturn(f4) {
     return function(v3) {
-      return Promise.resolve(v3).then(f3, reject);
+      return Promise.resolve(v3).then(f4, reject);
     };
   }
-  function verb(n2, f3) {
+  function verb(n2, f4) {
     if (g4[n2]) {
       i2[n2] = function(v3) {
         return new Promise(function(a4, b4) {
           q3.push([n2, v3, a4, b4]) > 1 || resume(n2, v3);
         });
       };
-      if (f3)
-        i2[n2] = f3(i2[n2]);
+      if (f4)
+        i2[n2] = f4(i2[n2]);
     }
   }
   function resume(n2, v3) {
@@ -4638,8 +5105,8 @@ function __asyncGenerator(thisArg, _arguments, generator) {
   function reject(value) {
     resume("throw", value);
   }
-  function settle(f3, v3) {
-    if (f3(v3), q3.shift(), q3.length)
+  function settle(f4, v3) {
+    if (f4(v3), q3.shift(), q3.length)
       resume(q3[0][0], q3[0][1]);
   }
 }
@@ -4650,10 +5117,10 @@ function __asyncDelegator(o3) {
   }), verb("return"), i2[Symbol.iterator] = function() {
     return this;
   }, i2;
-  function verb(n2, f3) {
+  function verb(n2, f4) {
     i2[n2] = o3[n2] ? function(v3) {
-      return (p = !p) ? { value: __await(o3[n2](v3)), done: false } : f3 ? f3(v3) : v3;
-    } : f3;
+      return (p = !p) ? { value: __await(o3[n2](v3)), done: false } : f4 ? f4(v3) : v3;
+    } : f4;
   }
 }
 function __asyncValues(o3) {
@@ -4705,69 +5172,69 @@ class ResultAsync {
   static combineWithAllErrors(asyncResultList) {
     return combineResultAsyncListWithAllErrors(asyncResultList);
   }
-  map(f3) {
+  map(f4) {
     return new ResultAsync(this._promise.then((res) => __awaiter(this, undefined, undefined, function* () {
       if (res.isErr()) {
         return new Err(res.error);
       }
-      return new Ok(yield f3(res.value));
+      return new Ok(yield f4(res.value));
     })));
   }
-  andThrough(f3) {
+  andThrough(f4) {
     return new ResultAsync(this._promise.then((res) => __awaiter(this, undefined, undefined, function* () {
       if (res.isErr()) {
         return new Err(res.error);
       }
-      const newRes = yield f3(res.value);
+      const newRes = yield f4(res.value);
       if (newRes.isErr()) {
         return new Err(newRes.error);
       }
       return new Ok(res.value);
     })));
   }
-  andTee(f3) {
+  andTee(f4) {
     return new ResultAsync(this._promise.then((res) => __awaiter(this, undefined, undefined, function* () {
       if (res.isErr()) {
         return new Err(res.error);
       }
       try {
-        yield f3(res.value);
+        yield f4(res.value);
       } catch (e3) {}
       return new Ok(res.value);
     })));
   }
-  orTee(f3) {
+  orTee(f4) {
     return new ResultAsync(this._promise.then((res) => __awaiter(this, undefined, undefined, function* () {
       if (res.isOk()) {
         return new Ok(res.value);
       }
       try {
-        yield f3(res.error);
+        yield f4(res.error);
       } catch (e3) {}
       return new Err(res.error);
     })));
   }
-  mapErr(f3) {
+  mapErr(f4) {
     return new ResultAsync(this._promise.then((res) => __awaiter(this, undefined, undefined, function* () {
       if (res.isOk()) {
         return new Ok(res.value);
       }
-      return new Err(yield f3(res.error));
+      return new Err(yield f4(res.error));
     })));
   }
-  andThen(f3) {
+  andThen(f4) {
     return new ResultAsync(this._promise.then((res) => {
       if (res.isErr()) {
         return new Err(res.error);
       }
-      const newValue = f3(res.value);
+      const newValue = f4(res.value);
       return newValue instanceof ResultAsync ? newValue._promise : newValue;
     }));
   }
-  orElse(f3) {
+  orElse(f4) {
     return new ResultAsync(this._promise.then((res) => __awaiter(this, undefined, undefined, function* () {
       if (res.isErr()) {
-        return f3(res.error);
+        return f4(res.error);
       }
       return new Ok(res.value);
     })));
@@ -4867,21 +5334,21 @@ class Ok {
   isErr() {
     return !this.isOk();
   }
-  map(f3) {
-    return ok(f3(this.value));
+  map(f4) {
+    return ok(f4(this.value));
   }
   mapErr(_f) {
     return ok(this.value);
   }
-  andThen(f3) {
-    return f3(this.value);
+  andThen(f4) {
+    return f4(this.value);
   }
-  andThrough(f3) {
-    return f3(this.value).map((_value) => this.value);
+  andThrough(f4) {
+    return f4(this.value).map((_value) => this.value);
   }
-  andTee(f3) {
+  andTee(f4) {
     try {
-      f3(this.value);
+      f4(this.value);
     } catch (e3) {}
     return ok(this.value);
   }
@@ -4891,14 +5358,14 @@ class Ok {
   orElse(_f) {
     return ok(this.value);
   }
-  asyncAndThen(f3) {
-    return f3(this.value);
+  asyncAndThen(f4) {
+    return f4(this.value);
   }
-  asyncAndThrough(f3) {
-    return f3(this.value).map(() => this.value);
+  asyncAndThrough(f4) {
+    return f4(this.value).map(() => this.value);
   }
-  asyncMap(f3) {
-    return ResultAsync.fromSafePromise(f3(this.value));
+  asyncMap(f4) {
+    return ResultAsync.fromSafePromise(f4(this.value));
   }
   unwrapOr(_v) {
     return this.value;
@@ -4912,7 +5379,7 @@ class Ok {
       return value;
     }();
   }
-  _unsafeUnwrap(_4) {
+  _unsafeUnwrap(_5) {
     return this.value;
   }
   _unsafeUnwrapErr(config) {
@@ -4936,8 +5403,8 @@ class Err {
   map(_f) {
     return err(this.error);
   }
-  mapErr(f3) {
-    return err(f3(this.error));
+  mapErr(f4) {
+    return err(f4(this.error));
   }
   andThrough(_f) {
     return err(this.error);
@@ -4945,17 +5412,17 @@ class Err {
   andTee(_f) {
     return err(this.error);
   }
-  orTee(f3) {
+  orTee(f4) {
     try {
-      f3(this.error);
+      f4(this.error);
     } catch (e3) {}
     return err(this.error);
   }
   andThen(_f) {
     return err(this.error);
   }
-  orElse(f3) {
-    return f3(this.error);
+  orElse(f4) {
+    return f4(this.error);
   }
   asyncAndThen(_f) {
     return errAsync(this.error);
@@ -4982,7 +5449,7 @@ class Err {
   _unsafeUnwrap(config) {
     throw createNeverThrowError("Called `_unsafeUnwrap` on an Err", this, config);
   }
-  _unsafeUnwrapErr(_4) {
+  _unsafeUnwrapErr(_5) {
     return this.error;
   }
   *[Symbol.iterator]() {
@@ -4999,7 +5466,11 @@ var $ok = ok;
 
 // src/domain/script-catalog.ts
 var ENTRY_FILE = "index.ts";
-var listSelectable = (catalog) => [...catalog.packages].sort((a4, b4) => a4.id.localeCompare(b4.id)).map((p) => ({ id: p.id, title: p.manifest.title }));
+var listSelectable = (catalog) => [...catalog.packages].sort((a4, b4) => a4.id.localeCompare(b4.id)).map((p) => ({
+  id: p.id,
+  title: p.manifest.title,
+  description: p.manifest.description
+}));
 var resolvePackage = (catalog, id) => {
   const matches = catalog.packages.filter((p) => p.id === id);
   if (matches.length === 0) {
@@ -5011,6 +5482,106 @@ var resolvePackage = (catalog, id) => {
   const [first] = matches;
   return $ok(first);
 };
+
+// src/flow/run-bundled-script.ts
+import { join as join4 } from "node:path";
+import { pathToFileURL } from "node:url";
+function runBundledScript(pkg, args, context) {
+  const entryPath = join4(pkg.rootPath, pkg.entryRelative);
+  const href = pathToFileURL(entryPath).href;
+  const startedAt = Date.now();
+  const diagnostics = context.diagnostics?.child({ scriptId: pkg.id });
+  diagnostics?.emit({
+    level: "info",
+    event: "cli.script_started",
+    phase: "start",
+    scriptId: pkg.id,
+    details: {
+      entryPath,
+      scriptArgs: summarizeScriptArgs(args)
+    }
+  });
+  return $ResultAsync.fromPromise(import(href), (e3) => ({
+    kind: "load",
+    message: e3 instanceof Error ? e3.message : String(e3)
+  })).andThen((mod) => {
+    const fn = mod.default;
+    if (typeof fn !== "function") {
+      return $errAsync({
+        kind: "no_default_export",
+        message: "script entry must default-export a function (see script-package contract)"
+      });
+    }
+    const run = fn;
+    return $ResultAsync.fromPromise(Promise.resolve(run(args, context)), (e3) => {
+      if (isCliCommandError(e3)) {
+        return {
+          kind: "execution",
+          message: e3.message,
+          cliError: e3
+        };
+      }
+      return {
+        kind: "execution",
+        message: e3 instanceof Error ? e3.message : String(e3)
+      };
+    });
+  }).map(() => {
+    diagnostics?.emit({
+      level: "info",
+      event: "cli.script_completed",
+      phase: "complete",
+      scriptId: pkg.id,
+      durationMs: Math.max(0, Date.now() - startedAt)
+    });
+    return;
+  }).mapErr((error) => {
+    if (error.kind === "execution" && error.cliError) {
+      diagnostics?.emit({
+        level: "error",
+        event: "cli.script_failed",
+        phase: "execution",
+        scriptId: pkg.id,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        exitCode: error.cliError.exitCode,
+        errorCode: error.cliError.code,
+        message: error.cliError.message,
+        details: { scriptArgs: summarizeScriptArgs(args) }
+      });
+      return error;
+    }
+    diagnostics?.emit({
+      level: "error",
+      event: "cli.script_failed",
+      phase: error.kind,
+      scriptId: pkg.id,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      message: error.message,
+      details: { scriptArgs: summarizeScriptArgs(args) }
+    });
+    return error;
+  });
+}
+
+// src/infra/bundled-script-catalog.ts
+var import_picocolors3 = __toESM(require_picocolors(), 1);
+
+// src/infra/bundled-scripts-root.ts
+import { existsSync as existsSync2 } from "node:fs";
+import { dirname as dirname6, join as join5 } from "node:path";
+import { fileURLToPath } from "node:url";
+function getBundledScriptsRoot() {
+  const moduleDir = dirname6(fileURLToPath(import.meta.url));
+  const candidates = [
+    join5(moduleDir, "../scripts"),
+    join5(moduleDir, "../src/scripts")
+  ];
+  return candidates.find((candidate) => existsSync2(candidate)) ?? candidates[0];
+}
+
+// src/infra/discover-scripts.ts
+import { readdir as readdir3, readFile as readFile4, stat as stat2 } from "node:fs/promises";
+import { join as join6 } from "node:path";
 
 // src/domain/script-id.ts
 var KEBAB_CASE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -5342,6 +5913,7 @@ var parseScriptManifest = (raw) => {
 
 // src/infra/discover-scripts.ts
 var MANIFEST_FILE = "script.json";
+var reservedScriptIds = new Set(["list", "run"]);
 var pushWarning = (warnings, path, message) => {
   warnings.push({ path, message });
 };
@@ -5363,14 +5935,14 @@ async function scanScriptsRoot(scriptsRoot) {
   }
   const names = entries.filter((e3) => e3.isDirectory()).map((e3) => e3.name).sort((a4, b4) => a4.localeCompare(b4));
   for (const name of names) {
-    const dirPath = join4(scriptsRoot, name);
+    const dirPath = join6(scriptsRoot, name);
     const dirIdResult = validateScriptId(name);
     if (dirIdResult.isErr()) {
       pushWarning(warnings, dirPath, `skip non-kebab-case script folder: ${dirIdResult.error.message}`);
       continue;
     }
-    const manifestPath = join4(dirPath, MANIFEST_FILE);
-    const entryPath = join4(dirPath, ENTRY_FILE);
+    const manifestPath = join6(dirPath, MANIFEST_FILE);
+    const entryPath = join6(dirPath, ENTRY_FILE);
     let manifestStat;
     let entryStat;
     try {
@@ -5388,7 +5960,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let rawJson;
     try {
-      rawJson = await readFile3(manifestPath, "utf8");
+      rawJson = await readFile4(manifestPath, "utf8");
     } catch (e3) {
       const msg = e3 instanceof Error ? e3.message : String(e3);
       pushWarning(warnings, manifestPath, `cannot read manifest: ${msg}`);
@@ -5412,6 +5984,10 @@ async function scanScriptsRoot(scriptsRoot) {
       pushWarning(warnings, manifestPath, `manifest id "${manifest.id}" does not match folder name "${name}"`);
       continue;
     }
+    if (reservedScriptIds.has(manifest.id)) {
+      pushWarning(warnings, manifestPath, `script id "${manifest.id}" is reserved for a scripts command operation`);
+      continue;
+    }
     if (seenIds.has(manifest.id)) {
       pushWarning(warnings, dirPath, `duplicate script id "${manifest.id}" ignored (keep first in discovery order)`);
       continue;
@@ -5427,489 +6003,71 @@ async function scanScriptsRoot(scriptsRoot) {
   return { packages, warnings };
 }
 
-// src/domain/completion-candidates.ts
-async function resolveValue2(value) {
-  if (typeof value === "function") {
-    return await value();
+// src/infra/bundled-script-catalog.ts
+var maxDescriptionLength = 160;
+var maxWarnings = 5;
+function boundedDescription(value) {
+  if (!value) {
+    return;
   }
-  return await value;
+  return value.length <= maxDescriptionLength ? value : `${value.slice(0, maxDescriptionLength - 1)}…`;
 }
-function toKebabCase(value) {
-  return value.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
+function toBundledScriptCatalogRows(catalog) {
+  return listSelectable(catalog).map((row) => ({
+    ...row,
+    description: boundedDescription(row.description)
+  }));
 }
-async function getSubCommands(command) {
-  const subCommands = await resolveValue2(command.subCommands);
-  if (!subCommands) {
-    return {};
+function loadBundledScriptCatalog() {
+  return discoverScripts(getBundledScriptsRoot());
+}
+async function getBundledScriptIdCandidates() {
+  const discovered = await loadBundledScriptCatalog();
+  return discovered.isOk() ? toBundledScriptCatalogRows(discovered.value).map((row) => row.id) : [];
+}
+function formatBundledScriptCatalog(catalog, heading = "AVAILABLE SCRIPTS") {
+  const rows = toBundledScriptCatalogRows(catalog);
+  const width = Math.max(0, ...rows.map((row) => row.id.length));
+  const lines = [heading, ""];
+  if (rows.length === 0) {
+    lines.push("  No bundled scripts available.");
+  } else {
+    for (const row of rows) {
+      const detail = row.description ? `${row.title} — ${row.description}` : row.title;
+      lines.push(`  ${import_picocolors3.default.cyan(row.id.padEnd(width + 2))}${detail}`);
+    }
   }
-  const entries = await Promise.all(Object.entries(subCommands).map(async ([name, value]) => [
-    name,
-    await resolveValue2(value)
-  ]));
-  return Object.fromEntries(entries);
-}
-async function getArgs(command) {
-  return await resolveValue2(command.args) ?? {};
-}
-function isFlag(word) {
-  return word.startsWith("-");
-}
-function isCompleteFlag(word) {
-  return word.startsWith("--") && word.length > 2 && !word.includes("=");
-}
-function flagName(name, _arg) {
-  return `--${toKebabCase(name)}`;
-}
-async function traverseCommand(rootCommand, completedWords) {
-  let command = rootCommand;
-  const path = [];
-  let skipFlagValue = false;
-  for (const word of completedWords) {
-    if (skipFlagValue) {
-      skipFlagValue = false;
-      continue;
+  if (catalog.warnings.length > 0) {
+    lines.push("", "WARNINGS", "");
+    for (const warning of catalog.warnings.slice(0, maxWarnings)) {
+      lines.push(`  ${warning.path}: ${warning.message}`);
     }
-    if (isFlag(word)) {
-      const args = await getArgs(command);
-      const arg = Object.entries(args).find(([name]) => flagName(name, args[name]) === word)?.[1];
-      skipFlagValue = arg?.type === "string";
-      continue;
+    const omitted = catalog.warnings.length - maxWarnings;
+    if (omitted > 0) {
+      lines.push(`  ... ${omitted} more warnings`);
     }
-    const subCommands = await getSubCommands(command);
-    const next = subCommands[word];
-    if (!next) {
-      return { command, path };
-    }
-    command = next;
-    path.push(word);
   }
-  return { command, path };
+  return lines.join(`
+`);
 }
-function filterByPrefix(candidates, prefix) {
-  return [...new Set(candidates)].filter((candidate) => candidate.startsWith(prefix)).sort((a4, b4) => a4.localeCompare(b4));
-}
-async function getFlagCandidates(command, completedWords, prefix) {
-  const args = await getArgs(command);
-  const used = new Set(completedWords.filter(isCompleteFlag));
-  const candidates = Object.entries(args).filter(([, arg]) => arg.type !== "positional").map(([name, arg]) => flagName(name, arg)).filter((candidate) => !used.has(candidate));
-  return filterByPrefix(candidates, prefix);
-}
-async function getScriptCandidates(prefix) {
-  const discovered = await discoverScripts(getBundledScriptsRoot());
+async function renderBundledScriptHelpAppendix() {
+  const discovered = await loadBundledScriptCatalog();
   if (discovered.isErr()) {
-    return [];
-  }
-  return filterByPrefix(listSelectable(discovered.value).map((row) => row.id), prefix);
-}
-function shouldCompleteScriptId(path, completedWords) {
-  if (path.join(" ") !== "scripts") {
-    return false;
-  }
-  const hasScriptFlag = completedWords.at(-1) === "--script";
-  const hasExplicitId = completedWords.some((word, index) => {
-    if (index === 0 || isFlag(word)) {
-      return false;
-    }
-    const previous = completedWords[index - 1];
-    return previous !== "--script";
-  });
-  return hasScriptFlag || !hasExplicitId;
-}
-function shouldCompleteShellName(path, completedWords) {
-  return path.join(" ") === "completion" && completedWords.length === 1;
-}
-function shouldCompleteManagedShellName(path, completedWords) {
-  return path.join(" ") === "completion" && completedWords.length === 2 && ["disable", "enable", "status"].includes(completedWords[1]);
-}
-async function getCompletionCandidates({
-  rootCommand,
-  words
-}) {
-  const currentWord = words.at(-1) ?? "";
-  const completedWords = words.slice(0, -1);
-  const state = await traverseCommand(rootCommand, completedWords);
-  if (!state) {
-    return [];
-  }
-  if (currentWord.startsWith("-")) {
-    return getFlagCandidates(state.command, completedWords, currentWord);
-  }
-  if (shouldCompleteScriptId(state.path, completedWords)) {
-    return getScriptCandidates(currentWord);
-  }
-  if (shouldCompleteShellName(state.path, completedWords)) {
-    return filterByPrefix(["disable", "enable", "powershell", "status", "zsh"], currentWord);
-  }
-  if (shouldCompleteManagedShellName(state.path, completedWords)) {
-    return filterByPrefix(["powershell", "zsh"], currentWord);
-  }
-  const subCommands = await getSubCommands(state.command);
-  return filterByPrefix(Object.keys(subCommands).filter((candidate) => candidate !== "__complete"), currentWord);
-}
-
-// src/command/completion.command.ts
-var emptyCompletionWord = "__cthutool_empty_completion_word__";
-var powershellProfileEnv = "CHC_COMPLETION_POWERSHELL_PROFILE";
-var zshProfileEnv = "CHC_COMPLETION_ZSH_PROFILE";
-var powershellCompletionLoadLine = "chc completion powershell | Out-String | Invoke-Expression";
-var powershellCompletionReloadHint = `Restart PowerShell to load it, or run: ${powershellCompletionLoadLine}`;
-var legacyPowerShellCompletionComment = "# CthuTool CLI completion";
-var completionStartMarker = "# >>> cthutool chc completion >>>";
-var completionEndMarker = "# <<< cthutool chc completion <<<";
-var powershellCompletionBlock = `${completionStartMarker}
-${powershellCompletionLoadLine}
-${completionEndMarker}`;
-var zshCompletionLoadLine = "source <(chc completion zsh)";
-var zshCompletionBlock = `${completionStartMarker}
-if (( ! $+functions[compdef] )); then
-  autoload -Uz compinit
-  compinit
-fi
-${zshCompletionLoadLine}
-${completionEndMarker}`;
-var execFileAsync = promisify(execFile);
-var powershellScript = `Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
-  param($wordToComplete, $commandAst, $cursorPosition)
-  $words = @($commandAst.CommandElements | Select-Object -Skip 1 | ForEach-Object { $_.Extent.Text })
-  if ($words.Count -eq 0 -or $words[-1] -ne $wordToComplete) {
-    if ($wordToComplete -eq '') {
-      $words += '__cthutool_empty_completion_word__'
-    } else {
-      $words += $wordToComplete
-    }
-  }
-  chc __complete @words | ForEach-Object {
-    $completionText = if ($_.StartsWith('-')) { $_ } else { "$_ " }
-    [System.Management.Automation.CompletionResult]::new($completionText, $_, 'ParameterValue', $_)
-  }
-}
-`;
-var zshScript = `#compdef chc
-_chc_completion() {
-  local -a candidates
-  candidates=("\${(@f)$(chc __complete "\${words[@]:1}")}")
-  compadd -- "\${candidates[@]}"
-}
-compdef _chc_completion chc
-`;
-function renderShellScript(shell) {
-  if (shell === "powershell") {
-    return powershellScript;
-  }
-  if (shell === "zsh") {
-    return zshScript;
-  }
-  return;
-}
-function isCompletionProfileAction(value) {
-  return value === "enable" || value === "disable" || value === "status";
-}
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function removeManagedCompletionBlock(content) {
-  const pattern = new RegExp(`${escapeRegExp(completionStartMarker)}\\r?\\n[\\s\\S]*?\\r?\\n${escapeRegExp(completionEndMarker)}\\r?\\n?`, "g");
-  const nextContent = content.replace(pattern, "");
-  return { content: nextContent, removed: nextContent !== content };
-}
-function removeLegacyCompletionBlock(content) {
-  const legacyBlockPattern = new RegExp(`${escapeRegExp(legacyPowerShellCompletionComment)}\\r?\\n${escapeRegExp(powershellCompletionLoadLine)}\\r?\\n?`, "g");
-  return content.replace(legacyBlockPattern, "");
-}
-function removeLegacyZshCompletionLine(content) {
-  const legacyLinePattern = new RegExp(`^${escapeRegExp(zshCompletionLoadLine)}\\r?\\n?`, "gm");
-  return content.replace(legacyLinePattern, "");
-}
-async function readTextIfExists(path) {
-  try {
-    return await readFile4(path, "utf8");
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return "";
-    }
-    throw error;
-  }
-}
-async function resolvePowerShellProfilePath() {
-  const override = process.env[powershellProfileEnv]?.trim();
-  if (override) {
-    return override;
-  }
-  for (const executable of ["pwsh", "powershell"]) {
-    try {
-      const { stdout: stdout2 } = await execFileAsync(executable, [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        "$PROFILE.CurrentUserCurrentHost"
-      ]);
-      const profilePath = stdout2.trim();
-      if (profilePath.length > 0) {
-        return profilePath;
-      }
-    } catch {}
-  }
-  if (platform2() === "win32") {
-    return join5(process.env.USERPROFILE || homedir2(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
-  }
-  return join5(homedir2(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
-}
-function resolveZshProfilePath() {
-  const override = process.env[zshProfileEnv]?.trim();
-  if (override) {
-    return override;
-  }
-  const zdotdir = process.env.ZDOTDIR?.trim();
-  return join5(zdotdir || homedir2(), ".zshrc");
-}
-async function handlePowerShellProfileAction(action) {
-  const profilePath = await resolvePowerShellProfilePath();
-  const content = await readTextIfExists(profilePath);
-  const installed = content.includes(completionStartMarker) && content.includes(completionEndMarker);
-  if (action === "status") {
-    process.stdout.write(`PowerShell completion ${installed ? "enabled" : "disabled"}: ${profilePath}
+    return [
+      "AVAILABLE SCRIPTS",
+      "",
+      `  Unavailable: ${discovered.error.message}`
+    ].join(`
 `);
-    if (installed) {
-      process.stdout.write(`${powershellCompletionReloadHint}
-`);
-    }
-    process.exitCode = 0;
-    return;
   }
-  if (action === "disable") {
-    const cleaned2 = removeManagedCompletionBlock(content);
-    if (cleaned2.removed) {
-      await writeFile3(profilePath, cleaned2.content);
-    }
-    process.stdout.write(`PowerShell completion disabled: ${profilePath}
-`);
-    process.exitCode = 0;
-    return;
-  }
-  const cleaned = removeManagedCompletionBlock(content);
-  const migratedContent = removeLegacyCompletionBlock(cleaned.content);
-  const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
-`) ? migratedContent : `${migratedContent}
-`;
-  await mkdir3(dirname6(profilePath), { recursive: true });
-  await writeFile3(profilePath, `${prefix}${powershellCompletionBlock}
-`);
-  process.stdout.write(`PowerShell completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
-`);
-  process.stdout.write(`${powershellCompletionReloadHint}
-`);
-  process.exitCode = 0;
-}
-async function handleZshProfileAction(action) {
-  const profilePath = resolveZshProfilePath();
-  const content = await readTextIfExists(profilePath);
-  const installed = content.includes(completionStartMarker) && content.includes(completionEndMarker);
-  const reloadHint = `Restart zsh to load it, or run: source ${profilePath}`;
-  if (action === "status") {
-    process.stdout.write(`zsh completion ${installed ? "enabled" : "disabled"}: ${profilePath}
-`);
-    if (installed) {
-      process.stdout.write(`${reloadHint}
-`);
-    }
-    process.exitCode = 0;
-    return;
-  }
-  if (action === "disable") {
-    const cleaned2 = removeManagedCompletionBlock(content);
-    if (cleaned2.removed) {
-      await writeFile3(profilePath, cleaned2.content);
-    }
-    process.stdout.write(`zsh completion disabled: ${profilePath}
-`);
-    process.exitCode = 0;
-    return;
-  }
-  const cleaned = removeManagedCompletionBlock(content);
-  const migratedContent = removeLegacyZshCompletionLine(cleaned.content);
-  const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
-`) ? migratedContent : `${migratedContent}
-`;
-  await mkdir3(dirname6(profilePath), { recursive: true });
-  await writeFile3(profilePath, `${prefix}${zshCompletionBlock}
-`);
-  process.stdout.write(`zsh completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
-`);
-  process.stdout.write(`${reloadHint}
-`);
-  process.exitCode = 0;
-}
-function createCompletionCommand() {
-  return defineCommand({
-    meta: {
-      name: "completion",
-      description: "Print or manage shell completion setup."
-    },
-    args: {
-      shell: {
-        type: "positional",
-        description: "Shell to generate completion for (powershell or zsh), or action to manage persistent completion",
-        required: true
-      }
-    },
-    async run({ args, rawArgs }) {
-      await runObservedCliCommand(args, { command: "completion" }, async ({ fail }) => {
-        const first = rawArgs[0] ?? "";
-        if (isCompletionProfileAction(first)) {
-          const shell2 = rawArgs[1] ?? "";
-          if (shell2 !== "powershell" && shell2 !== "zsh") {
-            const error = createCliError("invalid_option", `unsupported managed completion shell: ${shell2 || "<missing>"}`);
-            fail(error, { details: { action: first, shell: shell2 } });
-            process.stderr.write(`${error.message}
-`);
-            process.exitCode = error.exitCode;
-            return;
-          }
-          try {
-            if (shell2 === "powershell") {
-              await handlePowerShellProfileAction(first);
-            } else {
-              await handleZshProfileAction(first);
-            }
-          } catch (error) {
-            const cliError = createCliError("invalid_option", error instanceof Error ? error.message : String(error));
-            fail(cliError, { details: { action: first, shell: shell2 } });
-            process.stderr.write(`${cliError.message}
-`);
-            process.exitCode = cliError.exitCode;
-          }
-          return;
-        }
-        const shell = typeof args.shell === "string" ? args.shell : "";
-        const script = renderShellScript(shell);
-        if (!script) {
-          const error = createCliError("invalid_option", `unsupported shell: ${shell}`);
-          fail(error, { details: { shell } });
-          process.stderr.write(`${error.message}
-`);
-          process.exitCode = error.exitCode;
-          return;
-        }
-        process.stdout.write(script);
-        process.exitCode = 0;
-      });
-    }
-  });
-}
-function createInternalCompleteCommand(resolveRootCommand) {
-  return defineCommand({
-    meta: {
-      name: "__complete",
-      description: "Internal shell completion protocol."
-    },
-    async run({ rawArgs }) {
-      try {
-        const words = rawArgs.map((word) => word === emptyCompletionWord ? "" : word);
-        const candidates = await getCompletionCandidates({
-          rootCommand: resolveRootCommand(),
-          words
-        });
-        if (candidates.length > 0) {
-          process.stdout.write(`${candidates.join(`
-`)}
-`);
-        }
-        process.exitCode = 0;
-      } catch {
-        process.exitCode = 0;
-      }
-    }
-  });
-}
-
-// src/command/run-scripts.command.ts
-var import_picocolors3 = __toESM(require_picocolors(), 1);
-
-// src/flow/run-bundled-script.ts
-import { join as join6 } from "node:path";
-import { pathToFileURL } from "node:url";
-function runBundledScript(pkg, args, context) {
-  const entryPath = join6(pkg.rootPath, pkg.entryRelative);
-  const href = pathToFileURL(entryPath).href;
-  const startedAt = Date.now();
-  const diagnostics = context.diagnostics?.child({ scriptId: pkg.id });
-  diagnostics?.emit({
-    level: "info",
-    event: "cli.script_started",
-    phase: "start",
-    scriptId: pkg.id,
-    details: {
-      entryPath,
-      scriptArgs: summarizeScriptArgs(args)
-    }
-  });
-  return $ResultAsync.fromPromise(import(href), (e3) => ({
-    kind: "load",
-    message: e3 instanceof Error ? e3.message : String(e3)
-  })).andThen((mod) => {
-    const fn = mod.default;
-    if (typeof fn !== "function") {
-      return $errAsync({
-        kind: "no_default_export",
-        message: "script entry must default-export a function (see script-package contract)"
-      });
-    }
-    const run = fn;
-    return $ResultAsync.fromPromise(Promise.resolve(run(args, context)), (e3) => {
-      if (isCliCommandError(e3)) {
-        return {
-          kind: "execution",
-          message: e3.message,
-          cliError: e3
-        };
-      }
-      return {
-        kind: "execution",
-        message: e3 instanceof Error ? e3.message : String(e3)
-      };
-    });
-  }).map(() => {
-    diagnostics?.emit({
-      level: "info",
-      event: "cli.script_completed",
-      phase: "complete",
-      scriptId: pkg.id,
-      durationMs: Math.max(0, Date.now() - startedAt)
-    });
-    return;
-  }).mapErr((error) => {
-    if (error.kind === "execution" && error.cliError) {
-      diagnostics?.emit({
-        level: "error",
-        event: "cli.script_failed",
-        phase: "execution",
-        scriptId: pkg.id,
-        durationMs: Math.max(0, Date.now() - startedAt),
-        exitCode: error.cliError.exitCode,
-        errorCode: error.cliError.code,
-        message: error.cliError.message,
-        details: { scriptArgs: summarizeScriptArgs(args) }
-      });
-      return error;
-    }
-    diagnostics?.emit({
-      level: "error",
-      event: "cli.script_failed",
-      phase: error.kind,
-      scriptId: pkg.id,
-      durationMs: Math.max(0, Date.now() - startedAt),
-      message: error.message,
-      details: { scriptArgs: summarizeScriptArgs(args) }
-    });
-    return error;
-  });
+  return formatBundledScriptCatalog(discovered.value);
 }
 
 // src/command/run-scripts.command.ts
 var defaultDeps = {
   isInteractive: () => process.stdin.isTTY === true,
   pickScriptId: async (rows) => {
-    pe(import_picocolors3.default.cyan("▶ Script Selection"));
+    pe(import_picocolors4.default.cyan("▶ Script Selection"));
     const choice = await le2({
       message: "Choose a bundled script to run",
       options: rows.map((o3) => ({
@@ -5921,6 +6079,20 @@ var defaultDeps = {
       return;
     }
     return choice;
+  }
+};
+var scriptRunnerArgs = {
+  ...cliContractArgs,
+  id: {
+    type: "positional",
+    description: "Script id (folder name under apps/cli/src/scripts/)",
+    required: false
+  },
+  script: {
+    type: "string",
+    description: "Same as positional id (for non-interactive CI)",
+    alias: "s",
+    valueHint: "id"
   }
 };
 function resolveExplicitId(args) {
@@ -5941,162 +6113,223 @@ function toScriptArgs(args) {
   ]);
   return Object.fromEntries(Object.entries(args).filter(([key]) => !skipped.has(key)));
 }
-var createScriptsCommand = (deps = defaultDeps) => defineCommand({
-  meta: {
-    name: "scripts",
-    description: [
-      "Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).",
-      "",
-      "Examples:",
-      "  chc scripts hello-world",
-      "  chc scripts --script hello-world",
-      "  bun run apps/cli/src/scripts/hello-world/index.ts"
-    ].join(`
-`)
-  },
-  args: {
-    ...cliContractArgs,
-    id: {
-      type: "positional",
-      description: "Script id (folder name under apps/cli/src/scripts/)",
-      required: false
-    },
-    script: {
-      type: "string",
-      description: "Same as positional id (for non-interactive CI)",
-      alias: "s",
-      valueHint: "id"
+function shouldOfferScriptIds({
+  completedWords,
+  path
+}) {
+  const tail = completedWords.slice(path.length);
+  const last = tail.at(-1);
+  if (last === "--script" || last === "-s") {
+    return true;
+  }
+  return !tail.some((word) => !word.startsWith("-"));
+}
+async function scriptIdCandidates(context) {
+  return shouldOfferScriptIds(context) ? await getBundledScriptIdCandidates() : [];
+}
+function normalizeScriptsArgs(args) {
+  const [first] = args;
+  if (!first || first === "list" || first === "run" || first === "--help" || first === "-h") {
+    return args;
+  }
+  return ["run", ...args];
+}
+async function executeBundledScript(args, deps) {
+  const context = createCliContext(args, { isTty: deps.isInteractive });
+  const commandDiagnostics = createCliCommandDiagnostics(context, processOutput, { command: "scripts" });
+  const diagnostics = createCliDiagnostics(context, processOutput, {
+    command: "scripts"
+  });
+  const fail = (error, details) => {
+    commandDiagnostics.fail(error, { details });
+    writeCommandError(context, processOutput, error);
+    process.exitCode = error.exitCode;
+  };
+  const root = getBundledScriptsRoot();
+  const discovered = await loadBundledScriptCatalog();
+  if (discovered.isErr()) {
+    const error = createCliError("discovery_failed", discovered.error.message);
+    fail(error, { phase: "discovery", scriptsRoot: root });
+    return;
+  }
+  const catalog = discovered.value;
+  diagnostics.emit({
+    level: "debug",
+    event: "cli.scripts_discovered",
+    phase: "discovery",
+    details: {
+      packageCount: catalog.packages.length,
+      warningCount: catalog.warnings.length
     }
-  },
-  async run({ args }) {
-    const context = createCliContext(args, { isTty: deps.isInteractive });
-    const commandDiagnostics = createCliCommandDiagnostics(context, processOutput, { command: "scripts" });
-    const diagnostics = createCliDiagnostics(context, processOutput, {
-      command: "scripts"
-    });
-    const fail = (error, details) => {
-      commandDiagnostics.fail(error, { details });
-      writeCommandError(context, processOutput, error);
-      process.exitCode = error.exitCode;
-    };
-    const root = getBundledScriptsRoot();
-    const discovered = await discoverScripts(root);
-    if (discovered.isErr()) {
-      const error = createCliError("discovery_failed", discovered.error.message);
-      fail(error, { phase: "discovery", scriptsRoot: root });
-      return;
-    }
-    const catalog = discovered.value;
+  });
+  for (const warning of catalog.warnings) {
+    writeWarning(processOutput, import_picocolors4.default.yellow(`${warning.path}: ${warning.message}`));
     diagnostics.emit({
-      level: "debug",
-      event: "cli.scripts_discovered",
+      level: "warn",
+      event: "cli.script_discovery_warning",
       phase: "discovery",
       details: {
-        packageCount: catalog.packages.length,
-        warningCount: catalog.warnings.length
+        message: warning.message,
+        path: warning.path
       }
     });
-    for (const w3 of catalog.warnings) {
-      writeWarning(processOutput, import_picocolors3.default.yellow(`${w3.path}: ${w3.message}`));
-      diagnostics.emit({
-        level: "warn",
-        event: "cli.script_discovery_warning",
-        phase: "discovery",
-        details: {
-          message: w3.message,
-          path: w3.path
-        }
-      });
-    }
-    if (catalog.packages.length === 0) {
-      const error = createCliError("discovery_failed", "no valid bundled script packages found (see apps/cli/src/scripts/)");
-      fail(error, { phase: "discovery", scriptsRoot: root });
+  }
+  if (catalog.packages.length === 0) {
+    const error = createCliError("discovery_failed", "no valid bundled script packages found (see apps/cli/src/scripts/)");
+    fail(error, { phase: "discovery", scriptsRoot: root });
+    return;
+  }
+  const explicitId = resolveExplicitId(args);
+  let targetId = explicitId;
+  if (!targetId) {
+    if (!context.interactive) {
+      const error = createCliError("missing_required_argument", "script id is required in non-interactive mode (use: chc scripts run <id>, chc scripts <id>, or --script <id>)");
+      fail(error, { phase: "selection" });
       return;
     }
-    const explicitId = resolveExplicitId(args);
-    let targetId = explicitId;
-    if (!targetId) {
-      if (!context.interactive) {
-        const error = createCliError("missing_required_argument", "script id is required in non-interactive mode (use: chc scripts <id> or --script <id>)");
-        fail(error, { phase: "selection" });
-        return;
-      }
-      const options = listSelectable(catalog);
-      if (options.length === 1) {
-        const [only] = options;
-        targetId = only.id;
-        diagnostics.emit({
-          level: "info",
-          event: "cli.script_selected",
-          phase: "selection",
-          scriptId: targetId,
-          details: { selectionMode: "single-option" }
-        });
-      } else {
-        const choice = await deps.pickScriptId(options);
-        if (choice === undefined) {
-          const error = createCliError("invalid_option", "selection cancelled");
-          fail(error, { phase: "selection" });
-          return;
-        }
-        targetId = choice;
-        diagnostics.emit({
-          level: "info",
-          event: "cli.script_selected",
-          phase: "selection",
-          scriptId: targetId,
-          details: { selectionMode: "interactive" }
-        });
-      }
-    } else {
+    const options = listSelectable(catalog);
+    if (options.length === 1) {
+      const [only] = options;
+      targetId = only.id;
       diagnostics.emit({
         level: "info",
         event: "cli.script_selected",
         phase: "selection",
         scriptId: targetId,
-        details: {
-          selectionMode: explicitId === args.script ? "flag" : "positional"
-        }
+        details: { selectionMode: "single-option" }
       });
-    }
-    const resolved = resolvePackage(catalog, targetId);
-    if (resolved.isErr()) {
-      const error = resolved.error.kind === "not_found" ? createCliError("unknown_selection", `unknown script id: ${resolved.error.id}`) : createCliError("ambiguous_selection", `ambiguous script id: ${resolved.error.id}`);
-      fail(error, {
+    } else {
+      const choice = await deps.pickScriptId(options);
+      if (choice === undefined) {
+        const error = createCliError("invalid_option", "selection cancelled");
+        fail(error, { phase: "selection" });
+        return;
+      }
+      targetId = choice;
+      diagnostics.emit({
+        level: "info",
+        event: "cli.script_selected",
         phase: "selection",
-        requestedScriptId: resolved.error.id
+        scriptId: targetId,
+        details: { selectionMode: "interactive" }
       });
-      return;
     }
-    const executed = await runBundledScript(resolved.value, toScriptArgs(args), {
-      cli: context,
-      diagnostics: diagnostics.child({
-        scriptId: resolved.value.id
-      })
-    });
-    if (executed.isErr()) {
-      const e3 = executed.error;
-      const error = e3.kind === "load" ? createCliError("script_load_failed", e3.message) : e3.kind === "no_default_export" ? createCliError("script_load_failed", e3.message) : e3.cliError ?? createCliError("script_execution_failed", e3.message);
-      fail(error, {
-        phase: e3.kind,
-        scriptId: resolved.value.id,
-        scriptArgs: summarizeScriptArgs(toScriptArgs(args))
-      });
-      return;
-    }
-    commandDiagnostics.complete({
+  } else {
+    diagnostics.emit({
+      level: "info",
+      event: "cli.script_selected",
+      phase: "selection",
+      scriptId: targetId,
       details: {
-        scriptId: resolved.value.id,
-        scriptArgs: summarizeScriptArgs(toScriptArgs(args))
+        selectionMode: explicitId === args.script ? "flag" : "positional"
       }
     });
-    process.exitCode = 0;
   }
-});
+  const resolved = resolvePackage(catalog, targetId);
+  if (resolved.isErr()) {
+    const error = resolved.error.kind === "not_found" ? createCliError("unknown_selection", `unknown script id: ${resolved.error.id}`) : createCliError("ambiguous_selection", `ambiguous script id: ${resolved.error.id}`);
+    fail(error, {
+      phase: "selection",
+      requestedScriptId: resolved.error.id
+    });
+    return;
+  }
+  const executed = await runBundledScript(resolved.value, toScriptArgs(args), {
+    cli: context,
+    diagnostics: diagnostics.child({
+      scriptId: resolved.value.id
+    })
+  });
+  if (executed.isErr()) {
+    const error = executed.error.kind === "load" || executed.error.kind === "no_default_export" ? createCliError("script_load_failed", executed.error.message) : executed.error.cliError ?? createCliError("script_execution_failed", executed.error.message);
+    fail(error, {
+      phase: executed.error.kind,
+      scriptId: resolved.value.id,
+      scriptArgs: summarizeScriptArgs(toScriptArgs(args))
+    });
+    return;
+  }
+  commandDiagnostics.complete({
+    details: {
+      scriptId: resolved.value.id,
+      scriptArgs: summarizeScriptArgs(toScriptArgs(args))
+    }
+  });
+  process.exitCode = 0;
+}
+function createScriptListCommand() {
+  return defineCommand({
+    meta: {
+      name: "list",
+      description: "List discovered bundled scripts."
+    },
+    args: cliContractArgs,
+    async run({ args }) {
+      await runObservedCliCommand(args, { command: "scripts", subcommand: "list" }, async ({ context, fail }) => {
+        const discovered = await loadBundledScriptCatalog();
+        if (discovered.isErr()) {
+          const error = createCliError("discovery_failed", discovered.error.message);
+          fail(error, { details: { phase: "discovery" } });
+          writeCommandError(context, processOutput, error);
+          process.exitCode = error.exitCode;
+          return;
+        }
+        if (context.json) {
+          writeJsonValue(processOutput, {
+            ok: true,
+            command: "scripts list",
+            scripts: toBundledScriptCatalogRows(discovered.value)
+          });
+        } else {
+          writeHumanStatus(context, processOutput, formatBundledScriptCatalog(discovered.value));
+        }
+        process.exitCode = 0;
+      });
+    }
+  });
+}
+function createScriptRunCommand(deps) {
+  const command = defineCommand({
+    meta: {
+      name: "run",
+      description: "Run a discovered bundled script."
+    },
+    args: scriptRunnerArgs,
+    async run({ args }) {
+      await executeBundledScript(args, deps);
+    }
+  });
+  return registerPositionalCandidates(command, scriptIdCandidates);
+}
+var createScriptsCommand = (deps = defaultDeps) => {
+  const registrations = [
+    {
+      name: "list",
+      command: createScriptListCommand(),
+      visibility: "public",
+      bareBehavior: "run"
+    },
+    {
+      name: "run",
+      command: createScriptRunCommand(deps),
+      visibility: "public",
+      bareBehavior: "run"
+    }
+  ];
+  const command = registerCommandGroup(defineCommand({
+    meta: {
+      name: "scripts",
+      description: "Discover, list, and run bundled scripts under apps/cli/src/scripts/<id>/."
+    },
+    subCommands: buildRegisteredSubCommands(registrations)
+  }), registrations);
+  registerPositionalCandidates(command, scriptIdCandidates);
+  return registerCommandHelpAppendix(command, renderBundledScriptHelpAppendix);
+};
 var scriptsCommand = createScriptsCommand();
 
 // src/command/self-update.command.ts
-var import_picocolors4 = __toESM(require_picocolors(), 1);
+var import_picocolors6 = __toESM(require_picocolors(), 1);
 
 // src/domain/self-update-manager.ts
 import { spawn } from "node:child_process";
@@ -6108,19 +6341,34 @@ import { fileURLToPath as fileURLToPath2 } from "node:url";
 var defaultSelfUpdateRepo = "https://github.com/mickmetalholic/CthuTool.git";
 var defaultSelfUpdateRef = "main";
 var committedCliBundlePath = "apps/cli/dist/index.js";
+var maxChangeHighlights = 5;
+var maxSubjectLength = 120;
+var maxDetailLines = 8;
+var maxDetailLineLength = 240;
 
 class SelfUpdateError extends Error {
+  phase;
+  summary;
+  causeText;
+  hint;
   result;
-  constructor(result) {
-    super(formatFailedCommand(result));
+  constructor(options) {
+    const cause = options.cause ? `
+Cause: ${options.cause}` : "";
+    super(`${options.summary}${cause}
+Next: ${options.hint}`);
     this.name = "SelfUpdateError";
-    this.result = result;
+    this.phase = options.phase;
+    this.summary = options.summary;
+    this.causeText = options.cause;
+    this.hint = options.hint;
+    this.result = options.result;
   }
 }
 function getDefaultSelfUpdateInstallDir(home = homedir3()) {
   return join7(home, ".cthutool", "source", "CthuTool");
 }
-function createSelfUpdateDeps(onStep) {
+function createSelfUpdateDeps(onEvent) {
   return {
     exists: existsSync3,
     mkdir: async (path) => {
@@ -6129,7 +6377,7 @@ function createSelfUpdateDeps(onStep) {
     run: runCommand2,
     env: process.env,
     home: homedir3,
-    onStep
+    onEvent
   };
 }
 function getCliVersion() {
@@ -6143,69 +6391,331 @@ function resolveSelfUpdateOptions(options, deps) {
     installDir: options.installDir ?? deps.env.CHC_INSTALL_DIR ?? getDefaultSelfUpdateInstallDir(home)
   };
 }
-function emitStep(deps, step) {
-  deps.onStep?.(step);
+function emit(deps, event) {
+  deps.onEvent?.(event);
 }
-function ensureOk(result) {
-  if (result.code !== 0) {
-    throw new SelfUpdateError(result);
+async function runPhase(deps, phase, action) {
+  emit(deps, { type: "phase_started", phase });
+  try {
+    const value = await action();
+    emit(deps, { type: "phase_completed", phase });
+    return value;
+  } catch (error) {
+    const failure = toPhaseError(error, phase);
+    emit(deps, {
+      type: "failure",
+      phase: failure.phase,
+      summary: failure.summary,
+      cause: failure.causeText,
+      hint: failure.hint
+    });
+    throw failure;
   }
 }
-async function runRequired(deps, command, args, options) {
-  ensureOk(await deps.run(command, args, options));
+function phaseHint(phase) {
+  switch (phase) {
+    case "preflight":
+      return "Check the selected directory and local Git state, then retry.";
+    case "check_remote":
+      return "Check the repository URL, ref, network access, and Git credentials.";
+    case "clone":
+      return "Check repository access and permissions for the managed source directory.";
+    case "fetch":
+      return "Check network access and the configured origin, then retry.";
+    case "checkout":
+      return "Inspect the checkout state and selected ref before retrying.";
+    case "verify_bundle":
+      return `Select a ref containing ${committedCliBundlePath}.`;
+    case "install_global":
+      return "Check npm global-install permissions, then retry the update.";
+  }
 }
-async function remoteRefExists(deps, installDir, ref) {
-  const result = await deps.run("git", ["rev-parse", "--verify", `origin/${ref}`], { cwd: installDir, allowFailure: true });
-  return result.code === 0;
+function toPhaseError(error, phase) {
+  if (error instanceof SelfUpdateError) {
+    return error;
+  }
+  return new SelfUpdateError({
+    phase,
+    summary: `Update failed during ${formatPhase(phase)}.`,
+    cause: boundedText(error instanceof Error ? error.message : String(error)),
+    hint: phaseHint(phase)
+  });
+}
+function commandFailure(phase, result) {
+  return new SelfUpdateError({
+    phase,
+    summary: `Update failed during ${formatPhase(phase)}.`,
+    cause: boundedCommandOutput(result) || `Command exited with code ${result.code}.`,
+    hint: phaseHint(phase),
+    result
+  });
+}
+async function execute(deps, phase, command, args, options = {}) {
+  let result;
+  try {
+    result = await deps.run(command, args, options);
+  } catch (error) {
+    throw new SelfUpdateError({
+      phase,
+      summary: `Unable to start ${command} during ${formatPhase(phase)}.`,
+      cause: boundedText(error instanceof Error ? error.message : String(error)),
+      hint: phaseHint(phase)
+    });
+  }
+  emit(deps, {
+    type: "command",
+    phase,
+    command,
+    args: redactArgs(args),
+    cwd: options.cwd,
+    code: result.code,
+    stdout: boundedText(result.stdout),
+    stderr: boundedText(result.stderr)
+  });
+  if (result.code !== 0 && options.allowFailure !== true) {
+    throw commandFailure(phase, result);
+  }
+  return result;
+}
+async function requiredOutput(deps, phase, args, cwd) {
+  const result = await execute(deps, phase, "git", args, { cwd });
+  const value = result.stdout.trim();
+  if (value.length === 0) {
+    throw new SelfUpdateError({
+      phase,
+      summary: `Git returned no identity during ${formatPhase(phase)}.`,
+      hint: phaseHint(phase)
+    });
+  }
+  return value;
+}
+async function readIdentity(deps, phase, cwd, fallbackRef, revision = "HEAD") {
+  const commit = await requiredOutput(deps, phase, ["rev-parse", "--verify", `${revision}^{commit}`], cwd);
+  const refResult = revision === "HEAD" ? await execute(deps, phase, "git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd, allowFailure: true }) : undefined;
+  return {
+    ref: refResult?.code === 0 ? refResult.stdout.trim() || fallbackRef : fallbackRef,
+    commit,
+    shortCommit: commit.slice(0, 7)
+  };
+}
+function finishPlan(deps, plan) {
+  emit(deps, { type: "plan", plan });
+  return plan;
+}
+async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
+  const resolved = resolveSelfUpdateOptions(options, deps);
+  const publicResolved = {
+    ...resolved,
+    repo: redactValue(resolved.repo)
+  };
+  const phases = [];
+  const gitRoot = join7(resolved.installDir, ".git");
+  const initial = await runPhase(deps, "preflight", async () => {
+    if (!deps.exists(gitRoot)) {
+      return;
+    }
+    const status = await execute(deps, "preflight", "git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: resolved.installDir });
+    if (status.stdout.trim().length > 0) {
+      return "dirty";
+    }
+    return readIdentity(deps, "preflight", resolved.installDir, resolved.ref);
+  });
+  phases.push("preflight");
+  if (initial === undefined) {
+    return finishPlan(deps, {
+      status: "install_required",
+      ...publicResolved,
+      phases
+    });
+  }
+  if (initial === "dirty") {
+    return finishPlan(deps, {
+      status: "blocked",
+      ...publicResolved,
+      block: {
+        kind: "dirty_checkout",
+        message: "The selected checkout has uncommitted or untracked changes.",
+        hint: "Commit, stash, or remove the local changes, then retry."
+      },
+      phases
+    });
+  }
+  const remote = await runPhase(deps, "check_remote", async () => {
+    await execute(deps, "check_remote", "git", ["fetch", "--no-tags", resolved.repo, resolved.ref], { cwd: resolved.installDir });
+    const target = await readIdentity(deps, "check_remote", resolved.installDir, resolved.ref, "FETCH_HEAD");
+    const branch = await execute(deps, "check_remote", "git", ["ls-remote", "--exit-code", "--heads", resolved.repo, resolved.ref], { cwd: resolved.installDir, allowFailure: true });
+    return {
+      target,
+      isBranch: branch.code === 0 && branch.stdout.trim().length > 0
+    };
+  });
+  phases.push("check_remote");
+  if (initial.commit === remote.target.commit) {
+    return finishPlan(deps, {
+      status: "up_to_date",
+      ...publicResolved,
+      before: initial,
+      target: remote.target,
+      phases
+    });
+  }
+  if (remote.isBranch) {
+    const ancestor = await execute(deps, "check_remote", "git", ["merge-base", "--is-ancestor", initial.commit, remote.target.commit], { cwd: resolved.installDir, allowFailure: true });
+    if (ancestor.code === 1) {
+      return finishPlan(deps, {
+        status: "blocked",
+        ...publicResolved,
+        before: initial,
+        target: remote.target,
+        block: {
+          kind: "diverged_branch",
+          message: "The selected checkout cannot fast-forward to the remote branch.",
+          hint: "Reconcile the local branch manually, then retry."
+        },
+        phases
+      });
+    }
+    if (ancestor.code !== 0) {
+      throw commandFailure("check_remote", ancestor);
+    }
+  }
+  const changes = await loadChangeSummary(deps, resolved.installDir, initial.commit, remote.target.commit);
+  return finishPlan(deps, {
+    status: "update_available",
+    ...publicResolved,
+    before: initial,
+    target: remote.target,
+    changes,
+    phases
+  });
+}
+async function loadChangeSummary(deps, cwd, before, target) {
+  const countResult = await execute(deps, "check_remote", "git", ["rev-list", "--count", `${before}..${target}`], { cwd, allowFailure: true });
+  const parsedCount = Number.parseInt(countResult.stdout.trim(), 10);
+  const count = countResult.code === 0 && Number.isFinite(parsedCount) ? parsedCount : 0;
+  const logResult = await execute(deps, "check_remote", "git", [
+    "log",
+    `--max-count=${maxChangeHighlights}`,
+    "--format=%h%x09%s",
+    `${before}..${target}`
+  ], { cwd, allowFailure: true });
+  const highlights = logResult.code === 0 ? logResult.stdout.split(/\r?\n/).filter(Boolean).slice(0, maxChangeHighlights).map((line) => {
+    const [commit = "", ...subject] = line.split("\t");
+    return {
+      commit: commit.slice(0, 12),
+      subject: boundedLine(subject.join("\t"), maxSubjectLength)
+    };
+  }) : [];
+  return {
+    count: Math.max(count, highlights.length),
+    highlights,
+    omitted: Math.max(0, count - highlights.length)
+  };
+}
+function blockedError(plan) {
+  return new SelfUpdateError({
+    phase: "preflight",
+    summary: `Update blocked: ${plan.block?.message ?? "The selected checkout is not safe to update."}`,
+    hint: plan.block?.hint ?? phaseHint("preflight")
+  });
+}
+function assertSelfUpdatePlanReady(plan) {
+  if (plan.status === "blocked") {
+    throw blockedError(plan);
+  }
 }
 async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
   const resolved = resolveSelfUpdateOptions(options, deps);
-  const completedSteps = [];
-  const recordStep = (step) => {
-    completedSteps.push(step);
-    emitStep(deps, step);
-  };
-  if (deps.exists(join7(resolved.installDir, ".git"))) {
-    recordStep("fetch");
-    await runRequired(deps, "git", ["remote", "set-url", "origin", resolved.repo], {
-      cwd: resolved.installDir
+  const plan = await planSelfUpdate(options, deps);
+  assertSelfUpdatePlanReady(plan);
+  if (plan.status === "up_to_date") {
+    return {
+      status: "up_to_date",
+      repo: plan.repo,
+      ref: plan.ref,
+      installDir: plan.installDir,
+      before: plan.before,
+      target: plan.target,
+      after: plan.before,
+      phases: plan.phases,
+      steps: []
+    };
+  }
+  const phases = [...plan.phases];
+  const steps = [];
+  const isInstall = plan.status === "install_required";
+  if (isInstall) {
+    await runPhase(deps, "clone", async () => {
+      await deps.mkdir(dirname7(plan.installDir));
+      await execute(deps, "clone", "git", [
+        "clone",
+        resolved.repo,
+        plan.installDir
+      ]);
     });
-    await runRequired(deps, "git", ["fetch", "--tags", "origin"], {
-      cwd: resolved.installDir
-    });
+    phases.push("clone");
+    steps.push("clone");
   } else {
-    recordStep("clone");
-    await deps.mkdir(dirname7(resolved.installDir));
-    await runRequired(deps, "git", [
-      "clone",
-      resolved.repo,
-      resolved.installDir
-    ]);
-  }
-  recordStep("checkout");
-  await runRequired(deps, "git", ["checkout", resolved.ref], {
-    cwd: resolved.installDir
-  });
-  if (await remoteRefExists(deps, resolved.installDir, resolved.ref)) {
-    recordStep("pull");
-    await runRequired(deps, "git", ["pull", "--ff-only", "origin", resolved.ref], {
-      cwd: resolved.installDir
+    await runPhase(deps, "preflight", async () => {
+      const status = await execute(deps, "preflight", "git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: plan.installDir });
+      if (status.stdout.trim().length > 0) {
+        throw new SelfUpdateError({
+          phase: "preflight",
+          summary: "Update blocked: the checkout changed after preflight.",
+          hint: "Preserve the new local changes, then retry."
+        });
+      }
     });
   }
-  recordStep("verify-bundle");
-  verifyCommittedBundle(deps, resolved.installDir);
-  recordStep("install-global");
-  await runRequired(deps, "npm", [
-    "install",
-    "-g",
-    "--ignore-scripts",
-    resolved.installDir
-  ]);
+  if (!isInstall) {
+    await runPhase(deps, "fetch", async () => {
+      await execute(deps, "fetch", "git", ["remote", "set-url", "origin", resolved.repo], { cwd: plan.installDir });
+      await execute(deps, "fetch", "git", ["fetch", "--tags", "origin"], {
+        cwd: plan.installDir
+      });
+    });
+    phases.push("fetch");
+    steps.push("fetch");
+  }
+  await runPhase(deps, "checkout", async () => {
+    await execute(deps, "checkout", "git", ["checkout", plan.ref], {
+      cwd: plan.installDir
+    });
+    steps.push("checkout");
+    const remoteBranch = await execute(deps, "checkout", "git", ["rev-parse", "--verify", `origin/${plan.ref}`], { cwd: plan.installDir, allowFailure: true });
+    if (remoteBranch.code === 0) {
+      await execute(deps, "checkout", "git", ["pull", "--ff-only", "origin", plan.ref], { cwd: plan.installDir });
+      steps.push("pull");
+    }
+  });
+  phases.push("checkout");
+  await runPhase(deps, "verify_bundle", async () => {
+    verifyCommittedBundle(deps, plan.installDir);
+  });
+  phases.push("verify_bundle");
+  steps.push("verify-bundle");
+  await runPhase(deps, "install_global", async () => {
+    await execute(deps, "install_global", "npm", [
+      "install",
+      "-g",
+      "--ignore-scripts",
+      plan.installDir
+    ]);
+  });
+  phases.push("install_global");
+  steps.push("install-global");
+  const after = await readIdentity(deps, "checkout", plan.installDir, plan.ref);
   return {
-    repo: resolved.repo,
-    ref: resolved.ref,
-    installDir: resolved.installDir,
-    steps: completedSteps
+    status: isInstall ? "installed" : "updated",
+    repo: plan.repo,
+    ref: plan.ref,
+    installDir: plan.installDir,
+    before: plan.before,
+    target: plan.target ?? after,
+    after,
+    changes: plan.changes,
+    phases,
+    steps
   };
 }
 async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDeps()) {
@@ -6247,19 +6757,38 @@ async function runOptional(deps, command, args, options) {
 function verifyCommittedBundle(deps, installDir) {
   const bundlePath = join7(installDir, committedCliBundlePath);
   if (!deps.exists(bundlePath)) {
-    throw new Error(`missing committed CLI bundle: ${bundlePath}; the selected ref must include ${committedCliBundlePath}`);
+    throw new SelfUpdateError({
+      phase: "verify_bundle",
+      summary: "The selected ref does not contain the committed CLI bundle.",
+      cause: `Missing ${bundlePath}.`,
+      hint: phaseHint("verify_bundle")
+    });
   }
 }
-function formatFailedCommand(result) {
-  const cwd = result.cwd ? ` (cwd: ${result.cwd})` : "";
-  const output = `${result.stderr}
-${result.stdout}`.trim();
-  const suffix = output.length > 0 ? `
-${output}` : "";
-  return `command failed: ${result.command} ${result.args.join(" ")}${cwd}${suffix}`;
+function formatPhase(phase) {
+  return phase.replaceAll("_", " ");
+}
+function boundedLine(value, maxLength) {
+  const normalized = value.replaceAll(/\s+/g, " ").trim();
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`;
+}
+function boundedText(value) {
+  const lines = value.split(/\r?\n/).map((line) => boundedLine(line, maxDetailLineLength)).filter(Boolean).slice(0, maxDetailLines);
+  return lines.length > 0 ? lines.join(`
+`) : undefined;
+}
+function boundedCommandOutput(result) {
+  return boundedText(`${result.stderr}
+${result.stdout}`);
+}
+function redactArgs(args) {
+  return args.map(redactValue);
+}
+function redactValue(value) {
+  return value.replace(/:\/\/[^/@\s]+@/g, "://***@");
 }
 function runCommand2(command, args, options = {}) {
-  return new Promise((resolve5, reject) => {
+  return new Promise((resolvePromise, reject) => {
     const child = spawn(command, [...args], {
       cwd: options.cwd,
       stdio: ["ignore", "pipe", "pipe"]
@@ -6278,7 +6807,7 @@ function runCommand2(command, args, options = {}) {
       reject(error);
     });
     child.on("close", (code) => {
-      resolve5({
+      resolvePromise({
         command,
         args,
         cwd: options.cwd,
@@ -6318,9 +6847,167 @@ function readPackageVersion(root) {
   return pkg.version;
 }
 
+// src/command/self-update-output.ts
+var import_picocolors5 = __toESM(require_picocolors(), 1);
+var defaultDeps2 = {
+  output: processOutput,
+  isOutputTty: () => process.stdout.isTTY === true,
+  createSpinner: _4
+};
+var phaseLabels = {
+  preflight: "Checking local update state",
+  check_remote: "Checking the selected remote ref",
+  clone: "Cloning the managed source checkout",
+  fetch: "Fetching repository updates",
+  checkout: "Checking out the selected ref",
+  verify_bundle: "Verifying the committed CLI bundle",
+  install_global: "Installing the global command"
+};
+function identity(value) {
+  return `${value.ref}@${value.shortCommit}`;
+}
+function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
+  const human = !context.json && !context.quiet;
+  const interactiveOutput = human && context.isTty && deps.isOutputTty();
+  let activeSpinner;
+  let activePhase;
+  let headerWritten = false;
+  const writeHeader = () => {
+    if (!human || headerWritten)
+      return;
+    headerWritten = true;
+    deps.output.stdout.write(`${import_picocolors5.default.cyan("CthuTool update")}
+`);
+  };
+  const stopSpinner = (message, code) => {
+    if (!activeSpinner)
+      return;
+    activeSpinner.stop(message, code);
+    activeSpinner = undefined;
+    activePhase = undefined;
+  };
+  const renderPlan = (plan) => {
+    if (!human)
+      return;
+    writeHeader();
+    deps.output.stdout.write(`source: ${plan.installDir}
+`);
+    deps.output.stdout.write(`target: ${plan.repo}#${plan.ref}
+`);
+    if (plan.before) {
+      deps.output.stdout.write(`current: ${identity(plan.before)}
+`);
+    }
+    if (plan.target) {
+      deps.output.stdout.write(`latest:  ${identity(plan.target)}
+`);
+    }
+    if (plan.changes && plan.changes.count > 0) {
+      deps.output.stdout.write(`changes: ${plan.changes.count} commit(s)
+`);
+      for (const change of plan.changes.highlights) {
+        deps.output.stdout.write(`  ${change.commit}  ${change.subject}
+`);
+      }
+      if (plan.changes.omitted > 0) {
+        deps.output.stdout.write(`  … ${plan.changes.omitted} more commit(s)
+`);
+      }
+    }
+  };
+  const renderVerboseCommand = (event) => {
+    if (!options.verbose)
+      return;
+    const cwd = event.cwd ? ` (cwd: ${event.cwd})` : "";
+    deps.output.stderr.write(`${import_picocolors5.default.dim(`$ ${event.command} ${event.args.join(" ")}${cwd}`)}
+`);
+    for (const detail of [event.stderr, event.stdout]) {
+      if (detail)
+        deps.output.stderr.write(`${import_picocolors5.default.dim(detail)}
+`);
+    }
+  };
+  return {
+    onEvent(event) {
+      if (event.type === "command") {
+        renderVerboseCommand(event);
+        return;
+      }
+      if (event.type === "plan") {
+        renderPlan(event.plan);
+        return;
+      }
+      if (event.type === "failure") {
+        if (activeSpinner) {
+          stopSpinner(`${phaseLabels[event.phase]} failed`, 1);
+        }
+        return;
+      }
+      if (!human)
+        return;
+      writeHeader();
+      const label = phaseLabels[event.phase];
+      if (event.type === "phase_started") {
+        if (interactiveOutput) {
+          if (activeSpinner)
+            stopSpinner(phaseLabels[activePhase ?? event.phase]);
+          activeSpinner = deps.createSpinner();
+          activePhase = event.phase;
+          activeSpinner.start(label);
+        } else {
+          deps.output.stdout.write(`- ${label}
+`);
+        }
+        return;
+      }
+      if (interactiveOutput) {
+        stopSpinner(`${label} complete`);
+      } else {
+        deps.output.stdout.write(`${import_picocolors5.default.green("✓")} ${label}
+`);
+      }
+    },
+    renderCheckResult(plan) {
+      if (!human)
+        return;
+      if (plan.status === "up_to_date" && plan.target) {
+        deps.output.stdout.write(`${import_picocolors5.default.green("✓")} chc is already up to date · ${identity(plan.target)}
+`);
+      } else if (plan.status === "update_available" && plan.target) {
+        deps.output.stdout.write(`${import_picocolors5.default.cyan("Update available")} · ${identity(plan.target)}
+`);
+      } else if (plan.status === "install_required") {
+        deps.output.stdout.write(`${import_picocolors5.default.yellow("Managed installation required")} · run chc update
+`);
+      }
+    },
+    renderApplyResult(result) {
+      if (!human)
+        return;
+      const after = result.after ?? result.target;
+      if (result.status === "up_to_date" && after) {
+        deps.output.stdout.write(`${import_picocolors5.default.green("✓")} chc is already up to date · ${identity(after)}
+`);
+        return;
+      }
+      const before = result.before ? `${identity(result.before)} → ` : "";
+      const target = after ? identity(after) : result.ref;
+      const verb = result.status === "installed" ? "Installed" : "Updated";
+      deps.output.stdout.write(`${import_picocolors5.default.green("✓")} ${verb} chc successfully · ${before}${target}
+`);
+      deps.output.stdout.write("  Run `chc status` for installation details.\n");
+    },
+    stopForError(error) {
+      if (!activeSpinner)
+        return;
+      const phase = error && typeof error === "object" && "phase" in error ? error.phase : activePhase;
+      stopSpinner(phase ? `${phaseLabels[phase]} failed` : "Update failed", 1);
+    }
+  };
+}
+
 // src/command/self-update.command.ts
-var selfUpdateArgs = {
-  ...cliContractArgs,
+var selfUpdateSourceArgs = {
   repo: {
     type: "string",
     description: "Git repository URL to install from"
@@ -6334,30 +7021,39 @@ var selfUpdateArgs = {
     description: "Local source checkout directory"
   }
 };
+var selfUpdateArgs = {
+  ...cliContractArgs,
+  ...selfUpdateSourceArgs,
+  check: {
+    type: "boolean",
+    description: "Check update availability without applying changes"
+  },
+  verbose: {
+    type: "boolean",
+    description: "Show bounded Git and npm command details"
+  }
+};
 function getStringArg2(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
-}
-function formatStep(step) {
-  switch (step) {
-    case "clone":
-      return "cloning repository";
-    case "fetch":
-      return "fetching repository";
-    case "checkout":
-      return "checking out ref";
-    case "pull":
-      return "fast-forwarding branch";
-    case "verify-bundle":
-      return "verifying committed CLI bundle";
-    case "install-global":
-      return "installing global command";
-  }
 }
 function toUpdateCliError(error) {
   return error instanceof SelfUpdateError ? createCliError("update_failed", error.message) : createCliError("update_failed", error instanceof Error ? error.message : "update failed");
 }
-function writeFailure(context, cliError) {
-  writeCommandError(context, processOutput, cliError);
+function writeFailure(context, cliError, error) {
+  if (context.json && error instanceof SelfUpdateError) {
+    writeJsonValue(processOutput, {
+      ok: false,
+      error: {
+        code: cliError.code,
+        message: error.summary,
+        phase: error.phase,
+        cause: error.causeText,
+        hint: error.hint
+      }
+    });
+  } else {
+    writeCommandError(context, processOutput, cliError);
+  }
   process.exitCode = cliError.exitCode;
 }
 function createUpdateCommand() {
@@ -6372,14 +7068,27 @@ function createUpdateCommand() {
         const repo = getStringArg2(args.repo);
         const ref = getStringArg2(args.ref);
         const installDir = getStringArg2(args["install-dir"]);
-        writeHumanStatus(context, processOutput, import_picocolors4.default.cyan("CthuTool update"));
-        writeHumanStatus(context, processOutput, `repo: ${repo ?? defaultSelfUpdateRepo}`);
-        writeHumanStatus(context, processOutput, `ref:  ${ref ?? defaultSelfUpdateRef}`);
-        writeHumanStatus(context, processOutput, `dir:  ${installDir ?? getDefaultSelfUpdateInstallDir()}`);
+        const renderer = createSelfUpdateRenderer(context, {
+          verbose: args.verbose === true
+        });
+        const managerDeps = createSelfUpdateDeps(renderer.onEvent);
         try {
-          const result = await runSelfUpdate({ repo, ref, installDir }, createSelfUpdateDeps((step) => {
-            writeHumanStatus(context, processOutput, `- ${formatStep(step)}`);
-          }));
+          if (args.check === true) {
+            const result2 = await planSelfUpdate({ repo, ref, installDir }, managerDeps);
+            assertSelfUpdatePlanReady(result2);
+            if (context.json) {
+              writeJsonValue(processOutput, {
+                ok: true,
+                command: "update",
+                result: result2
+              });
+            } else {
+              renderer.renderCheckResult(result2);
+            }
+            process.exitCode = 0;
+            return;
+          }
+          const result = await runSelfUpdate({ repo, ref, installDir }, managerDeps);
           if (context.json) {
             writeJsonValue(processOutput, {
               ok: true,
@@ -6387,13 +7096,21 @@ function createUpdateCommand() {
               result
             });
           } else {
-            writeHumanStatus(context, processOutput, import_picocolors4.default.green("updated"));
+            renderer.renderApplyResult(result);
           }
           process.exitCode = 0;
         } catch (error) {
+          renderer.stopForError(error);
           const cliError = toUpdateCliError(error);
-          fail(cliError, { details: { installDir, ref, repo } });
-          writeFailure(context, cliError);
+          fail(cliError, {
+            details: {
+              installDir,
+              ref,
+              repo,
+              phase: error instanceof SelfUpdateError ? error.phase : undefined
+            }
+          });
+          writeFailure(context, cliError, error);
         }
       });
     }
@@ -6427,7 +7144,7 @@ var statusCommand = defineCommand({
     name: "status",
     description: "Show chc CLI installation status."
   },
-  args: selfUpdateArgs,
+  args: { ...cliContractArgs, ...selfUpdateSourceArgs },
   async run({ args }) {
     await runObservedCliCommand(args, { command: "status" }, async ({ context, fail }) => {
       try {
@@ -6443,7 +7160,7 @@ var statusCommand = defineCommand({
             status
           });
         } else {
-          writeHumanStatus(context, processOutput, import_picocolors4.default.cyan("CthuTool status"));
+          writeHumanStatus(context, processOutput, import_picocolors6.default.cyan("CthuTool status"));
           writeHumanStatus(context, processOutput, `version:     ${status.version}`);
           writeHumanStatus(context, processOutput, `mode:        ${status.mode}`);
           writeHumanStatus(context, processOutput, `install dir: ${status.installDir}`);
@@ -6456,7 +7173,7 @@ var statusCommand = defineCommand({
       } catch (error) {
         const cliError = toUpdateCliError(error);
         fail(cliError);
-        writeFailure(context, cliError);
+        writeFailure(context, cliError, error);
       }
     });
   }
@@ -6465,31 +7182,77 @@ var updateCommand = createUpdateCommand();
 
 // src/command/root.command.ts
 var rootCommand;
-rootCommand = defineCommand({
+var rootCommandRegistrations = [
+  {
+    name: "codex",
+    command: codexCommand,
+    visibility: "public",
+    bareBehavior: "help"
+  },
+  {
+    name: "version",
+    command: versionCommand,
+    visibility: "compat",
+    bareBehavior: "run"
+  },
+  {
+    name: "status",
+    command: statusCommand,
+    visibility: "public",
+    bareBehavior: "run"
+  },
+  {
+    name: "update",
+    command: updateCommand,
+    visibility: "public",
+    bareBehavior: "run"
+  },
+  {
+    name: "completion",
+    command: createCompletionCommand(),
+    visibility: "public",
+    bareBehavior: "help"
+  },
+  {
+    name: "__complete",
+    command: createInternalCompleteCommand(() => rootCommand),
+    visibility: "internal",
+    bareBehavior: "run"
+  },
+  {
+    name: "scripts",
+    command: scriptsCommand,
+    visibility: "public",
+    bareBehavior: "help",
+    normalizeArgs: normalizeScriptsArgs
+  }
+];
+rootCommand = registerCommandGroup(defineCommand({
   meta: {
     name: "chc",
     description: "CthuTool monorepo CLI"
   },
-  subCommands: {
-    codex: codexCommand,
-    version: versionCommand,
-    status: statusCommand,
-    update: updateCommand,
-    completion: createCompletionCommand(),
-    __complete: createInternalCompleteCommand(() => rootCommand),
-    scripts: scriptsCommand
-  }
-});
+  subCommands: buildRegisteredSubCommands(rootCommandRegistrations)
+}), rootCommandRegistrations);
 
 // src/index.ts
-function formatUsageForStdout(value) {
-  return normalizeCommandRows(value.replace(/`([^`]+)`/g, "$1").replace(/[ \t]+$/gm, ""));
+function formatUsageForStdout(value, hiddenCommands = new Set) {
+  return normalizeCommandRows(value.replace(/`([^`]+)`/g, "$1").replace(/[ \t]+$/gm, ""), hiddenCommands);
 }
 function stripAnsi3(value) {
   const sgrPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
   return value.replace(sgrPattern, "");
 }
-function normalizeCommandRows(value) {
+function filterUsageCommandChoices(line, hiddenCommands) {
+  const match = /^(\s*USAGE\s+\S+\s+)([A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)(.*)$/.exec(line);
+  if (!match) {
+    return line;
+  }
+  const [, prefix, choices, suffix] = match;
+  const visibleChoices = choices.split("|").filter((choice) => !hiddenCommands.has(choice));
+  return `${prefix}${visibleChoices.join("|")}${suffix}`;
+}
+function normalizeCommandRows(value, hiddenCommands) {
   const lines = value.split(`
 `);
   const normalized = [];
@@ -6499,26 +7262,27 @@ function normalizeCommandRows(value) {
     if (pendingRows.length === 0) {
       return;
     }
-    const visibleRows = pendingRows.filter((row) => row.name !== "__complete");
+    const visibleRows = pendingRows.filter((row) => row.name !== "__complete" && !hiddenCommands.has(row.name));
     if (visibleRows.length === 0) {
       pendingRows = [];
       return;
     }
     const width = Math.max(...visibleRows.map((row) => row.name.length));
     for (const row of visibleRows) {
-      normalized.push(`  ${import_picocolors5.default.bold(import_picocolors5.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
+      normalized.push(`  ${import_picocolors7.default.bold(import_picocolors7.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
     }
     pendingRows = [];
   };
   for (const line of lines) {
-    const plain = stripAnsi3(line).trim();
+    const visibleLine = filterUsageCommandChoices(line, hiddenCommands);
+    const plain = stripAnsi3(visibleLine).trim();
     if (plain === "COMMANDS") {
       flushRows();
       inCommands = true;
-      normalized.push(line);
+      normalized.push(visibleLine);
       continue;
     }
-    const commandRow = inCommands ? stripAnsi3(line).match(/^\s{2,}([A-Za-z0-9_-]+)\s{2,}(.+)$/) : null;
+    const commandRow = inCommands ? stripAnsi3(visibleLine).match(/^\s{2,}([A-Za-z0-9_-]+)\s{2,}(.+)$/) : null;
     if (commandRow) {
       pendingRows.push({
         name: commandRow[1],
@@ -6530,23 +7294,22 @@ function normalizeCommandRows(value) {
     if (inCommands && plain.length > 0) {
       inCommands = false;
     }
-    normalized.push(line);
+    normalized.push(visibleLine);
   }
   flushRows();
   return normalized.join(`
 `);
 }
 async function showNativeUsage(command, parent) {
-  process.stdout.write(`${formatUsageForStdout(await renderUsage(command, parent))}
+  const hiddenCommands = new Set(getCommandRegistrations(command)?.filter((registration) => registration.visibility !== "public").map((registration) => registration.name) ?? []);
+  const appendix = await getCommandHelpAppendixProvider(command)?.();
+  const rendered = formatUsageForStdout(await renderUsage(command, parent), hiddenCommands);
+  process.stdout.write(`${rendered}${appendix ? `
+
+${appendix}` : ""}
 `);
 }
-async function resolveValue3(value) {
-  if (typeof value === "function") {
-    return await value();
-  }
-  return await value;
-}
-async function resolveOmittedTopLevelCommand(rawArgs) {
+async function resolveBareTopLevelHelpCommand(rawArgs) {
   if (rawArgs.length !== 1) {
     return;
   }
@@ -6554,14 +7317,11 @@ async function resolveOmittedTopLevelCommand(rawArgs) {
   if (!name || name.startsWith("-") || name === "__complete") {
     return;
   }
-  if (!new Set(["codex", "scripts", "completion"]).has(name)) {
-    return;
-  }
-  const subCommands = await resolveValue3(rootCommand.subCommands);
-  return await resolveValue3(subCommands?.[name]);
+  const registration = getCommandRegistration(rootCommand, name);
+  return registration?.bareBehavior === "help" ? registration.command : undefined;
 }
-var rawArgs = process.argv.slice(2);
-var omittedTopLevelCommand = await resolveOmittedTopLevelCommand(rawArgs);
+var rawArgs = normalizeRegisteredArgs(rootCommand, process.argv.slice(2));
+var bareTopLevelHelpCommand = await resolveBareTopLevelHelpCommand(rawArgs);
 if (rawArgs.length === 1 && rawArgs[0] === "--version") {
   process.stdout.write(`chc ${getCliVersion()}
 `);
@@ -6569,11 +7329,11 @@ if (rawArgs.length === 1 && rawArgs[0] === "--version") {
 } else if (rawArgs.length === 0) {
   await showNativeUsage(rootCommand);
   process.exitCode = 0;
-} else if (omittedTopLevelCommand) {
-  await showNativeUsage(omittedTopLevelCommand, rootCommand);
+} else if (bareTopLevelHelpCommand) {
+  await showNativeUsage(bareTopLevelHelpCommand, rootCommand);
   process.exitCode = 0;
 } else {
-  await runMain(rootCommand, { showUsage: showNativeUsage }).catch(() => {
+  await runMain(rootCommand, { rawArgs, showUsage: showNativeUsage }).catch(() => {
     process.exitCode = 1;
   });
 }

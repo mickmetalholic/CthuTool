@@ -50,13 +50,13 @@ describe('CLI command diagnostics coverage', () => {
   });
 
   test('emits failure diagnostics for a deliberate command error', async () => {
-    const result = await runCli(['completion', 'fish'], {
+    const result = await runCli(['completion', 'enable', 'fish'], {
       CHC_CLI_DIAGNOSTICS: '1',
     });
 
     expect(result.code).not.toBe(0);
     expect(result.out).toBe('');
-    expect(result.err).toContain('unsupported shell: fish');
+    expect(result.err).toContain('unsupported managed completion shell: fish');
     const diagnostics = parseDiagnostics(result.err);
     expect(diagnostics.map((event) => event.event)).toEqual([
       'cli.command_started',

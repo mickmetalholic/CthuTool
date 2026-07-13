@@ -107,8 +107,29 @@ describe('shell completion command', () => {
     const result = await runCli(['completion', 'fish']);
 
     expect(result.code).not.toBe(0);
-    expect(result.out).toBe('');
-    expect(result.err).toContain('unsupported shell: fish');
+    expect(result.out).toContain('COMMANDS');
+    expect(result.out).toContain('powershell');
+    expect(result.out).toContain('zsh');
+    expect(result.err).toContain('Unknown command');
+    expect(result.err).toContain('fish');
+  });
+
+  test('prints the public completion command tree for a bare group', async () => {
+    const bare = await runCli(['completion']);
+    const explicit = await runCli(['completion', '--help']);
+
+    expect(bare).toEqual(explicit);
+    expect(bare.code).toBe(0);
+    expect(bare.err).toBe('');
+    for (const operation of [
+      'powershell',
+      'zsh',
+      'enable',
+      'disable',
+      'status',
+    ]) {
+      expect(bare.out).toContain(operation);
+    }
   });
 
   test('completes commands, flags, and bundled script ids', async () => {
@@ -124,7 +145,6 @@ describe('shell completion command', () => {
       'scripts',
       'status',
       'update',
-      'version',
     ]);
     expect(lines((await runCli(['__complete', 'co'])).out)).toEqual([
       'codex',
@@ -173,12 +193,21 @@ describe('shell completion command', () => {
         (await runCli(['__complete', 'codex', 'status', '--json', '--'])).out,
       ),
     ).not.toContain('--json');
-    expect(lines((await runCli(['__complete', 'scripts', ''])).out)).toContain(
-      'convert-to-cbz',
+    const scriptList = await runCli(['scripts', 'list', '--json']);
+    const scriptIds = (
+      JSON.parse(scriptList.out) as { scripts: Array<{ id: string }> }
+    ).scripts.map((script) => script.id);
+    expect(scriptList.code).toBe(0);
+    expect(scriptList.err).toBe('');
+    expect(lines((await runCli(['__complete', 'scripts', ''])).out)).toEqual(
+      [...scriptIds, 'list', 'run'].sort(),
     );
     expect(
+      lines((await runCli(['__complete', 'scripts', 'run', ''])).out),
+    ).toEqual([...scriptIds].sort());
+    expect(
       lines((await runCli(['__complete', 'scripts', '--script', ''])).out),
-    ).toContain('convert-to-cbz');
+    ).toEqual([...scriptIds].sort());
   }, 15_000);
 
   test('manages persistent PowerShell completion in an isolated profile', async () => {

@@ -13,6 +13,7 @@ import { parseScriptManifest } from '../domain/script-manifest-schema';
 export type DiscoveryError = { readonly message: string };
 
 const MANIFEST_FILE = 'script.json';
+export const reservedScriptIds = new Set(['list', 'run']);
 
 const pushWarning = (
   warnings: Array<{ path: string; message: string }>,
@@ -130,6 +131,15 @@ async function scanScriptsRoot(scriptsRoot: string): Promise<ScriptCatalog> {
         warnings,
         manifestPath,
         `manifest id "${manifest.id}" does not match folder name "${name}"`,
+      );
+      continue;
+    }
+
+    if (reservedScriptIds.has(manifest.id)) {
+      pushWarning(
+        warnings,
+        manifestPath,
+        `script id "${manifest.id}" is reserved for a scripts command operation`,
       );
       continue;
     }

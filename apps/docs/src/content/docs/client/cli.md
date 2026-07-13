@@ -60,13 +60,29 @@ CHC_INSTALL_MODE=remote scripts/install-chc.sh
 ## Update
 
 ```bash
-chc version
+chc --version
 chc status
+chc update --check
 chc update
 chc update --ref v0.1.0
 ```
 
-`chc status` detects the source checkout used by the running global command. It reports `mode: local` for a linked development checkout and `mode: remote` for the default managed checkout, together with that checkout's Git and bundle state. Pass `--install-dir <path>` to inspect a different checkout explicitly.
+Use `chc --version` for the lightweight version-only check. `chc status` includes that version and detects the source checkout used by the running global command. It reports `mode: local` for a linked development checkout and `mode: remote` for the default managed checkout, together with that checkout's Git and bundle state. Pass `--install-dir <path>` to inspect a different checkout explicitly.
+
+`chc update --check` reports whether installation or an update is required without changing checkout files or the global command. A clean managed `chc update` proceeds directly, shows current-to-target commit progress, and skips global reinstallation when already current. Dirty or diverged checkouts are blocked without automatic stash, reset, clean, or rebase.
+
+Use `--quiet` for errors-only human output, `--verbose` for bounded Git and npm details on stderr, or `--json` for one structured result. Checks only run when explicitly requested; there is no periodic or shell-startup background update checker.
+
+## Discover Commands
+
+```bash
+chc completion
+chc scripts
+chc scripts list
+chc scripts run convert-to-cbz --input ./samples
+```
+
+Bare command groups print their registered child operations. `chc scripts` also includes an `AVAILABLE SCRIPTS` catalog. The compatibility forms `chc scripts <id>` and `chc scripts --script <id>` remain supported; `chc scripts run <id>` is the canonical execution form. See [CLI Commands](/reference/cli/) for completion lifecycle and script examples.
 
 ## Uninstall
 

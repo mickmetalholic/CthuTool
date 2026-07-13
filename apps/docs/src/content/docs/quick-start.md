@@ -62,6 +62,7 @@ chc --help
 Update later with:
 
 ```bash
+chc update --check
 chc update
 ```
 

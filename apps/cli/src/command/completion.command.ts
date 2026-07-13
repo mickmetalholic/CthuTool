@@ -3,13 +3,22 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir, platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
-import { type CommandDef, defineCommand } from 'citty';
+import { defineCommand } from 'citty';
 import { getCompletionCandidates } from '../domain/completion-candidates';
 import { createCliError } from '../runtime/cli-error';
 import { runObservedCliCommand } from '../runtime/command-diagnostics';
+import {
+  type AnyCommandDef,
+  buildRegisteredSubCommands,
+  type CliCommandRegistration,
+  registerCommandGroup,
+  registerPositionalCandidates,
+} from './command-discovery';
 
-type RootCommandResolver = () => CommandDef;
+type RootCommandResolver = () => AnyCommandDef;
 type CompletionProfileAction = 'enable' | 'disable' | 'status';
+export const supportedCompletionShells = ['powershell', 'zsh'] as const;
+type CompletionShell = (typeof supportedCompletionShells)[number];
 
 const emptyCompletionWord = '__cthutool_empty_completion_word__';
 const powershellProfileEnv = 'CHC_COMPLETION_POWERSHELL_PROFILE';
@@ -59,20 +68,13 @@ _chc_completion() {
 compdef _chc_completion chc
 `;
 
-function renderShellScript(shell: string): string | undefined {
-  if (shell === 'powershell') {
-    return powershellScript;
-  }
-  if (shell === 'zsh') {
-    return zshScript;
-  }
-  return undefined;
-}
+const completionShellScripts: Record<CompletionShell, string> = {
+  powershell: powershellScript,
+  zsh: zshScript,
+};
 
-function isCompletionProfileAction(
-  value: string,
-): value is CompletionProfileAction {
-  return value === 'enable' || value === 'disable' || value === 'status';
+function isCompletionShell(value: string): value is CompletionShell {
+  return supportedCompletionShells.some((shell) => shell === value);
 }
 
 function escapeRegExp(value: string): string {
@@ -262,74 +264,103 @@ async function handleZshProfileAction(
   process.exitCode = 0;
 }
 
-export function createCompletionCommand() {
+function createCompletionShellCommand(shell: CompletionShell) {
   return defineCommand({
     meta: {
-      name: 'completion',
-      description: 'Print or manage shell completion setup.',
+      name: shell,
+      description: `Print the ${shell} completion adapter.`,
     },
-    args: {
-      shell: {
-        type: 'positional',
-        description:
-          'Shell to generate completion for (powershell or zsh), or action to manage persistent completion',
-        required: true,
-      },
-    },
-    async run({ args, rawArgs }) {
+    async run({ args }) {
       await runObservedCliCommand(
         args,
-        { command: 'completion' },
-        async ({ fail }) => {
-          const first = rawArgs[0] ?? '';
-          if (isCompletionProfileAction(first)) {
-            const shell = rawArgs[1] ?? '';
-            if (shell !== 'powershell' && shell !== 'zsh') {
-              const error = createCliError(
-                'invalid_option',
-                `unsupported managed completion shell: ${shell || '<missing>'}`,
-              );
-              fail(error, { details: { action: first, shell } });
-              process.stderr.write(`${error.message}\n`);
-              process.exitCode = error.exitCode;
-              return;
-            }
-            try {
-              if (shell === 'powershell') {
-                await handlePowerShellProfileAction(first);
-              } else {
-                await handleZshProfileAction(first);
-              }
-            } catch (error) {
-              const cliError = createCliError(
-                'invalid_option',
-                error instanceof Error ? error.message : String(error),
-              );
-              fail(cliError, { details: { action: first, shell } });
-              process.stderr.write(`${cliError.message}\n`);
-              process.exitCode = cliError.exitCode;
-            }
-            return;
-          }
-
-          const shell = typeof args.shell === 'string' ? args.shell : '';
-          const script = renderShellScript(shell);
-          if (!script) {
-            const error = createCliError(
-              'invalid_option',
-              `unsupported shell: ${shell}`,
-            );
-            fail(error, { details: { shell } });
-            process.stderr.write(`${error.message}\n`);
-            process.exitCode = error.exitCode;
-            return;
-          }
-          process.stdout.write(script);
+        { command: 'completion', subcommand: shell },
+        async () => {
+          process.stdout.write(completionShellScripts[shell]);
           process.exitCode = 0;
         },
       );
     },
   });
+}
+
+function createCompletionProfileCommand(action: CompletionProfileAction) {
+  const command = defineCommand({
+    meta: {
+      name: action,
+      description: `${action[0]?.toUpperCase()}${action.slice(1)} persistent shell completion.`,
+    },
+    args: {
+      shell: {
+        type: 'positional',
+        description: 'Shell profile to manage (powershell or zsh)',
+        required: true,
+      },
+    },
+    async run({ args }) {
+      await runObservedCliCommand(
+        args,
+        { command: 'completion', subcommand: action },
+        async ({ fail }) => {
+          const shell = typeof args.shell === 'string' ? args.shell : '';
+          if (!isCompletionShell(shell)) {
+            const error = createCliError(
+              'invalid_option',
+              `unsupported managed completion shell: ${shell || '<missing>'}`,
+            );
+            fail(error, { details: { action, shell } });
+            process.stderr.write(`${error.message}\n`);
+            process.exitCode = error.exitCode;
+            return;
+          }
+          try {
+            if (shell === 'powershell') {
+              await handlePowerShellProfileAction(action);
+            } else {
+              await handleZshProfileAction(action);
+            }
+          } catch (error) {
+            const cliError = createCliError(
+              'invalid_option',
+              error instanceof Error ? error.message : String(error),
+            );
+            fail(cliError, { details: { action, shell } });
+            process.stderr.write(`${cliError.message}\n`);
+            process.exitCode = cliError.exitCode;
+          }
+        },
+      );
+    },
+  });
+  return registerPositionalCandidates(command, ({ completedWords, path }) =>
+    completedWords.length === path.length ? supportedCompletionShells : [],
+  );
+}
+
+export function createCompletionCommand() {
+  const registrations: readonly CliCommandRegistration[] = [
+    ...supportedCompletionShells.map((shell) => ({
+      name: shell,
+      command: createCompletionShellCommand(shell),
+      visibility: 'public' as const,
+      bareBehavior: 'run' as const,
+    })),
+    ...(['enable', 'disable', 'status'] as const).map((action) => ({
+      name: action,
+      command: createCompletionProfileCommand(action),
+      visibility: 'public' as const,
+      bareBehavior: 'run' as const,
+    })),
+  ];
+  return registerCommandGroup(
+    defineCommand({
+      meta: {
+        name: 'completion',
+        description: 'Print or manage shell completion setup.',
+      },
+      subCommands: buildRegisteredSubCommands(registrations),
+    }),
+    registrations,
+  );
 }
 
 export function createInternalCompleteCommand(

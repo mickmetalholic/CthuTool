@@ -51,4 +51,41 @@ describe('discoverScripts', () => {
     const root = getBundledScriptsRoot();
     expect(root.replaceAll('\\', '/')).toContain('/apps/cli/src/scripts');
   });
+
+  test('returns a bounded discovery error when the scripts root is unavailable', async () => {
+    const root = join(
+      tmpdir(),
+      `cthutool-missing-scripts-${crypto.randomUUID()}`,
+    );
+    const result = await discoverScripts(root);
+
+    expect(result.isErr()).toBe(true);
+    if (!result.isErr()) return;
+    expect(result.error.message).toContain(
+      `cannot read bundled scripts directory (${root})`,
+    );
+  });
+
+  test('skips script ids reserved for group operations', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cthutool-reserved-script-'));
+    await writePackage(root, 'list', { id: 'list', title: 'Reserved list' });
+    await writePackage(root, 'run', { id: 'run', title: 'Reserved run' });
+    await writePackage(root, 'valid-script', {
+      id: 'valid-script',
+      title: 'Valid',
+    });
+
+    const result = await discoverScripts(root);
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value.packages.map((pkg) => pkg.id)).toEqual([
+      'valid-script',
+    ]);
+    expect(result.value.warnings.map((warning) => warning.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('script id "list" is reserved'),
+        expect.stringContaining('script id "run" is reserved'),
+      ]),
+    );
+  });
 });

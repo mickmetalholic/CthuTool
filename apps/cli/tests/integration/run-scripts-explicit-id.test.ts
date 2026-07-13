@@ -38,4 +38,22 @@ describe('scripts command explicit id', () => {
     expect(code).toBe(0);
     expect(out).toContain('Hello from bundled script: hello-world');
   });
+
+  test('runs hello-world through the canonical run operation', async () => {
+    const proc = Bun.spawn(
+      ['bun', 'run', 'src/index.ts', 'scripts', 'run', 'hello-world'],
+      {
+        cwd: cliRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      },
+    );
+    const out = await new Response(proc.stdout).text();
+    const err = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+    expect(code).toBe(0);
+    expect(err).toBe('');
+    expect(out).toContain('Hello from bundled script: hello-world');
+  });
 });

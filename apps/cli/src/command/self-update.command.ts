@@ -1,15 +1,13 @@
 import { defineCommand } from 'citty';
 import pc from 'picocolors';
 import {
+  assertSelfUpdatePlanReady,
   createSelfUpdateDeps,
-  defaultSelfUpdateRef,
-  defaultSelfUpdateRepo,
   getCliInstallationStatus,
   getCliVersion,
-  getDefaultSelfUpdateInstallDir,
+  planSelfUpdate,
   runSelfUpdate,
   SelfUpdateError,
-  type SelfUpdateStep,
 } from '../domain/self-update-manager';
 import { type CliContext, cliContractArgs } from '../runtime/cli-context';
 import { type CliError, createCliError } from '../runtime/cli-error';
@@ -20,9 +18,9 @@ import {
   writeHumanStatus,
   writeJsonValue,
 } from '../runtime/output';
+import { createSelfUpdateRenderer } from './self-update-output';
 
-const selfUpdateArgs = {
-  ...cliContractArgs,
+const selfUpdateSourceArgs = {
   repo: {
     type: 'string',
     description: 'Git repository URL to install from',
@@ -37,27 +35,23 @@ const selfUpdateArgs = {
   },
 } as const;
 
+const selfUpdateArgs = {
+  ...cliContractArgs,
+  ...selfUpdateSourceArgs,
+  check: {
+    type: 'boolean',
+    description: 'Check update availability without applying changes',
+  },
+  verbose: {
+    type: 'boolean',
+    description: 'Show bounded Git and npm command details',
+  },
+} as const;
+
 function getStringArg(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0
     ? value.trim()
     : undefined;
-}
-
-function formatStep(step: SelfUpdateStep): string {
-  switch (step) {
-    case 'clone':
-      return 'cloning repository';
-    case 'fetch':
-      return 'fetching repository';
-    case 'checkout':
-      return 'checking out ref';
-    case 'pull':
-      return 'fast-forwarding branch';
-    case 'verify-bundle':
-      return 'verifying committed CLI bundle';
-    case 'install-global':
-      return 'installing global command';
-  }
 }
 
 function toUpdateCliError(error: unknown): CliError {
@@ -69,8 +63,25 @@ function toUpdateCliError(error: unknown): CliError {
       );
 }
 
-function writeFailure(context: CliContext, cliError: CliError): void {
-  writeCommandError(context, processOutput, cliError);
+function writeFailure(
+  context: CliContext,
+  cliError: CliError,
+  error: unknown,
+): void {
+  if (context.json && error instanceof SelfUpdateError) {
+    writeJsonValue(processOutput, {
+      ok: false,
+      error: {
+        code: cliError.code,
+        message: error.summary,
+        phase: error.phase,
+        cause: error.causeText,
+        hint: error.hint,
+      },
+    });
+  } else {
+    writeCommandError(context, processOutput, cliError);
+  }
   process.exitCode = cliError.exitCode;
 }
 
@@ -90,34 +101,33 @@ function createUpdateCommand() {
           const repo = getStringArg(args.repo);
           const ref = getStringArg(args.ref);
           const installDir = getStringArg(args['install-dir']);
-
-          writeHumanStatus(context, processOutput, pc.cyan('CthuTool update'));
-          writeHumanStatus(
-            context,
-            processOutput,
-            `repo: ${repo ?? defaultSelfUpdateRepo}`,
-          );
-          writeHumanStatus(
-            context,
-            processOutput,
-            `ref:  ${ref ?? defaultSelfUpdateRef}`,
-          );
-          writeHumanStatus(
-            context,
-            processOutput,
-            `dir:  ${installDir ?? getDefaultSelfUpdateInstallDir()}`,
-          );
+          const renderer = createSelfUpdateRenderer(context, {
+            verbose: args.verbose === true,
+          });
+          const managerDeps = createSelfUpdateDeps(renderer.onEvent);
 
           try {
+            if (args.check === true) {
+              const result = await planSelfUpdate(
+                { repo, ref, installDir },
+                managerDeps,
+              );
+              assertSelfUpdatePlanReady(result);
+              if (context.json) {
+                writeJsonValue(processOutput, {
+                  ok: true,
+                  command: 'update',
+                  result,
+                });
+              } else {
+                renderer.renderCheckResult(result);
+              }
+              process.exitCode = 0;
+              return;
+            }
             const result = await runSelfUpdate(
               { repo, ref, installDir },
-              createSelfUpdateDeps((step) => {
-                writeHumanStatus(
-                  context,
-                  processOutput,
-                  `- ${formatStep(step)}`,
-                );
-              }),
+              managerDeps,
             );
             if (context.json) {
               writeJsonValue(processOutput, {
@@ -126,13 +136,22 @@ function createUpdateCommand() {
                 result,
               });
             } else {
-              writeHumanStatus(context, processOutput, pc.green('updated'));
+              renderer.renderApplyResult(result);
             }
             process.exitCode = 0;
           } catch (error) {
+            renderer.stopForError(error);
             const cliError = toUpdateCliError(error);
-            fail(cliError, { details: { installDir, ref, repo } });
-            writeFailure(context, cliError);
+            fail(cliError, {
+              details: {
+                installDir,
+                ref,
+                repo,
+                phase:
+                  error instanceof SelfUpdateError ? error.phase : undefined,
+              },
+            });
+            writeFailure(context, cliError, error);
           }
         },
       );
@@ -168,7 +187,7 @@ export const statusCommand = defineCommand({
     name: 'status',
     description: 'Show chc CLI installation status.',
   },
-  args: selfUpdateArgs,
+  args: { ...cliContractArgs, ...selfUpdateSourceArgs },
   async run({ args }) {
     await runObservedCliCommand(
       args,
@@ -232,7 +251,7 @@ export const statusCommand = defineCommand({
         } catch (error) {
           const cliError = toUpdateCliError(error);
           fail(cliError);
-          writeFailure(context, cliError);
+          writeFailure(context, cliError, error);
         }
       },
     );

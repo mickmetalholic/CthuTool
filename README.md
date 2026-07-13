@@ -97,11 +97,36 @@ mode. `CHC_INSTALL_COMPLETION` accepts `auto`, `zsh`, or `none`.
 After the first install, update from the CLI:
 
 ```bash
-chc version
+chc --version
 chc status
+chc update --check
 chc update
 chc update --ref v0.1.0
 ```
+
+Use `chc --version` for the lightweight version-only check. `chc status`
+includes that version together with the detected installation mode and source
+checkout diagnostics. `chc update --check` reports whether installation or an
+update is needed without changing checkout files or the global command. A safe
+managed `chc update` runs directly, reports commit progress, and skips the
+global reinstall when already current. Dirty or diverged checkouts are blocked
+without automatic stash, reset, or rebase. Update checks are explicit; the CLI
+does not run a periodic background checker.
+
+Discover command groups and bundled scripts directly from the CLI:
+
+```bash
+chc completion
+chc scripts
+chc scripts list
+chc scripts run convert-to-cbz --input ./samples
+```
+
+`chc completion` lists the `powershell`, `zsh`, `enable`, `disable`, and
+`status` operations. `chc scripts` shows `list`, `run`, and an
+`AVAILABLE SCRIPTS` catalog. Existing `chc scripts <id>` and
+`chc scripts --script <id>` forms remain supported as shorthand for
+`chc scripts run <id>`.
 
 For full install, update, uninstall, and command usage docs, use the docs site
 under `apps/docs/src/content/docs/client/cli.md` and
