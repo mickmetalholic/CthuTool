@@ -95,7 +95,7 @@ describe('self-update output', () => {
       'start:Checking local update state',
       'stop:0:Checking local update state complete',
     ]);
-    expect(harness.stdout()).toBe('CthuTool update\n');
+    expect(harness.stdout()).toBe('\u001b[36mCthuTool update\u001b[39m\n');
   });
 
   test('renders stable non-TTY progress and a bounded change summary', () => {

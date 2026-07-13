@@ -55,6 +55,7 @@ export function createSelfUpdateRenderer(
 ): SelfUpdateRenderer {
   const human = !context.json && !context.quiet;
   const interactiveOutput = human && context.isTty && deps.isOutputTty();
+  const colors = pc.createColors(interactiveOutput);
   let activeSpinner: SpinnerLike | undefined;
   let activePhase: SelfUpdatePhase | undefined;
   let headerWritten = false;
@@ -62,7 +63,7 @@ export function createSelfUpdateRenderer(
   const writeHeader = () => {
     if (!human || headerWritten) return;
     headerWritten = true;
-    deps.output.stdout.write(`${pc.cyan('CthuTool update')}\n`);
+    deps.output.stdout.write(`${colors.cyan('CthuTool update')}\n`);
   };
 
   const stopSpinner = (message: string, code?: number) => {
@@ -102,10 +103,10 @@ export function createSelfUpdateRenderer(
     if (!options.verbose) return;
     const cwd = event.cwd ? ` (cwd: ${event.cwd})` : '';
     deps.output.stderr.write(
-      `${pc.dim(`$ ${event.command} ${event.args.join(' ')}${cwd}`)}\n`,
+      `${colors.dim(`$ ${event.command} ${event.args.join(' ')}${cwd}`)}\n`,
     );
     for (const detail of [event.stderr, event.stdout]) {
-      if (detail) deps.output.stderr.write(`${pc.dim(detail)}\n`);
+      if (detail) deps.output.stderr.write(`${colors.dim(detail)}\n`);
     }
   };
 
@@ -143,22 +144,22 @@ export function createSelfUpdateRenderer(
       if (interactiveOutput) {
         stopSpinner(`${label} complete`);
       } else {
-        deps.output.stdout.write(`${pc.green('✓')} ${label}\n`);
+        deps.output.stdout.write(`${colors.green('✓')} ${label}\n`);
       }
     },
     renderCheckResult(plan) {
       if (!human) return;
       if (plan.status === 'up_to_date' && plan.target) {
         deps.output.stdout.write(
-          `${pc.green('✓')} chc is already up to date · ${identity(plan.target)}\n`,
+          `${colors.green('✓')} chc is already up to date · ${identity(plan.target)}\n`,
         );
       } else if (plan.status === 'update_available' && plan.target) {
         deps.output.stdout.write(
-          `${pc.cyan('Update available')} · ${identity(plan.target)}\n`,
+          `${colors.cyan('Update available')} · ${identity(plan.target)}\n`,
         );
       } else if (plan.status === 'install_required') {
         deps.output.stdout.write(
-          `${pc.yellow('Managed installation required')} · run chc update\n`,
+          `${colors.yellow('Managed installation required')} · run chc update\n`,
         );
       }
     },
@@ -167,7 +168,7 @@ export function createSelfUpdateRenderer(
       const after = result.after ?? result.target;
       if (result.status === 'up_to_date' && after) {
         deps.output.stdout.write(
-          `${pc.green('✓')} chc is already up to date · ${identity(after)}\n`,
+          `${colors.green('✓')} chc is already up to date · ${identity(after)}\n`,
         );
         return;
       }
@@ -175,7 +176,7 @@ export function createSelfUpdateRenderer(
       const target = after ? identity(after) : result.ref;
       const verb = result.status === 'installed' ? 'Installed' : 'Updated';
       deps.output.stdout.write(
-        `${pc.green('✓')} ${verb} chc successfully · ${before}${target}\n`,
+        `${colors.green('✓')} ${verb} chc successfully · ${before}${target}\n`,
       );
       deps.output.stdout.write(
         '  Run `chc status` for installation details.\n',
