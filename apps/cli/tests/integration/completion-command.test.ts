@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const zshExecutable = Bun.which('zsh');
 
 async function runCli(args: string[], env: Record<string, string> = {}) {
   const proc = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
@@ -64,7 +65,43 @@ describe('shell completion command', () => {
     expect(zsh.out).toContain('#compdef chc');
     expect(zsh.out).toContain('compdef _chc_completion chc');
     expect(zsh.out).toContain('chc __complete');
+    expect(zsh.out).not.toContain('\\${');
   });
+
+  test.skipIf(!zshExecutable)(
+    'expands zsh completion candidates instead of inserting array syntax',
+    async () => {
+      const tempRoot = await mkdtemp(join(tmpdir(), 'chc-zsh-adapter-'));
+      const adapterPath = join(tempRoot, '_chc');
+
+      try {
+        const zsh = await runCli(['completion', 'zsh']);
+        expect(zsh.code).toBe(0);
+        expect(zsh.err).toBe('');
+        await writeFile(adapterPath, zsh.out);
+
+        const result = await runProcess(zshExecutable ?? 'zsh', [
+          '-fc',
+          [
+            'compdef() { :; }',
+            "chc() { printf 'codex\\ncompletion\\n'; }",
+            'compadd() { printf \'<%s>\\n\' "$@"; }',
+            'words=(chc "")',
+            'source "$1"',
+            '_chc_completion',
+          ].join('\n'),
+          'zsh',
+          adapterPath,
+        ]);
+
+        expect(result.code).toBe(0);
+        expect(result.err).toBe('');
+        expect(result.out).toBe('<-->\n<codex>\n<completion>\n');
+      } finally {
+        await rm(tempRoot, { force: true, recursive: true });
+      }
+    },
+  );
 
   test('rejects unsupported shell names clearly', async () => {
     const result = await runCli(['completion', 'fish']);
