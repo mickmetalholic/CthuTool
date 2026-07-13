@@ -13,11 +13,9 @@ chc version
 chc status
 chc update
 chc update --ref v0.1.0
-chc self-update
-chc self-update --ref v0.1.0
 ```
 
-`chc update` is the primary update command. `chc self-update` remains a backwards-compatible alias.
+`chc status` reports the detected `local` or `remote` installation mode and inspects the source checkout used by the running command. `chc status --install-dir <path>` overrides automatic source detection.
 
 ## Shared Flags
 
@@ -41,8 +39,13 @@ chc completion disable powershell
 ```
 
 ```zsh
+chc completion enable zsh
+chc completion status zsh
+chc completion disable zsh
 source <(chc completion zsh)
 ```
+
+The installer enables zsh completion automatically when zsh is the user's login shell.
 
 ## Bundled Scripts
 

@@ -212,7 +212,7 @@ describe('self-update manager', () => {
     });
   });
 
-  test('reports installation status from the managed checkout', async () => {
+  test('reports installation status from an explicit checkout', async () => {
     const { deps, installDir } = createDeps({
       existingCheckout: true,
       bundlePresent: true,
@@ -222,12 +222,28 @@ describe('self-update manager', () => {
       getCliInstallationStatus({ installDir }, deps),
     ).resolves.toMatchObject({
       version: '0.0.0',
+      mode: 'local',
       installDir,
       repo: 'git@github.com:me/CthuTool.git',
       ref: 'main',
       commit: 'abc1234',
       bundlePath: join(installDir, committedCliBundlePath),
       bundlePresent: true,
+    });
+  });
+
+  test('reports remote mode for the default managed checkout', async () => {
+    const { deps } = createDeps({
+      existingCheckout: false,
+      bundlePresent: false,
+    });
+    const installDir = '/home/tester/.cthutool/source/CthuTool';
+
+    await expect(
+      getCliInstallationStatus({ installDir }, deps),
+    ).resolves.toMatchObject({
+      mode: 'remote',
+      installDir,
     });
   });
 });

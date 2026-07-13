@@ -53,6 +53,10 @@ curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/script
 chc --help
 ```
 
+When the user's login shell is zsh, the installer also enables persistent `chc`
+completion in the user's zsh profile. Set `CHC_INSTALL_COMPLETION=none` to skip
+this step.
+
 The public raw installer runs in remote mode. It clones or updates
 `https://github.com/mickmetalholic/CthuTool.git` into
 `~/.cthutool/source/CthuTool`, verifies the committed CLI bundle, and runs
@@ -82,12 +86,13 @@ Use environment variables to install a different source or version:
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | CHC_REF=v0.1.0 bash
 CHC_INSTALL_MODE=remote CHC_REF=v0.1.0 scripts/install-chc.sh
 CHC_INSTALL_MODE=remote CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_INSTALL_DIR="$HOME/.cthutool/source/CthuTool" scripts/install-chc.sh
+CHC_INSTALL_COMPLETION=none scripts/install-chc.sh
 ```
 
 `CHC_INSTALL_MODE` accepts `auto`, `local`, or `remote`. In `auto` mode, which
 is the default, raw stdin execution selects `remote` and local file execution
 selects `local`. Repository, ref, and install-dir overrides apply to `remote`
-mode.
+mode. `CHC_INSTALL_COMPLETION` accepts `auto`, `zsh`, or `none`.
 
 After the first install, update from the CLI:
 

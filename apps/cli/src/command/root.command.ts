@@ -6,7 +6,6 @@ import {
 } from './completion.command';
 import { scriptsCommand } from './run-scripts.command';
 import {
-  selfUpdateCommand,
   statusCommand,
   updateCommand,
   versionCommand,
@@ -24,7 +23,6 @@ rootCommand = defineCommand({
     version: versionCommand,
     status: statusCommand,
     update: updateCommand,
-    'self-update': selfUpdateCommand,
     completion: createCompletionCommand(),
     __complete: createInternalCompleteCommand(() => rootCommand),
     scripts: scriptsCommand,

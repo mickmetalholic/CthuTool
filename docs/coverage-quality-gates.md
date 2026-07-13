@@ -50,7 +50,7 @@ files, external plugin scripts, and temporary `cthutool-script-*` execution
 paths are excluded from the artifact. The CLI is not threshold-gated yet because
 Bun does not provide the same package-local threshold configuration surface used
 by the Vitest packages, and the next useful improvements are broader behavioral
-tests around command entrypoints, completion candidates, self-update flows, and
+tests around command entrypoints, completion candidates, update flows, and
 bundled script execution.
 
 `@cthutool/desktop` remains visibility-only after expanding desktop runtime and

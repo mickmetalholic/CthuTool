@@ -11,7 +11,7 @@ Commands derive `CliContext` at the boundary, reserve stdout for JSON in `--json
 
 ## Install and Update
 
-The GitHub installer keeps a source checkout, builds `@cthutool/cli`, and installs the root package globally. `chc self-update` updates that checkout and reinstall path.
+The GitHub installer keeps a source checkout, builds `@cthutool/cli`, and installs the root package globally. `chc update` updates that checkout and reinstall path.
 
 ## Requirements Sources
 

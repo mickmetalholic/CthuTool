@@ -85,7 +85,6 @@ describe('shell completion command', () => {
       'codex',
       'completion',
       'scripts',
-      'self-update',
       'status',
       'update',
       'version',
@@ -119,13 +118,13 @@ describe('shell completion command', () => {
     );
     expect(
       lines((await runCli(['__complete', 'completion', 'enable', ''])).out),
-    ).toEqual(['powershell']);
+    ).toEqual(['powershell', 'zsh']);
     expect(
       lines((await runCli(['__complete', 'completion', 'disable', ''])).out),
-    ).toEqual(['powershell']);
+    ).toEqual(['powershell', 'zsh']);
     expect(
       lines((await runCli(['__complete', 'completion', 'status', ''])).out),
-    ).toEqual(['powershell']);
+    ).toEqual(['powershell', 'zsh']);
     expect(
       lines((await runCli(['__complete', 'codex', 'status', '--'])).out),
     ).toContain('--json');
@@ -224,14 +223,72 @@ describe('shell completion command', () => {
     }
   });
 
+  test('manages persistent zsh completion in an isolated profile', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'chc-completion-zsh-'));
+    const profilePath = join(tempRoot, '.zshrc');
+    const env = { CHC_COMPLETION_ZSH_PROFILE: profilePath };
+
+    try {
+      const initialStatus = await runCli(['completion', 'status', 'zsh'], env);
+      expect(initialStatus.code).toBe(0);
+      expect(initialStatus.err).toBe('');
+      expect(initialStatus.out).toContain('disabled');
+      expect(initialStatus.out).toContain(profilePath);
+
+      await writeFile(
+        profilePath,
+        `export BEFORE_CHC=1\nsource <(chc completion zsh)\n`,
+      );
+      const enabled = await runCli(['completion', 'enable', 'zsh'], env);
+      expect(enabled.code).toBe(0);
+      expect(enabled.err).toBe('');
+      expect(enabled.out).toContain('enabled');
+      expect(enabled.out).toContain(profilePath);
+      expect(enabled.out).toContain('Restart zsh to load it');
+
+      const content = await readFile(profilePath, 'utf8');
+      expect(content).toContain('export BEFORE_CHC=1');
+      expect(content).toContain('# >>> cthutool chc completion >>>');
+      expect(content).toContain('autoload -Uz compinit');
+      expect(content).toContain('source <(chc completion zsh)');
+      expect(content).toContain('# <<< cthutool chc completion <<<');
+      expect(content.match(/source <\(chc completion zsh\)/g)?.length).toBe(1);
+
+      const secondEnable = await runCli(['completion', 'enable', 'zsh'], env);
+      expect(secondEnable.code).toBe(0);
+      expect(secondEnable.out).toContain('already enabled');
+      const afterSecondEnable = await readFile(profilePath, 'utf8');
+      expect(afterSecondEnable.match(/cthutool chc completion/g)?.length).toBe(
+        2,
+      );
+
+      const enabledStatus = await runCli(['completion', 'status', 'zsh'], env);
+      expect(enabledStatus.code).toBe(0);
+      expect(enabledStatus.out).toContain('enabled');
+
+      await writeFile(
+        profilePath,
+        `export BEFORE_CHC=1\n${afterSecondEnable}export AFTER_CHC=1\n`,
+      );
+      const disabled = await runCli(['completion', 'disable', 'zsh'], env);
+      expect(disabled.code).toBe(0);
+      expect(disabled.err).toBe('');
+      expect(disabled.out).toContain('disabled');
+      const afterDisable = await readFile(profilePath, 'utf8');
+      expect(afterDisable).toContain('export BEFORE_CHC=1');
+      expect(afterDisable).toContain('export AFTER_CHC=1');
+      expect(afterDisable).not.toContain('cthutool chc completion');
+    } finally {
+      await rm(tempRoot, { force: true, recursive: true });
+    }
+  });
+
   test('rejects managed completion for unsupported shells', async () => {
-    const result = await runCli(['completion', 'enable', 'zsh']);
+    const result = await runCli(['completion', 'enable', 'fish']);
 
     expect(result.code).not.toBe(0);
     expect(result.out).toBe('');
-    expect(result.err).toContain(
-      'managed persistent completion currently supports PowerShell only',
-    );
+    expect(result.err).toContain('unsupported managed completion shell: fish');
   });
 
   test('migrates the legacy manual PowerShell profile line when enabling', async () => {

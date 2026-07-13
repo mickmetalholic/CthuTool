@@ -6,7 +6,7 @@ export type CliErrorCode =
   | 'script_load_failed'
   | 'script_execution_failed'
   | 'invalid_option'
-  | 'self_update_failed';
+  | 'update_failed';
 
 export type CliError = {
   readonly code: CliErrorCode;
