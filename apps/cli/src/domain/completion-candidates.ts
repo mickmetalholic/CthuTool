@@ -1,15 +1,17 @@
-import type { ArgDef, ArgsDef, CommandDef, Resolvable } from 'citty';
-import { getBundledScriptsRoot } from '../infra/bundled-scripts-root';
-import { discoverScripts } from '../infra/discover-scripts';
-import { listSelectable } from './script-catalog';
+import type { ArgDef, ArgsDef, Resolvable } from 'citty';
+import {
+  type AnyCommandDef,
+  getCommandRegistrations,
+  getPositionalCandidateProvider,
+} from '../command/command-discovery';
 
 export type CompletionCandidateInput = {
-  readonly rootCommand: CommandDef;
+  readonly rootCommand: AnyCommandDef;
   readonly words: readonly string[];
 };
 
 type CompletionState = {
-  readonly command: CommandDef;
+  readonly command: AnyCommandDef;
   readonly path: readonly string[];
 };
 
@@ -27,23 +29,34 @@ function toKebabCase(value: string): string {
 }
 
 async function getSubCommands(
-  command: CommandDef,
-): Promise<Record<string, CommandDef>> {
+  command: AnyCommandDef,
+): Promise<Record<string, AnyCommandDef>> {
   const subCommands = await resolveValue(command.subCommands);
   if (!subCommands) {
     return {};
   }
 
   const entries = await Promise.all(
-    Object.entries(subCommands).map(async ([name, value]) => [
-      name,
-      (await resolveValue(value)) as CommandDef,
-    ]),
+    Object.entries(subCommands).map(
+      async ([name, value]): Promise<[string, AnyCommandDef]> => [
+        name,
+        (await resolveValue(value)) as AnyCommandDef,
+      ],
+    ),
   );
-  return Object.fromEntries(entries);
+  const publicNames = new Set(
+    getCommandRegistrations(command)
+      ?.filter((registration) => registration.visibility === 'public')
+      .map((registration) => registration.name),
+  );
+  return Object.fromEntries(
+    publicNames.size === 0
+      ? entries
+      : entries.filter(([name]) => publicNames.has(name)),
+  );
 }
 
-async function getArgs(command: CommandDef): Promise<ArgsDef> {
+async function getArgs(command: AnyCommandDef): Promise<ArgsDef> {
   return (await resolveValue(command.args)) ?? {};
 }
 
@@ -60,7 +73,7 @@ function flagName(name: string, _arg: ArgDef): string {
 }
 
 async function traverseCommand(
-  rootCommand: CommandDef,
+  rootCommand: AnyCommandDef,
   completedWords: readonly string[],
 ): Promise<CompletionState | undefined> {
   let command = rootCommand;
@@ -103,7 +116,7 @@ function filterByPrefix(
 }
 
 async function getFlagCandidates(
-  command: CommandDef,
+  command: AnyCommandDef,
   completedWords: readonly string[],
   prefix: string,
 ): Promise<string[]> {
@@ -114,53 +127,6 @@ async function getFlagCandidates(
     .map(([name, arg]) => flagName(name, arg))
     .filter((candidate) => !used.has(candidate));
   return filterByPrefix(candidates, prefix);
-}
-
-async function getScriptCandidates(prefix: string): Promise<string[]> {
-  const discovered = await discoverScripts(getBundledScriptsRoot());
-  if (discovered.isErr()) {
-    return [];
-  }
-  return filterByPrefix(
-    listSelectable(discovered.value).map((row) => row.id),
-    prefix,
-  );
-}
-
-function shouldCompleteScriptId(
-  path: readonly string[],
-  completedWords: readonly string[],
-): boolean {
-  if (path.join(' ') !== 'scripts') {
-    return false;
-  }
-  const hasScriptFlag = completedWords.at(-1) === '--script';
-  const hasExplicitId = completedWords.some((word, index) => {
-    if (index === 0 || isFlag(word)) {
-      return false;
-    }
-    const previous = completedWords[index - 1];
-    return previous !== '--script';
-  });
-  return hasScriptFlag || !hasExplicitId;
-}
-
-function shouldCompleteShellName(
-  path: readonly string[],
-  completedWords: readonly string[],
-): boolean {
-  return path.join(' ') === 'completion' && completedWords.length === 1;
-}
-
-function shouldCompleteManagedShellName(
-  path: readonly string[],
-  completedWords: readonly string[],
-): boolean {
-  return (
-    path.join(' ') === 'completion' &&
-    completedWords.length === 2 &&
-    ['disable', 'enable', 'status'].includes(completedWords[1])
-  );
 }
 
 export async function getCompletionCandidates({
@@ -178,24 +144,19 @@ export async function getCompletionCandidates({
     return getFlagCandidates(state.command, completedWords, currentWord);
   }
 
-  if (shouldCompleteScriptId(state.path, completedWords)) {
-    return getScriptCandidates(currentWord);
-  }
-
-  if (shouldCompleteShellName(state.path, completedWords)) {
-    return filterByPrefix(
-      ['disable', 'enable', 'powershell', 'status', 'zsh'],
-      currentWord,
-    );
-  }
-
-  if (shouldCompleteManagedShellName(state.path, completedWords)) {
-    return filterByPrefix(['powershell', 'zsh'], currentWord);
-  }
-
+  const positionalCandidates = getPositionalCandidateProvider(state.command);
   const subCommands = await getSubCommands(state.command);
+  const dynamicCandidates = positionalCandidates
+    ? await positionalCandidates({
+        currentWord,
+        completedWords,
+        path: state.path,
+      })
+    : [];
+  const staticCandidates =
+    completedWords.length === state.path.length ? Object.keys(subCommands) : [];
   return filterByPrefix(
-    Object.keys(subCommands).filter((candidate) => candidate !== '__complete'),
+    [...staticCandidates, ...dynamicCandidates],
     currentWord,
   );
 }

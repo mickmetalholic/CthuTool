@@ -132,6 +132,27 @@ describe('global bin', () => {
       expect(out).toBe(`chc ${rootPackage.version}\n`);
     }
 
+    const versionJson = Bun.spawn(
+      ['node', 'bin/chc.mjs', 'version', '--json'],
+      {
+        cwd: cliRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      },
+    );
+    const versionJsonOut = await new Response(versionJson.stdout).text();
+    const versionJsonErr = await new Response(versionJson.stderr).text();
+    const versionJsonCode = await versionJson.exited;
+
+    expect(versionJsonCode).toBe(0);
+    expect(versionJsonErr).toBe('');
+    expect(JSON.parse(versionJsonOut)).toEqual({
+      ok: true,
+      command: 'version',
+      version: rootPackage.version,
+    });
+
     const installDir = await mkdtemp(join(tmpdir(), 'cthutool-status-'));
     const status = Bun.spawn(
       ['node', 'bin/chc.mjs', 'status', '--install-dir', installDir, '--json'],
@@ -204,7 +225,7 @@ describe('global bin', () => {
       error: {
         code: 'missing_required_argument',
         message:
-          'script id is required in non-interactive mode (use: chc scripts <id> or --script <id>)',
+          'script id is required in non-interactive mode (use: chc scripts run <id>, chc scripts <id>, or --script <id>)',
       },
     });
   });
@@ -249,15 +270,14 @@ describe('global bin', () => {
           '\n  codex       Manage reproducible Codex configuration.',
         );
         expect(plain).toContain(
-          '\n  scripts     Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
+          '\n  scripts     Discover, list, and run bundled scripts under apps/cli/src/scripts/<id>/.',
         );
         expect(plain).not.toContain('\n  self-update');
         expect(plain).toContain(
           '\n  update      Update the global chc command from the CthuTool Git repository.',
         );
-        expect(plain).toContain(
-          '\n  version     Print the current chc CLI version.',
-        );
+        expect(plain).not.toContain('version');
+        expect(plain).not.toContain('__complete');
         expect(plain).toContain(
           '\n  status      Show chc CLI installation status.',
         );
@@ -275,16 +295,21 @@ describe('global bin', () => {
         );
         expect(plain).not.toContain('\n   apply');
       } else if (args[0] === 'scripts') {
-        expect(plain).toContain('chc scripts [OPTIONS] [ID]');
+        expect(plain).toContain('COMMANDS');
         expect(plain).toContain(
-          'Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
+          'Discover, list, and run bundled scripts under apps/cli/src/scripts/<id>/.',
         );
-        expect(plain).toContain('Examples:');
+        expect(plain).toContain('list');
+        expect(plain).toContain('run');
+        expect(plain).toContain('AVAILABLE SCRIPTS');
+        expect(plain).toContain('convert-to-cbz');
       } else {
-        expect(plain).toContain('chc completion [OPTIONS] <SHELL>');
-        expect(plain).toContain(
-          'Shell to generate completion for (powershell or zsh), or action to manage persistent completion',
-        );
+        expect(plain).toContain('COMMANDS');
+        expect(plain).toContain('powershell');
+        expect(plain).toContain('zsh');
+        expect(plain).toContain('enable');
+        expect(plain).toContain('disable');
+        expect(plain).toContain('status');
       }
     }
   });

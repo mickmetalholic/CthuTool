@@ -54,16 +54,40 @@ apply to `remote` mode.
 Update an installed CLI in place:
 
 ```bash
-chc version
+chc --version
 chc status
+chc update --check
 chc update
 chc update --ref v0.1.0
 ```
 
-`chc status` automatically detects whether the running command is linked to a
-local checkout or the default remote managed checkout and reports that source
-as `mode: local` or `mode: remote`. Use `--install-dir` only to inspect a
-different checkout explicitly.
+Use `chc --version` for the lightweight version-only check. `chc status`
+includes that version, automatically detects whether the running command is
+linked to a local checkout or the default remote managed checkout, and reports
+that source as `mode: local` or `mode: remote`. Use `--install-dir` only to
+inspect a different checkout explicitly.
+
+`chc update --check` resolves the selected remote ref and reports
+`install_required`, `update_available`, or `up_to_date` without changing
+checkout files or the global installation. A normal update of a clean managed
+checkout proceeds directly without a redundant confirmation, shows TTY-aware
+phase progress and a bounded commit summary, and skips checkout plus
+`npm install -g` when already current.
+
+The updater refuses dirty or diverged checkouts and never automatically
+stashes, resets, cleans, or rebases local work. Use output modes as needed:
+
+```bash
+chc update --quiet
+chc update --verbose
+chc update --json
+chc update --check --json
+```
+
+`--verbose` writes bounded Git and npm diagnostics to stderr. JSON mode keeps
+one result value on stdout with stable status, commit identities, phases, and
+bounded change or failure metadata. Update checks only run when requested; the
+CLI does not install a periodic or shell-startup background checker.
 
 ## Shell Completion
 
@@ -74,6 +98,7 @@ login shell is zsh. Skip automatic setup with
 Manage completion explicitly when needed:
 
 ```bash
+chc completion
 chc completion enable zsh
 chc completion status zsh
 chc completion disable zsh
@@ -88,7 +113,30 @@ chc completion powershell | Out-String | Invoke-Expression
 ```
 
 The global or locally linked `chc` command must be available before loading
-either completion adapter.
+either completion adapter. Bare `chc completion` prints the registered
+`powershell`, `zsh`, `enable`, `disable`, and `status` child commands without
+changing a shell profile.
+
+## Bundled Scripts
+
+Use the discoverable catalog and canonical `run` operation:
+
+```bash
+chc scripts
+chc scripts list
+chc scripts list --json
+chc scripts run convert-to-cbz --input ./samples
+```
+
+Bare `chc scripts` prints group help plus an `AVAILABLE SCRIPTS` catalog.
+`chc scripts list` prints that same catalog, and `--json` returns bounded
+metadata for automation. The earlier forms remain supported as shorthand and
+route through the same runner:
+
+```bash
+chc scripts convert-to-cbz --input ./samples
+chc scripts --script convert-to-cbz --input ./samples
+```
 
 ## Local Development
 

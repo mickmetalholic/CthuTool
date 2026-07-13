@@ -22,6 +22,12 @@ export type CatalogResolveError =
   | { readonly kind: 'not_found'; readonly id: string }
   | { readonly kind: 'ambiguous'; readonly id: string };
 
+export type ScriptCatalogRow = {
+  readonly id: string;
+  readonly title: string;
+  readonly description?: string;
+};
+
 /**
  * Sorted selectable rows for prompts and listings.
  *
@@ -30,10 +36,14 @@ export type CatalogResolveError =
  */
 export const listSelectable = (
   catalog: ScriptCatalog,
-): ReadonlyArray<{ readonly id: string; readonly title: string }> =>
+): ReadonlyArray<ScriptCatalogRow> =>
   [...catalog.packages]
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((p) => ({ id: p.id, title: p.manifest.title }));
+    .map((p) => ({
+      id: p.id,
+      title: p.manifest.title,
+      description: p.manifest.description,
+    }));
 
 /**
  * Resolves a package by id from a catalog.

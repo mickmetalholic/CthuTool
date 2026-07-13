@@ -10,11 +10,33 @@ export const defaultSelfUpdateRepo =
 export const defaultSelfUpdateRef = 'main';
 export const committedCliBundlePath = 'apps/cli/dist/index.js';
 
+const maxChangeHighlights = 5;
+const maxSubjectLength = 120;
+const maxDetailLines = 8;
+const maxDetailLineLength = 240;
+
 export type SelfUpdateOptions = {
   readonly repo?: string;
   readonly ref?: string;
   readonly installDir?: string;
 };
+
+export type SelfUpdatePlanStatus =
+  | 'install_required'
+  | 'update_available'
+  | 'up_to_date'
+  | 'blocked';
+
+export type SelfUpdateApplyStatus = 'installed' | 'updated' | 'up_to_date';
+
+export type SelfUpdatePhase =
+  | 'preflight'
+  | 'check_remote'
+  | 'clone'
+  | 'fetch'
+  | 'checkout'
+  | 'verify_bundle'
+  | 'install_global';
 
 export type SelfUpdateStep =
   | 'clone'
@@ -23,6 +45,41 @@ export type SelfUpdateStep =
   | 'pull'
   | 'verify-bundle'
   | 'install-global';
+
+export type SelfUpdateIdentity = {
+  readonly ref: string;
+  readonly commit: string;
+  readonly shortCommit: string;
+};
+
+export type SelfUpdateChange = {
+  readonly commit: string;
+  readonly subject: string;
+};
+
+export type SelfUpdateChangeSummary = {
+  readonly count: number;
+  readonly highlights: readonly SelfUpdateChange[];
+  readonly omitted: number;
+};
+
+export type SelfUpdateBlock = {
+  readonly kind: 'dirty_checkout' | 'diverged_branch';
+  readonly message: string;
+  readonly hint: string;
+};
+
+export type SelfUpdatePlan = {
+  readonly status: SelfUpdatePlanStatus;
+  readonly repo: string;
+  readonly ref: string;
+  readonly installDir: string;
+  readonly before?: SelfUpdateIdentity;
+  readonly target?: SelfUpdateIdentity;
+  readonly changes?: SelfUpdateChangeSummary;
+  readonly block?: SelfUpdateBlock;
+  readonly phases: readonly SelfUpdatePhase[];
+};
 
 export type SelfUpdateCommandResult = {
   readonly command: string;
@@ -33,10 +90,41 @@ export type SelfUpdateCommandResult = {
   readonly stderr: string;
 };
 
+export type SelfUpdateEvent =
+  | {
+      readonly type: 'phase_started' | 'phase_completed';
+      readonly phase: SelfUpdatePhase;
+    }
+  | { readonly type: 'plan'; readonly plan: SelfUpdatePlan }
+  | {
+      readonly type: 'command';
+      readonly phase: SelfUpdatePhase;
+      readonly command: string;
+      readonly args: readonly string[];
+      readonly cwd?: string;
+      readonly code: number;
+      readonly stdout?: string;
+      readonly stderr?: string;
+    }
+  | {
+      readonly type: 'failure';
+      readonly phase: SelfUpdatePhase;
+      readonly summary: string;
+      readonly cause?: string;
+      readonly hint: string;
+    };
+
 export type SelfUpdateResult = {
+  readonly status: SelfUpdateApplyStatus;
   readonly repo: string;
   readonly ref: string;
   readonly installDir: string;
+  readonly before?: SelfUpdateIdentity;
+  readonly target?: SelfUpdateIdentity;
+  readonly after?: SelfUpdateIdentity;
+  readonly changes?: SelfUpdateChangeSummary;
+  readonly phases: readonly SelfUpdatePhase[];
+  /** Compatibility detail retained for existing JSON consumers. */
   readonly steps: readonly SelfUpdateStep[];
 };
 
@@ -61,16 +149,31 @@ export type SelfUpdateDeps = {
   ) => Promise<SelfUpdateCommandResult>;
   readonly env: Record<string, string | undefined>;
   readonly home: () => string;
-  readonly onStep?: (step: SelfUpdateStep) => void;
+  readonly onEvent?: (event: SelfUpdateEvent) => void;
 };
 
 export class SelfUpdateError extends Error {
-  readonly result: SelfUpdateCommandResult;
+  readonly phase: SelfUpdatePhase;
+  readonly summary: string;
+  readonly causeText?: string;
+  readonly hint: string;
+  readonly result?: SelfUpdateCommandResult;
 
-  constructor(result: SelfUpdateCommandResult) {
-    super(formatFailedCommand(result));
+  constructor(options: {
+    readonly phase: SelfUpdatePhase;
+    readonly summary: string;
+    readonly cause?: string;
+    readonly hint: string;
+    readonly result?: SelfUpdateCommandResult;
+  }) {
+    const cause = options.cause ? `\nCause: ${options.cause}` : '';
+    super(`${options.summary}${cause}\nNext: ${options.hint}`);
     this.name = 'SelfUpdateError';
-    this.result = result;
+    this.phase = options.phase;
+    this.summary = options.summary;
+    this.causeText = options.cause;
+    this.hint = options.hint;
+    this.result = options.result;
   }
 }
 
@@ -79,7 +182,7 @@ export function getDefaultSelfUpdateInstallDir(home = homedir()): string {
 }
 
 export function createSelfUpdateDeps(
-  onStep?: (step: SelfUpdateStep) => void,
+  onEvent?: (event: SelfUpdateEvent) => void,
 ): SelfUpdateDeps {
   return {
     exists: existsSync,
@@ -89,7 +192,7 @@ export function createSelfUpdateDeps(
     run: runCommand,
     env: process.env,
     home: homedir,
-    onStep,
+    onEvent,
   };
 }
 
@@ -116,36 +219,368 @@ export function resolveSelfUpdateOptions(
   };
 }
 
-function emitStep(deps: SelfUpdateDeps, step: SelfUpdateStep): void {
-  deps.onStep?.(step);
+function emit(deps: SelfUpdateDeps, event: SelfUpdateEvent): void {
+  deps.onEvent?.(event);
 }
 
-function ensureOk(result: SelfUpdateCommandResult): void {
-  if (result.code !== 0) {
-    throw new SelfUpdateError(result);
+async function runPhase<T>(
+  deps: SelfUpdateDeps,
+  phase: SelfUpdatePhase,
+  action: () => Promise<T>,
+): Promise<T> {
+  emit(deps, { type: 'phase_started', phase });
+  try {
+    const value = await action();
+    emit(deps, { type: 'phase_completed', phase });
+    return value;
+  } catch (error) {
+    const failure = toPhaseError(error, phase);
+    emit(deps, {
+      type: 'failure',
+      phase: failure.phase,
+      summary: failure.summary,
+      cause: failure.causeText,
+      hint: failure.hint,
+    });
+    throw failure;
   }
 }
 
-async function runRequired(
-  deps: SelfUpdateDeps,
-  command: string,
-  args: readonly string[],
-  options?: { readonly cwd?: string },
-): Promise<void> {
-  ensureOk(await deps.run(command, args, options));
+function phaseHint(phase: SelfUpdatePhase): string {
+  switch (phase) {
+    case 'preflight':
+      return 'Check the selected directory and local Git state, then retry.';
+    case 'check_remote':
+      return 'Check the repository URL, ref, network access, and Git credentials.';
+    case 'clone':
+      return 'Check repository access and permissions for the managed source directory.';
+    case 'fetch':
+      return 'Check network access and the configured origin, then retry.';
+    case 'checkout':
+      return 'Inspect the checkout state and selected ref before retrying.';
+    case 'verify_bundle':
+      return `Select a ref containing ${committedCliBundlePath}.`;
+    case 'install_global':
+      return 'Check npm global-install permissions, then retry the update.';
+  }
 }
 
-async function remoteRefExists(
+function toPhaseError(error: unknown, phase: SelfUpdatePhase): SelfUpdateError {
+  if (error instanceof SelfUpdateError) {
+    return error;
+  }
+  return new SelfUpdateError({
+    phase,
+    summary: `Update failed during ${formatPhase(phase)}.`,
+    cause: boundedText(error instanceof Error ? error.message : String(error)),
+    hint: phaseHint(phase),
+  });
+}
+
+function commandFailure(
+  phase: SelfUpdatePhase,
+  result: SelfUpdateCommandResult,
+): SelfUpdateError {
+  return new SelfUpdateError({
+    phase,
+    summary: `Update failed during ${formatPhase(phase)}.`,
+    cause:
+      boundedCommandOutput(result) ||
+      `Command exited with code ${result.code}.`,
+    hint: phaseHint(phase),
+    result,
+  });
+}
+
+async function execute(
   deps: SelfUpdateDeps,
-  installDir: string,
-  ref: string,
-): Promise<boolean> {
-  const result = await deps.run(
-    'git',
-    ['rev-parse', '--verify', `origin/${ref}`],
-    { cwd: installDir, allowFailure: true },
+  phase: SelfUpdatePhase,
+  command: string,
+  args: readonly string[],
+  options: { readonly cwd?: string; readonly allowFailure?: boolean } = {},
+): Promise<SelfUpdateCommandResult> {
+  let result: SelfUpdateCommandResult;
+  try {
+    result = await deps.run(command, args, options);
+  } catch (error) {
+    throw new SelfUpdateError({
+      phase,
+      summary: `Unable to start ${command} during ${formatPhase(phase)}.`,
+      cause: boundedText(
+        error instanceof Error ? error.message : String(error),
+      ),
+      hint: phaseHint(phase),
+    });
+  }
+  emit(deps, {
+    type: 'command',
+    phase,
+    command,
+    args: redactArgs(args),
+    cwd: options.cwd,
+    code: result.code,
+    stdout: boundedText(result.stdout),
+    stderr: boundedText(result.stderr),
+  });
+  if (result.code !== 0 && options.allowFailure !== true) {
+    throw commandFailure(phase, result);
+  }
+  return result;
+}
+
+async function requiredOutput(
+  deps: SelfUpdateDeps,
+  phase: SelfUpdatePhase,
+  args: readonly string[],
+  cwd: string,
+): Promise<string> {
+  const result = await execute(deps, phase, 'git', args, { cwd });
+  const value = result.stdout.trim();
+  if (value.length === 0) {
+    throw new SelfUpdateError({
+      phase,
+      summary: `Git returned no identity during ${formatPhase(phase)}.`,
+      hint: phaseHint(phase),
+    });
+  }
+  return value;
+}
+
+async function readIdentity(
+  deps: SelfUpdateDeps,
+  phase: SelfUpdatePhase,
+  cwd: string,
+  fallbackRef: string,
+  revision = 'HEAD',
+): Promise<SelfUpdateIdentity> {
+  const commit = await requiredOutput(
+    deps,
+    phase,
+    ['rev-parse', '--verify', `${revision}^{commit}`],
+    cwd,
   );
-  return result.code === 0;
+  const refResult =
+    revision === 'HEAD'
+      ? await execute(
+          deps,
+          phase,
+          'git',
+          ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+          { cwd, allowFailure: true },
+        )
+      : undefined;
+  return {
+    ref:
+      refResult?.code === 0
+        ? refResult.stdout.trim() || fallbackRef
+        : fallbackRef,
+    commit,
+    shortCommit: commit.slice(0, 7),
+  };
+}
+
+function finishPlan(
+  deps: SelfUpdateDeps,
+  plan: SelfUpdatePlan,
+): SelfUpdatePlan {
+  emit(deps, { type: 'plan', plan });
+  return plan;
+}
+
+export async function planSelfUpdate(
+  options: SelfUpdateOptions = {},
+  deps = createSelfUpdateDeps(),
+): Promise<SelfUpdatePlan> {
+  const resolved = resolveSelfUpdateOptions(options, deps);
+  const publicResolved = {
+    ...resolved,
+    repo: redactValue(resolved.repo),
+  };
+  const phases: SelfUpdatePhase[] = [];
+  const gitRoot = join(resolved.installDir, '.git');
+
+  const initial = await runPhase(deps, 'preflight', async () => {
+    if (!deps.exists(gitRoot)) {
+      return undefined;
+    }
+    const status = await execute(
+      deps,
+      'preflight',
+      'git',
+      ['status', '--porcelain', '--untracked-files=normal'],
+      { cwd: resolved.installDir },
+    );
+    if (status.stdout.trim().length > 0) {
+      return 'dirty' as const;
+    }
+    return readIdentity(deps, 'preflight', resolved.installDir, resolved.ref);
+  });
+  phases.push('preflight');
+
+  if (initial === undefined) {
+    return finishPlan(deps, {
+      status: 'install_required',
+      ...publicResolved,
+      phases,
+    });
+  }
+  if (initial === 'dirty') {
+    return finishPlan(deps, {
+      status: 'blocked',
+      ...publicResolved,
+      block: {
+        kind: 'dirty_checkout',
+        message: 'The selected checkout has uncommitted or untracked changes.',
+        hint: 'Commit, stash, or remove the local changes, then retry.',
+      },
+      phases,
+    });
+  }
+
+  const remote = await runPhase(deps, 'check_remote', async () => {
+    await execute(
+      deps,
+      'check_remote',
+      'git',
+      ['fetch', '--no-tags', resolved.repo, resolved.ref],
+      { cwd: resolved.installDir },
+    );
+    const target = await readIdentity(
+      deps,
+      'check_remote',
+      resolved.installDir,
+      resolved.ref,
+      'FETCH_HEAD',
+    );
+    const branch = await execute(
+      deps,
+      'check_remote',
+      'git',
+      ['ls-remote', '--exit-code', '--heads', resolved.repo, resolved.ref],
+      { cwd: resolved.installDir, allowFailure: true },
+    );
+    return {
+      target,
+      isBranch: branch.code === 0 && branch.stdout.trim().length > 0,
+    };
+  });
+  phases.push('check_remote');
+
+  if (initial.commit === remote.target.commit) {
+    return finishPlan(deps, {
+      status: 'up_to_date',
+      ...publicResolved,
+      before: initial,
+      target: remote.target,
+      phases,
+    });
+  }
+
+  if (remote.isBranch) {
+    const ancestor = await execute(
+      deps,
+      'check_remote',
+      'git',
+      ['merge-base', '--is-ancestor', initial.commit, remote.target.commit],
+      { cwd: resolved.installDir, allowFailure: true },
+    );
+    if (ancestor.code === 1) {
+      return finishPlan(deps, {
+        status: 'blocked',
+        ...publicResolved,
+        before: initial,
+        target: remote.target,
+        block: {
+          kind: 'diverged_branch',
+          message:
+            'The selected checkout cannot fast-forward to the remote branch.',
+          hint: 'Reconcile the local branch manually, then retry.',
+        },
+        phases,
+      });
+    }
+    if (ancestor.code !== 0) {
+      throw commandFailure('check_remote', ancestor);
+    }
+  }
+
+  const changes = await loadChangeSummary(
+    deps,
+    resolved.installDir,
+    initial.commit,
+    remote.target.commit,
+  );
+  return finishPlan(deps, {
+    status: 'update_available',
+    ...publicResolved,
+    before: initial,
+    target: remote.target,
+    changes,
+    phases,
+  });
+}
+
+async function loadChangeSummary(
+  deps: SelfUpdateDeps,
+  cwd: string,
+  before: string,
+  target: string,
+): Promise<SelfUpdateChangeSummary> {
+  const countResult = await execute(
+    deps,
+    'check_remote',
+    'git',
+    ['rev-list', '--count', `${before}..${target}`],
+    { cwd, allowFailure: true },
+  );
+  const parsedCount = Number.parseInt(countResult.stdout.trim(), 10);
+  const count =
+    countResult.code === 0 && Number.isFinite(parsedCount) ? parsedCount : 0;
+  const logResult = await execute(
+    deps,
+    'check_remote',
+    'git',
+    [
+      'log',
+      `--max-count=${maxChangeHighlights}`,
+      '--format=%h%x09%s',
+      `${before}..${target}`,
+    ],
+    { cwd, allowFailure: true },
+  );
+  const highlights =
+    logResult.code === 0
+      ? logResult.stdout
+          .split(/\r?\n/)
+          .filter(Boolean)
+          .slice(0, maxChangeHighlights)
+          .map((line) => {
+            const [commit = '', ...subject] = line.split('\t');
+            return {
+              commit: commit.slice(0, 12),
+              subject: boundedLine(subject.join('\t'), maxSubjectLength),
+            };
+          })
+      : [];
+  return {
+    count: Math.max(count, highlights.length),
+    highlights,
+    omitted: Math.max(0, count - highlights.length),
+  };
+}
+
+function blockedError(plan: SelfUpdatePlan): SelfUpdateError {
+  return new SelfUpdateError({
+    phase: 'preflight',
+    summary: `Update blocked: ${plan.block?.message ?? 'The selected checkout is not safe to update.'}`,
+    hint: plan.block?.hint ?? phaseHint('preflight'),
+  });
+}
+
+export function assertSelfUpdatePlanReady(plan: SelfUpdatePlan): void {
+  if (plan.status === 'blocked') {
+    throw blockedError(plan);
+  }
 }
 
 export async function runSelfUpdate(
@@ -153,68 +588,127 @@ export async function runSelfUpdate(
   deps = createSelfUpdateDeps(),
 ): Promise<SelfUpdateResult> {
   const resolved = resolveSelfUpdateOptions(options, deps);
-  const completedSteps: SelfUpdateStep[] = [];
-  const recordStep = (step: SelfUpdateStep) => {
-    completedSteps.push(step);
-    emitStep(deps, step);
-  };
+  const plan = await planSelfUpdate(options, deps);
+  assertSelfUpdatePlanReady(plan);
+  if (plan.status === 'up_to_date') {
+    return {
+      status: 'up_to_date',
+      repo: plan.repo,
+      ref: plan.ref,
+      installDir: plan.installDir,
+      before: plan.before,
+      target: plan.target,
+      after: plan.before,
+      phases: plan.phases,
+      steps: [],
+    };
+  }
 
-  if (deps.exists(join(resolved.installDir, '.git'))) {
-    recordStep('fetch');
-    await runRequired(
-      deps,
-      'git',
-      ['remote', 'set-url', 'origin', resolved.repo],
-      {
-        cwd: resolved.installDir,
-      },
-    );
-    await runRequired(deps, 'git', ['fetch', '--tags', 'origin'], {
-      cwd: resolved.installDir,
+  const phases = [...plan.phases];
+  const steps: SelfUpdateStep[] = [];
+  const isInstall = plan.status === 'install_required';
+
+  if (isInstall) {
+    await runPhase(deps, 'clone', async () => {
+      await deps.mkdir(dirname(plan.installDir));
+      await execute(deps, 'clone', 'git', [
+        'clone',
+        resolved.repo,
+        plan.installDir,
+      ]);
     });
+    phases.push('clone');
+    steps.push('clone');
   } else {
-    recordStep('clone');
-    await deps.mkdir(dirname(resolved.installDir));
-    await runRequired(deps, 'git', [
-      'clone',
-      resolved.repo,
-      resolved.installDir,
-    ]);
+    await runPhase(deps, 'preflight', async () => {
+      const status = await execute(
+        deps,
+        'preflight',
+        'git',
+        ['status', '--porcelain', '--untracked-files=normal'],
+        { cwd: plan.installDir },
+      );
+      if (status.stdout.trim().length > 0) {
+        throw new SelfUpdateError({
+          phase: 'preflight',
+          summary: 'Update blocked: the checkout changed after preflight.',
+          hint: 'Preserve the new local changes, then retry.',
+        });
+      }
+    });
   }
 
-  recordStep('checkout');
-  await runRequired(deps, 'git', ['checkout', resolved.ref], {
-    cwd: resolved.installDir,
-  });
+  if (!isInstall) {
+    await runPhase(deps, 'fetch', async () => {
+      await execute(
+        deps,
+        'fetch',
+        'git',
+        ['remote', 'set-url', 'origin', resolved.repo],
+        { cwd: plan.installDir },
+      );
+      await execute(deps, 'fetch', 'git', ['fetch', '--tags', 'origin'], {
+        cwd: plan.installDir,
+      });
+    });
+    phases.push('fetch');
+    steps.push('fetch');
+  }
 
-  if (await remoteRefExists(deps, resolved.installDir, resolved.ref)) {
-    recordStep('pull');
-    await runRequired(
+  await runPhase(deps, 'checkout', async () => {
+    await execute(deps, 'checkout', 'git', ['checkout', plan.ref], {
+      cwd: plan.installDir,
+    });
+    steps.push('checkout');
+    const remoteBranch = await execute(
       deps,
+      'checkout',
       'git',
-      ['pull', '--ff-only', 'origin', resolved.ref],
-      {
-        cwd: resolved.installDir,
-      },
+      ['rev-parse', '--verify', `origin/${plan.ref}`],
+      { cwd: plan.installDir, allowFailure: true },
     );
-  }
+    if (remoteBranch.code === 0) {
+      await execute(
+        deps,
+        'checkout',
+        'git',
+        ['pull', '--ff-only', 'origin', plan.ref],
+        { cwd: plan.installDir },
+      );
+      steps.push('pull');
+    }
+  });
+  phases.push('checkout');
 
-  recordStep('verify-bundle');
-  verifyCommittedBundle(deps, resolved.installDir);
+  await runPhase(deps, 'verify_bundle', async () => {
+    verifyCommittedBundle(deps, plan.installDir);
+  });
+  phases.push('verify_bundle');
+  steps.push('verify-bundle');
 
-  recordStep('install-global');
-  await runRequired(deps, 'npm', [
-    'install',
-    '-g',
-    '--ignore-scripts',
-    resolved.installDir,
-  ]);
+  await runPhase(deps, 'install_global', async () => {
+    await execute(deps, 'install_global', 'npm', [
+      'install',
+      '-g',
+      '--ignore-scripts',
+      plan.installDir,
+    ]);
+  });
+  phases.push('install_global');
+  steps.push('install-global');
 
+  const after = await readIdentity(deps, 'checkout', plan.installDir, plan.ref);
   return {
-    repo: resolved.repo,
-    ref: resolved.ref,
-    installDir: resolved.installDir,
-    steps: completedSteps,
+    status: isInstall ? 'installed' : 'updated',
+    repo: plan.repo,
+    ref: plan.ref,
+    installDir: plan.installDir,
+    before: plan.before,
+    target: plan.target ?? after,
+    after,
+    changes: plan.changes,
+    phases,
+    steps,
   };
 }
 
@@ -279,17 +773,47 @@ async function runOptional(
 function verifyCommittedBundle(deps: SelfUpdateDeps, installDir: string): void {
   const bundlePath = join(installDir, committedCliBundlePath);
   if (!deps.exists(bundlePath)) {
-    throw new Error(
-      `missing committed CLI bundle: ${bundlePath}; the selected ref must include ${committedCliBundlePath}`,
-    );
+    throw new SelfUpdateError({
+      phase: 'verify_bundle',
+      summary: 'The selected ref does not contain the committed CLI bundle.',
+      cause: `Missing ${bundlePath}.`,
+      hint: phaseHint('verify_bundle'),
+    });
   }
 }
 
-function formatFailedCommand(result: SelfUpdateCommandResult): string {
-  const cwd = result.cwd ? ` (cwd: ${result.cwd})` : '';
-  const output = `${result.stderr}\n${result.stdout}`.trim();
-  const suffix = output.length > 0 ? `\n${output}` : '';
-  return `command failed: ${result.command} ${result.args.join(' ')}${cwd}${suffix}`;
+function formatPhase(phase: SelfUpdatePhase): string {
+  return phase.replaceAll('_', ' ');
+}
+
+function boundedLine(value: string, maxLength: number): string {
+  const normalized = value.replaceAll(/\s+/g, ' ').trim();
+  return normalized.length <= maxLength
+    ? normalized
+    : `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function boundedText(value: string): string | undefined {
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => boundedLine(line, maxDetailLineLength))
+    .filter(Boolean)
+    .slice(0, maxDetailLines);
+  return lines.length > 0 ? lines.join('\n') : undefined;
+}
+
+function boundedCommandOutput(
+  result: SelfUpdateCommandResult,
+): string | undefined {
+  return boundedText(`${result.stderr}\n${result.stdout}`);
+}
+
+function redactArgs(args: readonly string[]): readonly string[] {
+  return args.map(redactValue);
+}
+
+function redactValue(value: string): string {
+  return value.replace(/:\/\/[^/@\s]+@/g, '://***@');
 }
 
 function runCommand(
@@ -297,7 +821,7 @@ function runCommand(
   args: readonly string[],
   options: { readonly cwd?: string; readonly allowFailure?: boolean } = {},
 ): Promise<SelfUpdateCommandResult> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolvePromise, reject) => {
     const child = spawn(command, [...args], {
       cwd: options.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -317,7 +841,7 @@ function runCommand(
       reject(error);
     });
     child.on('close', (code) => {
-      resolve({
+      resolvePromise({
         command,
         args,
         cwd: options.cwd,

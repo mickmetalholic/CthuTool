@@ -1,32 +1,79 @@
-import { type CommandDef, defineCommand } from 'citty';
+import { defineCommand } from 'citty';
 import { codexCommand } from './codex.command';
+import {
+  type AnyCommandDef,
+  buildRegisteredSubCommands,
+  type CliCommandRegistration,
+  registerCommandGroup,
+} from './command-discovery';
 import {
   createCompletionCommand,
   createInternalCompleteCommand,
 } from './completion.command';
-import { scriptsCommand } from './run-scripts.command';
+import { normalizeScriptsArgs, scriptsCommand } from './run-scripts.command';
 import {
   statusCommand,
   updateCommand,
   versionCommand,
 } from './self-update.command';
 
-let rootCommand: CommandDef;
+let rootCommand: AnyCommandDef;
 
-rootCommand = defineCommand({
-  meta: {
-    name: 'chc',
-    description: 'CthuTool monorepo CLI',
+const rootCommandRegistrations: readonly CliCommandRegistration[] = [
+  {
+    name: 'codex',
+    command: codexCommand,
+    visibility: 'public',
+    bareBehavior: 'help',
   },
-  subCommands: {
-    codex: codexCommand,
-    version: versionCommand,
-    status: statusCommand,
-    update: updateCommand,
-    completion: createCompletionCommand(),
-    __complete: createInternalCompleteCommand(() => rootCommand),
-    scripts: scriptsCommand,
+  {
+    name: 'version',
+    command: versionCommand,
+    visibility: 'compat',
+    bareBehavior: 'run',
   },
-});
+  {
+    name: 'status',
+    command: statusCommand,
+    visibility: 'public',
+    bareBehavior: 'run',
+  },
+  {
+    name: 'update',
+    command: updateCommand,
+    visibility: 'public',
+    bareBehavior: 'run',
+  },
+  {
+    name: 'completion',
+    command: createCompletionCommand(),
+    visibility: 'public',
+    bareBehavior: 'help',
+  },
+  {
+    name: '__complete',
+    command: createInternalCompleteCommand(() => rootCommand),
+    visibility: 'internal',
+    bareBehavior: 'run',
+  },
+  {
+    name: 'scripts',
+    command: scriptsCommand,
+    visibility: 'public',
+    bareBehavior: 'help',
+    normalizeArgs: normalizeScriptsArgs,
+  },
+];
 
-export { rootCommand };
+rootCommand = registerCommandGroup(
+  defineCommand({
+    meta: {
+      name: 'chc',
+      description: 'CthuTool monorepo CLI',
+    },
+    subCommands: buildRegisteredSubCommands(rootCommandRegistrations),
+  }),
+  rootCommandRegistrations,
+);
+
+export { rootCommand, rootCommandRegistrations };

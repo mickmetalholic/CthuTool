@@ -24,7 +24,7 @@ describe('scripts command interactive selection', () => {
       origErr(...a);
     };
     try {
-      await runCommand(cmd, { rawArgs: [] });
+      await runCommand(cmd, { rawArgs: ['run'] });
     } finally {
       console.log = origLog;
       console.error = origErr;

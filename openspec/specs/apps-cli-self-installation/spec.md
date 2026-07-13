@@ -87,16 +87,27 @@ Remote managed install and update flows SHALL use a managed source checkout cont
 - **THEN** the install flow fails before global installation with a clear missing-bundle message
 
 ### Requirement: CLI Lifecycle Commands
-The CLI SHALL provide top-level lifecycle commands for viewing the installed CLI version, inspecting installation state, and updating the global `chc` installation from committed prebuilt output.
-
-#### Scenario: Version command
-- **WHEN** a user runs `chc version`
-- **THEN** stdout reports the current `chc` CLI version
+The CLI SHALL provide top-level lifecycle entry points for viewing the installed CLI version, inspecting installation state, and updating the global `chc` installation from committed prebuilt output. The discoverable interface SHALL use `chc --version` for version-only output and `chc status` for installation diagnostics, while retaining `chc version` as an undiscoverable compatibility alias.
 
 #### Scenario: Version flag
 - **WHEN** a user runs `chc --version`
 - **THEN** stdout reports the current `chc` CLI version
+- **AND** the command exits successfully without inspecting Git installation state
+
+#### Scenario: Legacy version command
+- **WHEN** a user runs `chc version`
+- **THEN** stdout reports the current `chc` CLI version using the existing output contract
 - **AND** the command exits successfully
+
+#### Scenario: Legacy version JSON command
+- **WHEN** a user runs `chc version --json`
+- **THEN** stdout reports the existing machine-readable version response
+- **AND** the command exits successfully
+
+#### Scenario: Consolidated command discovery
+- **WHEN** a user views top-level help or requests top-level shell completion candidates
+- **THEN** the discoverable lifecycle commands include `status` and `update`
+- **AND** the legacy `version` subcommand is not listed
 
 #### Scenario: Status command
 - **WHEN** a user runs `chc status`
@@ -121,27 +132,38 @@ The CLI SHALL provide top-level lifecycle commands for viewing the installed CLI
 - **THEN** the committed `apps/cli/bin/chc.mjs` entrypoint has executable permission
 - **AND** the installed `chc` command can invoke it directly
 
-#### Scenario: Default update
-- **WHEN** a user runs `chc update`
-- **THEN** the command uses the default repository, `main` ref, and managed checkout directory
-- **AND** it verifies the committed CLI bundle is present
-- **AND** it reinstalls the root package globally without running dependency installation or CLI build commands
+#### Scenario: Default update with available changes
+- **WHEN** a user runs `chc update` and the default repository `main` ref differs from the safe managed checkout
+- **THEN** the command updates the managed checkout to the resolved target
+- **AND** verifies the committed CLI bundle is present
+- **AND** reinstalls the root package globally without running dependency installation or CLI build commands
+
+#### Scenario: Default update already current
+- **WHEN** a user runs `chc update` and the safe managed checkout already matches the resolved target
+- **THEN** the command exits successfully as already current
+- **AND** does not check out files or reinstall the root package globally
+
+#### Scenario: Update availability check
+- **WHEN** a user runs `chc update --check`
+- **THEN** the command reports whether installation or an update is required
+- **AND** does not clone, check out, pull, or globally install the package
 
 #### Scenario: Update overrides
 - **WHEN** a user runs `chc update --repo <url> --ref <ref> --install-dir <path>`
 - **THEN** the command uses the provided repository URL, Git ref, and checkout directory
+- **AND** applies the same preflight safety and no-op detection as the default managed update
 
 #### Scenario: Update JSON success
-- **WHEN** a user runs `chc update --json` and the update succeeds
-- **THEN** stdout contains exactly one JSON object with `ok: true`, `command: "update"`, and result details
+- **WHEN** a user runs `chc update --json` and the update succeeds or is already current
+- **THEN** stdout contains exactly one JSON object with `ok: true`, `command: "update"`, and structured result status and identity details
 
 #### Scenario: Update failure
-- **WHEN** any Git, committed-bundle verification, or global install step fails during `chc update`
+- **WHEN** preflight safety, Git, committed-bundle verification, or global install fails during `chc update`
 - **THEN** the command exits non-zero
-- **AND** it reports an `update_failed` command error
+- **AND** reports an `update_failed` command error with the failed phase and bounded recovery context
 
 ### Requirement: Installation Documentation
-The repository documentation SHALL describe public GitHub installation, local checkout installation, prebuilt bundle expectations, lifecycle commands, and update usage.
+The repository SHALL document the public and local CLI install flows, lightweight target prerequisites, committed runtime bundle, canonical lifecycle commands, and update path.
 
 #### Scenario: Public install documented
 - **WHEN** a user reads the root README
@@ -168,8 +190,22 @@ The repository documentation SHALL describe public GitHub installation, local ch
 
 #### Scenario: Lifecycle commands documented
 - **WHEN** a user reads the CLI installation documentation
-- **THEN** it shows `chc version`, `chc status`, and `chc update`
+- **THEN** it shows `chc --version`, `chc status`, and `chc update` as the canonical lifecycle entry points
+- **AND** it does not present `chc version` as a canonical command
 
 #### Scenario: Update documented
 - **WHEN** a user reads the CLI installation documentation
 - **THEN** it shows `chc update` as the update path after the first install
+
+### Requirement: Managed Update Safety
+Managed checkout updates SHALL preserve local work and SHALL complete safety checks before mutating checkout files or reinstalling the global command.
+
+#### Scenario: Local changes remain untouched
+- **WHEN** the selected update checkout contains tracked or untracked changes
+- **THEN** the update fails before changing the remote URL, checking out a ref, pulling, or globally installing the package
+- **AND** it does not automatically stash, reset, clean, or overwrite those changes
+
+#### Scenario: Diverged branch remains untouched
+- **WHEN** an existing selected branch has diverged from its resolved remote branch
+- **THEN** the update fails before checkout or global installation
+- **AND** it does not reset or rebase the branch
