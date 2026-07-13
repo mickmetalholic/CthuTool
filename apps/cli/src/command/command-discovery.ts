@@ -29,6 +29,29 @@ export type CommandHelpAppendixProvider = () =>
   | string
   | undefined;
 
+export function stripAnsi(value: string): string {
+  const sgrPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+  return value.replace(sgrPattern, '');
+}
+
+export function filterUsageCommandChoices(
+  line: string,
+  hiddenCommands: ReadonlySet<string>,
+): string {
+  const match =
+    /^(\s*USAGE\s+\S+\s+)([A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)(.*)$/.exec(
+      stripAnsi(line),
+    );
+  if (!match) {
+    return line;
+  }
+  const [, prefix, choices, suffix] = match;
+  const visibleChoices = choices
+    .split('|')
+    .filter((choice) => !hiddenCommands.has(choice));
+  return `${prefix}${visibleChoices.join('|')}${suffix}`;
+}
+
 const registrationsByCommand = new WeakMap<
   AnyCommandDef,
   readonly CliCommandRegistration[]
