@@ -190,7 +190,7 @@ export async function getCompletionCandidates({
   }
 
   if (shouldCompleteManagedShellName(state.path, completedWords)) {
-    return filterByPrefix(['powershell'], currentWord);
+    return filterByPrefix(['powershell', 'zsh'], currentWord);
   }
 
   const subCommands = await getSubCommands(state.command);

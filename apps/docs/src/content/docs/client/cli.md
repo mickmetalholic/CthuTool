@@ -26,12 +26,15 @@ chc --help
 
 Raw/stdin installer usage selects remote mode. It clones or updates `https://github.com/mickmetalholic/CthuTool.git` into `~/.cthutool/source/CthuTool`, checks out the selected ref, verifies the committed CLI bundle, and runs `npm install -g --ignore-scripts`.
 
+When the user's login shell is zsh, the installer also enables persistent `chc` completion in the user's zsh profile. Set `CHC_INSTALL_COMPLETION=none` to skip completion setup.
+
 Override source or version:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | CHC_REF=v0.1.0 bash
 CHC_INSTALL_MODE=remote CHC_REF=v0.1.0 scripts/install-chc.sh
 CHC_INSTALL_MODE=remote CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.git CHC_INSTALL_DIR="$HOME/.cthutool/source/CthuTool" scripts/install-chc.sh
+CHC_INSTALL_COMPLETION=none scripts/install-chc.sh
 ```
 
 ## Install from a Local Checkout
@@ -52,7 +55,7 @@ To restore global `chc` to the managed remote checkout:
 CHC_INSTALL_MODE=remote scripts/install-chc.sh
 ```
 
-`CHC_INSTALL_MODE` accepts `auto`, `local`, or `remote`. In `auto` mode, raw/stdin execution selects `remote` and local file execution selects `local`.
+`CHC_INSTALL_MODE` accepts `auto`, `local`, or `remote`. In `auto` mode, raw/stdin execution selects `remote` and local file execution selects `local`. `CHC_INSTALL_COMPLETION` accepts `auto`, `zsh`, or `none`.
 
 ## Update
 
@@ -63,7 +66,7 @@ chc update
 chc update --ref v0.1.0
 ```
 
-`chc self-update` remains available as a backwards-compatible alias for `chc update`.
+`chc status` detects the source checkout used by the running global command. It reports `mode: local` for a linked development checkout and `mode: remote` for the default managed checkout, together with that checkout's Git and bundle state. Pass `--install-dir <path>` to inspect a different checkout explicitly.
 
 ## Uninstall
 

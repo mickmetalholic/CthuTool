@@ -13,15 +13,24 @@ type CompletionProfileAction = 'enable' | 'disable' | 'status';
 
 const emptyCompletionWord = '__cthutool_empty_completion_word__';
 const powershellProfileEnv = 'CHC_COMPLETION_POWERSHELL_PROFILE';
+const zshProfileEnv = 'CHC_COMPLETION_ZSH_PROFILE';
 const powershellCompletionLoadLine =
   'chc completion powershell | Out-String | Invoke-Expression';
 const powershellCompletionReloadHint = `Restart PowerShell to load it, or run: ${powershellCompletionLoadLine}`;
 const legacyPowerShellCompletionComment = '# CthuTool CLI completion';
-const powershellCompletionStartMarker = '# >>> cthutool chc completion >>>';
-const powershellCompletionEndMarker = '# <<< cthutool chc completion <<<';
-const powershellCompletionBlock = `${powershellCompletionStartMarker}
+const completionStartMarker = '# >>> cthutool chc completion >>>';
+const completionEndMarker = '# <<< cthutool chc completion <<<';
+const powershellCompletionBlock = `${completionStartMarker}
 ${powershellCompletionLoadLine}
-${powershellCompletionEndMarker}`;
+${completionEndMarker}`;
+const zshCompletionLoadLine = 'source <(chc completion zsh)';
+const zshCompletionBlock = `${completionStartMarker}
+if (( ! $+functions[compdef] )); then
+  autoload -Uz compinit
+  compinit
+fi
+${zshCompletionLoadLine}
+${completionEndMarker}`;
 const execFileAsync = promisify(execFile);
 
 const powershellScript = `Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
@@ -75,7 +84,7 @@ function removeManagedCompletionBlock(content: string): {
   readonly removed: boolean;
 } {
   const pattern = new RegExp(
-    `${escapeRegExp(powershellCompletionStartMarker)}\\r?\\n[\\s\\S]*?\\r?\\n${escapeRegExp(powershellCompletionEndMarker)}\\r?\\n?`,
+    `${escapeRegExp(completionStartMarker)}\\r?\\n[\\s\\S]*?\\r?\\n${escapeRegExp(completionEndMarker)}\\r?\\n?`,
     'g',
   );
   const nextContent = content.replace(pattern, '');
@@ -88,6 +97,14 @@ function removeLegacyCompletionBlock(content: string): string {
     'g',
   );
   return content.replace(legacyBlockPattern, '');
+}
+
+function removeLegacyZshCompletionLine(content: string): string {
+  const legacyLinePattern = new RegExp(
+    `^${escapeRegExp(zshCompletionLoadLine)}\\r?\\n?`,
+    'gm',
+  );
+  return content.replace(legacyLinePattern, '');
 }
 
 async function readTextIfExists(path: string): Promise<string> {
@@ -144,14 +161,24 @@ async function resolvePowerShellProfilePath(): Promise<string> {
   );
 }
 
+function resolveZshProfilePath(): string {
+  const override = process.env[zshProfileEnv]?.trim();
+  if (override) {
+    return override;
+  }
+
+  const zdotdir = process.env.ZDOTDIR?.trim();
+  return join(zdotdir || homedir(), '.zshrc');
+}
+
 async function handlePowerShellProfileAction(
   action: CompletionProfileAction,
 ): Promise<void> {
   const profilePath = await resolvePowerShellProfilePath();
   const content = await readTextIfExists(profilePath);
   const installed =
-    content.includes(powershellCompletionStartMarker) &&
-    content.includes(powershellCompletionEndMarker);
+    content.includes(completionStartMarker) &&
+    content.includes(completionEndMarker);
 
   if (action === 'status') {
     process.stdout.write(
@@ -189,6 +216,52 @@ async function handlePowerShellProfileAction(
   process.exitCode = 0;
 }
 
+async function handleZshProfileAction(
+  action: CompletionProfileAction,
+): Promise<void> {
+  const profilePath = resolveZshProfilePath();
+  const content = await readTextIfExists(profilePath);
+  const installed =
+    content.includes(completionStartMarker) &&
+    content.includes(completionEndMarker);
+  const reloadHint = `Restart zsh to load it, or run: source ${profilePath}`;
+
+  if (action === 'status') {
+    process.stdout.write(
+      `zsh completion ${installed ? 'enabled' : 'disabled'}: ${profilePath}\n`,
+    );
+    if (installed) {
+      process.stdout.write(`${reloadHint}\n`);
+    }
+    process.exitCode = 0;
+    return;
+  }
+
+  if (action === 'disable') {
+    const cleaned = removeManagedCompletionBlock(content);
+    if (cleaned.removed) {
+      await writeFile(profilePath, cleaned.content);
+    }
+    process.stdout.write(`zsh completion disabled: ${profilePath}\n`);
+    process.exitCode = 0;
+    return;
+  }
+
+  const cleaned = removeManagedCompletionBlock(content);
+  const migratedContent = removeLegacyZshCompletionLine(cleaned.content);
+  const prefix =
+    migratedContent.length === 0 || migratedContent.endsWith('\n')
+      ? migratedContent
+      : `${migratedContent}\n`;
+  await mkdir(dirname(profilePath), { recursive: true });
+  await writeFile(profilePath, `${prefix}${zshCompletionBlock}\n`);
+  process.stdout.write(
+    `zsh completion ${installed ? 'already enabled' : 'enabled'}: ${profilePath}\n`,
+  );
+  process.stdout.write(`${reloadHint}\n`);
+  process.exitCode = 0;
+}
+
 export function createCompletionCommand() {
   return defineCommand({
     meta: {
@@ -211,10 +284,10 @@ export function createCompletionCommand() {
           const first = rawArgs[0] ?? '';
           if (isCompletionProfileAction(first)) {
             const shell = rawArgs[1] ?? '';
-            if (shell !== 'powershell') {
+            if (shell !== 'powershell' && shell !== 'zsh') {
               const error = createCliError(
                 'invalid_option',
-                `managed persistent completion currently supports PowerShell only: ${shell || '<missing>'}`,
+                `unsupported managed completion shell: ${shell || '<missing>'}`,
               );
               fail(error, { details: { action: first, shell } });
               process.stderr.write(`${error.message}\n`);
@@ -222,7 +295,11 @@ export function createCompletionCommand() {
               return;
             }
             try {
-              await handlePowerShellProfileAction(first);
+              if (shell === 'powershell') {
+                await handlePowerShellProfileAction(first);
+              } else {
+                await handleZshProfileAction(first);
+              }
             } catch (error) {
               const cliError = createCliError(
                 'invalid_option',

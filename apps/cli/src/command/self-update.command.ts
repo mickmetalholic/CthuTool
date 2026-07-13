@@ -60,12 +60,12 @@ function formatStep(step: SelfUpdateStep): string {
   }
 }
 
-function toSelfUpdateCliError(error: unknown): CliError {
+function toUpdateCliError(error: unknown): CliError {
   return error instanceof SelfUpdateError
-    ? createCliError('self_update_failed', error.message)
+    ? createCliError('update_failed', error.message)
     : createCliError(
-        'self_update_failed',
-        error instanceof Error ? error.message : 'self-update failed',
+        'update_failed',
+        error instanceof Error ? error.message : 'update failed',
       );
 }
 
@@ -74,10 +74,10 @@ function writeFailure(context: CliContext, cliError: CliError): void {
   process.exitCode = cliError.exitCode;
 }
 
-function createUpdateCommand(name: 'update' | 'self-update') {
+function createUpdateCommand() {
   return defineCommand({
     meta: {
-      name,
+      name: 'update',
       description:
         'Update the global chc command from the CthuTool Git repository.',
     },
@@ -85,21 +85,13 @@ function createUpdateCommand(name: 'update' | 'self-update') {
     async run({ args }) {
       await runObservedCliCommand(
         args,
-        { command: name },
+        { command: 'update' },
         async ({ context, fail }) => {
           const repo = getStringArg(args.repo);
           const ref = getStringArg(args.ref);
           const installDir = getStringArg(args['install-dir']);
 
-          writeHumanStatus(
-            context,
-            processOutput,
-            pc.cyan(
-              name === 'self-update'
-                ? 'CthuTool self-update'
-                : 'CthuTool update',
-            ),
-          );
+          writeHumanStatus(context, processOutput, pc.cyan('CthuTool update'));
           writeHumanStatus(
             context,
             processOutput,
@@ -130,7 +122,7 @@ function createUpdateCommand(name: 'update' | 'self-update') {
             if (context.json) {
               writeJsonValue(processOutput, {
                 ok: true,
-                command: name,
+                command: 'update',
                 result,
               });
             } else {
@@ -138,7 +130,7 @@ function createUpdateCommand(name: 'update' | 'self-update') {
             }
             process.exitCode = 0;
           } catch (error) {
-            const cliError = toSelfUpdateCliError(error);
+            const cliError = toUpdateCliError(error);
             fail(cliError, { details: { installDir, ref, repo } });
             writeFailure(context, cliError);
           }
@@ -208,6 +200,11 @@ export const statusCommand = defineCommand({
             writeHumanStatus(
               context,
               processOutput,
+              `mode:        ${status.mode}`,
+            );
+            writeHumanStatus(
+              context,
+              processOutput,
               `install dir: ${status.installDir}`,
             );
             writeHumanStatus(
@@ -233,7 +230,7 @@ export const statusCommand = defineCommand({
           }
           process.exitCode = 0;
         } catch (error) {
-          const cliError = toSelfUpdateCliError(error);
+          const cliError = toUpdateCliError(error);
           fail(cliError);
           writeFailure(context, cliError);
         }
@@ -242,5 +239,4 @@ export const statusCommand = defineCommand({
   },
 });
 
-export const updateCommand = createUpdateCommand('update');
-export const selfUpdateCommand = createUpdateCommand('self-update');
+export const updateCommand = createUpdateCommand();

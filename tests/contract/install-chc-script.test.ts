@@ -50,6 +50,11 @@ printf '\\n' >> "${logPath}"
   writeExecutable(
     join(binDir, "chc"),
     `#!/usr/bin/env bash
+printf 'chc' >> "${logPath}"
+for arg in "$@"; do
+  printf '\\t%s' "$arg" >> "${logPath}"
+done
+printf '\\n' >> "${logPath}"
 exit 0
 `,
   );
@@ -84,6 +89,7 @@ exit 0
     ...process.env,
     PATH: `${binDir}:${process.env.PATH ?? ""}`,
     CHC_INSTALL_DIR: join(dir, "managed", "CthuTool"),
+    SHELL: "/bin/zsh",
   } as Record<string, string>;
 
   return {
@@ -133,6 +139,7 @@ describe("install-chc.sh", () => {
       expect(log).toContain(
         `npm\tinstall\t-g\t--ignore-scripts\t${fixture.env.CHC_INSTALL_DIR}`,
       );
+      expect(log).toContain("chc\tcompletion\tenable\tzsh");
     } finally {
       fixture.cleanup();
     }
@@ -149,6 +156,7 @@ describe("install-chc.sh", () => {
       expect(log).not.toContain("git\tclone");
       expect(log).not.toContain("git\t-C");
       expect(log).toContain(`npm\tinstall\t-g\t--ignore-scripts\t${root}`);
+      expect(log).toContain("chc\tcompletion\tenable\tzsh");
     } finally {
       fixture.cleanup();
     }
@@ -235,6 +243,40 @@ describe("install-chc.sh", () => {
       expect(result.stderr).toContain("Missing committed CLI bundle");
       expect(fixture.readLog()).toContain("git\tclone");
       expect(fixture.readLog()).not.toContain("npm\tinstall");
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("allows automatic zsh completion setup to be disabled", () => {
+    const fixture = createFixture();
+    try {
+      const result = runInstaller({
+        env: {
+          ...fixture.env,
+          CHC_INSTALL_COMPLETION: "none",
+        },
+      });
+
+      expect(result.status).toBe(0);
+      expect(fixture.readLog()).not.toContain("chc\tcompletion\tenable\tzsh");
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("skips automatic completion when the login shell is not zsh", () => {
+    const fixture = createFixture();
+    try {
+      const result = runInstaller({
+        env: {
+          ...fixture.env,
+          SHELL: "",
+        },
+      });
+
+      expect(result.status).toBe(0);
+      expect(fixture.readLog()).not.toContain("chc\tcompletion\tenable\tzsh");
     } finally {
       fixture.cleanup();
     }

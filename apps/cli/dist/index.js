@@ -5541,7 +5541,7 @@ async function getCompletionCandidates({
     return filterByPrefix(["disable", "enable", "powershell", "status", "zsh"], currentWord);
   }
   if (shouldCompleteManagedShellName(state.path, completedWords)) {
-    return filterByPrefix(["powershell"], currentWord);
+    return filterByPrefix(["powershell", "zsh"], currentWord);
   }
   const subCommands = await getSubCommands(state.command);
   return filterByPrefix(Object.keys(subCommands).filter((candidate) => candidate !== "__complete"), currentWord);
@@ -5550,14 +5550,23 @@ async function getCompletionCandidates({
 // src/command/completion.command.ts
 var emptyCompletionWord = "__cthutool_empty_completion_word__";
 var powershellProfileEnv = "CHC_COMPLETION_POWERSHELL_PROFILE";
+var zshProfileEnv = "CHC_COMPLETION_ZSH_PROFILE";
 var powershellCompletionLoadLine = "chc completion powershell | Out-String | Invoke-Expression";
 var powershellCompletionReloadHint = `Restart PowerShell to load it, or run: ${powershellCompletionLoadLine}`;
 var legacyPowerShellCompletionComment = "# CthuTool CLI completion";
-var powershellCompletionStartMarker = "# >>> cthutool chc completion >>>";
-var powershellCompletionEndMarker = "# <<< cthutool chc completion <<<";
-var powershellCompletionBlock = `${powershellCompletionStartMarker}
+var completionStartMarker = "# >>> cthutool chc completion >>>";
+var completionEndMarker = "# <<< cthutool chc completion <<<";
+var powershellCompletionBlock = `${completionStartMarker}
 ${powershellCompletionLoadLine}
-${powershellCompletionEndMarker}`;
+${completionEndMarker}`;
+var zshCompletionLoadLine = "source <(chc completion zsh)";
+var zshCompletionBlock = `${completionStartMarker}
+if (( ! $+functions[compdef] )); then
+  autoload -Uz compinit
+  compinit
+fi
+${zshCompletionLoadLine}
+${completionEndMarker}`;
 var execFileAsync = promisify(execFile);
 var powershellScript = `Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
@@ -5599,13 +5608,17 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function removeManagedCompletionBlock(content) {
-  const pattern = new RegExp(`${escapeRegExp(powershellCompletionStartMarker)}\\r?\\n[\\s\\S]*?\\r?\\n${escapeRegExp(powershellCompletionEndMarker)}\\r?\\n?`, "g");
+  const pattern = new RegExp(`${escapeRegExp(completionStartMarker)}\\r?\\n[\\s\\S]*?\\r?\\n${escapeRegExp(completionEndMarker)}\\r?\\n?`, "g");
   const nextContent = content.replace(pattern, "");
   return { content: nextContent, removed: nextContent !== content };
 }
 function removeLegacyCompletionBlock(content) {
   const legacyBlockPattern = new RegExp(`${escapeRegExp(legacyPowerShellCompletionComment)}\\r?\\n${escapeRegExp(powershellCompletionLoadLine)}\\r?\\n?`, "g");
   return content.replace(legacyBlockPattern, "");
+}
+function removeLegacyZshCompletionLine(content) {
+  const legacyLinePattern = new RegExp(`^${escapeRegExp(zshCompletionLoadLine)}\\r?\\n?`, "gm");
+  return content.replace(legacyLinePattern, "");
 }
 async function readTextIfExists(path) {
   try {
@@ -5641,10 +5654,18 @@ async function resolvePowerShellProfilePath() {
   }
   return join5(homedir2(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
 }
+function resolveZshProfilePath() {
+  const override = process.env[zshProfileEnv]?.trim();
+  if (override) {
+    return override;
+  }
+  const zdotdir = process.env.ZDOTDIR?.trim();
+  return join5(zdotdir || homedir2(), ".zshrc");
+}
 async function handlePowerShellProfileAction(action) {
   const profilePath = await resolvePowerShellProfilePath();
   const content = await readTextIfExists(profilePath);
-  const installed = content.includes(powershellCompletionStartMarker) && content.includes(powershellCompletionEndMarker);
+  const installed = content.includes(completionStartMarker) && content.includes(completionEndMarker);
   if (action === "status") {
     process.stdout.write(`PowerShell completion ${installed ? "enabled" : "disabled"}: ${profilePath}
 `);
@@ -5679,6 +5700,45 @@ async function handlePowerShellProfileAction(action) {
 `);
   process.exitCode = 0;
 }
+async function handleZshProfileAction(action) {
+  const profilePath = resolveZshProfilePath();
+  const content = await readTextIfExists(profilePath);
+  const installed = content.includes(completionStartMarker) && content.includes(completionEndMarker);
+  const reloadHint = `Restart zsh to load it, or run: source ${profilePath}`;
+  if (action === "status") {
+    process.stdout.write(`zsh completion ${installed ? "enabled" : "disabled"}: ${profilePath}
+`);
+    if (installed) {
+      process.stdout.write(`${reloadHint}
+`);
+    }
+    process.exitCode = 0;
+    return;
+  }
+  if (action === "disable") {
+    const cleaned2 = removeManagedCompletionBlock(content);
+    if (cleaned2.removed) {
+      await writeFile3(profilePath, cleaned2.content);
+    }
+    process.stdout.write(`zsh completion disabled: ${profilePath}
+`);
+    process.exitCode = 0;
+    return;
+  }
+  const cleaned = removeManagedCompletionBlock(content);
+  const migratedContent = removeLegacyZshCompletionLine(cleaned.content);
+  const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
+`) ? migratedContent : `${migratedContent}
+`;
+  await mkdir3(dirname6(profilePath), { recursive: true });
+  await writeFile3(profilePath, `${prefix}${zshCompletionBlock}
+`);
+  process.stdout.write(`zsh completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
+`);
+  process.stdout.write(`${reloadHint}
+`);
+  process.exitCode = 0;
+}
 function createCompletionCommand() {
   return defineCommand({
     meta: {
@@ -5697,8 +5757,8 @@ function createCompletionCommand() {
         const first = rawArgs[0] ?? "";
         if (isCompletionProfileAction(first)) {
           const shell2 = rawArgs[1] ?? "";
-          if (shell2 !== "powershell") {
-            const error = createCliError("invalid_option", `managed persistent completion currently supports PowerShell only: ${shell2 || "<missing>"}`);
+          if (shell2 !== "powershell" && shell2 !== "zsh") {
+            const error = createCliError("invalid_option", `unsupported managed completion shell: ${shell2 || "<missing>"}`);
             fail(error, { details: { action: first, shell: shell2 } });
             process.stderr.write(`${error.message}
 `);
@@ -5706,7 +5766,11 @@ function createCompletionCommand() {
             return;
           }
           try {
-            await handlePowerShellProfileAction(first);
+            if (shell2 === "powershell") {
+              await handlePowerShellProfileAction(first);
+            } else {
+              await handleZshProfileAction(first);
+            }
           } catch (error) {
             const cliError = createCliError("invalid_option", error instanceof Error ? error.message : String(error));
             fail(cliError, { details: { action: first, shell: shell2 } });
@@ -6039,7 +6103,7 @@ import { spawn } from "node:child_process";
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "node:fs";
 import { mkdir as mkdir4 } from "node:fs/promises";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname7, join as join7 } from "node:path";
+import { dirname as dirname7, join as join7, resolve as resolve4 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var defaultSelfUpdateRepo = "https://github.com/mickmetalholic/CthuTool.git";
 var defaultSelfUpdateRef = "main";
@@ -6145,7 +6209,8 @@ async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
   };
 }
 async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDeps()) {
-  const resolved = resolveSelfUpdateOptions(options, deps);
+  const installDir = options.installDir ?? deps.env.CHC_INSTALL_DIR ?? findRepoRootFromModule();
+  const resolved = resolveSelfUpdateOptions({ ...options, installDir }, deps);
   const bundlePath = join7(resolved.installDir, committedCliBundlePath);
   const gitRoot = join7(resolved.installDir, ".git");
   const repo = deps.exists(gitRoot) ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
@@ -6159,6 +6224,7 @@ async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDep
   }) : undefined;
   return {
     version: getCliVersion(),
+    mode: resolve4(resolved.installDir) === resolve4(getDefaultSelfUpdateInstallDir(deps.home())) ? "remote" : "local",
     installDir: resolved.installDir,
     repo,
     ref,
@@ -6193,7 +6259,7 @@ ${output}` : "";
   return `command failed: ${result.command} ${result.args.join(" ")}${cwd}${suffix}`;
 }
 function runCommand2(command, args, options = {}) {
-  return new Promise((resolve4, reject) => {
+  return new Promise((resolve5, reject) => {
     const child = spawn(command, [...args], {
       cwd: options.cwd,
       stdio: ["ignore", "pipe", "pipe"]
@@ -6212,7 +6278,7 @@ function runCommand2(command, args, options = {}) {
       reject(error);
     });
     child.on("close", (code) => {
-      resolve4({
+      resolve5({
         command,
         args,
         cwd: options.cwd,
@@ -6287,26 +6353,26 @@ function formatStep(step) {
       return "installing global command";
   }
 }
-function toSelfUpdateCliError(error) {
-  return error instanceof SelfUpdateError ? createCliError("self_update_failed", error.message) : createCliError("self_update_failed", error instanceof Error ? error.message : "self-update failed");
+function toUpdateCliError(error) {
+  return error instanceof SelfUpdateError ? createCliError("update_failed", error.message) : createCliError("update_failed", error instanceof Error ? error.message : "update failed");
 }
 function writeFailure(context, cliError) {
   writeCommandError(context, processOutput, cliError);
   process.exitCode = cliError.exitCode;
 }
-function createUpdateCommand(name) {
+function createUpdateCommand() {
   return defineCommand({
     meta: {
-      name,
+      name: "update",
       description: "Update the global chc command from the CthuTool Git repository."
     },
     args: selfUpdateArgs,
     async run({ args }) {
-      await runObservedCliCommand(args, { command: name }, async ({ context, fail }) => {
+      await runObservedCliCommand(args, { command: "update" }, async ({ context, fail }) => {
         const repo = getStringArg2(args.repo);
         const ref = getStringArg2(args.ref);
         const installDir = getStringArg2(args["install-dir"]);
-        writeHumanStatus(context, processOutput, import_picocolors4.default.cyan(name === "self-update" ? "CthuTool self-update" : "CthuTool update"));
+        writeHumanStatus(context, processOutput, import_picocolors4.default.cyan("CthuTool update"));
         writeHumanStatus(context, processOutput, `repo: ${repo ?? defaultSelfUpdateRepo}`);
         writeHumanStatus(context, processOutput, `ref:  ${ref ?? defaultSelfUpdateRef}`);
         writeHumanStatus(context, processOutput, `dir:  ${installDir ?? getDefaultSelfUpdateInstallDir()}`);
@@ -6317,7 +6383,7 @@ function createUpdateCommand(name) {
           if (context.json) {
             writeJsonValue(processOutput, {
               ok: true,
-              command: name,
+              command: "update",
               result
             });
           } else {
@@ -6325,7 +6391,7 @@ function createUpdateCommand(name) {
           }
           process.exitCode = 0;
         } catch (error) {
-          const cliError = toSelfUpdateCliError(error);
+          const cliError = toUpdateCliError(error);
           fail(cliError, { details: { installDir, ref, repo } });
           writeFailure(context, cliError);
         }
@@ -6379,6 +6445,7 @@ var statusCommand = defineCommand({
         } else {
           writeHumanStatus(context, processOutput, import_picocolors4.default.cyan("CthuTool status"));
           writeHumanStatus(context, processOutput, `version:     ${status.version}`);
+          writeHumanStatus(context, processOutput, `mode:        ${status.mode}`);
           writeHumanStatus(context, processOutput, `install dir: ${status.installDir}`);
           writeHumanStatus(context, processOutput, `repo:        ${status.repo}`);
           writeHumanStatus(context, processOutput, `ref:         ${status.ref}`);
@@ -6387,15 +6454,14 @@ var statusCommand = defineCommand({
         }
         process.exitCode = 0;
       } catch (error) {
-        const cliError = toSelfUpdateCliError(error);
+        const cliError = toUpdateCliError(error);
         fail(cliError);
         writeFailure(context, cliError);
       }
     });
   }
 });
-var updateCommand = createUpdateCommand("update");
-var selfUpdateCommand = createUpdateCommand("self-update");
+var updateCommand = createUpdateCommand();
 
 // src/command/root.command.ts
 var rootCommand;
@@ -6409,7 +6475,6 @@ rootCommand = defineCommand({
     version: versionCommand,
     status: statusCommand,
     update: updateCommand,
-    "self-update": selfUpdateCommand,
     completion: createCompletionCommand(),
     __complete: createInternalCompleteCommand(() => rootCommand),
     scripts: scriptsCommand

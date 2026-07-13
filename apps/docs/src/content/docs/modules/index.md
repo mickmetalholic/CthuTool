@@ -7,7 +7,7 @@ CthuTool modules are grouped by what the user is trying to do, not by repository
 
 | Module | Purpose | Runs on | Source |
 | --- | --- | --- | --- |
-| [CLI](/modules/cli/) | Command-line workflows, scripts, Codex config, completion, self-update | Client computer | `apps/cli/README.md` |
+| [CLI](/modules/cli/) | Command-line workflows, scripts, Codex config, completion, updates | Client computer | `apps/cli/README.md` |
 | [Desktop](/modules/desktop/) | Local browser execution, login state, agent connection | Client computer | `docs/desktop-agent-console.md` |
 | [Web Console](/modules/web-console/) | Browser-hosted management console scaffold | Homelab/web host | `apps/web/README.md` |
 | [Browser Auth](/modules/browser-auth/) | Browser profile ownership and login flow | Backend plus desktop | `docs/browser-auth.md` |
