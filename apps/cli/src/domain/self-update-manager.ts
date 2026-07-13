@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const defaultSelfUpdateRepo =
@@ -42,6 +42,7 @@ export type SelfUpdateResult = {
 
 export type CliInstallationStatus = {
   readonly version: string;
+  readonly mode: 'local' | 'remote';
   readonly installDir: string;
   readonly repo: string;
   readonly ref: string;
@@ -221,7 +222,9 @@ export async function getCliInstallationStatus(
   options: SelfUpdateOptions = {},
   deps = createSelfUpdateDeps(),
 ): Promise<CliInstallationStatus> {
-  const resolved = resolveSelfUpdateOptions(options, deps);
+  const installDir =
+    options.installDir ?? deps.env.CHC_INSTALL_DIR ?? findRepoRootFromModule();
+  const resolved = resolveSelfUpdateOptions({ ...options, installDir }, deps);
   const bundlePath = join(resolved.installDir, committedCliBundlePath);
   const gitRoot = join(resolved.installDir, '.git');
   const repo = deps.exists(gitRoot)
@@ -242,6 +245,11 @@ export async function getCliInstallationStatus(
 
   return {
     version: getCliVersion(),
+    mode:
+      resolve(resolved.installDir) ===
+      resolve(getDefaultSelfUpdateInstallDir(deps.home()))
+        ? 'remote'
+        : 'local',
     installDir: resolved.installDir,
     repo,
     ref,

@@ -5,6 +5,7 @@ repo_url="${CHC_REPO_URL:-${CHC_REPO:-https://github.com/mickmetalholic/CthuTool
 ref="${CHC_REF:-main}"
 install_dir="${CHC_INSTALL_DIR:-$HOME/.cthutool/source/CthuTool}"
 install_mode="${CHC_INSTALL_MODE:-auto}"
+completion_mode="${CHC_INSTALL_COMPLETION:-auto}"
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -35,6 +36,15 @@ case "$install_mode" in
   *)
     printf 'Invalid CHC_INSTALL_MODE: %s\n' "$install_mode" >&2
     printf 'Expected one of: auto, local, remote\n' >&2
+    exit 1
+    ;;
+esac
+
+case "$completion_mode" in
+  auto | none | zsh) ;;
+  *)
+    printf 'Invalid CHC_INSTALL_COMPLETION: %s\n' "$completion_mode" >&2
+    printf 'Expected one of: auto, none, zsh\n' >&2
     exit 1
     ;;
 esac
@@ -111,4 +121,22 @@ npm install -g --ignore-scripts "$install_source"
 
 printf 'Installed: '
 command -v chc
+
+selected_completion="$completion_mode"
+if [ "$selected_completion" = "auto" ]; then
+  login_shell="${SHELL:-}"
+  if [ "${login_shell##*/}" = "zsh" ]; then
+    selected_completion="zsh"
+  else
+    selected_completion="none"
+  fi
+fi
+
+if [ "$selected_completion" = "zsh" ]; then
+  printf '%s\n' '- enabling zsh completion'
+  if ! chc completion enable zsh; then
+    printf '%s\n' 'Warning: installed chc does not support automatic zsh completion setup.' >&2
+  fi
+fi
+
 printf 'Done. Try: chc --help\n'

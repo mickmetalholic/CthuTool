@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +71,9 @@ describe('global bin', () => {
     expect(
       await readFile(join(cliRoot, 'bin', 'chc.mjs'), 'utf8'),
     ).not.toContain('bun');
+    expect((await stat(join(cliRoot, 'bin', 'chc.mjs'))).mode & 0o111).not.toBe(
+      0,
+    );
   });
 
   test('bin shim forwards arguments to the CLI', async () => {
@@ -150,8 +153,34 @@ describe('global bin', () => {
       command: 'status',
       status: {
         version: rootPackage.version,
+        mode: 'local',
         installDir,
         bundlePresent: false,
+      },
+    });
+
+    const detectedStatus = Bun.spawn(
+      ['node', 'bin/chc.mjs', 'status', '--json'],
+      {
+        cwd: cliRoot,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      },
+    );
+    const detectedStatusOut = await new Response(detectedStatus.stdout).text();
+    const detectedStatusErr = await new Response(detectedStatus.stderr).text();
+    const detectedStatusCode = await detectedStatus.exited;
+
+    expect(detectedStatusCode).toBe(0);
+    expect(detectedStatusErr).toBe('');
+    expect(JSON.parse(detectedStatusOut)).toMatchObject({
+      ok: true,
+      command: 'status',
+      status: {
+        mode: 'local',
+        installDir: repoRoot,
+        bundlePresent: true,
       },
     });
   });
@@ -217,22 +246,20 @@ describe('global bin', () => {
       if (args.length === 0) {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(
-          '\n  codex        Manage reproducible Codex configuration.',
+          '\n  codex       Manage reproducible Codex configuration.',
         );
         expect(plain).toContain(
-          '\n  scripts      Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
+          '\n  scripts     Discover and run bundled scripts under apps/cli/src/scripts/<id>/ (script.json + index.ts).',
+        );
+        expect(plain).not.toContain('\n  self-update');
+        expect(plain).toContain(
+          '\n  update      Update the global chc command from the CthuTool Git repository.',
         );
         expect(plain).toContain(
-          '\n  self-update  Update the global chc command from the CthuTool Git repository.',
+          '\n  version     Print the current chc CLI version.',
         );
         expect(plain).toContain(
-          '\n  update       Update the global chc command from the CthuTool Git repository.',
-        );
-        expect(plain).toContain(
-          '\n  version      Print the current chc CLI version.',
-        );
-        expect(plain).toContain(
-          '\n  status       Show chc CLI installation status.',
+          '\n  status      Show chc CLI installation status.',
         );
         expect(plain).not.toContain('\n    codex');
       } else if (args[0] === 'codex') {

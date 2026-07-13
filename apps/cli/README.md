@@ -60,8 +60,35 @@ chc update
 chc update --ref v0.1.0
 ```
 
-`chc self-update` remains available as a backward-compatible alias for
-`chc update`.
+`chc status` automatically detects whether the running command is linked to a
+local checkout or the default remote managed checkout and reports that source
+as `mode: local` or `mode: remote`. Use `--install-dir` only to inspect a
+different checkout explicitly.
+
+## Shell Completion
+
+The installer enables persistent zsh completion automatically when the user's
+login shell is zsh. Skip automatic setup with
+`CHC_INSTALL_COMPLETION=none scripts/install-chc.sh`.
+
+Manage completion explicitly when needed:
+
+```bash
+chc completion enable zsh
+chc completion status zsh
+chc completion disable zsh
+source <(chc completion zsh)
+```
+
+```powershell
+chc completion enable powershell
+chc completion status powershell
+chc completion disable powershell
+chc completion powershell | Out-String | Invoke-Expression
+```
+
+The global or locally linked `chc` command must be available before loading
+either completion adapter.
 
 ## Local Development
 
