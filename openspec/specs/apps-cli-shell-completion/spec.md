@@ -209,3 +209,15 @@ The CLI SHALL provide explicit commands for managing persistent zsh completion s
 - **WHEN** a user runs `chc completion enable fish`
 - **THEN** the CLI exits with a non-zero status
 - **AND** stderr explains that the managed completion shell is unsupported
+
+### Requirement: zsh candidate expansion
+The zsh completion adapter SHALL expand the candidates returned by `chc __complete` and pass each candidate to zsh completion without exposing shell array syntax as a candidate.
+
+#### Scenario: Root candidates are forwarded to compadd
+- **WHEN** the generated zsh completion function receives line-oriented candidates from `chc __complete`
+- **THEN** it passes each returned candidate as a separate argument to `compadd`
+- **AND** it does not pass literal `${candidates[@]}` text as a completion candidate
+
+#### Scenario: Generated parameter expressions remain executable
+- **WHEN** a user runs `chc completion zsh`
+- **THEN** the emitted zsh parameter expressions are not prefixed with escape characters that make them literal text

@@ -50,7 +50,7 @@ const powershellScript = `Register-ArgumentCompleter -Native -CommandName chc -S
 }
 `;
 
-const zshScript = String.raw`#compdef chc
+const zshScript = `#compdef chc
 _chc_completion() {
   local -a candidates
   candidates=("\${(@f)$(chc __complete "\${words[@]:1}")}")
