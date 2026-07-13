@@ -2,10 +2,12 @@ import { type ArgsDef, type CommandDef, renderUsage, runMain } from 'citty';
 import pc from 'picocolors';
 import {
   type AnyCommandDef,
+  filterUsageCommandChoices,
   getCommandHelpAppendixProvider,
   getCommandRegistration,
   getCommandRegistrations,
   normalizeRegisteredArgs,
+  stripAnsi,
 } from './command/command-discovery';
 import { rootCommand } from './command/root.command';
 import { getCliVersion } from './domain/self-update-manager';
@@ -18,27 +20,6 @@ function formatUsageForStdout(
     value.replace(/`([^`]+)`/g, '$1').replace(/[ \t]+$/gm, ''),
     hiddenCommands,
   );
-}
-
-function stripAnsi(value: string): string {
-  const sgrPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
-  return value.replace(sgrPattern, '');
-}
-
-function filterUsageCommandChoices(
-  line: string,
-  hiddenCommands: ReadonlySet<string>,
-): string {
-  const match =
-    /^(\s*USAGE\s+\S+\s+)([A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)(.*)$/.exec(line);
-  if (!match) {
-    return line;
-  }
-  const [, prefix, choices, suffix] = match;
-  const visibleChoices = choices
-    .split('|')
-    .filter((choice) => !hiddenCommands.has(choice));
-  return `${prefix}${visibleChoices.join('|')}${suffix}`;
 }
 
 function normalizeCommandRows(

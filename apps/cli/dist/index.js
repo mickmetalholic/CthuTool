@@ -2331,6 +2331,19 @@ async function runMain(cmd, opts = {}) {
 var import_picocolors7 = __toESM(require_picocolors(), 1);
 
 // src/command/command-discovery.ts
+function stripAnsi3(value) {
+  const sgrPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+  return value.replace(sgrPattern, "");
+}
+function filterUsageCommandChoices(line, hiddenCommands) {
+  const match = /^(\s*USAGE\s+\S+\s+)([A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)(.*)$/.exec(stripAnsi3(line));
+  if (!match) {
+    return line;
+  }
+  const [, prefix, choices, suffix] = match;
+  const visibleChoices = choices.split("|").filter((choice) => !hiddenCommands.has(choice));
+  return `${prefix}${visibleChoices.join("|")}${suffix}`;
+}
 var registrationsByCommand = new WeakMap;
 var positionalCandidatesByCommand = new WeakMap;
 var helpAppendixByCommand = new WeakMap;
@@ -7239,19 +7252,6 @@ rootCommand = registerCommandGroup(defineCommand({
 // src/index.ts
 function formatUsageForStdout(value, hiddenCommands = new Set) {
   return normalizeCommandRows(value.replace(/`([^`]+)`/g, "$1").replace(/[ \t]+$/gm, ""), hiddenCommands);
-}
-function stripAnsi3(value) {
-  const sgrPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
-  return value.replace(sgrPattern, "");
-}
-function filterUsageCommandChoices(line, hiddenCommands) {
-  const match = /^(\s*USAGE\s+\S+\s+)([A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)(.*)$/.exec(line);
-  if (!match) {
-    return line;
-  }
-  const [, prefix, choices, suffix] = match;
-  const visibleChoices = choices.split("|").filter((choice) => !hiddenCommands.has(choice));
-  return `${prefix}${visibleChoices.join("|")}${suffix}`;
 }
 function normalizeCommandRows(value, hiddenCommands) {
   const lines = value.split(`
