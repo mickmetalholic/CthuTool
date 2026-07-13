@@ -2,7 +2,6 @@
 
 ## Purpose
 Define GitHub-based personal installation, lifecycle status, and update behavior for the `chc` CLI.
-
 ## Requirements
 ### Requirement: Public GitHub Installer
 The repository SHALL provide a shell installer that can be executed from the public GitHub raw URL or from a local checkout to install the `chc` CLI globally from committed prebuilt output.
@@ -49,6 +48,15 @@ The repository SHALL provide a shell installer that can be executed from the pub
 - **WHEN** the local Node major version is not 24
 - **THEN** the installer fails before global installation
 
+#### Scenario: Automatic zsh completion setup
+- **WHEN** the installer succeeds and the user's login shell is zsh
+- **AND** completion setup has not been disabled
+- **THEN** the installer enables persistent `chc` completion in the user's zsh profile
+
+#### Scenario: Automatic completion setup opt-out
+- **WHEN** the user sets `CHC_INSTALL_COMPLETION=none`
+- **THEN** the installer does not modify a shell profile
+
 ### Requirement: Managed Source Checkout
 Remote managed install and update flows SHALL use a managed source checkout containing committed CLI build output as the source for the global `chc` installation.
 
@@ -92,7 +100,26 @@ The CLI SHALL provide top-level lifecycle commands for viewing the installed CLI
 
 #### Scenario: Status command
 - **WHEN** a user runs `chc status`
-- **THEN** stdout reports CLI installation state including version, managed checkout directory, repository URL, ref, commit when available, and committed bundle presence
+- **THEN** stdout reports CLI installation state including version, installation mode, actual source checkout directory, repository URL, ref, commit when available, and committed bundle presence
+
+#### Scenario: Local checkout status detection
+- **WHEN** the globally installed CLI resolves to a local checkout outside the default managed source directory
+- **THEN** `chc status` reports `mode: local`
+- **AND** it inspects that checkout for repository, ref, commit, and bundle state
+
+#### Scenario: Remote managed status detection
+- **WHEN** the globally installed CLI resolves to the default managed source directory
+- **THEN** `chc status` reports `mode: remote`
+- **AND** it inspects the managed checkout for repository, ref, commit, and bundle state
+
+#### Scenario: Explicit status directory override
+- **WHEN** a user runs `chc status --install-dir <path>`
+- **THEN** status inspects the requested directory instead of the automatically detected source checkout
+
+#### Scenario: Executable CLI bin shim
+- **WHEN** the root package is installed globally on a Unix-like target
+- **THEN** the committed `apps/cli/bin/chc.mjs` entrypoint has executable permission
+- **AND** the installed `chc` command can invoke it directly
 
 #### Scenario: Default update
 - **WHEN** a user runs `chc update`
@@ -111,12 +138,7 @@ The CLI SHALL provide top-level lifecycle commands for viewing the installed CLI
 #### Scenario: Update failure
 - **WHEN** any Git, committed-bundle verification, or global install step fails during `chc update`
 - **THEN** the command exits non-zero
-- **AND** it reports a `self_update_failed` command error
-
-#### Scenario: Legacy self-update alias
-- **WHEN** a user runs `chc self-update`
-- **THEN** the CLI performs the same update behavior as `chc update`
-- **AND** documentation presents `chc update` as the preferred command
+- **AND** it reports an `update_failed` command error
 
 ### Requirement: Installation Documentation
 The repository documentation SHALL describe public GitHub installation, local checkout installation, prebuilt bundle expectations, lifecycle commands, and update usage.
@@ -125,6 +147,7 @@ The repository documentation SHALL describe public GitHub installation, local ch
 - **WHEN** a user reads the root README
 - **THEN** it shows a `curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash` installation command
 - **AND** it explains that public raw installation uses the managed checkout
+- **AND** it explains automatic zsh completion setup and its opt-out
 
 #### Scenario: Local checkout install documented
 - **WHEN** a developer reads the CLI installation documentation
