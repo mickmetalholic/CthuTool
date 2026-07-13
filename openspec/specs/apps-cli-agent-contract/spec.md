@@ -2,7 +2,6 @@
 
 ## Purpose
 Define the apps/cli shared runtime contract for interactivity, JSON output, quiet output, prompt suppression, and stable command errors.
-
 ## Requirements
 ### Requirement: Shared CLI Context
 The CLI SHALL derive a shared command context containing TTY state, interactivity, JSON output mode, and quiet output mode before command implementations perform prompt or rendering decisions.
@@ -64,9 +63,9 @@ Command boundary failures SHALL use a command error model with a stable code, hu
 - **WHEN** a command receives a requested script or plugin name that cannot be resolved
 - **THEN** the error code is `unknown_selection` and the exit code is non-zero
 
-#### Scenario: Self-update failure error
-- **WHEN** the `self-update` command cannot complete a Git, dependency install, build, or global install step
-- **THEN** the error code is `self_update_failed` and the exit code is non-zero
+#### Scenario: Update failure error
+- **WHEN** the `update` command cannot complete a Git, dependency install, build, or global install step
+- **THEN** the error code is `update_failed` and the exit code is non-zero
 
 #### Scenario: Human error rendering
 - **WHEN** a command fails outside JSON mode
@@ -91,11 +90,11 @@ The CLI SHALL render native help for a top-level command when the user invokes t
 - **THEN** the CLI prints root help and exits successfully
 
 #### Scenario: Command group omitted
-- **WHEN** the user runs a top-level command such as `chc codex`, `chc scripts`, `chc self-update`, or `chc completion` without a subcommand or required argument
+- **WHEN** the user runs a top-level command such as `chc codex`, `chc scripts`, or `chc completion` without a subcommand or required argument
 - **THEN** the CLI prints that command's native help and exits successfully
 
 #### Scenario: Complete command still runs
-- **WHEN** the user runs a complete command such as `chc codex status`, `chc scripts hello-world`, or `chc self-update --json`
+- **WHEN** the user runs a complete command such as `chc codex status`, `chc scripts hello-world`, or `chc update --json`
 - **THEN** the CLI executes that command instead of printing help
 
 ### Requirement: CLI agent correlation metadata

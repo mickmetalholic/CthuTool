@@ -2,7 +2,6 @@
 
 ## Purpose
 Define PowerShell and zsh shell completion behavior for the `chc` CLI.
-
 ## Requirements
 ### Requirement: Completion command group
 The CLI SHALL expose a `completion` command group for shell completion setup scripts.
@@ -48,7 +47,7 @@ Completion SHALL derive command and flag candidates from the shared CLI command 
 
 #### Scenario: Root command candidates
 - **WHEN** a shell adapter requests completion for the root command position
-- **THEN** candidates include `codex`, `scripts`, `self-update`, and `completion`
+- **THEN** candidates include `codex`, `scripts`, `update`, and `completion`
 
 #### Scenario: Codex subcommand candidates
 - **WHEN** a shell adapter requests completion after `chc codex`
@@ -60,7 +59,7 @@ Completion SHALL derive command and flag candidates from the shared CLI command 
 
 #### Scenario: Managed completion shell candidates
 - **WHEN** a shell adapter requests completion after `chc completion enable`
-- **THEN** candidates include `powershell`
+- **THEN** candidates include `powershell` and `zsh`
 
 #### Scenario: Shared flag candidates
 - **WHEN** a shell adapter requests flag completion for a command that accepts the shared CLI contract flags
@@ -166,11 +165,6 @@ The CLI SHALL provide explicit commands for managing persistent PowerShell compl
 - **THEN** the CLI reports whether the managed completion block is installed
 - **AND** stdout includes the profile path checked
 
-#### Scenario: Unsupported managed shell is rejected clearly
-- **WHEN** a user runs `chc completion enable zsh`
-- **THEN** the CLI exits with a non-zero status
-- **AND** stderr explains that managed persistent completion currently supports PowerShell only
-
 ### Requirement: Completion profile management candidates
 The internal completion protocol SHALL expose candidates for completion profile lifecycle commands.
 
@@ -180,4 +174,38 @@ The internal completion protocol SHALL expose candidates for completion profile 
 
 #### Scenario: Managed shell candidates are suggested
 - **WHEN** a shell adapter requests completion after `chc completion enable `
-- **THEN** candidates include `powershell`
+- **THEN** candidates include `powershell` and `zsh`
+
+### Requirement: zsh profile lifecycle commands
+The CLI SHALL provide explicit commands for managing persistent zsh completion setup.
+
+#### Scenario: Persistent zsh completion is enabled
+- **WHEN** a user runs `chc completion enable zsh`
+- **THEN** the CLI writes a managed completion block to the user's zsh profile
+- **AND** the managed block initializes the zsh completion system when needed
+- **AND** the managed block loads completion with `source <(chc completion zsh)`
+- **AND** stdout reports that completion was enabled and includes the profile path
+
+#### Scenario: zsh enable is idempotent
+- **WHEN** a user runs `chc completion enable zsh` and the managed completion block is already present
+- **THEN** the CLI refreshes the block without duplicating it
+
+#### Scenario: Persistent zsh completion is disabled
+- **WHEN** a user runs `chc completion disable zsh`
+- **THEN** the CLI removes the managed completion block from the user's zsh profile
+- **AND** it preserves user-authored profile content outside the managed block
+
+#### Scenario: zsh completion status is reported
+- **WHEN** a user runs `chc completion status zsh`
+- **THEN** the CLI reports whether the managed completion block is installed
+- **AND** stdout includes the profile path checked
+
+#### Scenario: Documented manual zsh setup is migrated
+- **WHEN** the zsh profile contains the standalone documented line `source <(chc completion zsh)`
+- **AND** the user enables managed zsh completion
+- **THEN** the CLI replaces the standalone line with one managed completion block
+
+#### Scenario: Unsupported managed shell is rejected clearly
+- **WHEN** a user runs `chc completion enable fish`
+- **THEN** the CLI exits with a non-zero status
+- **AND** stderr explains that the managed completion shell is unsupported

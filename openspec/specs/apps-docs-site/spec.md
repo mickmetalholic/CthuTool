@@ -2,7 +2,6 @@
 
 ## Purpose
 CthuTool provides an Astro Starlight documentation site under `apps/docs` as the primary user and operator documentation surface for homelab deployment, client installation, module usage, operations, architecture, reference material, and OpenSpec capability discovery.
-
 ## Requirements
 ### Requirement: Docs workspace application
 The repository SHALL include a first-class documentation site package under `apps/docs`.
@@ -89,12 +88,16 @@ The docs site SHALL document how users install, update, and remove CthuTool clie
 
 #### Scenario: Reader installs CLI tooling
 - **WHEN** a reader opens CLI installation documentation
-- **THEN** the documentation explains target-machine prerequisites, public raw installer usage, committed bundle runtime behavior, remote install mode, local checkout install mode, and supported override environment variables
+- **THEN** the documentation explains target-machine prerequisites, public raw installer usage, committed bundle runtime behavior, remote install mode, local checkout install mode, automatic zsh completion behavior, and supported override environment variables
+
+#### Scenario: Reader inspects installed CLI tooling
+- **WHEN** a reader needs to inspect CLI installation state
+- **THEN** the documentation explains that `chc status` reports the detected local or remote source checkout
+- **AND** it documents the explicit install-directory override
 
 #### Scenario: Reader manages installed CLI tooling
 - **WHEN** a reader needs to update CLI tooling
-- **THEN** the documentation presents `chc update` as the primary update command
-- **AND** it identifies `chc self-update` as a backwards-compatible alias
+- **THEN** the documentation presents `chc update` as the update command
 
 ### Requirement: Module usage documentation
 The docs site SHALL provide module-oriented usage documentation for major CthuTool product areas.
