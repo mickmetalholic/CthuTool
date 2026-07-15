@@ -1,0 +1,6 @@
+interface:
+  display_name: "Anki · Create English Expression Card"
+  short_description: "Create English expression cards in Anki."
+  default_prompt: "Use $anki-create-english-expression-card to create English Expression Anki note(s) from this sentence or excerpt and target expression marker(s)."
+policy:
+  allow_implicit_invocation: false

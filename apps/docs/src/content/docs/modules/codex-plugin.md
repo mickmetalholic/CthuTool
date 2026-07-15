@@ -9,9 +9,8 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 
 - language coach hook
 - Anki MCP server
-- Japanese sentence card maker skill
-- Japanese vocabulary card maker skill
-- English expression card maker skill
+- Anki card-creation skills
+- Notion channel-library skill
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -52,7 +51,7 @@ Available tools:
 
 ## Japanese Sentence Cards
 
-Use `$anki-japanese-sentence-card-maker` for Japanese grammar sentence cards. The skill defaults to deck `0.Japanese::Japanese Sentences` and model `Japanese Sentence`.
+Use `$anki-create-japanese-sentence-card` for Japanese grammar sentence cards. The skill defaults to deck `0.Japanese::Japanese Sentences` and model `Japanese Sentence`.
 
 It accepts either a marked grammar point:
 
@@ -71,7 +70,7 @@ When `tags:` is provided, or when a standalone line looks like a tag hierarchy, 
 
 ## Japanese Vocabulary Cards
 
-Use `$anki-japanese-vocabulary-card-maker` for Japanese vocabulary cards. The skill defaults to deck `0.Japanese::Japanese Vocabulary` and model `Japanese Vocabulary`.
+Use `$anki-create-japanese-vocabulary-card` for Japanese vocabulary cards. The skill defaults to deck `0.Japanese::Japanese Vocabulary` and model `Japanese Vocabulary`.
 
 It accepts a vocabulary target marked with double brackets:
 
@@ -89,7 +88,7 @@ The skill removes markup, preserves kana annotations, stores dictionary-form voc
 
 ## English Expression Cards
 
-Use `$anki-english-expression-card-maker` for English expression cards. The skill defaults to deck `0.English` and model `English Expression`.
+Use `$anki-create-english-expression-card` for English expression cards. The skill defaults to deck `0.English` and model `English Expression`.
 
 It accepts a marked expression:
 
@@ -105,6 +104,10 @@ get past the maze of
 ```
 
 The `Sentence` field uses Anki cloze syntax with a short synonym or paraphrase hint. The `Explanation` field uses the existing English style with `Definition`, `Synonyms`, and `Other Examples` sections.
+
+## Notion Channel Library
+
+Use `$notion-add-channel` to add a YouTube or Bilibili channel to the personal Notion Channel Library. The explicit-only skill checks for duplicates, resolves an existing category, selects the platform-specific template, verifies the created entry, and returns its Notion URL.
 
 ## Authoritative Sources
 

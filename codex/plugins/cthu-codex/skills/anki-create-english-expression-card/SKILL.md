@@ -1,9 +1,9 @@
 ---
-name: anki-english-expression-card-maker
-description: Create English Expression Anki notes from English sentences, reading excerpts, and one or more target expressions through the CthuCodex Anki MCP tools. Use when the user explicitly asks to make, add, generate, or create English expression cards/notes for Anki, especially for the `English Expression` note type with fields `Sentence`, `Expression`, and `Explanation`, cloze deletion, structured English explanations, examples, optional tags, and batch creation from `[[...]]` markers.
+name: anki-create-english-expression-card
+description: Create one or more `English Expression` Anki notes from English sentences, excerpts, and target-expression markers through the CthuCodex Anki MCP tools. Use only when the user explicitly invokes `$anki-create-english-expression-card`.
 ---
 
-# Anki English Expression Card Maker
+# Anki · Create English Expression Card
 
 Use this skill to create one or more `English Expression` Anki notes from an English sentence or excerpt and target expression markers.
 

@@ -1,6 +1,0 @@
-interface:
-  display_name: "Anki English Expression Card Maker"
-  short_description: "Create English expression notes in Anki."
-  default_prompt: "Use $anki-english-expression-card-maker to create English Expression Anki note(s) from this sentence or excerpt and target expression marker(s)."
-policy:
-  allow_implicit_invocation: false

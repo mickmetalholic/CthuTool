@@ -7,7 +7,7 @@
 Repository-managed Codex plugin for CthuTool workflows and reusable assistant
 utilities.
 
-User-facing plugin, Anki MCP, and card-maker skill documentation lives in the
+User-facing plugin, Anki MCP, and manually invoked skill documentation lives in the
 docs site:
 
 - `apps/docs/src/content/docs/modules/codex-plugin.md`
