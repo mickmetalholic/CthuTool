@@ -1,9 +1,9 @@
 ---
-name: anki-japanese-vocabulary-card-maker
-description: Create Japanese Vocabulary Anki notes from Japanese example sentences and marked vocabulary targets through the CthuCodex Anki MCP tools. Use when the user explicitly asks to make, add, generate, or create a Japanese vocabulary card/note for Anki, especially for the `Japanese Vocabulary` note type with fields `単語`, `読み方`, `穴埋め例文`, `例文`, and `意味`, dictionary-form normalization, English meaning cues, kana annotations, and optional tags.
+name: anki-create-japanese-vocabulary-card
+description: Create a `Japanese Vocabulary` Anki note from a Japanese example sentence and marked vocabulary target through the CthuCodex Anki MCP tools. Use only when the user explicitly invokes `$anki-create-japanese-vocabulary-card`.
 ---
 
-# Anki Japanese Vocabulary Card Maker
+# Anki · Create Japanese Vocabulary Card
 
 Use this skill to create one `Japanese Vocabulary` Anki note from a Japanese example sentence and vocabulary target.
 

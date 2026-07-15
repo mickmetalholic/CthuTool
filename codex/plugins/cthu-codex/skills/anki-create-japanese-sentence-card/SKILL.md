@@ -1,9 +1,9 @@
 ---
-name: anki-japanese-sentence-card-maker
-description: Create Japanese Sentence Anki notes from Japanese example sentences and grammar points through the CthuCodex Anki MCP tools. Use when the user asks to make, add, generate, or create a Japanese grammar sentence card/note for Anki, especially for the `Japanese Sentence` note type with fields `文`, `ヒント`, `訳`, and `メモ`, cloze deletion, English translation, English grammar explanations, and optional tags.
+name: anki-create-japanese-sentence-card
+description: Create a `Japanese Sentence` Anki note from a Japanese example sentence and grammar point through the CthuCodex Anki MCP tools. Use only when the user explicitly invokes `$anki-create-japanese-sentence-card`.
 ---
 
-# Anki Japanese Sentence Card Maker
+# Anki · Create Japanese Sentence Card
 
 Use this skill to create one `Japanese Sentence` Anki note from a Japanese example sentence and grammar point.
 

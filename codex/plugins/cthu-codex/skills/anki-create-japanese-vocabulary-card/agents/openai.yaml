@@ -1,0 +1,6 @@
+interface:
+  display_name: "Anki · Create Japanese Vocabulary Card"
+  short_description: "Create Japanese vocabulary cards in Anki."
+  default_prompt: "Use $anki-create-japanese-vocabulary-card to create a Japanese Vocabulary Anki note from this example sentence and vocabulary target."
+policy:
+  allow_implicit_invocation: false

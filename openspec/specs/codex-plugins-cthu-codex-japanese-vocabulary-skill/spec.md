@@ -9,8 +9,13 @@ CthuCodex SHALL provide a plugin-local explicit-only skill for creating `Japanes
 
 #### Scenario: Skill lives inside CthuCodex
 - **WHEN** the Japanese vocabulary card skill is implemented
-- **THEN** its skill instructions live under `codex/plugins/cthu-codex/skills/anki-japanese-vocabulary-card-maker/`
+- **THEN** its skill instructions live under `codex/plugins/cthu-codex/skills/anki-create-japanese-vocabulary-card/`
 - **AND** the skill is packaged with CthuCodex rather than as a standalone top-level repository skill
+
+#### Scenario: Skill uses the grouped invocation name
+- **WHEN** the Japanese vocabulary card skill is presented or invoked
+- **THEN** its skill name is `anki-create-japanese-vocabulary-card`
+- **AND** its display name starts with `Anki ·`
 
 #### Scenario: Skill is explicit-only
 - **WHEN** the Anki Japanese vocabulary card skill is installed
