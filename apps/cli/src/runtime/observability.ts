@@ -197,7 +197,9 @@ function sanitizeValue(key: string, value: unknown, depth: number): unknown {
     return REDACTED;
   }
   if (typeof value === 'string') {
-    return isPathKey(key) ? summarizePath(value) : truncate(value);
+    return isPathKey(key)
+      ? summarizePath(value)
+      : truncate(redactUrlUserinfo(value));
   }
   if (
     typeof value === 'number' ||
@@ -262,11 +264,15 @@ function truncate(value: string): string {
 
 function sanitizeDiagnosticMessage(value: string): string {
   return truncate(
-    value.replace(
+    redactUrlUserinfo(value).replace(
       /(token|secret|password|passwd|cookie|authorization|credential)=([^&\s]+)/gi,
       '$1=[redacted]',
     ),
   );
+}
+
+function redactUrlUserinfo(value: string): string {
+  return value.replace(/:\/\/[^/\s]+@/g, '://***@');
 }
 
 function dropUndefined(

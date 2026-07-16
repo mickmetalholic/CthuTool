@@ -128,6 +128,21 @@ describe('self-update output', () => {
     }
   });
 
+  test('reports when an already-current explicit source needs a global relink', () => {
+    const harness = createHarness();
+    const relinkPlan: SelfUpdatePlan = {
+      ...plan,
+      status: 'up_to_date',
+      relinkRequired: true,
+      changes: undefined,
+    };
+
+    harness.renderer.renderCheckResult(relinkPlan);
+
+    expect(harness.stdout()).toContain('Global relink required');
+    expect(harness.stdout()).toContain('run chc update');
+  });
+
   test('writes bounded verbose command details only to stderr', () => {
     const harness = createHarness({
       context: { json: true },

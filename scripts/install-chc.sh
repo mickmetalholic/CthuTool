@@ -79,22 +79,52 @@ if [ "$selected_mode" = "remote" ]; then
   printf 'ref:  %s\n' "$ref"
   printf 'dir:  %s\n' "$install_dir"
 
-  if [ -d "$install_dir/.git" ]; then
+  if git -C "$install_dir" rev-parse --git-dir >/dev/null 2>&1; then
+    existing_checkout=true
+    if [ -n "$(git -C "$install_dir" status --porcelain --untracked-files=normal)" ]; then
+      printf 'Update blocked: the managed checkout has uncommitted or untracked changes.\n' >&2
+      printf 'Preserve those changes, then retry.\n' >&2
+      exit 1
+    fi
     printf '%s\n' '- fetching repository'
-    git -C "$install_dir" remote set-url origin "$repo_url"
-    git -C "$install_dir" fetch --tags origin
+    git -C "$install_dir" fetch --no-tags "$repo_url" "$ref"
   else
+    existing_checkout=false
     printf '%s\n' '- cloning repository'
     mkdir -p "$(dirname "$install_dir")"
     git clone "$repo_url" "$install_dir"
+    git -C "$install_dir" fetch --no-tags "$repo_url" "$ref"
+  fi
+
+  target_commit="$(git -C "$install_dir" rev-parse --verify 'FETCH_HEAD^{commit}')"
+  if ! git -C "$install_dir" cat-file -e "$target_commit:apps/cli/dist/index.js"; then
+    printf 'Missing committed CLI bundle in target %s: apps/cli/dist/index.js\n' "$target_commit" >&2
+    exit 1
+  fi
+
+  if git ls-remote --exit-code --heads "$repo_url" "$ref" >/dev/null 2>&1; then
+    target_kind="branch"
+    if [ "$existing_checkout" = true ] && ! git -C "$install_dir" merge-base --is-ancestor HEAD "$target_commit"; then
+      printf 'Update blocked: the managed checkout cannot fast-forward to %s.\n' "$ref" >&2
+      printf 'Reconcile the local branch manually, then retry.\n' >&2
+      exit 1
+    fi
+  else
+    target_kind="detached"
+  fi
+
+  if [ "$existing_checkout" = true ]; then
+    git -C "$install_dir" remote set-url origin "$repo_url"
+    git -C "$install_dir" fetch --tags origin
   fi
 
   printf '%s\n' '- checking out ref'
-  git -C "$install_dir" checkout "$ref"
-
-  if git -C "$install_dir" rev-parse --verify "origin/$ref" >/dev/null 2>&1; then
+  if [ "$target_kind" = "branch" ]; then
+    git -C "$install_dir" checkout "$ref"
     printf '%s\n' '- fast-forwarding branch'
-    git -C "$install_dir" pull --ff-only origin "$ref"
+    git -C "$install_dir" merge --ff-only "$target_commit"
+  else
+    git -C "$install_dir" checkout --detach "$target_commit"
   fi
 
   install_source="$install_dir"

@@ -64,7 +64,11 @@ export type SelfUpdateChangeSummary = {
 };
 
 export type SelfUpdateBlock = {
-  readonly kind: 'dirty_checkout' | 'diverged_branch';
+  readonly kind:
+    | 'local_linked_source'
+    | 'dirty_checkout'
+    | 'diverged_branch'
+    | 'missing_target_bundle';
   readonly message: string;
   readonly hint: string;
 };
@@ -78,6 +82,8 @@ export type SelfUpdatePlan = {
   readonly target?: SelfUpdateIdentity;
   readonly changes?: SelfUpdateChangeSummary;
   readonly block?: SelfUpdateBlock;
+  readonly targetKind?: 'branch' | 'detached';
+  readonly relinkRequired?: boolean;
   readonly phases: readonly SelfUpdatePhase[];
 };
 
@@ -149,7 +155,15 @@ export type SelfUpdateDeps = {
   ) => Promise<SelfUpdateCommandResult>;
   readonly env: Record<string, string | undefined>;
   readonly home: () => string;
+  readonly runtimeRoot: () => string;
   readonly onEvent?: (event: SelfUpdateEvent) => void;
+};
+
+export type ResolvedSelfUpdateSource = Required<SelfUpdateOptions> & {
+  readonly runtimeRoot: string;
+  readonly managedRoot: string;
+  readonly mode: 'local' | 'remote';
+  readonly explicitInstallDir: boolean;
 };
 
 export class SelfUpdateError extends Error {
@@ -166,14 +180,21 @@ export class SelfUpdateError extends Error {
     readonly hint: string;
     readonly result?: SelfUpdateCommandResult;
   }) {
-    const cause = options.cause ? `\nCause: ${options.cause}` : '';
-    super(`${options.summary}${cause}\nNext: ${options.hint}`);
+    const summary = redactSelfUpdateText(options.summary);
+    const causeText = options.cause
+      ? redactSelfUpdateText(options.cause)
+      : undefined;
+    const hint = redactSelfUpdateText(options.hint);
+    const cause = causeText ? `\nCause: ${causeText}` : '';
+    super(`${summary}${cause}\nNext: ${hint}`);
     this.name = 'SelfUpdateError';
     this.phase = options.phase;
-    this.summary = options.summary;
-    this.causeText = options.cause;
-    this.hint = options.hint;
-    this.result = options.result;
+    this.summary = summary;
+    this.causeText = causeText;
+    this.hint = hint;
+    this.result = options.result
+      ? redactCommandResult(options.result)
+      : undefined;
   }
 }
 
@@ -192,6 +213,7 @@ export function createSelfUpdateDeps(
     run: runCommand,
     env: process.env,
     home: homedir,
+    runtimeRoot: findRepoRootFromModule,
     onEvent,
   };
 }
@@ -200,23 +222,80 @@ export function getCliVersion(): string {
   return readPackageVersion(findRepoRootFromModule());
 }
 
-export function resolveSelfUpdateOptions(
+export async function resolveSelfUpdateSource(
   options: SelfUpdateOptions,
   deps: SelfUpdateDeps,
-): Required<SelfUpdateOptions> {
-  const home = deps.home();
+): Promise<ResolvedSelfUpdateSource> {
+  const runtimeRoot = deps.runtimeRoot();
+  const managedRoot = getDefaultSelfUpdateInstallDir(deps.home());
+  const envInstallDir = nonEmpty(deps.env.CHC_INSTALL_DIR);
+  const explicitInstallDir =
+    options.installDir !== undefined || envInstallDir !== undefined;
+  const installDir = options.installDir ?? envInstallDir ?? runtimeRoot;
+  const mode =
+    resolve(runtimeRoot) === resolve(managedRoot) ? 'remote' : 'local';
+  const gitRoot = join(installDir, '.git');
+  const canInspectCheckout = deps.exists(gitRoot);
+  const repoOverride =
+    options.repo ??
+    nonEmpty(deps.env.CHC_REPO_URL) ??
+    nonEmpty(deps.env.CHC_REPO);
+  const refOverride = options.ref ?? nonEmpty(deps.env.CHC_REF);
+  const installedRepo =
+    canInspectCheckout && repoOverride === undefined
+      ? await runOptional(deps, 'git', ['remote', 'get-url', 'origin'], {
+          cwd: installDir,
+        })
+      : undefined;
+  const installedRef =
+    canInspectCheckout && refOverride === undefined
+      ? await readInstalledRef(deps, installDir)
+      : undefined;
+
   return {
-    repo:
-      options.repo ??
-      deps.env.CHC_REPO_URL ??
-      deps.env.CHC_REPO ??
-      defaultSelfUpdateRepo,
-    ref: options.ref ?? deps.env.CHC_REF ?? defaultSelfUpdateRef,
-    installDir:
-      options.installDir ??
-      deps.env.CHC_INSTALL_DIR ??
-      getDefaultSelfUpdateInstallDir(home),
+    repo: repoOverride ?? installedRepo ?? defaultSelfUpdateRepo,
+    ref: refOverride ?? installedRef ?? defaultSelfUpdateRef,
+    installDir,
+    runtimeRoot,
+    managedRoot,
+    mode,
+    explicitInstallDir,
   };
+}
+
+async function readInstalledRef(
+  deps: SelfUpdateDeps,
+  installDir: string,
+): Promise<string | undefined> {
+  const branch = await runOptional(
+    deps,
+    'git',
+    ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+    { cwd: installDir },
+  );
+  if (branch) return branch;
+
+  const tags = await runOptional(
+    deps,
+    'git',
+    ['tag', '--points-at', 'HEAD', '--sort=refname'],
+    { cwd: installDir },
+  );
+  const exactTag = tags
+    ?.split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right))[0];
+  if (exactTag) return exactTag;
+
+  return runOptional(deps, 'git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
+    cwd: installDir,
+  });
+}
+
+function nonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function emit(deps: SelfUpdateDeps, event: SelfUpdateEvent): void {
@@ -272,7 +351,11 @@ function toPhaseError(error: unknown, phase: SelfUpdatePhase): SelfUpdateError {
   return new SelfUpdateError({
     phase,
     summary: `Update failed during ${formatPhase(phase)}.`,
-    cause: boundedText(error instanceof Error ? error.message : String(error)),
+    cause: boundedText(
+      redactSelfUpdateText(
+        error instanceof Error ? error.message : String(error),
+      ),
+    ),
     hint: phaseHint(phase),
   });
 }
@@ -319,8 +402,8 @@ async function execute(
     args: redactArgs(args),
     cwd: options.cwd,
     code: result.code,
-    stdout: boundedText(result.stdout),
-    stderr: boundedText(result.stderr),
+    stdout: boundedText(redactSelfUpdateText(result.stdout)),
+    stderr: boundedText(redactSelfUpdateText(result.stderr)),
   });
   if (result.code !== 0 && options.allowFailure !== true) {
     throw commandFailure(phase, result);
@@ -391,13 +474,28 @@ export async function planSelfUpdate(
   options: SelfUpdateOptions = {},
   deps = createSelfUpdateDeps(),
 ): Promise<SelfUpdatePlan> {
-  const resolved = resolveSelfUpdateOptions(options, deps);
+  const resolved = await resolveSelfUpdateSource(options, deps);
   const publicResolved = {
-    ...resolved,
-    repo: redactValue(resolved.repo),
+    repo: redactSelfUpdateText(resolved.repo),
+    ref: resolved.ref,
+    installDir: resolved.installDir,
   };
   const phases: SelfUpdatePhase[] = [];
   const gitRoot = join(resolved.installDir, '.git');
+
+  if (resolved.mode === 'local' && !resolved.explicitInstallDir) {
+    phases.push('preflight');
+    return finishPlan(deps, {
+      status: 'blocked',
+      ...publicResolved,
+      block: {
+        kind: 'local_linked_source',
+        message: `The running chc command is linked to the local checkout at ${resolved.runtimeRoot}.`,
+        hint: 'Update that checkout and rebuild apps/cli/dist/index.js, or run CHC_INSTALL_MODE=remote scripts/install-chc.sh to switch back to managed mode.',
+      },
+      phases,
+    });
+  }
 
   const initial = await runPhase(deps, 'preflight', async () => {
     if (!deps.exists(gitRoot)) {
@@ -466,12 +564,37 @@ export async function planSelfUpdate(
   });
   phases.push('check_remote');
 
+  const targetBundle = await execute(
+    deps,
+    'check_remote',
+    'git',
+    ['cat-file', '-e', `${remote.target.commit}:${committedCliBundlePath}`],
+    { cwd: resolved.installDir, allowFailure: true },
+  );
+  if (targetBundle.code !== 0) {
+    return finishPlan(deps, {
+      status: 'blocked',
+      ...publicResolved,
+      before: initial,
+      target: remote.target,
+      block: {
+        kind: 'missing_target_bundle',
+        message: `The selected target does not contain ${committedCliBundlePath}.`,
+        hint: `Select a ref containing ${committedCliBundlePath}.`,
+      },
+      phases,
+    });
+  }
+
   if (initial.commit === remote.target.commit) {
     return finishPlan(deps, {
       status: 'up_to_date',
       ...publicResolved,
       before: initial,
       target: remote.target,
+      targetKind: remote.isBranch ? 'branch' : 'detached',
+      relinkRequired:
+        resolve(resolved.installDir) !== resolve(resolved.runtimeRoot),
       phases,
     });
   }
@@ -490,6 +613,7 @@ export async function planSelfUpdate(
         ...publicResolved,
         before: initial,
         target: remote.target,
+        targetKind: 'branch',
         block: {
           kind: 'diverged_branch',
           message:
@@ -515,6 +639,7 @@ export async function planSelfUpdate(
     ...publicResolved,
     before: initial,
     target: remote.target,
+    targetKind: remote.isBranch ? 'branch' : 'detached',
     changes,
     phases,
   });
@@ -587,10 +712,31 @@ export async function runSelfUpdate(
   options: SelfUpdateOptions = {},
   deps = createSelfUpdateDeps(),
 ): Promise<SelfUpdateResult> {
-  const resolved = resolveSelfUpdateOptions(options, deps);
+  const resolved = await resolveSelfUpdateSource(options, deps);
   const plan = await planSelfUpdate(options, deps);
   assertSelfUpdatePlanReady(plan);
   if (plan.status === 'up_to_date') {
+    if (plan.relinkRequired) {
+      await runPhase(deps, 'install_global', async () => {
+        await execute(deps, 'install_global', 'npm', [
+          'install',
+          '-g',
+          '--ignore-scripts',
+          plan.installDir,
+        ]);
+      });
+      return {
+        status: 'installed',
+        repo: plan.repo,
+        ref: plan.ref,
+        installDir: plan.installDir,
+        before: plan.before,
+        target: plan.target,
+        after: plan.before,
+        phases: [...plan.phases, 'install_global'],
+        steps: ['install-global'],
+      };
+    }
     return {
       status: 'up_to_date',
       repo: plan.repo,
@@ -656,6 +802,33 @@ export async function runSelfUpdate(
   }
 
   await runPhase(deps, 'checkout', async () => {
+    if (!isInstall && plan.target) {
+      if (plan.targetKind === 'branch') {
+        await execute(deps, 'checkout', 'git', ['checkout', plan.ref], {
+          cwd: plan.installDir,
+        });
+        steps.push('checkout');
+        await execute(
+          deps,
+          'checkout',
+          'git',
+          ['merge', '--ff-only', plan.target.commit],
+          { cwd: plan.installDir },
+        );
+        steps.push('pull');
+      } else {
+        await execute(
+          deps,
+          'checkout',
+          'git',
+          ['checkout', '--detach', plan.target.commit],
+          { cwd: plan.installDir },
+        );
+        steps.push('checkout');
+      }
+      return;
+    }
+
     await execute(deps, 'checkout', 'git', ['checkout', plan.ref], {
       cwd: plan.installDir,
     });
@@ -716,9 +889,7 @@ export async function getCliInstallationStatus(
   options: SelfUpdateOptions = {},
   deps = createSelfUpdateDeps(),
 ): Promise<CliInstallationStatus> {
-  const installDir =
-    options.installDir ?? deps.env.CHC_INSTALL_DIR ?? findRepoRootFromModule();
-  const resolved = resolveSelfUpdateOptions({ ...options, installDir }, deps);
+  const resolved = await resolveSelfUpdateSource(options, deps);
   const bundlePath = join(resolved.installDir, committedCliBundlePath);
   const gitRoot = join(resolved.installDir, '.git');
   const repo = deps.exists(gitRoot)
@@ -727,9 +898,7 @@ export async function getCliInstallationStatus(
       })) ?? resolved.repo)
     : resolved.repo;
   const ref = deps.exists(gitRoot)
-    ? ((await runOptional(deps, 'git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd: resolved.installDir,
-      })) ?? resolved.ref)
+    ? ((await readInstalledRef(deps, resolved.installDir)) ?? resolved.ref)
     : resolved.ref;
   const commit = deps.exists(gitRoot)
     ? await runOptional(deps, 'git', ['rev-parse', '--short', 'HEAD'], {
@@ -740,8 +909,7 @@ export async function getCliInstallationStatus(
   return {
     version: getCliVersion(),
     mode:
-      resolve(resolved.installDir) ===
-      resolve(getDefaultSelfUpdateInstallDir(deps.home()))
+      resolve(resolved.installDir) === resolve(resolved.managedRoot)
         ? 'remote'
         : 'local',
     installDir: resolved.installDir,
@@ -805,15 +973,28 @@ function boundedText(value: string): string | undefined {
 function boundedCommandOutput(
   result: SelfUpdateCommandResult,
 ): string | undefined {
-  return boundedText(`${result.stderr}\n${result.stdout}`);
+  return boundedText(
+    redactSelfUpdateText(`${result.stderr}\n${result.stdout}`),
+  );
 }
 
 function redactArgs(args: readonly string[]): readonly string[] {
-  return args.map(redactValue);
+  return args.map(redactSelfUpdateText);
 }
 
-function redactValue(value: string): string {
-  return value.replace(/:\/\/[^/@\s]+@/g, '://***@');
+export function redactSelfUpdateText(value: string): string {
+  return value.replace(/:\/\/[^/\s]+@/g, '://***@');
+}
+
+function redactCommandResult(
+  result: SelfUpdateCommandResult,
+): SelfUpdateCommandResult {
+  return {
+    ...result,
+    args: redactArgs(result.args),
+    stdout: redactSelfUpdateText(result.stdout),
+    stderr: redactSelfUpdateText(result.stderr),
+  };
 }
 
 function runCommand(

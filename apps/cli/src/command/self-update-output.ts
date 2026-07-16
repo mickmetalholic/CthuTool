@@ -149,7 +149,11 @@ export function createSelfUpdateRenderer(
     },
     renderCheckResult(plan) {
       if (!human) return;
-      if (plan.status === 'up_to_date' && plan.target) {
+      if (plan.status === 'up_to_date' && plan.relinkRequired && plan.target) {
+        deps.output.stdout.write(
+          `${colors.yellow('Global relink required')} · run chc update · ${identity(plan.target)}\n`,
+        );
+      } else if (plan.status === 'up_to_date' && plan.target) {
         deps.output.stdout.write(
           `${colors.green('✓')} chc is already up to date · ${identity(plan.target)}\n`,
         );

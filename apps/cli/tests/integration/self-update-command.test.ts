@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const repoRoot = join(cliRoot, '../..');
 const scriptExecutable = Bun.which('script');
 
 async function runProcess(command: string, args: string[], cwd: string) {
@@ -146,6 +147,67 @@ function updateArgs(fixture: {
 }
 
 describe('self-update command', () => {
+  test('blocks default local-linked update and check without touching managed state', async () => {
+    const fixture = await createFixture();
+    const env = {
+      ...fixture.env,
+      CHC_INSTALL_DIR: undefined,
+      CHC_REPO_URL: undefined,
+      CHC_REPO: undefined,
+      CHC_REF: undefined,
+    };
+    try {
+      for (const args of [
+        ['update', '--json'],
+        ['update', '--check', '--json'],
+      ]) {
+        const result = await runCli(args, env);
+        expect(result.code).not.toBe(0);
+        expect(JSON.parse(result.out)).toMatchObject({
+          ok: false,
+          error: {
+            code: 'update_failed',
+            phase: 'preflight',
+            message: expect.stringContaining(repoRoot),
+            hint: expect.stringContaining('CHC_INSTALL_MODE=remote'),
+          },
+        });
+      }
+      expect(await fixture.npmInvocations()).toEqual([]);
+      expect(await Bun.file(join(fixture.installDir, '.git')).exists()).toBe(
+        false,
+      );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('accepts environment source overrides as an explicit update target', async () => {
+    const fixture = await createFixture();
+    try {
+      await fixture.clone();
+      await fixture.advanceSource('Environment-selected update');
+
+      const result = await runCli(['update', '--json'], {
+        ...fixture.env,
+        CHC_INSTALL_DIR: fixture.installDir,
+        CHC_REPO_URL: fixture.source,
+        CHC_REF: 'main',
+      });
+
+      expect(result.code).toBe(0);
+      expect(JSON.parse(result.out)).toMatchObject({
+        result: {
+          status: 'updated',
+          installDir: fixture.installDir,
+        },
+      });
+      expect(await fixture.npmInvocations()).toHaveLength(1);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('checks a missing installation without cloning or invoking npm', async () => {
     const fixture = await createFixture();
     try {
@@ -202,7 +264,7 @@ describe('self-update command', () => {
     }
   });
 
-  test('applies an available update and skips a subsequent no-op reinstall', async () => {
+  test('applies an available update and relinks an explicitly selected current checkout', async () => {
     const fixture = await createFixture();
     try {
       await fixture.clone();
@@ -232,9 +294,9 @@ describe('self-update command', () => {
       );
       expect(current.code).toBe(0);
       expect(JSON.parse(current.out)).toMatchObject({
-        result: { status: 'up_to_date', steps: [] },
+        result: { status: 'installed', steps: ['install-global'] },
       });
-      expect(await fixture.npmInvocations()).toHaveLength(1);
+      expect(await fixture.npmInvocations()).toHaveLength(2);
     } finally {
       await fixture.cleanup();
     }
@@ -329,7 +391,7 @@ describe('self-update command', () => {
         fixture.env,
       );
       expect(human.code).toBe(0);
-      expect(human.out).toContain('chc is already up to date');
+      expect(human.out).toContain('Global relink required');
       expect(human.out).not.toContain('\u001b[');
 
       const quiet = await runCli(
@@ -383,7 +445,7 @@ describe('self-update command', () => {
         expect(await proc.exited).toBe(0);
         expect(err).toBe('');
         expect(out).toContain('Checking local update state complete');
-        expect(out).toContain('chc is already up to date');
+        expect(out).toContain('Global relink required');
         expect(out).toContain('\u001b[?25l');
       } finally {
         await fixture.cleanup();

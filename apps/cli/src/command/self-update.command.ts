@@ -6,6 +6,7 @@ import {
   getCliInstallationStatus,
   getCliVersion,
   planSelfUpdate,
+  redactSelfUpdateText,
   runSelfUpdate,
   SelfUpdateError,
 } from '../domain/self-update-manager';
@@ -146,7 +147,7 @@ function createUpdateCommand() {
               details: {
                 installDir,
                 ref,
-                repo,
+                repo: repo ? redactSelfUpdateText(repo) : undefined,
                 phase:
                   error instanceof SelfUpdateError ? error.phase : undefined,
               },
