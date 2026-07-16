@@ -5,6 +5,7 @@ import {
   defaultSelfUpdateRepo,
   getCliInstallationStatus,
   planSelfUpdate,
+  resolveSelfUpdateSource,
   runSelfUpdate,
   type SelfUpdateCommandResult,
   type SelfUpdateDeps,
@@ -16,6 +17,7 @@ const currentCommit = '1111111111111111111111111111111111111111';
 const targetCommit = '2222222222222222222222222222222222222222';
 
 type FakeOptions = {
+  readonly installDir?: string;
   readonly existingCheckout?: boolean;
   readonly currentCommit?: string;
   readonly targetCommit?: string;
@@ -27,6 +29,14 @@ type FakeOptions = {
   readonly failCommand?: string;
   readonly failOutput?: string;
   readonly changeCount?: number;
+  readonly runtimeRoot?: string;
+  readonly home?: string;
+  readonly repo?: string;
+  readonly ref?: string;
+  readonly exactTags?: readonly string[];
+  readonly targetBundlePresent?: boolean;
+  readonly env?: Record<string, string | undefined>;
+  readonly advanceTargetOnApply?: string;
 };
 
 function createDeps(options: FakeOptions = {}) {
@@ -37,12 +47,13 @@ function createDeps(options: FakeOptions = {}) {
   }> = [];
   const events: SelfUpdateEvent[] = [];
   const mkdirs: string[] = [];
-  const installDir = '/tmp/cthutool/source/CthuTool';
+  const installDir = options.installDir ?? '/tmp/cthutool/source/CthuTool';
+  const runtimeRoot = options.runtimeRoot ?? '/tmp/runtime/CthuTool';
   let checkoutExists = options.existingCheckout ?? true;
   let head = options.currentCommit ?? currentCommit;
   let ref = 'main';
   let statusCalls = 0;
-  const wantedTarget = options.targetCommit ?? targetCommit;
+  let remoteTarget = options.targetCommit ?? targetCommit;
   const targetKind = options.targetKind ?? 'branch';
   const changeCount = options.changeCount ?? 7;
 
@@ -83,6 +94,8 @@ function createDeps(options: FakeOptions = {}) {
           options.dirty === true ||
           (options.dirtyOnRecheck === true && statusCalls > 1);
         stdout = dirty ? '?? local-change\n' : '';
+      } else if (command === 'git' && args[0] === 'cat-file') {
+        code = options.targetBundlePresent === false ? 1 : 0;
       } else if (
         command === 'git' &&
         args[0] === 'rev-parse' &&
@@ -94,7 +107,7 @@ function createDeps(options: FakeOptions = {}) {
         args[0] === 'rev-parse' &&
         args[2] === 'FETCH_HEAD^{commit}'
       ) {
-        stdout = `${wantedTarget}\n`;
+        stdout = `${remoteTarget}\n`;
       } else if (
         command === 'git' &&
         args[0] === 'symbolic-ref' &&
@@ -105,7 +118,7 @@ function createDeps(options: FakeOptions = {}) {
         code = 1;
       } else if (command === 'git' && args[0] === 'ls-remote') {
         if (targetKind === 'branch') {
-          stdout = `${wantedTarget}\trefs/heads/main\n`;
+          stdout = `${remoteTarget}\trefs/heads/main\n`;
         } else {
           code = 2;
         }
@@ -120,10 +133,25 @@ function createDeps(options: FakeOptions = {}) {
         ).join('\n');
       } else if (command === 'git' && args[0] === 'clone') {
         checkoutExists = true;
-        head = wantedTarget;
+        head = remoteTarget;
+      } else if (
+        command === 'git' &&
+        args[0] === 'fetch' &&
+        args[1] === '--tags' &&
+        options.advanceTargetOnApply
+      ) {
+        remoteTarget = options.advanceTargetOnApply;
       } else if (command === 'git' && args[0] === 'checkout') {
-        ref = args[1] ?? ref;
-        head = wantedTarget;
+        if (args[1] === '--detach') {
+          ref = 'HEAD';
+          head = args[2] ?? head;
+        } else {
+          ref = args[1] ?? ref;
+        }
+      } else if (command === 'git' && args[0] === 'merge') {
+        head = args[2] ?? head;
+      } else if (command === 'git' && args[0] === 'pull') {
+        head = remoteTarget;
       } else if (
         command === 'git' &&
         args[0] === 'rev-parse' &&
@@ -131,13 +159,15 @@ function createDeps(options: FakeOptions = {}) {
         String(args[2]).startsWith('origin/')
       ) {
         code = targetKind === 'branch' ? 0 : 1;
-        stdout = code === 0 ? `${wantedTarget}\n` : '';
+        stdout = code === 0 ? `${remoteTarget}\n` : '';
       } else if (
         command === 'git' &&
         args[0] === 'remote' &&
         args[1] === 'get-url'
       ) {
-        stdout = 'git@github.com:me/CthuTool.git\n';
+        stdout = `${options.repo ?? defaultSelfUpdateRepo}\n`;
+      } else if (command === 'git' && args[0] === 'tag') {
+        stdout = `${(options.exactTags ?? []).join('\n')}\n`;
       } else if (
         command === 'git' &&
         args[0] === 'rev-parse' &&
@@ -160,12 +190,13 @@ function createDeps(options: FakeOptions = {}) {
         stderr: '',
       };
     },
-    env: {},
-    home: () => '/home/tester',
+    env: options.env ?? {},
+    home: () => options.home ?? '/home/tester',
+    runtimeRoot: () => runtimeRoot,
     onEvent: (event) => events.push(event),
   };
 
-  return { commands, deps, events, installDir, mkdirs };
+  return { commands, deps, events, installDir, mkdirs, runtimeRoot };
 }
 
 function signatures(
@@ -184,6 +215,82 @@ describe('self-update manager', () => {
     );
   });
 
+  test('resolves the running managed checkout and its installed origin and branch by default', async () => {
+    const installDir = '/home/tester/.cthutool/source/CthuTool';
+    const repo = 'https://example.invalid/fork/CthuTool.git';
+    const { deps } = createDeps({ installDir, runtimeRoot: installDir, repo });
+
+    await expect(resolveSelfUpdateSource({}, deps)).resolves.toMatchObject({
+      installDir,
+      runtimeRoot: installDir,
+      explicitInstallDir: false,
+      mode: 'remote',
+      repo,
+      ref: 'main',
+    });
+  });
+
+  test('preserves deterministic exact tags and detached commits', async () => {
+    const installDir = '/home/tester/.cthutool/source/CthuTool';
+    const tagged = createDeps({
+      installDir,
+      runtimeRoot: installDir,
+      targetKind: 'tag',
+      exactTags: ['v2.0.0', 'v1.0.0'],
+    });
+    await expect(
+      resolveSelfUpdateSource({}, tagged.deps),
+    ).resolves.toMatchObject({ ref: 'v1.0.0' });
+
+    const detached = createDeps({
+      installDir,
+      runtimeRoot: installDir,
+      targetKind: 'tag',
+    });
+    await expect(
+      resolveSelfUpdateSource({}, detached.deps),
+    ).resolves.toMatchObject({ ref: currentCommit });
+  });
+
+  test('applies explicit directory, repository, and ref precedence', async () => {
+    const { deps, installDir } = createDeps({
+      env: {
+        CHC_INSTALL_DIR: '/env/CthuTool',
+        CHC_REPO_URL: 'https://example.invalid/env.git',
+        CHC_REF: 'env-ref',
+      },
+    });
+
+    await expect(
+      resolveSelfUpdateSource(
+        {
+          installDir,
+          repo: 'https://example.invalid/cli.git',
+          ref: 'cli-ref',
+        },
+        deps,
+      ),
+    ).resolves.toMatchObject({
+      installDir,
+      repo: 'https://example.invalid/cli.git',
+      ref: 'cli-ref',
+      explicitInstallDir: true,
+    });
+  });
+
+  test('uses official defaults for an explicitly selected absent checkout', async () => {
+    const { deps, installDir } = createDeps({ existingCheckout: false });
+
+    await expect(
+      resolveSelfUpdateSource({ installDir }, deps),
+    ).resolves.toMatchObject({
+      installDir,
+      repo: defaultSelfUpdateRepo,
+      ref: 'main',
+      explicitInstallDir: true,
+    });
+  });
+
   test('classifies an absent managed checkout without running commands', async () => {
     const { commands, deps, installDir } = createDeps({
       existingCheckout: false,
@@ -195,6 +302,39 @@ describe('self-update manager', () => {
       phases: ['preflight'],
     });
     expect(commands).toEqual([]);
+  });
+
+  test('blocks a default local-linked source before remote or mutating commands', async () => {
+    const installDir = '/worktrees/local/CthuTool';
+    const { commands, deps } = createDeps({
+      installDir,
+      runtimeRoot: installDir,
+    });
+
+    const plan = await planSelfUpdate({}, deps);
+
+    expect(plan).toMatchObject({
+      status: 'blocked',
+      installDir,
+      block: {
+        kind: 'local_linked_source',
+        message: expect.stringContaining(installDir),
+        hint: expect.stringContaining('CHC_INSTALL_MODE=remote'),
+      },
+    });
+    expect(signatures(commands).join('\n')).not.toMatch(
+      /fetch|checkout|merge|pull|npm/,
+    );
+  });
+
+  test('allows an explicit local install directory to use the updater', async () => {
+    const installDir = '/worktrees/local/CthuTool';
+    const { deps } = createDeps({ installDir, runtimeRoot: installDir });
+
+    await expect(planSelfUpdate({ installDir }, deps)).resolves.toMatchObject({
+      status: 'update_available',
+      installDir,
+    });
   });
 
   test('classifies an equal branch target as already current', async () => {
@@ -223,14 +363,36 @@ describe('self-update manager', () => {
     await planSelfUpdate(
       {
         installDir,
-        repo: 'https://update-user:super-secret@example.invalid/repo.git',
+        repo: 'https://update-user:super@secret@example.invalid/repo.git',
       },
       deps,
     );
 
     const serialized = JSON.stringify(events);
-    expect(serialized).not.toContain('super-secret');
+    expect(serialized).not.toContain('super@secret');
     expect(serialized).toContain('https://***@example.invalid/repo.git');
+  });
+
+  test('redacts repository credentials from command failures and event output', async () => {
+    const secret = 'super-secret';
+    const repo = `https://update-user:${secret}@example.invalid/repo.git`;
+    const { deps, events, installDir } = createDeps({
+      failCommand: 'git fetch',
+      failOutput: `fatal: unable to access '${repo}'`,
+    });
+
+    let caught: unknown;
+    try {
+      await planSelfUpdate({ installDir, repo }, deps);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(SelfUpdateError);
+    expect(JSON.stringify(caught)).not.toContain(secret);
+    expect((caught as Error).message).not.toContain(secret);
+    expect(JSON.stringify(events)).not.toContain(secret);
+    expect((caught as Error).message).toContain('https://***@example.invalid');
   });
 
   test('classifies a branch update and bounds its change summary', async () => {
@@ -270,9 +432,9 @@ describe('self-update manager', () => {
       status: 'blocked',
       block: { kind: 'dirty_checkout' },
     });
-    expect(signatures(commands)).toEqual([
-      'git status --porcelain --untracked-files=normal',
-    ]);
+    const all = signatures(commands);
+    expect(all.at(-1)).toBe('git status --porcelain --untracked-files=normal');
+    expect(all.join('\n')).not.toMatch(/fetch|checkout|merge|pull|npm/);
   });
 
   test('blocks a diverged branch without resetting or rebasing it', async () => {
@@ -285,6 +447,22 @@ describe('self-update manager', () => {
     });
     expect(signatures(commands).join('\n')).not.toMatch(
       /reset|rebase|checkout|pull/,
+    );
+  });
+
+  test('blocks a target without the committed bundle before checkout', async () => {
+    const { commands, deps, installDir } = createDeps({
+      targetBundlePresent: false,
+    });
+
+    const plan = await planSelfUpdate({ installDir }, deps);
+
+    expect(plan).toMatchObject({
+      status: 'blocked',
+      block: { kind: 'missing_target_bundle' },
+    });
+    expect(signatures(commands).join('\n')).not.toMatch(
+      /remote set-url|checkout|merge|npm install/,
     );
   });
 
@@ -330,6 +508,8 @@ describe('self-update manager', () => {
     expect(
       all.indexOf(`git remote set-url origin ${defaultSelfUpdateRepo}`),
     ).toBeLessThan(all.indexOf('git checkout main'));
+    expect(all).toContain(`git merge --ff-only ${targetCommit}`);
+    expect(all).not.toContain('git pull --ff-only origin main');
     const npmInstall = all.indexOf(
       `npm install -g --ignore-scripts ${installDir}`,
     );
@@ -339,8 +519,32 @@ describe('self-update manager', () => {
     );
   });
 
-  test('skips checkout, bundle verification, and global install when current', async () => {
+  test('applies the planned commit when the remote advances during apply', async () => {
+    const laterCommit = '3333333333333333333333333333333333333333';
     const { commands, deps, installDir } = createDeps({
+      advanceTargetOnApply: laterCommit,
+    });
+
+    const result = await runSelfUpdate({ installDir }, deps);
+
+    expect(result).toMatchObject({
+      status: 'updated',
+      target: { commit: targetCommit },
+      after: { commit: targetCommit },
+    });
+    expect(signatures(commands)).toContain(
+      `git merge --ff-only ${targetCommit}`,
+    );
+    expect(signatures(commands)).not.toContain(
+      `git merge --ff-only ${laterCommit}`,
+    );
+  });
+
+  test('skips checkout, bundle verification, and global install when current', async () => {
+    const installDir = '/tmp/cthutool/source/CthuTool';
+    const { commands, deps } = createDeps({
+      installDir,
+      runtimeRoot: installDir,
       targetCommit: currentCommit,
     });
     const result = await runSelfUpdate({ installDir }, deps);
@@ -348,6 +552,25 @@ describe('self-update manager', () => {
 
     expect(result).toMatchObject({ status: 'up_to_date', steps: [] });
     expect(all).not.toMatch(/remote set-url|checkout|npm install/);
+  });
+
+  test('relinks an explicitly selected current checkout when it differs from the runtime source', async () => {
+    const { commands, deps, installDir } = createDeps({
+      targetCommit: currentCommit,
+    });
+
+    const result = await runSelfUpdate({ installDir }, deps);
+
+    expect(result).toMatchObject({
+      status: 'installed',
+      steps: ['install-global'],
+      before: { commit: currentCommit },
+      after: { commit: currentCommit },
+    });
+    expect(signatures(commands)).toContain(
+      `npm install -g --ignore-scripts ${installDir}`,
+    );
+    expect(signatures(commands).join('\n')).not.toMatch(/checkout|merge|pull/);
   });
 
   test('rechecks safety and stops before mutation when the checkout changes', async () => {
@@ -389,7 +612,8 @@ describe('self-update manager', () => {
   });
 
   test('reports installation status from an explicit checkout', async () => {
-    const { deps, installDir } = createDeps();
+    const repo = 'git@github.com:me/CthuTool.git';
+    const { deps, installDir } = createDeps({ repo });
 
     await expect(
       getCliInstallationStatus({ installDir }, deps),
@@ -397,7 +621,7 @@ describe('self-update manager', () => {
       version: '0.0.0',
       mode: 'local',
       installDir,
-      repo: 'git@github.com:me/CthuTool.git',
+      repo,
       ref: 'main',
       commit: currentCommit.slice(0, 7),
       bundlePath: join(installDir, committedCliBundlePath),

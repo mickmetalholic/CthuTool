@@ -69,7 +69,11 @@ chc update --ref v0.1.0
 
 Use `chc --version` for the lightweight version-only check. `chc status` includes that version and detects the source checkout used by the running global command. It reports `mode: local` for a linked development checkout and `mode: remote` for the default managed checkout, together with that checkout's Git and bundle state. Pass `--install-dir <path>` to inspect a different checkout explicitly.
 
-`chc update --check` reports whether installation or an update is required without changing checkout files or the global command. A clean managed `chc update` proceeds directly, shows current-to-target commit progress, and skips global reinstallation when already current. Dirty or diverged checkouts are blocked without automatic stash, reset, clean, or rebase.
+For the default managed source, `chc update --check` and `chc update` use the checkout's existing origin and preserve its symbolic branch, exact tag, or detached commit unless an override is supplied. Checks do not change checkout files or the global command. A clean managed update validates the target bundle before checkout, applies the exact planned commit, shows current-to-target progress, and skips global reinstallation when already current.
+
+When status reports `mode: local`, default update and check commands do not mutate the linked development checkout or `~/.cthutool/source/CthuTool`. Update the linked repository through its normal Git workflow and refresh the committed bundle with `pnpm --filter @cthutool/cli dev`. Run `CHC_INSTALL_MODE=remote scripts/install-chc.sh` to restore the global command to managed mode.
+
+Use `--install-dir <path>`, `--repo <url>`, and `--ref <ref>` (or `CHC_INSTALL_DIR`, `CHC_REPO_URL`, and `CHC_REF`) to explicitly select a custom update source. A successful explicit apply relinks global `chc` to the selected directory. Dirty, diverged, or invalid-bundle targets are blocked without automatic stash, reset, clean, or rebase.
 
 Use `--quiet` for errors-only human output, `--verbose` for bounded Git and npm details on stderr, or `--json` for one structured result. Checks only run when explicitly requested; there is no periodic or shell-startup background update checker.
 

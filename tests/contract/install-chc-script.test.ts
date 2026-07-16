@@ -69,6 +69,7 @@ done
 printf '\\n' >> "${logPath}"
 
 if [ "$1" = "clone" ]; then
+  mkdir -p "$3/.git"
   mkdir -p "$3/apps/cli/dist"
   printf '{"name":"cthutool","bin":{"chc":"apps/cli/bin/chc.mjs"}}\\n' > "$3/package.json"
   if [ "\${MOCK_GIT_CREATE_BUNDLE:-1}" = "1" ]; then
@@ -77,8 +78,46 @@ if [ "$1" = "clone" ]; then
   exit 0
 fi
 
-if [ "$1" = "-C" ] && [ "$3" = "rev-parse" ]; then
+if [ "$1" = "-C" ] && [ "$3" = "rev-parse" ] && [ "$4" = "--git-dir" ]; then
+  if [ -d "$2/.git" ]; then
+    printf '.git\n'
+    exit 0
+  fi
   exit 1
+fi
+
+if [ "$1" = "-C" ] && [ "$3" = "status" ]; then
+  if [ -n "\${MOCK_GIT_STATUS:-}" ]; then
+    printf '%s\n' "$MOCK_GIT_STATUS"
+  fi
+  exit 0
+fi
+
+if [ "$1" = "-C" ] && [ "$3" = "rev-parse" ] && [ "$4" = "--verify" ]; then
+  printf '%s\n' "\${MOCK_GIT_TARGET:-2222222222222222222222222222222222222222}"
+  exit 0
+fi
+
+if [ "$1" = "-C" ] && [ "$3" = "cat-file" ]; then
+  if [ "\${MOCK_GIT_TARGET_BUNDLE:-1}" = "1" ]; then
+    exit 0
+  fi
+  exit 1
+fi
+
+if [ "$1" = "ls-remote" ]; then
+  if [ "\${MOCK_GIT_TARGET_KIND:-branch}" = "branch" ]; then
+    printf '%s\trefs/heads/%s\n' "\${MOCK_GIT_TARGET:-2222222222222222222222222222222222222222}" "\${!#}"
+    exit 0
+  fi
+  exit 2
+fi
+
+if [ "$1" = "-C" ] && [ "$3" = "merge-base" ]; then
+  if [ "\${MOCK_GIT_DIVERGED:-0}" = "1" ]; then
+    exit 1
+  fi
+  exit 0
 fi
 
 exit 0
@@ -104,6 +143,21 @@ exit 0
       }
     },
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
+    prepareManagedCheckout: () => {
+      const installDir = env.CHC_INSTALL_DIR;
+      mkdirSync(join(installDir, ".git"), { recursive: true });
+      mkdirSync(join(installDir, "apps", "cli", "dist"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(installDir, "package.json"),
+        '{"name":"cthutool","bin":{"chc":"apps/cli/bin/chc.mjs"}}\n',
+      );
+      writeFileSync(
+        join(installDir, "apps", "cli", "dist", "index.js"),
+        'console.log("existing bundle");\n',
+      );
+    },
   };
 }
 
@@ -201,6 +255,88 @@ describe("install-chc.sh", () => {
       );
     } finally {
       remoteFixture.cleanup();
+    }
+  });
+
+  it("updates an existing managed checkout to the resolved commit", () => {
+    const fixture = createFixture();
+    const target = "3333333333333333333333333333333333333333";
+    try {
+      fixture.prepareManagedCheckout();
+      const result = runInstaller({
+        env: {
+          ...fixture.env,
+          CHC_INSTALL_MODE: "remote",
+          MOCK_GIT_TARGET: target,
+        },
+      });
+
+      expect(result.status).toBe(0);
+      const log = fixture.readLog();
+      const status = `git\t-C\t${fixture.env.CHC_INSTALL_DIR}\tstatus`;
+      const setUrl = `git\t-C\t${fixture.env.CHC_INSTALL_DIR}\tremote\tset-url`;
+      expect(log).toContain(status);
+      expect(log).toContain(
+        `git\t-C\t${fixture.env.CHC_INSTALL_DIR}\tmerge\t--ff-only\t${target}`,
+      );
+      expect(log).not.toContain("\tpull\t");
+      expect(log.indexOf(status)).toBeLessThan(log.indexOf(setUrl));
+      expect(log).toContain(
+        `npm\tinstall\t-g\t--ignore-scripts\t${fixture.env.CHC_INSTALL_DIR}`,
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("blocks dirty and diverged managed checkouts before mutation", () => {
+    for (const state of ["dirty", "diverged"] as const) {
+      const fixture = createFixture();
+      try {
+        fixture.prepareManagedCheckout();
+        const result = runInstaller({
+          env: {
+            ...fixture.env,
+            CHC_INSTALL_MODE: "remote",
+            ...(state === "dirty"
+              ? { MOCK_GIT_STATUS: "?? local-change" }
+              : { MOCK_GIT_DIVERGED: "1" }),
+          },
+        });
+
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain("Update blocked");
+        const log = fixture.readLog();
+        expect(log).not.toContain("\tremote\tset-url\t");
+        expect(log).not.toContain("\tcheckout\t");
+        expect(log).not.toContain("npm\tinstall");
+        expect(log).not.toMatch(/\t(reset|rebase|stash|clean)\t/);
+      } finally {
+        fixture.cleanup();
+      }
+    }
+  });
+
+  it("blocks an invalid managed target bundle before checkout mutation", () => {
+    const fixture = createFixture();
+    try {
+      fixture.prepareManagedCheckout();
+      const result = runInstaller({
+        env: {
+          ...fixture.env,
+          CHC_INSTALL_MODE: "remote",
+          MOCK_GIT_TARGET_BUNDLE: "0",
+        },
+      });
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("Missing committed CLI bundle in target");
+      const log = fixture.readLog();
+      expect(log).not.toContain("\tremote\tset-url\t");
+      expect(log).not.toContain("\tcheckout\t");
+      expect(log).not.toContain("npm\tinstall");
+    } finally {
+      fixture.cleanup();
     }
   });
 

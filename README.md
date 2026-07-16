@@ -106,12 +106,22 @@ chc update --ref v0.1.0
 
 Use `chc --version` for the lightweight version-only check. `chc status`
 includes that version together with the detected installation mode and source
-checkout diagnostics. `chc update --check` reports whether installation or an
-update is needed without changing checkout files or the global command. A safe
-managed `chc update` runs directly, reports commit progress, and skips the
-global reinstall when already current. Dirty or diverged checkouts are blocked
-without automatic stash, reset, or rebase. Update checks are explicit; the CLI
-does not run a periodic background checker.
+checkout diagnostics. For the default remote managed installation,
+`chc update --check` and `chc update` follow that checkout's existing origin and
+checked-out branch, exact tag, or commit. A safe managed update reports the
+planned commit, validates the committed bundle before checkout, and skips the
+global reinstall when already current.
+
+When `chc status` reports `mode: local`, the command follows that development
+checkout and default update/check commands do not mutate it or the separate
+managed checkout. Update the repository with the normal Git workflow and
+refresh `apps/cli/dist/index.js` with `pnpm --filter @cthutool/cli dev`. Use
+`CHC_INSTALL_MODE=remote scripts/install-chc.sh` to switch the global command
+back to managed mode. Advanced callers can explicitly select another source
+with `--install-dir`, `--repo`, and `--ref`; a successful apply relinks the
+global command to that directory. Dirty, diverged, or invalid-bundle targets are
+blocked without automatic stash, reset, clean, or rebase. Update checks are
+explicit; the CLI does not run a periodic background checker.
 
 Discover command groups and bundled scripts directly from the CLI:
 

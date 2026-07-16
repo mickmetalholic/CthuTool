@@ -84,7 +84,7 @@ The docs site SHALL document Kubernetes/GitOps as the official user-facing deplo
 - **THEN** the documentation identifies the GitOps-managed observability namespace, ArgoCD Applications, Prometheus metrics scrape path, Loki log collection path, Tempo trace storage path, and OpenTelemetry Collector ingestion path
 
 ### Requirement: Client installation documentation
-The docs site SHALL document how users install, inspect, update, and remove CthuTool client tools on client computers using the canonical CLI lifecycle interface.
+The docs site SHALL document how users install, inspect, safely update, switch, and remove CthuTool client tools on client computers using the canonical CLI lifecycle interface.
 
 #### Scenario: Reader installs CLI tooling
 - **WHEN** a reader opens CLI installation documentation
@@ -100,9 +100,21 @@ The docs site SHALL document how users install, inspect, update, and remove Cthu
 - **THEN** the documentation explains that `chc status` includes the installed version and reports the detected local or remote source checkout
 - **AND** it documents the explicit install-directory override
 
-#### Scenario: Reader manages installed CLI tooling
-- **WHEN** a reader needs to update CLI tooling
-- **THEN** the documentation presents `chc update` as the update command
+#### Scenario: Reader updates managed CLI tooling
+- **WHEN** a reader needs to update a default remote managed installation
+- **THEN** the documentation presents `chc update --check` and `chc update` as source-aware managed update commands
+- **AND** explains that repository and ref defaults follow the installed managed checkout
+
+#### Scenario: Reader updates local-linked CLI tooling
+- **WHEN** a reader uses a local-linked installation
+- **THEN** the documentation explains that default `chc update` does not mutate the local or managed checkout
+- **AND** shows the manual Git and committed-bundle development workflow
+- **AND** shows how to restore the global command to remote managed mode explicitly
+
+#### Scenario: Reader updates an explicit custom checkout
+- **WHEN** a reader intentionally manages a non-default update checkout
+- **THEN** the documentation explains the `--install-dir`, `--repo`, and `--ref` overrides and their environment equivalents
+- **AND** warns that a successful explicit apply can relink the global command to that selected checkout
 
 ### Requirement: Module usage documentation
 The docs site SHALL provide module-oriented usage documentation for major CthuTool product areas.
@@ -203,9 +215,11 @@ The docs site SHALL document `@cthutool/browser-client` for third-party applicat
 - **THEN** the docs include install/build context, a minimal `CthuBrowserClient` example, session lifecycle, supported page methods, and limitations
 
 ### Requirement: CLI installer mode documentation
-The docs site SHALL document CLI installer mode selection for user and development install paths.
+The docs site SHALL document CLI installer mode selection and its relationship to subsequent status and update behavior.
 
 #### Scenario: Reader compares remote and local mode
 - **WHEN** a reader reviews CLI installation docs
 - **THEN** the documentation explains that raw/stdin installer usage selects remote mode and checkout script execution selects local mode by default
-- **AND** it documents `CHC_INSTALL_MODE=remote` as the way to restore the global command to the managed checkout after local development
+- **AND** explains that `chc status` derives mode from the checkout providing the running module
+- **AND** explains that default automatic update is available only for the default managed source
+- **AND** documents `CHC_INSTALL_MODE=remote` as the way to restore the global command to the managed checkout after local development

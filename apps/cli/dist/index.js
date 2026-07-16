@@ -4145,7 +4145,7 @@ function sanitizeValue(key, value, depth) {
     return REDACTED;
   }
   if (typeof value === "string") {
-    return isPathKey(key) ? summarizePath(value) : truncate(value);
+    return isPathKey(key) ? summarizePath(value) : truncate(redactUrlUserinfo(value));
   }
   if (typeof value === "number" || typeof value === "boolean" || value === null || value === undefined) {
     return value;
@@ -4186,7 +4186,10 @@ function truncate(value) {
   return `${value.slice(0, MAX_STRING_LENGTH - 3)}...`;
 }
 function sanitizeDiagnosticMessage(value) {
-  return truncate(value.replace(/(token|secret|password|passwd|cookie|authorization|credential)=([^&\s]+)/gi, "$1=[redacted]"));
+  return truncate(redactUrlUserinfo(value).replace(/(token|secret|password|passwd|cookie|authorization|credential)=([^&\s]+)/gi, "$1=[redacted]"));
+}
+function redactUrlUserinfo(value) {
+  return value.replace(/:\/\/[^/\s]+@/g, "://***@");
 }
 function dropUndefined(value) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
@@ -6366,16 +6369,19 @@ class SelfUpdateError extends Error {
   hint;
   result;
   constructor(options) {
-    const cause = options.cause ? `
-Cause: ${options.cause}` : "";
-    super(`${options.summary}${cause}
-Next: ${options.hint}`);
+    const summary = redactSelfUpdateText(options.summary);
+    const causeText = options.cause ? redactSelfUpdateText(options.cause) : undefined;
+    const hint = redactSelfUpdateText(options.hint);
+    const cause = causeText ? `
+Cause: ${causeText}` : "";
+    super(`${summary}${cause}
+Next: ${hint}`);
     this.name = "SelfUpdateError";
     this.phase = options.phase;
-    this.summary = options.summary;
-    this.causeText = options.cause;
-    this.hint = options.hint;
-    this.result = options.result;
+    this.summary = summary;
+    this.causeText = causeText;
+    this.hint = hint;
+    this.result = options.result ? redactCommandResult(options.result) : undefined;
   }
 }
 function getDefaultSelfUpdateInstallDir(home = homedir3()) {
@@ -6390,19 +6396,53 @@ function createSelfUpdateDeps(onEvent) {
     run: runCommand2,
     env: process.env,
     home: homedir3,
+    runtimeRoot: findRepoRootFromModule,
     onEvent
   };
 }
 function getCliVersion() {
   return readPackageVersion(findRepoRootFromModule());
 }
-function resolveSelfUpdateOptions(options, deps) {
-  const home = deps.home();
+async function resolveSelfUpdateSource(options, deps) {
+  const runtimeRoot = deps.runtimeRoot();
+  const managedRoot = getDefaultSelfUpdateInstallDir(deps.home());
+  const envInstallDir = nonEmpty(deps.env.CHC_INSTALL_DIR);
+  const explicitInstallDir = options.installDir !== undefined || envInstallDir !== undefined;
+  const installDir = options.installDir ?? envInstallDir ?? runtimeRoot;
+  const mode = resolve4(runtimeRoot) === resolve4(managedRoot) ? "remote" : "local";
+  const gitRoot = join7(installDir, ".git");
+  const canInspectCheckout = deps.exists(gitRoot);
+  const repoOverride = options.repo ?? nonEmpty(deps.env.CHC_REPO_URL) ?? nonEmpty(deps.env.CHC_REPO);
+  const refOverride = options.ref ?? nonEmpty(deps.env.CHC_REF);
+  const installedRepo = canInspectCheckout && repoOverride === undefined ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
+    cwd: installDir
+  }) : undefined;
+  const installedRef = canInspectCheckout && refOverride === undefined ? await readInstalledRef(deps, installDir) : undefined;
   return {
-    repo: options.repo ?? deps.env.CHC_REPO_URL ?? deps.env.CHC_REPO ?? defaultSelfUpdateRepo,
-    ref: options.ref ?? deps.env.CHC_REF ?? defaultSelfUpdateRef,
-    installDir: options.installDir ?? deps.env.CHC_INSTALL_DIR ?? getDefaultSelfUpdateInstallDir(home)
+    repo: repoOverride ?? installedRepo ?? defaultSelfUpdateRepo,
+    ref: refOverride ?? installedRef ?? defaultSelfUpdateRef,
+    installDir,
+    runtimeRoot,
+    managedRoot,
+    mode,
+    explicitInstallDir
   };
+}
+async function readInstalledRef(deps, installDir) {
+  const branch = await runOptional(deps, "git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: installDir });
+  if (branch)
+    return branch;
+  const tags = await runOptional(deps, "git", ["tag", "--points-at", "HEAD", "--sort=refname"], { cwd: installDir });
+  const exactTag = tags?.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).sort((left, right) => left.localeCompare(right))[0];
+  if (exactTag)
+    return exactTag;
+  return runOptional(deps, "git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+    cwd: installDir
+  });
+}
+function nonEmpty(value) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 function emit(deps, event) {
   deps.onEvent?.(event);
@@ -6450,7 +6490,7 @@ function toPhaseError(error, phase) {
   return new SelfUpdateError({
     phase,
     summary: `Update failed during ${formatPhase(phase)}.`,
-    cause: boundedText(error instanceof Error ? error.message : String(error)),
+    cause: boundedText(redactSelfUpdateText(error instanceof Error ? error.message : String(error))),
     hint: phaseHint(phase)
   });
 }
@@ -6482,8 +6522,8 @@ async function execute(deps, phase, command, args, options = {}) {
     args: redactArgs(args),
     cwd: options.cwd,
     code: result.code,
-    stdout: boundedText(result.stdout),
-    stderr: boundedText(result.stderr)
+    stdout: boundedText(redactSelfUpdateText(result.stdout)),
+    stderr: boundedText(redactSelfUpdateText(result.stderr))
   });
   if (result.code !== 0 && options.allowFailure !== true) {
     throw commandFailure(phase, result);
@@ -6516,13 +6556,27 @@ function finishPlan(deps, plan) {
   return plan;
 }
 async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
-  const resolved = resolveSelfUpdateOptions(options, deps);
+  const resolved = await resolveSelfUpdateSource(options, deps);
   const publicResolved = {
-    ...resolved,
-    repo: redactValue(resolved.repo)
+    repo: redactSelfUpdateText(resolved.repo),
+    ref: resolved.ref,
+    installDir: resolved.installDir
   };
   const phases = [];
   const gitRoot = join7(resolved.installDir, ".git");
+  if (resolved.mode === "local" && !resolved.explicitInstallDir) {
+    phases.push("preflight");
+    return finishPlan(deps, {
+      status: "blocked",
+      ...publicResolved,
+      block: {
+        kind: "local_linked_source",
+        message: `The running chc command is linked to the local checkout at ${resolved.runtimeRoot}.`,
+        hint: "Update that checkout and rebuild apps/cli/dist/index.js, or run CHC_INSTALL_MODE=remote scripts/install-chc.sh to switch back to managed mode."
+      },
+      phases
+    });
+  }
   const initial = await runPhase(deps, "preflight", async () => {
     if (!deps.exists(gitRoot)) {
       return;
@@ -6563,12 +6617,29 @@ async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
     };
   });
   phases.push("check_remote");
+  const targetBundle = await execute(deps, "check_remote", "git", ["cat-file", "-e", `${remote.target.commit}:${committedCliBundlePath}`], { cwd: resolved.installDir, allowFailure: true });
+  if (targetBundle.code !== 0) {
+    return finishPlan(deps, {
+      status: "blocked",
+      ...publicResolved,
+      before: initial,
+      target: remote.target,
+      block: {
+        kind: "missing_target_bundle",
+        message: `The selected target does not contain ${committedCliBundlePath}.`,
+        hint: `Select a ref containing ${committedCliBundlePath}.`
+      },
+      phases
+    });
+  }
   if (initial.commit === remote.target.commit) {
     return finishPlan(deps, {
       status: "up_to_date",
       ...publicResolved,
       before: initial,
       target: remote.target,
+      targetKind: remote.isBranch ? "branch" : "detached",
+      relinkRequired: resolve4(resolved.installDir) !== resolve4(resolved.runtimeRoot),
       phases
     });
   }
@@ -6580,6 +6651,7 @@ async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
         ...publicResolved,
         before: initial,
         target: remote.target,
+        targetKind: "branch",
         block: {
           kind: "diverged_branch",
           message: "The selected checkout cannot fast-forward to the remote branch.",
@@ -6598,6 +6670,7 @@ async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
     ...publicResolved,
     before: initial,
     target: remote.target,
+    targetKind: remote.isBranch ? "branch" : "detached",
     changes,
     phases
   });
@@ -6638,10 +6711,31 @@ function assertSelfUpdatePlanReady(plan) {
   }
 }
 async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
-  const resolved = resolveSelfUpdateOptions(options, deps);
+  const resolved = await resolveSelfUpdateSource(options, deps);
   const plan = await planSelfUpdate(options, deps);
   assertSelfUpdatePlanReady(plan);
   if (plan.status === "up_to_date") {
+    if (plan.relinkRequired) {
+      await runPhase(deps, "install_global", async () => {
+        await execute(deps, "install_global", "npm", [
+          "install",
+          "-g",
+          "--ignore-scripts",
+          plan.installDir
+        ]);
+      });
+      return {
+        status: "installed",
+        repo: plan.repo,
+        ref: plan.ref,
+        installDir: plan.installDir,
+        before: plan.before,
+        target: plan.target,
+        after: plan.before,
+        phases: [...plan.phases, "install_global"],
+        steps: ["install-global"]
+      };
+    }
     return {
       status: "up_to_date",
       repo: plan.repo,
@@ -6691,6 +6785,20 @@ async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
     steps.push("fetch");
   }
   await runPhase(deps, "checkout", async () => {
+    if (!isInstall && plan.target) {
+      if (plan.targetKind === "branch") {
+        await execute(deps, "checkout", "git", ["checkout", plan.ref], {
+          cwd: plan.installDir
+        });
+        steps.push("checkout");
+        await execute(deps, "checkout", "git", ["merge", "--ff-only", plan.target.commit], { cwd: plan.installDir });
+        steps.push("pull");
+      } else {
+        await execute(deps, "checkout", "git", ["checkout", "--detach", plan.target.commit], { cwd: plan.installDir });
+        steps.push("checkout");
+      }
+      return;
+    }
     await execute(deps, "checkout", "git", ["checkout", plan.ref], {
       cwd: plan.installDir
     });
@@ -6732,22 +6840,19 @@ async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
   };
 }
 async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDeps()) {
-  const installDir = options.installDir ?? deps.env.CHC_INSTALL_DIR ?? findRepoRootFromModule();
-  const resolved = resolveSelfUpdateOptions({ ...options, installDir }, deps);
+  const resolved = await resolveSelfUpdateSource(options, deps);
   const bundlePath = join7(resolved.installDir, committedCliBundlePath);
   const gitRoot = join7(resolved.installDir, ".git");
   const repo = deps.exists(gitRoot) ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
     cwd: resolved.installDir
   }) ?? resolved.repo : resolved.repo;
-  const ref = deps.exists(gitRoot) ? await runOptional(deps, "git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-    cwd: resolved.installDir
-  }) ?? resolved.ref : resolved.ref;
+  const ref = deps.exists(gitRoot) ? await readInstalledRef(deps, resolved.installDir) ?? resolved.ref : resolved.ref;
   const commit = deps.exists(gitRoot) ? await runOptional(deps, "git", ["rev-parse", "--short", "HEAD"], {
     cwd: resolved.installDir
   }) : undefined;
   return {
     version: getCliVersion(),
-    mode: resolve4(resolved.installDir) === resolve4(getDefaultSelfUpdateInstallDir(deps.home())) ? "remote" : "local",
+    mode: resolve4(resolved.installDir) === resolve4(resolved.managedRoot) ? "remote" : "local",
     installDir: resolved.installDir,
     repo,
     ref,
@@ -6791,14 +6896,22 @@ function boundedText(value) {
 `) : undefined;
 }
 function boundedCommandOutput(result) {
-  return boundedText(`${result.stderr}
-${result.stdout}`);
+  return boundedText(redactSelfUpdateText(`${result.stderr}
+${result.stdout}`));
 }
 function redactArgs(args) {
-  return args.map(redactValue);
+  return args.map(redactSelfUpdateText);
 }
-function redactValue(value) {
-  return value.replace(/:\/\/[^/@\s]+@/g, "://***@");
+function redactSelfUpdateText(value) {
+  return value.replace(/:\/\/[^/\s]+@/g, "://***@");
+}
+function redactCommandResult(result) {
+  return {
+    ...result,
+    args: redactArgs(result.args),
+    stdout: redactSelfUpdateText(result.stdout),
+    stderr: redactSelfUpdateText(result.stderr)
+  };
 }
 function runCommand2(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
@@ -6984,7 +7097,10 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
     renderCheckResult(plan) {
       if (!human)
         return;
-      if (plan.status === "up_to_date" && plan.target) {
+      if (plan.status === "up_to_date" && plan.relinkRequired && plan.target) {
+        deps.output.stdout.write(`${colors2.yellow("Global relink required")} · run chc update · ${identity(plan.target)}
+`);
+      } else if (plan.status === "up_to_date" && plan.target) {
         deps.output.stdout.write(`${colors2.green("✓")} chc is already up to date · ${identity(plan.target)}
 `);
       } else if (plan.status === "update_available" && plan.target) {
@@ -7120,7 +7236,7 @@ function createUpdateCommand() {
             details: {
               installDir,
               ref,
-              repo,
+              repo: repo ? redactSelfUpdateText(repo) : undefined,
               phase: error instanceof SelfUpdateError ? error.phase : undefined
             }
           });

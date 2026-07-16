@@ -126,6 +126,7 @@ describe('CLI runtime contract', () => {
       details: {
         inputPath: '/tmp/private/sample.cbz',
         password: 'secret-value',
+        repo: 'https://user:repo@secret@example.invalid/private.git',
       },
     });
     writeJsonValue(output, { ok: true, command: 'test' });
@@ -144,6 +145,9 @@ describe('CLI runtime contract', () => {
     );
     expect(diagnostic.details.password).toBe('[redacted]');
     expect(diagnostic.details.inputPath).toBe('private/sample.cbz');
+    expect(diagnostic.details.repo).toBe(
+      'https://***@example.invalid/private.git',
+    );
   });
 
   test('quiet mode suppresses nonessential diagnostics but preserves errors', () => {
