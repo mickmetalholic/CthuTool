@@ -107,9 +107,34 @@ The `Sentence` field uses Anki cloze syntax with a short synonym or paraphrase h
 
 ## Notion Channel Library
 
-Use `$notion-add-channel` to add a YouTube or Bilibili channel to the personal Notion Channel Library. The explicit-only skill checks for duplicates, resolves an existing category, selects the platform-specific template, verifies the created entry, and returns its Notion URL.
+Use `$notion-add-channel` to add one or more YouTube or Bilibili channels to the personal Notion Channel Library. The explicit-only skill validates current tags, checks for input and database duplicates, selects each platform-specific template, verifies created entries, and returns per-channel Notion URLs.
+
+An exact tag supplied by the user is used without inspecting the channel description or recent content and without a second confirmation. The skill still reads the minimum channel metadata required for its name and duplicate identity.
+
+Apply the same tags to a batch with a standalone `tags:` line:
+
+```text
+$notion-add-channel
+tags: Technology, AI
+
+https://www.youtube.com/@channel-a
+https://space.bilibili.com/123456
+```
+
+Put `tags:` on a channel line to replace the batch default for that item:
+
+```text
+$notion-add-channel
+tags: Technology
+
+https://www.youtube.com/@channel-a | tags: AI
+https://space.bilibili.com/123456 | tags: Japanese, Education
+https://www.youtube.com/@channel-c
+```
+
+Only channels without effective user-supplied tags require content inspection and inferred-tag confirmation. In a mixed batch, the skill consolidates those decisions before it creates any new entries.
 
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
-- Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`
+- Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`
