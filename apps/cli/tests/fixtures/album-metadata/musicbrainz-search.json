@@ -1,0 +1,34 @@
+{
+  "release-groups": [
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "score": 100,
+      "title": "Paranoid",
+      "primary-type": "Album",
+      "first-release-date": "1970-09-18",
+      "artist-credit": [
+        {
+          "artist": {
+            "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "name": "Black Sabbath"
+          }
+        }
+      ]
+    },
+    {
+      "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "score": 82,
+      "title": "Paranoid (Deluxe Edition)",
+      "primary-type": "Album",
+      "first-release-date": "2016-01-22",
+      "artist-credit": [
+        {
+          "artist": {
+            "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "name": "Black Sabbath"
+          }
+        }
+      ]
+    }
+  ]
+}
