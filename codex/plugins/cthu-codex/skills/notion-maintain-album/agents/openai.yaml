@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Maintain Album"
+  short_description: "Add, complete, or audit one personal Notion album."
+  default_prompt: "Use $notion-maintain-album to add, complete, or audit one album in my personal Notion Album database with a read-only match preview before any write."
+policy:
+  allow_implicit_invocation: true

@@ -11,6 +11,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - Anki MCP server
 - Anki card-creation skills
 - Notion channel-library skill
+- Notion album-maintenance skill
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -134,7 +135,56 @@ https://www.youtube.com/@channel-c
 
 Only channels without effective user-supplied tags require content inspection and inferred-tag confirmation. In a mixed batch, the skill consolidates those decisions before it creates any new entries.
 
+## Notion Album Library
+
+Use `$notion-maintain-album`, or make an unambiguous personal Album-library
+maintenance request, to add one album, complete missing metadata, or audit whether
+MusicBrainz and Discogs identify the same album. Ordinary album discussion does
+not invoke the workflow. Examples include:
+
+```text
+添加 Paranoid by Black Sabbath 到我的 Notion Album
+补全 The Black Parade 的专辑库元信息
+检查这张专辑的 MusicBrainz 和 Discogs 是否匹配
+把这个 MusicBrainz Release 链接加入专辑库
+```
+
+The workflow uses MusicBrainz Release Group as the canonical album identity and
+authority for standard title, artist credit, primary release type, and earliest
+release date. A concrete MusicBrainz Release URL is converted to its owning Release
+Group; a regional issue, reissue, or remaster date is never written as the original
+`Release Date`. Partial MusicBrainz dates remain visibly partial and are not padded
+with invented month or day values.
+
+Discogs Master is used to cross-check title, artist, and year and to supply Genre
+and Style values. A direct MusicBrainz-to-Discogs Master relationship is preferred
+over Discogs search. Confirmed new Genre/Style values are shown in the preview and
+added as live `Genre` options only after confirmation. The same rule applies if
+MusicBrainz introduces a new primary `Release Type` beyond the initial Album,
+Single, EP, Broadcast, and Other options.
+
+MusicBrainz lookup is anonymous and uses the required identifying User-Agent.
+Direct Discogs Master lookup can run without stored credentials; deterministic
+Discogs search fallback requires `DISCOGS_TOKEN`. If it is absent, the workflow
+reports the blocked fallback instead of substituting an untraceable web result.
+
+Album `Artist` relations must resolve to existing People Vault pages. The workflow
+matches `MusicBrainz Artist` URL first, then permits exactly one normalized exact
+name whose identifier is empty. It can preview filling that missing URL, but it
+never creates a People Vault page or replaces a conflicting artist identifier.
+
+Every mutation starts with a read-only candidate and field-change preview. Tied
+candidates, mismatched artists, edition qualifiers, conflicting dates, ambiguous
+People Vault pages, and differing non-empty Notion values block the write. A
+generic confirmation never authorizes replacing a non-empty value; approval must
+name that field and produces a new plan. Before execution, the workflow refetches
+the live schema and pages to reject stale plans, then verifies each approved write.
+
+Normal album metadata maintenance never writes personal listening fields:
+`Status`, `Listened Date`, `Score`, or the `Rating` formula. Streaming services may
+be retained as listening links, but are not authority for core metadata.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
-- Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`
+- Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-album-skill/spec.md`
