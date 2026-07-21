@@ -1,16 +1,33 @@
-import { confirm, isCancel } from '@clack/prompts';
+import { emitKeypressEvents } from 'node:readline';
+import {
+  confirm,
+  isCancel,
+  multiselect,
+  text as promptText,
+  select,
+} from '@clack/prompts';
 import { defineCommand } from 'citty';
 import pc from 'picocolors';
+import { installRepositoryCodexPlugins } from '../domain/codex-plugin-install-manager';
 import {
-  applyCodexConfig,
-  type CodexConfigComparison,
-  compareCodexConfig,
-  exportCodexConfig,
-  installCodexAssets,
-} from '../domain/codex-config-manager';
-import type { CodexConfigPaths } from '../infra/codex-config-paths';
+  createNpxSkillsBackend,
+  type DiscoveredSkill,
+  type SkillsBackend,
+} from '../domain/codex-skills-backend';
+import {
+  buildManagedSkillInventory,
+  executeSkillPlan,
+  type ManagedSkillAction,
+  type ManagedSkillInventoryRow,
+  type SkillPlanItem,
+} from '../domain/codex-skills-manager';
+import {
+  type CodexSkillsManifest,
+  type ManagedCodexSkill,
+  readCodexSkillsManifest,
+} from '../domain/codex-skills-manifest';
 import { createCodexConfigPaths } from '../infra/codex-config-paths';
-import { cliContractArgs, createCliContext } from '../runtime/cli-context';
+import { cliContractArgs } from '../runtime/cli-context';
 import { createCliError } from '../runtime/cli-error';
 import {
   type ObservedCliCommandScope,
@@ -23,20 +40,18 @@ import {
   writeJsonValue,
 } from '../runtime/output';
 
-const configArgs = {
+const commonArgs = {
   ...cliContractArgs,
-  repoRoot: {
-    type: 'string',
-    description: 'Override the repository root',
-  },
-  home: {
-    type: 'string',
-    description: 'Override the home directory',
-  },
+  repoRoot: { type: 'string', description: 'Override the repository root' },
+  home: { type: 'string', description: 'Override the home directory' },
   codexHome: {
     type: 'string',
     description: 'Override the local Codex home directory',
   },
+} as const;
+
+const installArgs = {
+  ...commonArgs,
   marketplace: {
     type: 'string',
     description: 'Override the personal marketplace.json path',
@@ -51,15 +66,7 @@ const configArgs = {
   },
 } as const;
 
-const applyArgs = {
-  ...configArgs,
-  yes: {
-    type: 'boolean',
-    description: 'Confirm overwriting local Codex prompts and rules',
-  },
-} as const;
-
-type ConfigCommandArgs = {
+type CodexArgs = {
   readonly json?: unknown;
   readonly noInteractive?: unknown;
   readonly quiet?: unknown;
@@ -69,7 +76,37 @@ type ConfigCommandArgs = {
   readonly marketplace?: unknown;
   readonly pluginsRoot?: unknown;
   readonly cacheRoot?: unknown;
-  readonly yes?: unknown;
+};
+
+export type SkillsInteraction = {
+  readonly chooseMode: () => Promise<'manage' | 'add' | undefined>;
+  readonly chooseManagedActions: (
+    rows: readonly ManagedSkillInventoryRow[],
+  ) => Promise<
+    | ReadonlyArray<{
+        readonly name: string;
+        readonly action: Exclude<ManagedSkillAction, 'none'>;
+      }>
+    | undefined
+  >;
+  readonly requestRepository: () => Promise<string | undefined>;
+  readonly chooseDiscoveredNames: (
+    skills: readonly DiscoveredSkill[],
+  ) => Promise<readonly string[] | undefined>;
+  readonly chooseTrackingType: () => Promise<'branch' | 'pin' | undefined>;
+  readonly requestTrackingRef: (
+    type: 'branch' | 'pin',
+  ) => Promise<string | undefined>;
+  readonly confirmPlan: (
+    plan: readonly SkillPlanItem[],
+  ) => Promise<boolean | undefined>;
+};
+
+export type RunSkillsDependencies = {
+  readonly createBackend?: (
+    paths: ReturnType<typeof createPaths>,
+  ) => SkillsBackend;
+  readonly interaction?: SkillsInteraction;
 };
 
 function getStringArg(value: unknown): string | undefined {
@@ -78,7 +115,7 @@ function getStringArg(value: unknown): string | undefined {
     : undefined;
 }
 
-function createPaths(args: ConfigCommandArgs) {
+function createPaths(args: CodexArgs) {
   return createCodexConfigPaths({
     repoRoot: getStringArg(args.repoRoot),
     homeRoot: getStringArg(args.home),
@@ -89,458 +126,460 @@ function createPaths(args: ConfigCommandArgs) {
   });
 }
 
-function writeDetailedStatusHuman(
-  comparison: CodexConfigComparison,
-  paths: CodexConfigPaths,
-  args: ConfigCommandArgs,
-): void {
-  const context = createCliContext(args);
-  writeHumanStatus(
-    context,
-    processOutput,
-    pc.bold(pc.cyan('Codex Status Details')),
-  );
-  writeHumanStatus(context, processOutput, `local: ${paths.localCodexRoot}`);
-  writeHumanStatus(context, processOutput, `repo:  ${paths.repoCodexRoot}`);
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(
-    context,
-    processOutput,
-    pc.bold('Area      Added  Removed  Modified  Unchanged'),
-  );
-  for (const area of ['prompts', 'rules'] as const) {
-    const counts = comparison.areas[area].counts;
-    writeHumanStatus(
-      context,
-      processOutput,
-      `${area.padEnd(9)} ${formatCount(counts.added, '+')} ${formatCount(
-        counts.removed,
-        '-',
-      )} ${formatCount(counts.modified, '~')} ${formatCount(
-        counts.unchanged,
-        '=',
-      )}`,
-    );
-  }
-
-  for (const area of ['prompts', 'rules'] as const) {
-    writeAreaDiff(context, area, comparison.areas[area].files);
-  }
-
-  writeIntentSection(context, 'Repository-owned assets not installed locally', [
-    ['skills', comparison.missingRepoSkills],
-    ['plugins', comparison.missingRepoPlugins],
-  ]);
-  writeRepoPluginStatusSection(context, comparison.repoPlugins);
-  writeIntentSection(context, 'Local backup intent not tracked', [
-    ['skills', comparison.unmanagedSkills],
-    ['plugins', comparison.unmanagedPlugins],
-  ]);
-  writeIntentSection(context, 'Unsupported restore intent', [
-    ['skills', comparison.unsupportedSkills],
-    ['plugins', comparison.unsupportedPlugins],
-  ]);
-  writeIntentSection(context, 'Unsafe repository content', [
-    ['paths', comparison.unsafeRepoPaths],
-  ]);
-
-  const next = chooseNextHint(comparison);
-  if (next) {
-    writeHumanStatus(context, processOutput);
-    writeHumanStatus(context, processOutput, pc.bold('Next'));
-    writeHumanStatus(context, processOutput, next);
-  }
-}
-
-async function runComparison(args: ConfigCommandArgs) {
-  const paths = createPaths(args);
-  const comparison = await compareCodexConfig(paths);
-  const ok = comparison.unsafeRepoPaths.length === 0;
-  if (args.json === true) {
-    writeJsonValue(processOutput, {
-      ok,
-      command: 'codex status',
-      comparison,
-    });
-  } else {
-    writeDetailedStatusHuman(comparison, paths, args);
-  }
-  process.exitCode = ok ? 0 : 1;
-}
-
-const maxDiffPathsPerState = 5;
-
-function formatCount(count: number, state: '+' | '-' | '~' | '='): string {
-  const value = `${state}${count}`.padStart(7);
-  if (count === 0) {
-    return pc.dim(value);
-  }
-  if (state === '+') {
-    return pc.green(value);
-  }
-  if (state === '-') {
-    return pc.red(value);
-  }
-  if (state === '~') {
-    return pc.yellow(value);
-  }
-  return pc.dim(value);
-}
-
-function writeAreaDiff(
-  context: ReturnType<typeof createCliContext>,
-  area: 'prompts' | 'rules',
-  files: CodexConfigComparison['areas']['prompts']['files'],
-): void {
-  const rows: Array<
-    readonly [
-      string,
-      'added' | 'removed' | 'modified',
-      (value: string) => string,
-    ]
-  > = [
-    ['+', 'added', pc.green],
-    ['-', 'removed', pc.red],
-    ['~', 'modified', pc.yellow],
-  ];
-  const hasChanges = rows.some(([, state]) => files[state].length > 0);
-  if (!hasChanges) {
-    return;
-  }
-
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(context, processOutput, pc.bold(area));
-  for (const [prefix, state, color] of rows) {
-    const paths = files[state];
-    if (paths.length === 0) {
-      continue;
-    }
-
-    for (const path of paths.slice(0, maxDiffPathsPerState)) {
-      writeHumanStatus(context, processOutput, color(`${prefix} ${path}`));
-    }
-    const omitted = paths.length - maxDiffPathsPerState;
-    if (omitted > 0) {
-      writeHumanStatus(
-        context,
-        processOutput,
-        pc.dim(`... ${omitted} more ${state} paths`),
-      );
-    }
-  }
-}
-
-function writeIntentSection(
-  context: ReturnType<typeof createCliContext>,
-  title: string,
-  rows: ReadonlyArray<readonly [string, readonly string[]]>,
-): void {
-  const visible = rows.filter(([, values]) => values.length > 0);
-  if (visible.length === 0) {
-    return;
-  }
-
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(context, processOutput, pc.bold(title));
-  for (const [label, values] of visible) {
-    writeHumanStatus(context, processOutput, `${label}: ${values.join(', ')}`);
-  }
-}
-
-function writeRepoPluginStatusSection(
-  context: ReturnType<typeof createCliContext>,
-  plugins: CodexConfigComparison['repoPlugins'],
-): void {
-  if (plugins.length === 0) {
-    return;
-  }
-
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(context, processOutput, pc.bold('Repository plugins'));
-  for (const plugin of plugins) {
-    writeHumanStatus(
-      context,
-      processOutput,
-      `${plugin.name}: ${formatRepoPluginStatus(plugin.status)}`,
-    );
-  }
-}
-
-function formatRepoPluginStatus(
-  status: CodexConfigComparison['repoPlugins'][number]['status'],
-): string {
-  if (status === 'applied') {
-    return pc.green('applied');
-  }
-  if (status === 'not_applied') {
-    return pc.yellow('not applied');
-  }
-  return pc.dim('disabled');
-}
-
-function chooseNextHint(comparison: CodexConfigComparison): string | undefined {
-  if (
-    comparison.missingRepoSkills.length > 0 ||
-    comparison.missingRepoPlugins.length > 0
-  ) {
-    return 'Next: run `chc codex install` to install repository-owned assets locally.';
-  }
-
-  const hasLocalOnlyChanges = (['prompts', 'rules'] as const).some((area) => {
-    const files = comparison.areas[area].files;
-    return files.added.length > 0 || files.modified.length > 0;
-  });
-  if (
-    hasLocalOnlyChanges ||
-    comparison.unmanagedSkills.length > 0 ||
-    comparison.unmanagedPlugins.length > 0
-  ) {
-    return 'Next: run `chc codex export` after reviewing local changes.';
-  }
-
-  if (
-    comparison.unsupportedSkills.length > 0 ||
-    comparison.unsupportedPlugins.length > 0
-  ) {
-    return 'Next: edit manifests or install unsupported entries manually.';
-  }
-
-  if (comparison.unsafeRepoPaths.length > 0) {
-    return 'Next: remove unsafe runtime state from repository codex/.';
-  }
-
-  return undefined;
-}
-
-function writeManualInstallHint(
-  context: ReturnType<typeof createCliContext>,
-  result: {
-    readonly unsupportedSkills: readonly string[];
-    readonly unsupportedPlugins: readonly string[];
-  },
-): void {
-  if (
-    result.unsupportedSkills.length === 0 &&
-    result.unsupportedPlugins.length === 0
-  ) {
-    return;
-  }
-
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(context, processOutput, pc.bold('Manual install needed'));
-  if (result.unsupportedSkills.length > 0) {
-    writeHumanStatus(
-      context,
-      processOutput,
-      `skills: ${result.unsupportedSkills.join(', ')}`,
-    );
-  }
-  if (result.unsupportedPlugins.length > 0) {
-    writeHumanStatus(
-      context,
-      processOutput,
-      `plugins: ${result.unsupportedPlugins.join(', ')}`,
-    );
-  }
-}
-
-type ManagedApplyArea = 'prompts' | 'rules';
-
-function getApplyOverwritePaths(
-  comparison: CodexConfigComparison,
-): Record<ManagedApplyArea, string[]> {
-  return {
-    prompts: [
-      ...comparison.areas.prompts.files.added,
-      ...comparison.areas.prompts.files.modified,
-    ].sort(),
-    rules: [
-      ...comparison.areas.rules.files.added,
-      ...comparison.areas.rules.files.modified,
-    ].sort(),
-  };
-}
-
-function hasApplyOverwriteRisk(
-  paths: Record<ManagedApplyArea, readonly string[]>,
-): boolean {
-  return paths.prompts.length > 0 || paths.rules.length > 0;
-}
-
-async function confirmApplyOverwrite(
-  context: ReturnType<typeof createCliContext>,
-  paths: Record<ManagedApplyArea, string[]>,
-  args: ConfigCommandArgs,
-  fail?: ObservedCliCommandScope['fail'],
-): Promise<boolean> {
-  if (!hasApplyOverwriteRisk(paths) || args.yes === true) {
-    return true;
-  }
-
-  const error = createCliError(
-    'invalid_option',
-    'codex apply would overwrite or delete local prompts/rules; rerun with --yes to confirm.',
-  );
-  if (context.json || !context.interactive) {
-    fail?.(error, { details: { phase: 'confirmation' } });
-    writeCommandError(context, processOutput, error);
-    process.exitCode = error.exitCode;
-    return false;
-  }
-
-  writeHumanStatus(context, processOutput, pc.yellow(error.message));
-  for (const area of ['prompts', 'rules'] as const) {
-    if (paths[area].length === 0) {
-      continue;
-    }
-
-    writeHumanStatus(context, processOutput, pc.bold(area));
-    for (const path of paths[area].slice(0, maxDiffPathsPerState)) {
-      writeHumanStatus(context, processOutput, pc.yellow(`! ${path}`));
-    }
-    const omitted = paths[area].length - maxDiffPathsPerState;
-    if (omitted > 0) {
-      writeHumanStatus(
-        context,
-        processOutput,
-        pc.dim(`... ${omitted} more affected paths`),
-      );
-    }
-  }
-
-  const answer = await confirm({
-    message: 'Overwrite local Codex prompts/rules from the repository?',
-    initialValue: false,
-  });
-  if (isCancel(answer) || answer !== true) {
-    const cancelError = createCliError(
-      'invalid_option',
-      'codex apply cancelled.',
-    );
-    fail?.(cancelError, { details: { phase: 'confirmation' } });
-    writeCommandError(context, processOutput, cancelError);
-    process.exitCode = cancelError.exitCode;
-    return false;
-  }
-
-  return true;
-}
-
 async function runObservedCodexSubcommand(
   subcommand: string,
-  args: ConfigCommandArgs,
+  args: CodexArgs,
   run: (scope: ObservedCliCommandScope) => Promise<void> | void,
 ): Promise<void> {
   await runObservedCliCommand(args, { command: 'codex', subcommand }, run);
 }
 
+function failCommand(scope: ObservedCliCommandScope, message: string): void {
+  const error = createCliError('invalid_option', message);
+  scope.fail(error);
+  writeCommandError(scope.context, processOutput, error);
+  process.exitCode = error.exitCode;
+}
+
+export async function runSkills(
+  args: CodexArgs,
+  scope: ObservedCliCommandScope,
+  dependencies: RunSkillsDependencies = {},
+): Promise<void> {
+  if (!scope.context.json && !scope.context.interactive) {
+    failCommand(
+      scope,
+      '`chc codex skills` requires an interactive terminal; use --json for a read-only snapshot.',
+    );
+    return;
+  }
+
+  const paths = createPaths(args);
+  const manifestResult = await readCodexSkillsManifest(paths.repoCodexRoot);
+  const backend = dependencies.createBackend
+    ? dependencies.createBackend(paths)
+    : createNpxSkillsBackend({
+        homeRoot: paths.homeRoot,
+        localCodexRoot: paths.localCodexRoot,
+      });
+  const inventory = await buildManagedSkillInventory({
+    ...manifestResult,
+    backend,
+  });
+
+  if (scope.context.json) {
+    writeJsonValue(processOutput, {
+      ok: true,
+      command: 'codex skills',
+      result: {
+        manifestVersion: manifestResult.manifest.version,
+        skills: inventory,
+        legacyEntries: manifestResult.legacyEntries,
+      },
+    });
+    process.exitCode = 0;
+    return;
+  }
+
+  if (manifestResult.legacyEntries.length > 0) {
+    failCommand(
+      scope,
+      `The version 1 skills manifest contains entries without reinstallable sources (${manifestResult.legacyEntries.join(', ')}). Migrate it explicitly to version 2 before making changes.`,
+    );
+    return;
+  }
+
+  writeInventory(scope, inventory);
+  const interaction = dependencies.interaction ?? defaultSkillsInteraction;
+  const mode = await interaction.chooseMode();
+  if (!mode) {
+    return;
+  }
+
+  const plan =
+    mode === 'add'
+      ? await createAddPlan(manifestResult.manifest, backend, interaction)
+      : await createManagePlan(inventory, interaction);
+  if (!plan || plan.length === 0) {
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      pc.dim('No changes selected.'),
+    );
+    return;
+  }
+
+  writePlan(scope, plan);
+  const approved = await interaction.confirmPlan(plan);
+  if (approved !== true) {
+    writeHumanStatus(scope.context, processOutput, pc.dim('Cancelled.'));
+    return;
+  }
+
+  const result = await executeSkillPlan({
+    repoCodexRoot: paths.repoCodexRoot,
+    manifest: manifestResult.manifest,
+    items: plan,
+    backend,
+  });
+  for (const item of result.completed) {
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      pc.green(`done  ${item.action} ${item.name}`),
+    );
+  }
+  for (const failure of result.failed) {
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      pc.red(
+        `failed ${failure.item.action} ${failure.item.name}: ${failure.error}`,
+      ),
+    );
+  }
+  process.exitCode = result.failed.length === 0 ? 0 : 1;
+}
+
+function writeInventory(
+  scope: ObservedCliCommandScope,
+  inventory: readonly ManagedSkillInventoryRow[],
+): void {
+  writeHumanStatus(
+    scope.context,
+    processOutput,
+    pc.bold('Managed Codex skills'),
+  );
+  if (inventory.length === 0) {
+    writeHumanStatus(scope.context, processOutput, pc.dim('(none)'));
+    return;
+  }
+  for (const row of inventory) {
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      `${row.name.padEnd(28)} ${row.state.padEnd(20)} ${pc.dim(row.source)}`,
+    );
+  }
+}
+
+async function createManagePlan(
+  inventory: readonly ManagedSkillInventoryRow[],
+  interaction: SkillsInteraction,
+): Promise<SkillPlanItem[] | undefined> {
+  const actionable = inventory.filter((row) =>
+    row.availableActions.some((action) => action !== 'none'),
+  );
+  if (actionable.length === 0) {
+    return [];
+  }
+  const choices = await interaction.chooseManagedActions(actionable);
+  if (!choices) {
+    return undefined;
+  }
+
+  const plan: SkillPlanItem[] = [];
+  for (const choice of choices) {
+    const row = actionable.find((candidate) => candidate.name === choice.name);
+    if (!row) {
+      continue;
+    }
+    plan.push({
+      action: choice.action,
+      name: row.name,
+      skill: row.skill,
+      installedPath: row.installedPath,
+      installedManaged: row.installedManaged,
+    });
+  }
+  return plan;
+}
+
+async function createAddPlan(
+  manifest: CodexSkillsManifest,
+  backend: SkillsBackend,
+  interaction: SkillsInteraction,
+): Promise<SkillPlanItem[] | undefined> {
+  const repositoryAnswer = await interaction.requestRepository();
+  if (!repositoryAnswer) {
+    return undefined;
+  }
+  const repository = repositoryAnswer.trim();
+  const discovered = await backend.discover(repository);
+  const selectedNames = await interaction.chooseDiscoveredNames(discovered);
+  if (!selectedNames) {
+    return undefined;
+  }
+  const trackingType = await interaction.chooseTrackingType();
+  if (!trackingType) {
+    return undefined;
+  }
+  const refAnswer = await interaction.requestTrackingRef(trackingType);
+  if (!refAnswer) {
+    return undefined;
+  }
+
+  const selectedSkills: ManagedCodexSkill[] = selectedNames.map((name) => ({
+    name,
+    source: 'github',
+    repository,
+    selector: name,
+    tracking: { type: trackingType, ref: refAnswer.trim() },
+    enabled: true,
+  }));
+  const candidateManifest: CodexSkillsManifest = {
+    version: 2,
+    skills: [
+      ...manifest.skills.filter(
+        (existing) => !selectedNames.includes(existing.name),
+      ),
+      ...selectedSkills,
+    ],
+  };
+  const inventory = await buildManagedSkillInventory({
+    manifest: candidateManifest,
+    legacyEntries: [],
+    backend,
+  });
+  return selectedSkills.map((skill) => {
+    const row = inventory.find((candidate) => candidate.name === skill.name);
+    if (row?.state === 'unmanaged_collision') {
+      return {
+        action: 'replace' as const,
+        name: skill.name,
+        skill,
+        installedPath: row.installedPath,
+      };
+    }
+    if (row?.state === 'missing') {
+      return { action: 'add' as const, name: skill.name, skill };
+    }
+    return { action: 'enable' as const, name: skill.name, skill };
+  });
+}
+
+const defaultSkillsInteraction: SkillsInteraction = {
+  async chooseMode() {
+    const answer = await select<'manage' | 'add'>({
+      message: 'Codex skills',
+      options: [
+        { value: 'manage', label: 'Manage tracked skills' },
+        { value: 'add', label: 'Add skills from GitHub' },
+      ],
+    });
+    return isCancel(answer) ? undefined : answer;
+  },
+  async chooseManagedActions(rows) {
+    return promptManagedActionTable(rows);
+  },
+  async requestRepository() {
+    const answer = await promptText({
+      message: 'GitHub repository (owner/repo)',
+      validate(value) {
+        return /^[^/\s]+\/[^/\s]+$/u.test(value.trim())
+          ? undefined
+          : 'Use owner/repo format.';
+      },
+    });
+    return isCancel(answer) ? undefined : answer.trim();
+  },
+  async chooseDiscoveredNames(skills) {
+    const answer = await multiselect<string>({
+      message: 'Select skills to track (Space toggles)',
+      required: true,
+      options: skills.map((skill) => ({
+        value: skill.name,
+        label: skill.name,
+      })),
+    });
+    return isCancel(answer) ? undefined : answer;
+  },
+  async chooseTrackingType() {
+    const answer = await select<'branch' | 'pin'>({
+      message: 'Tracking mode',
+      options: [
+        { value: 'branch', label: 'Track a branch' },
+        { value: 'pin', label: 'Pin a commit or tag' },
+      ],
+    });
+    return isCancel(answer) ? undefined : answer;
+  },
+  async requestTrackingRef(type) {
+    const answer = await promptText({
+      message: type === 'branch' ? 'Branch' : 'Commit or tag',
+      initialValue: type === 'branch' ? 'main' : undefined,
+      validate: (value) =>
+        value.trim().length > 0 ? undefined : 'A ref is required.',
+    });
+    return isCancel(answer) ? undefined : answer.trim();
+  },
+  async confirmPlan() {
+    const answer = await confirm({
+      message: 'Apply this skills plan?',
+      initialValue: false,
+    });
+    return isCancel(answer) ? undefined : answer;
+  },
+};
+
+async function promptManagedActionTable(
+  rows: readonly ManagedSkillInventoryRow[],
+): Promise<
+  | ReadonlyArray<{
+      readonly name: string;
+      readonly action: Exclude<ManagedSkillAction, 'none'>;
+    }>
+  | undefined
+> {
+  const input = process.stdin;
+  if (!input.isTTY || typeof input.setRawMode !== 'function') {
+    return undefined;
+  }
+  const indexes = rows.map(() => 0);
+  let focused = 0;
+  let renderedLines = 0;
+  const control = String.fromCharCode(27);
+
+  function render(): void {
+    const lines = [
+      pc.bold('Choose managed skill actions'),
+      pc.dim('↑/↓ move · Space cycles valid actions · Enter reviews plan'),
+      ...rows.map((row, index) => {
+        const action = row.availableActions[indexes[index] ?? 0] ?? 'none';
+        const marker = index === focused ? pc.cyan('›') : ' ';
+        const actionLabel =
+          action === 'none' ? pc.dim('none') : pc.yellow(action);
+        return `${marker} ${row.name.padEnd(26)} ${row.state.padEnd(20)} ${actionLabel.padEnd(18)} ${pc.dim(row.source)}`;
+      }),
+    ];
+    if (renderedLines > 0) {
+      process.stdout.write(`${control}[${renderedLines}A${control}[0J`);
+    }
+    process.stdout.write(`${lines.join('\n')}\n`);
+    renderedLines = lines.length;
+  }
+
+  return await new Promise((resolve) => {
+    const wasRaw = input.isRaw;
+    const finish = (cancelled: boolean) => {
+      input.off('keypress', onKeypress);
+      input.setRawMode(wasRaw);
+      if (!wasRaw) {
+        input.pause();
+      }
+      process.stdout.write(`${control}[?25h`);
+      if (cancelled) {
+        resolve(undefined);
+        return;
+      }
+      resolve(
+        rows.flatMap((row, index) => {
+          const action = row.availableActions[indexes[index] ?? 0] ?? 'none';
+          return action === 'none' ? [] : [{ name: row.name, action }];
+        }),
+      );
+    };
+    const onKeypress = (
+      _value: string,
+      key: { readonly name?: string; readonly ctrl?: boolean },
+    ) => {
+      if ((key.ctrl && key.name === 'c') || key.name === 'escape') {
+        finish(true);
+        return;
+      }
+      if (key.name === 'up') {
+        focused = (focused - 1 + rows.length) % rows.length;
+      } else if (key.name === 'down') {
+        focused = (focused + 1) % rows.length;
+      } else if (key.name === 'space') {
+        indexes[focused] =
+          ((indexes[focused] ?? 0) + 1) % rows[focused].availableActions.length;
+      } else if (key.name === 'return' || key.name === 'enter') {
+        finish(false);
+        return;
+      } else {
+        return;
+      }
+      render();
+    };
+
+    emitKeypressEvents(input);
+    input.setRawMode(true);
+    input.resume();
+    input.on('keypress', onKeypress);
+    process.stdout.write(`${control}[?25l`);
+    render();
+  });
+}
+
+function writePlan(
+  scope: ObservedCliCommandScope,
+  plan: readonly SkillPlanItem[],
+): void {
+  writeHumanStatus(scope.context, processOutput);
+  writeHumanStatus(scope.context, processOutput, pc.bold('Plan'));
+  for (const item of plan) {
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      `${item.action.padEnd(8)} ${item.name} ${pc.dim(describePlanEffect(item))}`,
+    );
+  }
+}
+
+function describePlanEffect(item: SkillPlanItem): string {
+  if (item.action === 'add' || item.action === 'install') {
+    return '(install locally; add/retain manifest entry)';
+  }
+  if (item.action === 'replace') {
+    return '(snapshot collision; install locally; add/retain manifest entry)';
+  }
+  if (item.action === 'remove') {
+    return item.installedManaged
+      ? '(remove managed installation; remove manifest entry)'
+      : '(leave unmanaged local copy; remove manifest entry)';
+  }
+  if (item.action === 'enable') {
+    return '(enable manifest entry)';
+  }
+  if (item.action === 'update') {
+    return '(update local installation; preserve manifest source)';
+  }
+  return '';
+}
+
 export const codexCommand = defineCommand({
   meta: {
     name: 'codex',
-    description: 'Manage reproducible Codex configuration.',
+    description: 'Manage Codex skills and repository plugins.',
   },
   subCommands: {
-    status: defineCommand({
+    skills: defineCommand({
       meta: {
-        name: 'status',
-        description: 'Summarize local-versus-repository Codex config state.',
+        name: 'skills',
+        description: 'Interactively manage manifest-tracked GitHub skills.',
       },
-      args: configArgs,
+      args: commonArgs,
       async run({ args }) {
-        await runObservedCodexSubcommand('status', args, async () => {
-          await runComparison(args);
+        await runObservedCodexSubcommand('skills', args, async (scope) => {
+          await runSkills(args, scope);
         });
-      },
-    }),
-    export: defineCommand({
-      meta: {
-        name: 'export',
-        description: 'Export safe local Codex config into the repository.',
-      },
-      args: configArgs,
-      async run({ args }) {
-        await runObservedCodexSubcommand(
-          'export',
-          args,
-          async ({ context }) => {
-            const result = await exportCodexConfig(createPaths(args));
-            if (context.json) {
-              writeJsonValue(processOutput, {
-                ok: true,
-                command: 'codex export',
-                result,
-              });
-            } else {
-              writeHumanStatus(context, processOutput, pc.cyan('Codex export'));
-              writeHumanStatus(
-                context,
-                processOutput,
-                `exported: ${result.exportedAreas.join(', ')}`,
-              );
-            }
-            process.exitCode = 0;
-          },
-        );
-      },
-    }),
-    apply: defineCommand({
-      meta: {
-        name: 'apply',
-        description: 'Restore repository Codex config locally.',
-      },
-      args: applyArgs,
-      async run({ args }) {
-        await runObservedCodexSubcommand(
-          'apply',
-          args,
-          async ({ context, fail }) => {
-            const paths = createPaths(args);
-            const comparison = await compareCodexConfig(paths);
-            if (
-              !(await confirmApplyOverwrite(
-                context,
-                getApplyOverwritePaths(comparison),
-                args,
-                fail,
-              ))
-            ) {
-              return;
-            }
-
-            const result = await applyCodexConfig(paths);
-            if (context.json) {
-              writeJsonValue(processOutput, {
-                ok: true,
-                command: 'codex apply',
-                result,
-              });
-            } else {
-              writeHumanStatus(context, processOutput, pc.cyan('Codex apply'));
-              writeHumanStatus(
-                context,
-                processOutput,
-                `applied: ${result.appliedAreas.join(', ')}`,
-              );
-              writeManualInstallHint(context, result);
-            }
-            process.exitCode = 0;
-          },
-        );
       },
     }),
     install: defineCommand({
       meta: {
         name: 'install',
-        description:
-          'Install repository-owned Codex skills and plugins locally.',
+        description: 'Install repository-owned Codex plugins locally.',
       },
-      args: configArgs,
+      args: installArgs,
       async run({ args }) {
         await runObservedCodexSubcommand(
           'install',
           args,
           async ({ context }) => {
-            const result = await installCodexAssets(createPaths(args));
+            const result = await installRepositoryCodexPlugins(
+              createPaths(args),
+            );
             if (context.json) {
               writeJsonValue(processOutput, {
                 ok: true,
@@ -556,18 +595,8 @@ export const codexCommand = defineCommand({
               writeHumanStatus(
                 context,
                 processOutput,
-                `installed skills: ${result.installedSkills.join(', ') || '(none)'}`,
+                `installed plugins: ${result.installedPlugins.map((plugin) => plugin.name).join(', ') || '(none)'}`,
               );
-              writeHumanStatus(
-                context,
-                processOutput,
-                `installed plugins: ${
-                  result.installedPlugins
-                    .map((plugin) => plugin.name)
-                    .join(', ') || '(none)'
-                }`,
-              );
-              writeManualInstallHint(context, result);
             }
             process.exitCode = 0;
           },

@@ -1,16 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  copyFile,
-  mkdir,
-  mkdtemp,
-  readFile,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const repoRoot = join(cliRoot, '../..');
+const buildScript = join(repoRoot, 'scripts', 'build-cli-dist.mjs');
 
 describe('installed convert-to-cbz script', () => {
   test('loads packaged JavaScript under Node without importing TypeScript source', async () => {
@@ -18,30 +14,25 @@ describe('installed convert-to-cbz script', () => {
     const distRoot = join(root, 'dist');
     const scriptRoot = join(distRoot, 'scripts', 'convert-to-cbz');
     const inputRoot = join(root, 'input');
-    await mkdir(scriptRoot, { recursive: true });
     await mkdir(inputRoot, { recursive: true });
     await writeFile(join(root, 'package.json'), '{"type":"module"}\n');
 
-    const cliBuild = await Bun.build({
-      define: { 'process.env.NODE_ENV': '"production"' },
-      entrypoints: [join(cliRoot, 'src', 'index.ts')],
-      outdir: distRoot,
-      target: 'node',
+    const build = Bun.spawn(['node', buildScript, distRoot], {
+      cwd: repoRoot,
+      stderr: 'pipe',
+      stdin: 'ignore',
+      stdout: 'pipe',
     });
-    const scriptBuild = await Bun.build({
-      define: { 'process.env.NODE_ENV': '"production"' },
-      entrypoints: [
-        join(cliRoot, 'src', 'scripts', 'convert-to-cbz', 'index.ts'),
-      ],
-      outdir: scriptRoot,
-      target: 'node',
-    });
-    expect(cliBuild.success).toBe(true);
-    expect(scriptBuild.success).toBe(true);
-    await copyFile(
-      join(cliRoot, 'src', 'scripts', 'convert-to-cbz', 'script.json'),
-      join(scriptRoot, 'script.json'),
-    );
+    const [buildOut, buildErr, buildCode] = await Promise.all([
+      new Response(build.stdout).text(),
+      new Response(build.stderr).text(),
+      build.exited,
+    ]);
+    if (buildCode !== 0) {
+      throw new Error(
+        `CLI build failed with exit code ${buildCode}\n${buildOut}${buildErr}`,
+      );
+    }
 
     const packagedEntry = await readFile(join(scriptRoot, 'index.js'), 'utf8');
     expect(packagedEntry).not.toMatch(/from\s+["'][^"']+\.ts["']/);

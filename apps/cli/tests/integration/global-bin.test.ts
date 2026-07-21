@@ -89,7 +89,7 @@ describe('global bin', () => {
         'node',
         'bin/chc.mjs',
         'codex',
-        'status',
+        'skills',
         '--repo-root',
         repoRoot,
         '--home',
@@ -112,7 +112,7 @@ describe('global bin', () => {
     expect(err).toBe('');
     expect(JSON.parse(out)).toMatchObject({
       ok: true,
-      command: 'codex status',
+      command: 'codex skills',
     });
   });
 
@@ -271,7 +271,7 @@ describe('global bin', () => {
       if (args.length === 0) {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(
-          '\n  codex       Manage reproducible Codex configuration.',
+          '\n  codex       Manage Codex skills and repository plugins.',
         );
         expect(plain).toContain(
           '\n  scripts     Discover, list, and run bundled scripts under apps/cli/src/scripts/<id>/.',
@@ -289,15 +289,14 @@ describe('global bin', () => {
       } else if (args[0] === 'codex') {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(
-          '\n  status   Summarize local-versus-repository Codex config state.',
+          '\n  skills   Interactively manage manifest-tracked GitHub skills.',
         );
         expect(plain).toContain(
-          '\n  apply    Restore repository Codex config locally.',
+          '\n  install  Install repository-owned Codex plugins locally.',
         );
-        expect(plain).toContain(
-          '\n  install  Install repository-owned Codex skills and plugins locally.',
-        );
-        expect(plain).not.toContain('\n   apply');
+        expect(plain).not.toContain('\n  status');
+        expect(plain).not.toContain('\n  export');
+        expect(plain).not.toContain('\n  apply');
       } else if (args[0] === 'scripts') {
         expect(plain).toContain('COMMANDS');
         expect(plain).toContain(

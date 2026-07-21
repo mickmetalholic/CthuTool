@@ -151,10 +151,8 @@ describe('shell completion command', () => {
       'completion',
     ]);
     expect(lines((await runCli(['__complete', 'codex', ''])).out)).toEqual([
-      'apply',
-      'export',
       'install',
-      'status',
+      'skills',
     ]);
     expect(
       lines(
@@ -166,7 +164,7 @@ describe('shell completion command', () => {
           ])
         ).out,
       ),
-    ).toEqual(['apply', 'export', 'install', 'status']);
+    ).toEqual(['install', 'skills']);
     expect(lines((await runCli(['__complete', 'codex'])).out)).toEqual([
       'codex',
     ]);
@@ -183,14 +181,14 @@ describe('shell completion command', () => {
       lines((await runCli(['__complete', 'completion', 'status', ''])).out),
     ).toEqual(['powershell', 'zsh']);
     expect(
-      lines((await runCli(['__complete', 'codex', 'status', '--'])).out),
+      lines((await runCli(['__complete', 'codex', 'skills', '--'])).out),
     ).toContain('--json');
     expect(
-      lines((await runCli(['__complete', 'codex', 'status', '--'])).out),
+      lines((await runCli(['__complete', 'codex', 'skills', '--'])).out),
     ).toContain('--repo-root');
     expect(
       lines(
-        (await runCli(['__complete', 'codex', 'status', '--json', '--'])).out,
+        (await runCli(['__complete', 'codex', 'skills', '--json', '--'])).out,
       ),
     ).not.toContain('--json');
     const scriptList = await runCli(['scripts', 'list', '--json']);
