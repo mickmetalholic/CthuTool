@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -78,7 +78,7 @@ describe('CLI command diagnostics coverage', () => {
     const result = await runCli(
       [
         'codex',
-        'status',
+        'skills',
         '--repo-root',
         repoRoot,
         '--home',
@@ -89,7 +89,7 @@ describe('CLI command diagnostics coverage', () => {
     );
 
     expect(result.code).toBe(0);
-    expect(JSON.parse(result.out).command).toBe('codex status');
+    expect(JSON.parse(result.out).command).toBe('codex skills');
     const diagnostics = parseDiagnostics(result.err);
     expect(diagnostics.map((event) => event.event)).toEqual([
       'cli.command_started',
@@ -98,7 +98,7 @@ describe('CLI command diagnostics coverage', () => {
     expect(diagnostics[1]).toEqual(
       expect.objectContaining({
         command: 'codex',
-        subcommand: 'status',
+        subcommand: 'skills',
         exitCode: 0,
       }),
     );
@@ -116,14 +116,14 @@ describe('CLI command diagnostics coverage', () => {
   });
 
   test('emits failure diagnostics before rethrowing unexpected command failures', async () => {
-    const repoRootFile = join(
-      await mkdtemp(join(tmpdir(), 'cthutool-repo-file-parent-')),
-      'repo-file',
+    const repoRoot = await mkdtemp(
+      join(tmpdir(), 'cthutool-invalid-manifest-'),
     );
-    await writeFile(repoRootFile, 'not a directory');
+    await mkdir(join(repoRoot, 'codex'), { recursive: true });
+    await writeFile(join(repoRoot, 'codex', 'skills.manifest.json'), '{');
 
     const result = await runCli(
-      ['codex', 'export', '--repo-root', repoRootFile, '--json'],
+      ['codex', 'skills', '--repo-root', repoRoot, '--json'],
       { CHC_CLI_DIAGNOSTICS: '1' },
     );
 
@@ -135,7 +135,7 @@ describe('CLI command diagnostics coverage', () => {
     expect(diagnostics.at(-1)).toEqual(
       expect.objectContaining({
         command: 'codex',
-        subcommand: 'export',
+        subcommand: 'skills',
         errorCode: 'invalid_option',
         exitCode: 1,
       }),

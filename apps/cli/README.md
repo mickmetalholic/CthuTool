@@ -200,6 +200,34 @@ MOBI files, PDFs nested in ZIP/RAR archives, loose image directories,
 deduplication, metadata lookup, and library-specific naming are preprocessing
 or organization concerns outside this command.
 
+## Codex Skills and Plugins
+
+`chc codex` has two operations:
+
+```bash
+chc codex skills
+chc codex install
+```
+
+`chc codex skills` opens an interactive manager for third-party GitHub skills
+declared in `codex/skills.manifest.json`. Use Space to select managed entries,
+review the explicit plan, and confirm before anything changes. The version 2
+manifest records the repository, skill selector, branch or pinned ref, and
+enabled state. Local skills absent from the manifest are ignored; the command
+only calls them out when their name collides with a selected managed skill.
+`--json` emits a read-only inventory, and a non-interactive bare invocation
+fails instead of choosing actions automatically.
+
+Skill discovery and local operations use the pinned
+`npx --yes skills@1.5.19` backend at Codex user scope. Updates are offered only
+for branch-tracked entries; pinned refs remain fixed until the manifest changes.
+
+`chc codex install` is plugin-only. It installs enabled repository plugins from
+`codex/plugins.manifest.json` (and discovered repository plugin directories),
+registers them in the personal marketplace, enables them in Codex, normalizes
+plugin metadata, and synchronizes the personal plugin cache. It does not read or
+install skills and does not synchronize prompts or rules.
+
 ## Local Development
 
 For local development, install the checkout once and keep the built CLI
@@ -218,7 +246,7 @@ pnpm --filter @cthutool/cli dev
 Then run commands through the global executable:
 
 ```bash
-chc codex status
+chc codex skills
 ```
 
 The `dev` script watches the TypeScript source and rebuilds

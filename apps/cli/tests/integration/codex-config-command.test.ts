@@ -13,14 +13,15 @@ async function runCli(args: string[]) {
     stderr: 'pipe',
     stdin: 'ignore',
   });
-
-  const out = await new Response(proc.stdout).text();
-  const err = await new Response(proc.stderr).text();
-  const code = await proc.exited;
-  return { code, out, err };
+  return {
+    out: await new Response(proc.stdout).text(),
+    err: await new Response(proc.stderr).text(),
+    code: await proc.exited,
+  };
 }
 
 async function writeJson(path: string, value: unknown) {
+  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(value, null, 2), 'utf8');
 }
 
@@ -32,7 +33,14 @@ async function writePlugin(root: string, name: string) {
     version: '0.1.0',
     interface: { displayName: name },
   });
-  await mkdir(join(pluginRoot, 'hooks'), { recursive: true });
+  await writeJson(join(pluginRoot, '.mcp.json'), {
+    mcpServers: {
+      sample: {
+        command: 'node',
+        args: ['$' + '{PLUGIN_ROOT}/server.mjs'],
+      },
+    },
+  });
   await writeJson(join(pluginRoot, 'hooks', 'hooks.json'), {
     hooks: {
       UserPromptSubmit: [
@@ -40,7 +48,7 @@ async function writePlugin(root: string, name: string) {
           hooks: [
             {
               type: 'command',
-              command: 'node "<PLUGIN_ROOT>/scripts/language-coach.mjs"',
+              command: 'node "<PLUGIN_ROOT>/language-coach.mjs"',
               timeout: 5,
             },
           ],
@@ -50,21 +58,43 @@ async function writePlugin(root: string, name: string) {
   });
 }
 
-function stripAnsi(value: string): string {
-  return value.replace(
-    new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g'),
-    '',
-  );
-}
+describe('codex command boundary', () => {
+  test('bare help exposes exactly skills and install', async () => {
+    const result = await runCli(['codex']);
+    expect(result.code).toBe(0);
+    expect(result.err).toBe('');
+    expect(result.out).toContain('skills');
+    expect(result.out).toContain('install');
+    for (const retired of ['status', 'export', 'apply']) {
+      expect(result.out).not.toMatch(new RegExp(`\\b${retired}\\b`));
+    }
+  });
 
-describe('codex config command', () => {
-  test('does not expose a codex plugins command', async () => {
+  test('rejects every retired subcommand without touching state', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    for (const retired of ['status', 'export', 'apply', 'plugins']) {
+      const result = await runCli(['codex', retired, '--repo-root', repoRoot]);
+      expect(result.code).not.toBe(0);
+      expect(result.err).toContain('Unknown command');
+    }
+    await expect(stat(join(repoRoot, 'codex'))).rejects.toThrow();
+  });
+
+  test('prints an empty, read-only version 2 skills snapshot as JSON', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    await writeJson(join(repoRoot, 'codex', 'skills.manifest.json'), {
+      version: 2,
+      skills: [],
+    });
 
+    const before = await readFile(
+      join(repoRoot, 'codex', 'skills.manifest.json'),
+      'utf8',
+    );
     const result = await runCli([
       'codex',
-      'plugins',
+      'skills',
       '--repo-root',
       repoRoot,
       '--home',
@@ -72,10 +102,55 @@ describe('codex config command', () => {
       '--json',
     ]);
 
-    expect(result.code).not.toBe(0);
+    expect(result.code).toBe(0);
+    expect(result.err).toBe('');
+    expect(JSON.parse(result.out)).toEqual({
+      ok: true,
+      command: 'codex skills',
+      result: { manifestVersion: 2, skills: [], legacyEntries: [] },
+    });
+    expect(
+      await readFile(join(repoRoot, 'codex', 'skills.manifest.json'), 'utf8'),
+    ).toBe(before);
   });
 
-  test('installs repository plugin manifests and syncs plugin cache', async () => {
+  test('reports legacy names without migrating or querying local skills', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    await writeJson(join(repoRoot, 'codex', 'skills.manifest.json'), {
+      version: 1,
+      skills: [
+        { name: 'old-skill', source: 'external', path: 'skill:old-skill' },
+      ],
+    });
+
+    const result = await runCli([
+      'codex',
+      'skills',
+      '--repo-root',
+      repoRoot,
+      '--home',
+      homeRoot,
+      '--json',
+    ]);
+    const parsed = JSON.parse(result.out);
+    expect(result.code).toBe(0);
+    expect(parsed.result.legacyEntries).toEqual(['old-skill']);
+    expect(parsed.result.skills[0]).toMatchObject({
+      name: 'old-skill',
+      state: 'legacy',
+    });
+  });
+
+  test('fails safely when the skills UI has no TTY', async () => {
+    const result = await runCli(['codex', 'skills']);
+    expect(result.code).not.toBe(0);
+    expect(result.out).toBe('');
+    expect(result.err).toContain('requires an interactive terminal');
+    expect(result.err).toContain('--json');
+  });
+
+  test('installs enabled repository plugins only and preserves plugin behavior', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
     const pluginsRoot = join(repoRoot, 'codex', 'plugins');
@@ -86,316 +161,74 @@ describe('codex config command', () => {
       'marketplace.json',
     );
     const cacheRoot = join(homeRoot, '.codex', 'plugins', 'cache', 'personal');
-    await mkdir(pluginsRoot, { recursive: true });
-    await writePlugin(pluginsRoot, 'cthu-codex');
+    await writePlugin(pluginsRoot, 'enabled-plugin');
+    await writePlugin(pluginsRoot, 'disabled-plugin');
     await writeJson(join(repoRoot, 'codex', 'plugins.manifest.json'), {
       version: 1,
       plugins: [
         {
-          name: 'cthu-codex',
+          name: 'disabled-plugin',
           source: 'repo',
-          path: 'codex/plugins/cthu-codex',
-          enabled: true,
+          path: 'codex/plugins/disabled-plugin',
+          enabled: false,
         },
       ],
     });
+    await writeFile(join(repoRoot, 'codex', 'skills.manifest.json'), '{');
+    await mkdir(join(repoRoot, 'codex', 'skills', 'ignored-skill'), {
+      recursive: true,
+    });
+    await mkdir(join(homeRoot, '.codex', 'rules'), { recursive: true });
+    await writeFile(
+      join(homeRoot, '.codex', 'rules', 'personal.rules'),
+      'leave unchanged',
+    );
 
     const result = await runCli([
       'codex',
       'install',
       '--repo-root',
       repoRoot,
-      '--marketplace',
-      marketplace,
       '--home',
       homeRoot,
+      '--marketplace',
+      marketplace,
       '--cache-root',
       cacheRoot,
       '--json',
     ]);
+    const parsed = JSON.parse(result.out);
 
     expect(result.code).toBe(0);
-    const parsed = JSON.parse(result.out);
     expect(parsed.command).toBe('codex install');
     expect(parsed.result.installedPlugins).toEqual([
-      { name: 'cthu-codex', action: 'installed' },
+      { name: 'enabled-plugin', action: 'installed' },
     ]);
-    expect(parsed.result.syncedPluginCaches).toEqual([
-      { name: 'cthu-codex', action: 'synced', version: '0.1.0' },
-    ]);
+    const marketplaceValue = JSON.parse(await readFile(marketplace, 'utf8'));
+    expect(
+      marketplaceValue.plugins.map((plugin: { name: string }) => plugin.name),
+    ).toEqual(['enabled-plugin']);
     expect(
       await readFile(
-        join(cacheRoot, 'cthu-codex', '0.1.0', 'hooks', 'hooks.json'),
+        join(cacheRoot, 'enabled-plugin', '0.1.0', 'hooks', 'hooks.json'),
         'utf8',
       ),
     ).not.toContain('<PLUGIN_ROOT>');
-  });
-
-  test('reports status as read-only JSON', async () => {
-    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
-    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
-    await mkdir(join(homeRoot, '.codex', 'prompts'), { recursive: true });
-    await writeFile(join(homeRoot, '.codex', 'prompts', 'daily.md'), 'local');
-
-    const status = await runCli([
-      'codex',
-      'status',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-      '--json',
-    ]);
-
-    expect(status.code).toBe(0);
-    expect(JSON.parse(status.out).comparison.areas.prompts.counts.added).toBe(
-      1,
-    );
-    expect(JSON.parse(status.out).command).toBe('codex status');
-    expect(JSON.parse(status.out).comparison.missingRepoSkills).toEqual([]);
-    await expect(
-      stat(join(repoRoot, 'codex', 'prompts', 'daily.md')),
-    ).rejects.toThrow();
-  });
-
-  test('prints enhanced status with grouped bounded changes and repo install gaps', async () => {
-    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
-    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
-
-    await mkdir(join(homeRoot, '.codex', 'prompts'), { recursive: true });
-    await mkdir(join(repoRoot, 'codex', 'prompts'), { recursive: true });
-    await mkdir(join(homeRoot, '.codex', 'skills', 'personal-only'), {
-      recursive: true,
-    });
-    await writeFile(
-      join(homeRoot, '.codex', 'skills', 'personal-only', 'SKILL.md'),
-      'personal skill',
-    );
-    await mkdir(join(repoRoot, 'codex', 'skills', 'repo-skill'), {
-      recursive: true,
-    });
-    await writePlugin(join(repoRoot, 'codex', 'plugins'), 'repo-plugin');
-    await writeFile(join(homeRoot, '.codex', 'prompts', 'local-only.md'), 'a');
-    await writeFile(join(repoRoot, 'codex', 'prompts', 'repo-only.md'), 'b');
-    await writeFile(join(homeRoot, '.codex', 'prompts', 'changed.md'), 'local');
-    await writeFile(join(repoRoot, 'codex', 'prompts', 'changed.md'), 'repo');
-    for (let index = 1; index <= 7; index += 1) {
-      await writeFile(
-        join(homeRoot, '.codex', 'prompts', `extra-${index}.md`),
-        'extra',
-      );
-    }
-    await writeJson(join(repoRoot, 'codex', 'skills.manifest.json'), {
-      version: 1,
-      skills: [
-        {
-          name: 'repo-skill',
-          source: 'repo',
-          path: 'codex/skills/repo-skill',
-          enabled: true,
-        },
-        {
-          name: 'external-skill',
-          source: 'github',
-          path: 'owner/repo',
-          enabled: true,
-        },
-      ],
-    });
-    await writeJson(join(repoRoot, 'codex', 'plugins.manifest.json'), {
-      version: 1,
-      plugins: [
-        {
-          name: 'repo-plugin',
-          source: 'repo',
-          path: 'codex/plugins/repo-plugin',
-          enabled: true,
-        },
-      ],
-    });
-
-    const result = await runCli([
-      'codex',
-      'status',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-    ]);
-    const out = stripAnsi(result.out);
-
-    expect(result.code).toBe(0);
-    expect(out).toContain('Codex Status Details');
-    expect(out).toContain(`local: ${join(homeRoot, '.codex')}`);
-    expect(out).toContain(`repo:  ${join(repoRoot, 'codex')}`);
-    expect(out).toContain('Area      Added  Removed  Modified  Unchanged');
-    expect(out).toContain('prompts');
-    expect(out).toContain('+ extra-1.md');
-    expect(out).toContain('- repo-only.md');
-    expect(out).toContain('~ changed.md');
-    expect(out).toContain('... 3 more added paths');
-    expect(out).toContain('Repository-owned assets not installed locally');
-    expect(out).toContain('skills: repo-skill');
-    expect(out).toContain('plugins: repo-plugin');
-    expect(out).toContain('Repository plugins');
-    expect(out).toContain('repo-plugin: not applied');
-    expect(out).toContain('Local backup intent not tracked');
-    expect(out).not.toContain('Unmanaged local assets');
-    expect(out).toContain('skills: personal-only');
-    expect(out).toContain('Unsupported restore intent');
-    expect(out).toContain('skills: external-skill');
-    expect(out).toContain('Next: run `chc codex install`');
-  });
-
-  test('prints repository plugin status before export generates a manifest', async () => {
-    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
-    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
-    await writePlugin(join(repoRoot, 'codex', 'plugins'), 'cthu-codex');
-
-    const result = await runCli([
-      'codex',
-      'status',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-    ]);
-    const out = stripAnsi(result.out);
-
-    expect(result.code).toBe(0);
-    expect(out).toContain('Repository-owned assets not installed locally');
-    expect(out).toContain('plugins: cthu-codex');
-    expect(out).toContain('Repository plugins');
-    expect(out).toContain('cthu-codex: not applied');
-    expect(out).toContain('Next: run `chc codex install`');
-  });
-
-  test('exports applies and reports unsafe repository Codex config in status', async () => {
-    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
-    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
-    await mkdir(join(homeRoot, '.codex', 'prompts'), { recursive: true });
-    await writeFile(join(homeRoot, '.codex', 'prompts', 'daily.md'), 'local');
-
-    const exported = await runCli([
-      'codex',
-      'export',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-      '--json',
-    ]);
-
-    expect(exported.code).toBe(0);
-    expect(JSON.parse(exported.out)).toMatchObject({
-      ok: true,
-      command: 'codex export',
-    });
     expect(
-      await readFile(join(repoRoot, 'codex', 'prompts', 'daily.md'), 'utf8'),
-    ).toBe('local');
-
-    await writeFile(join(repoRoot, 'codex', 'prompts', 'daily.md'), 'repo');
-    const blocked = await runCli([
-      'codex',
-      'apply',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-      '--json',
-    ]);
-
-    expect(blocked.code).not.toBe(0);
-    expect(JSON.parse(blocked.out)).toMatchObject({
-      ok: false,
-      error: {
-        code: 'invalid_option',
-      },
-    });
+      await readFile(
+        join(cacheRoot, 'enabled-plugin', '0.1.0', '.mcp.json'),
+        'utf8',
+      ),
+    ).toContain('$' + '{PLUGIN_ROOT}');
+    await expect(stat(join(cacheRoot, 'disabled-plugin'))).rejects.toThrow();
     expect(
-      await readFile(join(homeRoot, '.codex', 'prompts', 'daily.md'), 'utf8'),
-    ).toBe('local');
-
-    const applied = await runCli([
-      'codex',
-      'apply',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-      '--json',
-      '--yes',
-    ]);
-
-    expect(applied.code).toBe(0);
+      await readFile(join(homeRoot, '.codex', 'config.toml'), 'utf8'),
+    ).toContain('[plugins."enabled-plugin@personal"]');
     expect(
-      await readFile(join(homeRoot, '.codex', 'prompts', 'daily.md'), 'utf8'),
-    ).toBe('repo');
-
-    await writeFile(join(repoRoot, 'codex', 'auth.json'), '{}');
-    const status = await runCli([
-      'codex',
-      'status',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-      '--json',
-    ]);
-
-    expect(status.code).not.toBe(0);
-    expect(JSON.parse(status.out)).toMatchObject({
-      ok: false,
-      command: 'codex status',
-      comparison: {
-        unsafeRepoPaths: ['auth.json'],
-      },
-    });
-  });
-
-  test('applies missing repository config without overwrite confirmation', async () => {
-    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
-    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
-    await mkdir(join(repoRoot, 'codex', 'prompts'), { recursive: true });
-    await writeFile(join(repoRoot, 'codex', 'prompts', 'daily.md'), 'repo');
-
-    const applied = await runCli([
-      'codex',
-      'apply',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-      '--json',
-    ]);
-
-    expect(applied.code).toBe(0);
-    expect(JSON.parse(applied.out)).toMatchObject({
-      ok: true,
-      command: 'codex apply',
-    });
-    expect(
-      await readFile(join(homeRoot, '.codex', 'prompts', 'daily.md'), 'utf8'),
-    ).toBe('repo');
-  });
-
-  test('does not expose codex diff or codex doctor commands', async () => {
-    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
-    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
-
-    for (const command of ['diff', 'doctor']) {
-      const result = await runCli([
-        'codex',
-        command,
-        '--repo-root',
-        repoRoot,
-        '--home',
-        homeRoot,
-        '--json',
-      ]);
-
-      expect(result.code).not.toBe(0);
-    }
+      await readFile(
+        join(homeRoot, '.codex', 'rules', 'personal.rules'),
+        'utf8',
+      ),
+    ).toBe('leave unchanged');
   });
 });

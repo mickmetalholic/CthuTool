@@ -61,7 +61,8 @@ Completion SHALL derive public static command, nested operation, and flag candid
 
 #### Scenario: Codex subcommand candidates
 - **WHEN** a shell adapter requests completion after `chc codex`
-- **THEN** candidates include `status`, `export`, `apply`, and `install`
+- **THEN** candidates include exactly `skills` and `install`
+- **AND** candidates do not include `status`, `export`, or `apply`
 
 #### Scenario: Completion command candidates
 - **WHEN** a shell adapter requests completion after `chc completion`
@@ -77,12 +78,17 @@ Completion SHALL derive public static command, nested operation, and flag candid
 - **WHEN** a shell adapter requests flag completion for a command that accepts the shared CLI contract flags
 - **THEN** candidates include `--json`, `--no-interactive`, and `--quiet`
 
-#### Scenario: Command-specific flag candidates
-- **WHEN** a shell adapter requests flag completion for `chc codex status --`
+#### Scenario: Skills flag candidates
+- **WHEN** a shell adapter requests flag completion for `chc codex skills --`
+- **THEN** candidates include the supported repository-root and read-only output flags
+- **AND** completion does not invent mutation actions that are available only through the interactive selector
+
+#### Scenario: Install flag candidates
+- **WHEN** a shell adapter requests flag completion for `chc codex install --`
 - **THEN** candidates include command-specific flags such as `--repo-root`, `--codex-home`, and `--plugins-root`
 
 #### Scenario: Already used flags are not repeated
-- **WHEN** a shell adapter requests flag completion after `chc codex status --json --`
+- **WHEN** a shell adapter requests flag completion after `chc codex skills --json --`
 - **THEN** `--json` is not returned again
 
 ### Requirement: Bundled script id candidates
@@ -128,11 +134,11 @@ The PowerShell completion adapter SHALL preserve command-position boundaries whe
 #### Scenario: Completed parent command does not get replaced by child command
 - **WHEN** PowerShell completion is requested for `chc codex`
 - **THEN** the candidate for `codex` completes the active word as `codex ` with a trailing space
-- **AND** it does not replace `codex` with `apply`, `export`, `install`, or `status`
+- **AND** it does not replace `codex` with `skills` or `install`
 
 #### Scenario: Nested subcommands are offered after parent command boundary
 - **WHEN** PowerShell completion is requested for `chc codex `
-- **THEN** candidates include `apply`, `export`, `install`, and `status`
+- **THEN** candidates include `skills` and `install`
 - **AND** those candidates are inserted after `codex` rather than replacing `codex`
 
 ### Requirement: PowerShell empty current-word transport

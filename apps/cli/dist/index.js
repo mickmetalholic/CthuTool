@@ -2328,7 +2328,7 @@ async function runMain(cmd, opts = {}) {
 }
 
 // src/index.ts
-var import_picocolors7 = __toESM(require_picocolors(), 1);
+var import_picocolors8 = __toESM(require_picocolors(), 1);
 
 // src/command/command-discovery.ts
 function stripAnsi3(value) {
@@ -2389,8 +2389,12 @@ function getCommandHelpAppendixProvider(command) {
   return helpAppendixByCommand.get(command);
 }
 
+// src/command/codex.command.ts
+import { emitKeypressEvents as emitKeypressEvents2 } from "node:readline";
+
 // ../../node_modules/.pnpm/@clack+core@0.3.5/node_modules/@clack/core/dist/index.mjs
 var import_sisteransi = __toESM(require_src(), 1);
+var import_picocolors = __toESM(require_picocolors(), 1);
 import { stdin as $, stdout as k2 } from "node:process";
 import * as f3 from "node:readline";
 import _3 from "node:readline";
@@ -2719,6 +2723,41 @@ class BD extends x2 {
     });
   }
 }
+var fD2 = Object.defineProperty;
+var gD = (e2, u3, F3) => (u3 in e2) ? fD2(e2, u3, { enumerable: true, configurable: true, writable: true, value: F3 }) : e2[u3] = F3;
+var K = (e2, u3, F3) => (gD(e2, typeof u3 != "symbol" ? u3 + "" : u3, F3), F3);
+var vD = class extends x2 {
+  constructor(u3) {
+    super(u3, false), K(this, "options"), K(this, "cursor", 0), this.options = u3.options, this.value = [...u3.initialValues ?? []], this.cursor = Math.max(this.options.findIndex(({ value: F3 }) => F3 === u3.cursorAt), 0), this.on("key", (F3) => {
+      F3 === "a" && this.toggleAll();
+    }), this.on("cursor", (F3) => {
+      switch (F3) {
+        case "left":
+        case "up":
+          this.cursor = this.cursor === 0 ? this.options.length - 1 : this.cursor - 1;
+          break;
+        case "down":
+        case "right":
+          this.cursor = this.cursor === this.options.length - 1 ? 0 : this.cursor + 1;
+          break;
+        case "space":
+          this.toggleValue();
+          break;
+      }
+    });
+  }
+  get _value() {
+    return this.options[this.cursor].value;
+  }
+  toggleAll() {
+    const u3 = this.value.length === this.options.length;
+    this.value = u3 ? [] : this.options.map((F3) => F3.value);
+  }
+  toggleValue() {
+    const u3 = this.value.includes(this._value);
+    this.value = u3 ? this.value.filter((F3) => F3 !== this._value) : [...this.value, this._value];
+  }
+};
 var wD2 = Object.defineProperty;
 var yD = (e2, u3, F3) => (u3 in e2) ? wD2(e2, u3, { enumerable: true, configurable: true, writable: true, value: F3 }) : e2[u3] = F3;
 var Z = (e2, u3, F3) => (yD(e2, typeof u3 != "symbol" ? u3 + "" : u3, F3), F3);
@@ -2745,6 +2784,27 @@ var $D2 = class extends x2 {
     this.value = this._value.value;
   }
 };
+var TD = Object.defineProperty;
+var jD2 = (e2, u3, F3) => (u3 in e2) ? TD(e2, u3, { enumerable: true, configurable: true, writable: true, value: F3 }) : e2[u3] = F3;
+var MD = (e2, u3, F3) => (jD2(e2, typeof u3 != "symbol" ? u3 + "" : u3, F3), F3);
+
+class PD2 extends x2 {
+  constructor(u3) {
+    super(u3), MD(this, "valueWithCursor", ""), this.on("finalize", () => {
+      this.value || (this.value = u3.defaultValue), this.valueWithCursor = this.value;
+    }), this.on("value", () => {
+      if (this.cursor >= this.value.length)
+        this.valueWithCursor = `${this.value}${import_picocolors.default.inverse(import_picocolors.default.hidden("_"))}`;
+      else {
+        const F3 = this.value.slice(0, this.cursor), t2 = this.value.slice(this.cursor);
+        this.valueWithCursor = `${F3}${import_picocolors.default.inverse(t2[0])}${t2.slice(1)}`;
+      }
+    });
+  }
+  get cursor() {
+    return this._cursor;
+  }
+}
 var WD = globalThis.process.platform.startsWith("win");
 function OD({ input: e2 = $, output: u3 = k2, overwrite: F3 = true, hideCursor: t2 = true } = {}) {
   const s2 = f3.createInterface({ input: e2, output: u3, prompt: "", tabSize: 1 });
@@ -2769,13 +2829,13 @@ function OD({ input: e2 = $, output: u3 = k2, overwrite: F3 = true, hideCursor: 
 }
 
 // ../../node_modules/.pnpm/@clack+prompts@0.8.2/node_modules/@clack/prompts/dist/index.mjs
-var import_picocolors = __toESM(require_picocolors(), 1);
+var import_picocolors2 = __toESM(require_picocolors(), 1);
 var import_sisteransi2 = __toESM(require_src(), 1);
 import h2 from "node:process";
-function K() {
+function K2() {
   return h2.platform !== "win32" ? h2.env.TERM !== "linux" : !!h2.env.CI || !!h2.env.WT_SESSION || !!h2.env.TERMINUS_SUBLIME || h2.env.ConEmuTask === "{cmd::Cmder}" || h2.env.TERM_PROGRAM === "Terminus-Sublime" || h2.env.TERM_PROGRAM === "vscode" || h2.env.TERM === "xterm-256color" || h2.env.TERM === "alacritty" || h2.env.TERMINAL_EMULATOR === "JetBrains-JediTerm";
 }
-var C3 = K();
+var C3 = K2();
 var u3 = (s2, n2) => C3 ? s2 : n2;
 var Y2 = u3("◆", "*");
 var P4 = u3("■", "x");
@@ -2802,40 +2862,61 @@ var y4 = (s2) => {
   switch (s2) {
     case "initial":
     case "active":
-      return import_picocolors.default.cyan(Y2);
+      return import_picocolors2.default.cyan(Y2);
     case "cancel":
-      return import_picocolors.default.red(P4);
+      return import_picocolors2.default.red(P4);
     case "error":
-      return import_picocolors.default.yellow(V3);
+      return import_picocolors2.default.yellow(V3);
     case "submit":
-      return import_picocolors.default.green(M2);
+      return import_picocolors2.default.green(M2);
   }
 };
 var E = (s2) => {
-  const { cursor: n2, options: t2, style: i2 } = s2, r4 = s2.maxItems ?? 1 / 0, o3 = Math.max(process.stdout.rows - 4, 0), c3 = Math.min(o3, Math.max(r4, 5));
+  const { cursor: n2, options: t2, style: i2 } = s2, r4 = s2.maxItems ?? 1 / 0, o3 = Math.max(process.stdout.rows - 4, 0), c4 = Math.min(o3, Math.max(r4, 5));
   let l3 = 0;
-  n2 >= l3 + c3 - 3 ? l3 = Math.max(Math.min(n2 - c3 + 3, t2.length - c3), 0) : n2 < l3 + 2 && (l3 = Math.max(n2 - 2, 0));
-  const d3 = c3 < t2.length && l3 > 0, p = c3 < t2.length && l3 + c3 < t2.length;
-  return t2.slice(l3, l3 + c3).map((S4, f4, x3) => {
+  n2 >= l3 + c4 - 3 ? l3 = Math.max(Math.min(n2 - c4 + 3, t2.length - c4), 0) : n2 < l3 + 2 && (l3 = Math.max(n2 - 2, 0));
+  const d3 = c4 < t2.length && l3 > 0, p = c4 < t2.length && l3 + c4 < t2.length;
+  return t2.slice(l3, l3 + c4).map((S4, f4, x3) => {
     const g4 = f4 === 0 && d3, m3 = f4 === x3.length - 1 && p;
-    return g4 || m3 ? import_picocolors.default.dim("...") : i2(S4, f4 + l3 === n2);
+    return g4 || m3 ? import_picocolors2.default.dim("...") : i2(S4, f4 + l3 === n2);
   });
 };
+var ae = (s2) => new PD2({ validate: s2.validate, placeholder: s2.placeholder, defaultValue: s2.defaultValue, initialValue: s2.initialValue, render() {
+  const n2 = `${import_picocolors2.default.gray(a3)}
+${y4(this.state)}  ${s2.message}
+`, t2 = s2.placeholder ? import_picocolors2.default.inverse(s2.placeholder[0]) + import_picocolors2.default.dim(s2.placeholder.slice(1)) : import_picocolors2.default.inverse(import_picocolors2.default.hidden("_")), i2 = this.value ? this.valueWithCursor : t2;
+  switch (this.state) {
+    case "error":
+      return `${n2.trim()}
+${import_picocolors2.default.yellow(a3)}  ${i2}
+${import_picocolors2.default.yellow($2)}  ${import_picocolors2.default.yellow(this.error)}
+`;
+    case "submit":
+      return `${n2}${import_picocolors2.default.gray(a3)}  ${import_picocolors2.default.dim(this.value || s2.placeholder)}`;
+    case "cancel":
+      return `${n2}${import_picocolors2.default.gray(a3)}  ${import_picocolors2.default.strikethrough(import_picocolors2.default.dim(this.value ?? ""))}${this.value?.trim() ? `
+` + import_picocolors2.default.gray(a3) : ""}`;
+    default:
+      return `${n2}${import_picocolors2.default.cyan(a3)}  ${i2}
+${import_picocolors2.default.cyan($2)}
+`;
+  }
+} }).prompt();
 var ce2 = (s2) => {
   const n2 = s2.active ?? "Yes", t2 = s2.inactive ?? "No";
   return new BD({ active: n2, inactive: t2, initialValue: s2.initialValue ?? true, render() {
-    const i2 = `${import_picocolors.default.gray(a3)}
+    const i2 = `${import_picocolors2.default.gray(a3)}
 ${y4(this.state)}  ${s2.message}
 `, r4 = this.value ? n2 : t2;
     switch (this.state) {
       case "submit":
-        return `${i2}${import_picocolors.default.gray(a3)}  ${import_picocolors.default.dim(r4)}`;
+        return `${i2}${import_picocolors2.default.gray(a3)}  ${import_picocolors2.default.dim(r4)}`;
       case "cancel":
-        return `${i2}${import_picocolors.default.gray(a3)}  ${import_picocolors.default.strikethrough(import_picocolors.default.dim(r4))}
-${import_picocolors.default.gray(a3)}`;
+        return `${i2}${import_picocolors2.default.gray(a3)}  ${import_picocolors2.default.strikethrough(import_picocolors2.default.dim(r4))}
+${import_picocolors2.default.gray(a3)}`;
       default:
-        return `${i2}${import_picocolors.default.cyan(a3)}  ${this.value ? `${import_picocolors.default.green(I4)} ${n2}` : `${import_picocolors.default.dim(T4)} ${import_picocolors.default.dim(n2)}`} ${import_picocolors.default.dim("/")} ${this.value ? `${import_picocolors.default.dim(T4)} ${import_picocolors.default.dim(t2)}` : `${import_picocolors.default.green(I4)} ${t2}`}
-${import_picocolors.default.cyan($2)}
+        return `${i2}${import_picocolors2.default.cyan(a3)}  ${this.value ? `${import_picocolors2.default.green(I4)} ${n2}` : `${import_picocolors2.default.dim(T4)} ${import_picocolors2.default.dim(n2)}`} ${import_picocolors2.default.dim("/")} ${this.value ? `${import_picocolors2.default.dim(T4)} ${import_picocolors2.default.dim(t2)}` : `${import_picocolors2.default.green(I4)} ${t2}`}
+${import_picocolors2.default.cyan($2)}
 `;
     }
   } }).prompt();
@@ -2845,58 +2926,100 @@ var le2 = (s2) => {
     const r4 = t2.label ?? String(t2.value);
     switch (i2) {
       case "selected":
-        return `${import_picocolors.default.dim(r4)}`;
+        return `${import_picocolors2.default.dim(r4)}`;
       case "active":
-        return `${import_picocolors.default.green(I4)} ${r4} ${t2.hint ? import_picocolors.default.dim(`(${t2.hint})`) : ""}`;
+        return `${import_picocolors2.default.green(I4)} ${r4} ${t2.hint ? import_picocolors2.default.dim(`(${t2.hint})`) : ""}`;
       case "cancelled":
-        return `${import_picocolors.default.strikethrough(import_picocolors.default.dim(r4))}`;
+        return `${import_picocolors2.default.strikethrough(import_picocolors2.default.dim(r4))}`;
       default:
-        return `${import_picocolors.default.dim(T4)} ${import_picocolors.default.dim(r4)}`;
+        return `${import_picocolors2.default.dim(T4)} ${import_picocolors2.default.dim(r4)}`;
     }
   };
   return new $D2({ options: s2.options, initialValue: s2.initialValue, render() {
-    const t2 = `${import_picocolors.default.gray(a3)}
+    const t2 = `${import_picocolors2.default.gray(a3)}
 ${y4(this.state)}  ${s2.message}
 `;
     switch (this.state) {
       case "submit":
-        return `${t2}${import_picocolors.default.gray(a3)}  ${n2(this.options[this.cursor], "selected")}`;
+        return `${t2}${import_picocolors2.default.gray(a3)}  ${n2(this.options[this.cursor], "selected")}`;
       case "cancel":
-        return `${t2}${import_picocolors.default.gray(a3)}  ${n2(this.options[this.cursor], "cancelled")}
-${import_picocolors.default.gray(a3)}`;
+        return `${t2}${import_picocolors2.default.gray(a3)}  ${n2(this.options[this.cursor], "cancelled")}
+${import_picocolors2.default.gray(a3)}`;
       default:
-        return `${t2}${import_picocolors.default.cyan(a3)}  ${E({ cursor: this.cursor, options: this.options, maxItems: s2.maxItems, style: (i2, r4) => n2(i2, r4 ? "active" : "inactive") }).join(`
-${import_picocolors.default.cyan(a3)}  `)}
-${import_picocolors.default.cyan($2)}
+        return `${t2}${import_picocolors2.default.cyan(a3)}  ${E({ cursor: this.cursor, options: this.options, maxItems: s2.maxItems, style: (i2, r4) => n2(i2, r4 ? "active" : "inactive") }).join(`
+${import_picocolors2.default.cyan(a3)}  `)}
+${import_picocolors2.default.cyan($2)}
+`;
+    }
+  } }).prompt();
+};
+var $e = (s2) => {
+  const n2 = (t2, i2) => {
+    const r4 = t2.label ?? String(t2.value);
+    return i2 === "active" ? `${import_picocolors2.default.cyan(j2)} ${r4} ${t2.hint ? import_picocolors2.default.dim(`(${t2.hint})`) : ""}` : i2 === "selected" ? `${import_picocolors2.default.green(b3)} ${import_picocolors2.default.dim(r4)}` : i2 === "cancelled" ? `${import_picocolors2.default.strikethrough(import_picocolors2.default.dim(r4))}` : i2 === "active-selected" ? `${import_picocolors2.default.green(b3)} ${r4} ${t2.hint ? import_picocolors2.default.dim(`(${t2.hint})`) : ""}` : i2 === "submitted" ? `${import_picocolors2.default.dim(r4)}` : `${import_picocolors2.default.dim(B2)} ${import_picocolors2.default.dim(r4)}`;
+  };
+  return new vD({ options: s2.options, initialValues: s2.initialValues, required: s2.required ?? true, cursorAt: s2.cursorAt, validate(t2) {
+    if (this.required && t2.length === 0)
+      return `Please select at least one option.
+${import_picocolors2.default.reset(import_picocolors2.default.dim(`Press ${import_picocolors2.default.gray(import_picocolors2.default.bgWhite(import_picocolors2.default.inverse(" space ")))} to select, ${import_picocolors2.default.gray(import_picocolors2.default.bgWhite(import_picocolors2.default.inverse(" enter ")))} to submit`))}`;
+  }, render() {
+    let t2 = `${import_picocolors2.default.gray(a3)}
+${y4(this.state)}  ${s2.message}
+`;
+    const i2 = (r4, o3) => {
+      const c4 = this.value.includes(r4.value);
+      return o3 && c4 ? n2(r4, "active-selected") : c4 ? n2(r4, "selected") : n2(r4, o3 ? "active" : "inactive");
+    };
+    switch (this.state) {
+      case "submit":
+        return `${t2}${import_picocolors2.default.gray(a3)}  ${this.options.filter(({ value: r4 }) => this.value.includes(r4)).map((r4) => n2(r4, "submitted")).join(import_picocolors2.default.dim(", ")) || import_picocolors2.default.dim("none")}`;
+      case "cancel": {
+        const r4 = this.options.filter(({ value: o3 }) => this.value.includes(o3)).map((o3) => n2(o3, "cancelled")).join(import_picocolors2.default.dim(", "));
+        return `${t2}${import_picocolors2.default.gray(a3)}  ${r4.trim() ? `${r4}
+${import_picocolors2.default.gray(a3)}` : ""}`;
+      }
+      case "error": {
+        const r4 = this.error.split(`
+`).map((o3, c4) => c4 === 0 ? `${import_picocolors2.default.yellow($2)}  ${import_picocolors2.default.yellow(o3)}` : `   ${o3}`).join(`
+`);
+        return t2 + import_picocolors2.default.yellow(a3) + "  " + E({ options: this.options, cursor: this.cursor, maxItems: s2.maxItems, style: i2 }).join(`
+${import_picocolors2.default.yellow(a3)}  `) + `
+` + r4 + `
+`;
+      }
+      default:
+        return `${t2}${import_picocolors2.default.cyan(a3)}  ${E({ options: this.options, cursor: this.cursor, maxItems: s2.maxItems, style: i2 }).join(`
+${import_picocolors2.default.cyan(a3)}  `)}
+${import_picocolors2.default.cyan($2)}
 `;
     }
   } }).prompt();
 };
 var pe = (s2 = "") => {
-  process.stdout.write(`${import_picocolors.default.gray(Q3)}  ${s2}
+  process.stdout.write(`${import_picocolors2.default.gray(Q3)}  ${s2}
 `);
 };
 var _4 = () => {
   const s2 = C3 ? ["◒", "◐", "◓", "◑"] : ["•", "o", "O", "0"], n2 = C3 ? 80 : 120;
   let t2, i2, r4 = false, o3 = "";
-  const c3 = (g4) => {
+  const c4 = (g4) => {
     const m3 = g4 > 1 ? "Something went wrong" : "Canceled";
     r4 && x3(m3, g4);
-  }, l3 = () => c3(2), d3 = () => c3(1), p = () => {
-    process.on("uncaughtExceptionMonitor", l3), process.on("unhandledRejection", l3), process.on("SIGINT", d3), process.on("SIGTERM", d3), process.on("exit", c3);
+  }, l3 = () => c4(2), d3 = () => c4(1), p = () => {
+    process.on("uncaughtExceptionMonitor", l3), process.on("unhandledRejection", l3), process.on("SIGINT", d3), process.on("SIGTERM", d3), process.on("exit", c4);
   }, S4 = () => {
-    process.removeListener("uncaughtExceptionMonitor", l3), process.removeListener("unhandledRejection", l3), process.removeListener("SIGINT", d3), process.removeListener("SIGTERM", d3), process.removeListener("exit", c3);
+    process.removeListener("uncaughtExceptionMonitor", l3), process.removeListener("unhandledRejection", l3), process.removeListener("SIGINT", d3), process.removeListener("SIGTERM", d3), process.removeListener("exit", c4);
   }, f4 = (g4 = "") => {
-    r4 = true, t2 = OD(), o3 = g4.replace(/\.+$/, ""), process.stdout.write(`${import_picocolors.default.gray(a3)}
+    r4 = true, t2 = OD(), o3 = g4.replace(/\.+$/, ""), process.stdout.write(`${import_picocolors2.default.gray(a3)}
 `);
     let m3 = 0, w3 = 0;
     p(), i2 = setInterval(() => {
-      const L4 = import_picocolors.default.magenta(s2[m3]), O4 = ".".repeat(Math.floor(w3)).slice(0, 3);
+      const L4 = import_picocolors2.default.magenta(s2[m3]), O4 = ".".repeat(Math.floor(w3)).slice(0, 3);
       process.stdout.write(import_sisteransi2.cursor.move(-999, 0)), process.stdout.write(import_sisteransi2.erase.down(1)), process.stdout.write(`${L4}  ${o3}${O4}`), m3 = m3 + 1 < s2.length ? m3 + 1 : 0, w3 = w3 < s2.length ? w3 + 0.125 : 0;
     }, n2);
   }, x3 = (g4 = "", m3 = 0) => {
     o3 = g4 ?? o3, r4 = false, clearInterval(i2);
-    const w3 = m3 === 0 ? import_picocolors.default.green(M2) : m3 === 1 ? import_picocolors.default.red(P4) : import_picocolors.default.red(V3);
+    const w3 = m3 === 0 ? import_picocolors2.default.green(M2) : m3 === 1 ? import_picocolors2.default.red(P4) : import_picocolors2.default.red(V3);
     process.stdout.write(import_sisteransi2.cursor.move(-999, 0)), process.stdout.write(import_sisteransi2.erase.down(1)), process.stdout.write(`${w3}  ${o3}
 `), S4(), t2();
   };
@@ -2906,19 +3029,11 @@ var _4 = () => {
 };
 
 // src/command/codex.command.ts
-var import_picocolors2 = __toESM(require_picocolors(), 1);
+var import_picocolors3 = __toESM(require_picocolors(), 1);
 
-// src/domain/codex-config-manager.ts
-import {
-  cp as cp2,
-  mkdir as mkdir2,
-  readdir as readdir2,
-  readFile as readFile2,
-  rm as rm2,
-  stat,
-  writeFile as writeFile2
-} from "node:fs/promises";
-import { basename, dirname as dirname3, join as join2, posix, relative as relative3, resolve as resolve3 } from "node:path";
+// src/domain/codex-plugin-install-manager.ts
+import { readFile as readFile2 } from "node:fs/promises";
+import { basename, join as join2, resolve as resolve3 } from "node:path";
 
 // src/infra/codex-config-paths.ts
 import { existsSync, readFileSync } from "node:fs";
@@ -3046,31 +3161,6 @@ async function installCodexPlugins(options) {
 `, "utf8");
   await enableCodexPlugins(options.configPath, results.map((result) => `${result.name}@personal`));
   return results;
-}
-async function readEnabledCodexPluginIds(configPath) {
-  let raw;
-  try {
-    raw = await readFile(configPath, "utf8");
-  } catch {
-    return new Set;
-  }
-  const enabled = new Set;
-  let currentPlugin;
-  for (const line of raw.split(/\r?\n/)) {
-    const section = /^\s*\[plugins\."([^"]+)"\]\s*$/.exec(line);
-    if (section) {
-      currentPlugin = section[1];
-      continue;
-    }
-    if (/^\s*\[/.test(line)) {
-      currentPlugin = undefined;
-      continue;
-    }
-    if (currentPlugin && /^\s*enabled\s*=\s*true\s*$/.test(line)) {
-      enabled.add(currentPlugin);
-    }
-  }
-  return enabled;
 }
 async function syncCodexPluginCache(options) {
   const version = options.bumpPatch ? await bumpPluginPatchVersion(options.plugin.root) : await readPluginVersion(options.plugin.root);
@@ -3273,732 +3363,612 @@ async function readPluginManifest(pluginRoot) {
   }
 }
 
-// src/domain/codex-config-manager.ts
-var managedAreas = ["prompts", "rules"];
-var officialSkillsRepository = {
-  owner: "openai",
-  repo: "skills",
-  ref: "main"
-};
-var officialSkillCollections = ["skills/.curated", "skills/.experimental"];
-function getManagedAreaExclude(area) {
-  return area === "prompts" ? isGeneratedPromptAdapter : undefined;
-}
-function isGeneratedPromptAdapter(relativePath) {
-  return /^opsx-[a-z0-9-]+\.md$/i.test(relativePath);
-}
-async function compareCodexConfig(paths) {
-  return {
-    areas: {
-      prompts: await compareManagedArea(paths, "prompts"),
-      rules: await compareManagedArea(paths, "rules")
-    },
-    unmanagedSkills: await findUnmanagedSkills(paths),
-    unmanagedPlugins: await findUnmanagedPlugins(paths),
-    repoPlugins: await findRepoPluginStatuses(paths),
-    missingRepoSkills: await findMissingRepoSkills(paths),
-    missingRepoPlugins: await findMissingRepoPlugins(paths),
-    unsupportedSkills: await findUnsupportedSkills(paths),
-    unsupportedPlugins: await findUnsupportedPlugins(paths),
-    unsafeRepoPaths: await findUnsafeRepoPaths(paths)
-  };
-}
-async function exportCodexConfig(paths) {
-  const exportedAreas = [];
-  for (const area of managedAreas) {
-    await mirrorDirectory({
-      sourceRoot: join2(paths.localCodexRoot, area),
-      targetRoot: join2(paths.repoCodexRoot, area),
-      writeRoot: paths.repoCodexRoot,
-      excludeRelativePath: getManagedAreaExclude(area)
-    });
-    exportedAreas.push(area);
-  }
-  const skillsManifest = await generateSkillsManifest(paths);
-  const pluginsManifest = await generatePluginsManifest(paths);
-  const unmanagedSkills = await findUnmanagedSkills(paths, skillsManifest);
-  const unmanagedPlugins = await findUnmanagedPlugins(paths, pluginsManifest);
-  await writeJsonFile2(join2(paths.repoCodexRoot, "skills.manifest.json"), skillsManifest, paths.repoCodexRoot);
-  await writeJsonFile2(join2(paths.repoCodexRoot, "plugins.manifest.json"), pluginsManifest, paths.repoCodexRoot);
-  return {
-    exportedAreas,
-    skillsManifest,
-    pluginsManifest,
-    unmanagedSkills,
-    unmanagedPlugins
-  };
-}
-async function applyCodexConfig(paths) {
-  const appliedAreas = [];
-  for (const area of managedAreas) {
-    await mirrorDirectory({
-      sourceRoot: join2(paths.repoCodexRoot, area),
-      targetRoot: join2(paths.localCodexRoot, area),
-      writeRoot: paths.localCodexRoot,
-      excludeRelativePath: getManagedAreaExclude(area)
-    });
-    appliedAreas.push(area);
-  }
-  const skillsManifest = await readSkillsManifest(paths);
-  const skillResult = await applySkillsManifest(paths, {
-    version: 1,
-    skills: skillsManifest.skills.filter((skill) => skill.source !== "repo")
-  });
-  const pluginsManifest = await readPluginsManifest(paths);
-  const pluginResult = await applyPluginsManifest(paths, {
-    version: 1,
-    plugins: pluginsManifest.plugins.filter((plugin) => plugin.source !== "repo")
-  });
-  return {
-    appliedAreas,
-    installedPlugins: pluginResult.installed,
-    syncedPluginCaches: pluginResult.synced,
-    installedSkills: skillResult.installed,
-    unsupportedSkills: skillResult.unsupported,
-    unsupportedPlugins: pluginResult.unsupported
-  };
-}
-async function installCodexAssets(paths) {
-  const repoSkillsManifest = await withRepositorySkills(paths, {
-    version: 1,
-    skills: (await readSkillsManifest(paths)).skills.filter((skill) => skill.source === "repo")
-  });
-  const skillResult = await applySkillsManifest(paths, repoSkillsManifest);
-  const repoPluginsManifest = await withRepositoryPlugins(paths, {
-    version: 1,
-    plugins: (await readPluginsManifest(paths)).plugins.filter((plugin) => plugin.source === "repo")
-  });
-  const pluginResult = await applyPluginsManifest(paths, repoPluginsManifest);
-  return {
-    installedPlugins: pluginResult.installed,
-    syncedPluginCaches: pluginResult.synced,
-    installedSkills: skillResult.installed,
-    unsupportedSkills: skillResult.unsupported,
-    unsupportedPlugins: pluginResult.unsupported
-  };
-}
-async function findUnsafeRepoPaths(paths) {
-  const unsafe = new Set;
-  await walkRepoCodex(paths.repoCodexRoot, async (absolutePath, entry) => {
-    const relativePath = toSlash(relative3(paths.repoCodexRoot, absolutePath));
-    if (entry.isDirectory()) {
-      if (isUnsafeDirectory(relativePath)) {
-        unsafe.add(relativePath);
-      }
-      return;
-    }
-    if (isUnsafeFile(relativePath)) {
-      unsafe.add(relativePath);
-    }
-  });
-  return [...unsafe].sort();
-}
-async function compareManagedArea(paths, area) {
-  const excludeRelativePath = getManagedAreaExclude(area);
-  const localFiles = await readFileTree(join2(paths.localCodexRoot, area), excludeRelativePath);
-  const repoFiles = await readFileTree(join2(paths.repoCodexRoot, area), excludeRelativePath);
-  const names = new Set([...localFiles.keys(), ...repoFiles.keys()]);
-  const files = {
-    added: [],
-    removed: [],
-    modified: [],
-    unchanged: []
-  };
-  for (const name of [...names].sort()) {
-    const local = localFiles.get(name);
-    const repo = repoFiles.get(name);
-    if (local !== undefined && repo === undefined) {
-      files.added.push(name);
-    } else if (local === undefined && repo !== undefined) {
-      files.removed.push(name);
-    } else if (local !== repo) {
-      files.modified.push(name);
-    } else {
-      files.unchanged.push(name);
-    }
-  }
-  return {
-    counts: {
-      added: files.added.length,
-      removed: files.removed.length,
-      modified: files.modified.length,
-      unchanged: files.unchanged.length
-    },
-    files
-  };
-}
-async function readFileTree(root, excludeRelativePath) {
-  const files = new Map;
-  await walkFiles(root, async (path) => {
-    const relativePath = toSlash(relative3(root, path));
-    if (excludeRelativePath?.(relativePath)) {
-      return;
-    }
-    files.set(relativePath, await readFile2(path, "utf8"));
-  });
-  return files;
-}
-async function generateSkillsManifest(paths) {
-  const existing = await readSkillsManifest(paths);
-  const skills = existing.skills.filter((skill) => skill.source !== "repo" || skill.enabled === false);
-  const existingNames = new Set(skills.map((skill) => skill.name));
-  for (const skill of await discoverLocalExternalSkills(paths)) {
-    if (!existingNames.has(skill.name)) {
-      skills.push(skill);
-      existingNames.add(skill.name);
-    }
-  }
-  return {
-    version: 1,
-    skills: skills.sort((a4, b4) => a4.name.localeCompare(b4.name))
-  };
-}
-async function discoverRepositorySkills(paths) {
-  const skillsRoot = join2(paths.repoCodexRoot, "skills");
-  const skills = [];
-  for (const entry of await readDirectorySafe(skillsRoot)) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) {
-      continue;
-    }
-    skills.push({
-      name: entry.name,
-      source: "repo",
-      path: `codex/skills/${entry.name}`,
-      enabled: true
-    });
-  }
-  return skills;
-}
-async function discoverLocalExternalSkills(paths) {
-  const skillsRoot = join2(paths.localCodexRoot, "skills");
-  const skills = [];
-  const repoSkills = new Set((await discoverRepositorySkills(paths)).map((skill) => skill.name));
-  for (const entry of await readDirectorySafe(skillsRoot)) {
-    if (!entry.isDirectory() || entry.name.startsWith(".") || repoSkills.has(entry.name) || !await isLocalSkillDirectory(paths, entry.name)) {
-      continue;
-    }
-    skills.push({
-      name: entry.name,
-      source: "external",
-      path: `skill:${entry.name}`,
-      enabled: true
-    });
-  }
-  return skills.sort((a4, b4) => a4.name.localeCompare(b4.name));
-}
-async function withRepositorySkills(paths, manifest) {
-  const skills = [...manifest.skills];
-  const existingNames = new Set(skills.map((skill) => skill.name));
-  for (const skill of await discoverRepositorySkills(paths)) {
-    if (!existingNames.has(skill.name)) {
-      skills.push(skill);
-    }
-  }
-  return {
-    version: 1,
-    skills: skills.sort((a4, b4) => a4.name.localeCompare(b4.name))
-  };
-}
-async function generatePluginsManifest(paths) {
-  const existing = await readPluginsManifest(paths);
-  const plugins = existing.plugins.filter((plugin) => plugin.source !== "repo" || plugin.enabled === false);
-  const existingNames = new Set(plugins.map((plugin) => plugin.name));
-  for (const plugin of await discoverLocalMarketplacePlugins(paths)) {
-    if (!existingNames.has(plugin.name)) {
-      plugins.push(plugin);
-      existingNames.add(plugin.name);
-    }
-  }
-  return {
-    version: 1,
-    plugins: plugins.sort((a4, b4) => a4.name.localeCompare(b4.name))
-  };
-}
-async function discoverRepositoryPlugins(paths) {
-  return (await discoverCodexPlugins(paths.pluginsRoot)).map((plugin) => ({
-    name: plugin.name,
-    source: "repo",
-    path: toSlash(relative3(paths.repoRoot, plugin.root)),
-    enabled: true
-  }));
-}
-async function discoverLocalMarketplacePlugins(paths) {
-  const repoPlugins = new Set((await discoverRepositoryPlugins(paths)).map((plugin) => plugin.name));
-  return (await readMarketplaceEntries(paths)).map((plugin) => plugin.name).filter((name) => typeof name === "string").filter((name) => !repoPlugins.has(name)).map((name) => ({
-    name,
-    source: "marketplace",
-    path: `marketplace:${name}`,
-    enabled: true
-  })).sort((a4, b4) => a4.name.localeCompare(b4.name));
-}
-async function withRepositoryPlugins(paths, manifest) {
-  const plugins = [...manifest.plugins];
-  const existingNames = new Set(plugins.map((plugin) => plugin.name));
-  for (const plugin of await discoverRepositoryPlugins(paths)) {
-    if (!existingNames.has(plugin.name)) {
-      plugins.push(plugin);
-    }
-  }
-  return {
-    version: 1,
-    plugins: plugins.sort((a4, b4) => a4.name.localeCompare(b4.name))
-  };
-}
-async function findUnmanagedSkills(paths, manifest) {
-  const resolvedManifest = manifest ?? await readSkillsManifest(paths);
-  const managed = new Set([
-    ...resolvedManifest.skills.map((skill) => skill.name),
-    ...(await discoverRepositorySkills(paths)).map((skill) => skill.name)
+// src/domain/codex-plugin-install-manager.ts
+async function installRepositoryCodexPlugins(paths) {
+  const manifest = await readPluginManifest2(paths.repoCodexRoot);
+  const discovered = await discoverCodexPlugins(paths.pluginsRoot);
+  const disabledNames = new Set(manifest.plugins.filter((plugin) => plugin.enabled === false).map((plugin) => plugin.name));
+  const configured = manifest.plugins.filter((plugin) => plugin.enabled && plugin.source === "repo");
+  const configuredNames = new Set(configured.map((plugin) => plugin.name));
+  const plugins = await Promise.all([
+    ...configured.map(async (entry) => {
+      const root = resolve3(paths.repoRoot, entry.path);
+      assertPathInside(paths.repoCodexRoot, root);
+      return {
+        name: entry.name,
+        displayName: await readPluginDisplayName(root),
+        root,
+        marketplacePath: ""
+      };
+    }),
+    ...discovered.filter((plugin) => !configuredNames.has(plugin.name) && !disabledNames.has(plugin.name))
   ]);
-  const names = [];
-  for (const entry of await readDirectorySafe(join2(paths.localCodexRoot, "skills"))) {
-    if (entry.isDirectory() && !entry.name.startsWith(".") && !managed.has(entry.name) && await isLocalSkillDirectory(paths, entry.name)) {
-      names.push(entry.name);
-    }
-  }
-  return names.sort();
-}
-async function findUnmanagedPlugins(paths, manifest) {
-  const resolvedManifest = manifest ?? await readPluginsManifest(paths);
-  const managed = new Set([
-    ...resolvedManifest.plugins.map((plugin) => plugin.name),
-    ...(await discoverRepositoryPlugins(paths)).map((plugin) => plugin.name)
-  ]);
-  try {
-    const raw = await readFile2(paths.marketplacePath, "utf8");
-    const parsed = JSON.parse(raw);
-    return (parsed.plugins ?? []).map((plugin) => plugin.name).filter((name) => typeof name === "string").filter((name) => !managed.has(name)).sort();
-  } catch {
-    return [];
-  }
-}
-async function findMissingRepoSkills(paths) {
-  const manifest = await withRepositorySkills(paths, await readSkillsManifest(paths));
-  const missing = [];
-  for (const skill of manifest.skills) {
-    if (skill.enabled === false || skill.source !== "repo" || !isRepoManagedPath(paths, skill.path, "skills")) {
-      continue;
-    }
-    if (!await exists(join2(paths.localCodexRoot, "skills", skill.name))) {
-      missing.push(skill.name);
-    }
-  }
-  return missing.sort();
-}
-async function findMissingRepoPlugins(paths) {
-  const manifest = await withRepositoryPlugins(paths, await readPluginsManifest(paths));
-  const marketplace = await readMarketplaceEntries(paths);
-  const enabledPluginIds = await readEnabledCodexPluginIds(join2(paths.localCodexRoot, "config.toml"));
-  const missing = [];
-  for (const plugin of manifest.plugins) {
-    if (!plugin.enabled || plugin.source !== "repo" || !isRepoManagedPath(paths, plugin.path, "plugins")) {
-      continue;
-    }
-    const expectedRoot = resolve3(paths.repoRoot, plugin.path);
-    const installed = marketplace.find((entry) => entry.name === plugin.name);
-    if (!installed?.source?.path || !enabledPluginIds.has(`${plugin.name}@personal`) || !sameResolvedPath(resolveMarketplacePath(paths.homeRoot, installed.source.path), expectedRoot)) {
-      missing.push(plugin.name);
-    }
-  }
-  return missing.sort();
-}
-async function findRepoPluginStatuses(paths) {
-  const manifest = await readPluginsManifest(paths);
-  const marketplace = await readMarketplaceEntries(paths);
-  const enabledPluginIds = await readEnabledCodexPluginIds(join2(paths.localCodexRoot, "config.toml"));
-  const entriesByName = new Map(manifest.plugins.map((plugin) => [plugin.name, plugin]));
-  const statuses = [];
-  for (const plugin of await discoverCodexPlugins(paths.pluginsRoot)) {
-    const path = toSlash(relative3(paths.repoRoot, plugin.root));
-    const manifestEntry = entriesByName.get(plugin.name);
-    if (manifestEntry?.enabled === false) {
-      statuses.push({
-        name: plugin.name,
-        path,
-        status: "disabled"
-      });
-      continue;
-    }
-    const expectedRoot = manifestEntry?.source === "repo" && isRepoManagedPath(paths, manifestEntry.path, "plugins") ? resolve3(paths.repoRoot, manifestEntry.path) : plugin.root;
-    const installed = marketplace.find((entry) => entry.name === plugin.name);
-    statuses.push({
-      name: plugin.name,
-      path,
-      status: installed?.source?.path && enabledPluginIds.has(`${plugin.name}@personal`) && sameResolvedPath(resolveMarketplacePath(paths.homeRoot, installed.source.path), expectedRoot) ? "applied" : "not_applied"
-    });
-  }
-  return statuses.sort((a4, b4) => a4.name.localeCompare(b4.name));
-}
-async function findUnsupportedSkills(paths) {
-  const manifest = await readSkillsManifest(paths);
-  const unsupported = [];
-  for (const skill of manifest.skills) {
-    if (skill.enabled === false || skill.source === "repo") {
-      continue;
-    }
-    if (skill.source === "external" && (await isLocalSkillDirectory(paths, skill.name) || await findOfficialSkillSource(paths, skill))) {
-      continue;
-    }
-    unsupported.push(skill.name);
-  }
-  return unsupported.sort();
-}
-async function findUnsupportedPlugins(paths) {
-  const manifest = await readPluginsManifest(paths);
-  const marketplace = await readMarketplaceEntries(paths);
-  const installedMarketplaceNames = new Set(marketplace.map((plugin) => plugin.name).filter((name) => typeof name === "string"));
-  return manifest.plugins.filter((plugin) => plugin.enabled && plugin.source !== "repo" && !installedMarketplaceNames.has(plugin.name)).map((plugin) => plugin.name).sort();
-}
-async function readMarketplaceEntries(paths) {
-  try {
-    const raw = await readFile2(paths.marketplacePath, "utf8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed.plugins) ? parsed.plugins : [];
-  } catch {
-    return [];
-  }
-}
-async function readSkillsManifest(paths) {
-  try {
-    const parsed = JSON.parse(await readFile2(join2(paths.repoCodexRoot, "skills.manifest.json"), "utf8"));
-    return {
-      version: 1,
-      skills: Array.isArray(parsed.skills) ? parsed.skills.map((skill) => ({
-        ...skill,
-        enabled: skill.enabled !== false
-      })) : []
-    };
-  } catch {
-    return { version: 1, skills: [] };
-  }
-}
-async function readPluginsManifest(paths) {
-  try {
-    const parsed = JSON.parse(await readFile2(join2(paths.repoCodexRoot, "plugins.manifest.json"), "utf8"));
-    return {
-      version: 1,
-      plugins: Array.isArray(parsed.plugins) ? parsed.plugins : []
-    };
-  } catch {
-    return { version: 1, plugins: [] };
-  }
-}
-async function applySkillsManifest(paths, manifest) {
-  const installed = [];
-  const unsupported = [];
-  for (const skill of manifest.skills) {
-    if (skill.enabled === false) {
-      continue;
-    }
-    if (skill.source === "external") {
-      if (await isLocalSkillDirectory(paths, skill.name)) {
-        installed.push(skill.name);
-        continue;
-      }
-      const sourceRoot2 = await findOfficialSkillSource(paths, skill);
-      if (!sourceRoot2) {
-        if (!await installOfficialSkill(paths, skill)) {
-          unsupported.push(skill.name);
-          continue;
-        }
-        installed.push(skill.name);
-        continue;
-      }
-      const targetRoot2 = resolve3(paths.localCodexRoot, "skills", skill.name);
-      await mirrorDirectory({
-        sourceRoot: sourceRoot2,
-        targetRoot: targetRoot2,
-        writeRoot: paths.localCodexRoot
-      });
-      installed.push(skill.name);
-      continue;
-    }
-    if (skill.source !== "repo") {
-      unsupported.push(skill.name);
-      continue;
-    }
-    const sourceRoot = resolve3(paths.repoRoot, skill.path);
-    const targetRoot = resolve3(paths.localCodexRoot, "skills", skill.name);
-    assertPathInside(paths.repoCodexRoot, sourceRoot);
-    await mirrorDirectory({
-      sourceRoot,
-      targetRoot,
-      writeRoot: paths.localCodexRoot
-    });
-    installed.push(skill.name);
-  }
-  return { installed, unsupported };
-}
-async function installOfficialSkill(paths, skill) {
-  const requestedName = getRequestedOfficialSkillName(skill);
-  if (!requestedName) {
-    return false;
-  }
-  for (const collection of officialSkillCollections) {
-    const sourcePath = `${collection}/${requestedName}`;
-    const tempRoot = resolve3(paths.localCodexRoot, ".cthutool-install", `${requestedName}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    const targetRoot = resolve3(paths.localCodexRoot, "skills", skill.name);
-    assertPathInside(paths.localCodexRoot, tempRoot);
-    assertPathInside(paths.localCodexRoot, targetRoot);
-    try {
-      await downloadGitHubDirectory({
-        owner: officialSkillsRepository.owner,
-        repo: officialSkillsRepository.repo,
-        ref: officialSkillsRepository.ref,
-        sourcePath,
-        sourceRootPath: sourcePath,
-        targetRoot: tempRoot
-      });
-      if (!await exists(join2(tempRoot, "SKILL.md"))) {
-        await rm2(tempRoot, { recursive: true, force: true });
-        continue;
-      }
-      await mirrorDirectory({
-        sourceRoot: tempRoot,
-        targetRoot,
-        writeRoot: paths.localCodexRoot
-      });
-      await rm2(tempRoot, { recursive: true, force: true });
-      return true;
-    } catch {
-      await rm2(tempRoot, { recursive: true, force: true });
-    }
-  }
-  return false;
-}
-async function downloadGitHubDirectory(input) {
-  const entries = await fetchGitHubContentEntries(input);
-  for (const entry of entries) {
-    if (entry.type === "dir" && typeof entry.path === "string") {
-      await downloadGitHubDirectory({
-        ...input,
-        sourcePath: entry.path
-      });
-      continue;
-    }
-    if (entry.type !== "file" || typeof entry.path !== "string" || typeof entry.download_url !== "string") {
-      continue;
-    }
-    const relativePath = posix.relative(input.sourceRootPath, entry.path);
-    if (relativePath.length === 0 || relativePath.startsWith("..") || relativePath.includes("\\")) {
-      throw new Error(`Unsafe skill file path from GitHub: ${entry.path}`);
-    }
-    const outputPath = resolve3(input.targetRoot, ...relativePath.split("/"));
-    assertPathInside(input.targetRoot, outputPath);
-    const response = await fetch(entry.download_url);
-    if (!response.ok) {
-      throw new Error(`Failed to download ${entry.download_url}`);
-    }
-    await mkdir2(dirname3(outputPath), { recursive: true });
-    await writeFile2(outputPath, new Uint8Array(await response.arrayBuffer()));
-  }
-}
-async function fetchGitHubContentEntries(input) {
-  const encodedPath = input.sourcePath.split("/").map((part) => encodeURIComponent(part)).join("/");
-  const url = `https://api.github.com/repos/${input.owner}/${input.repo}/contents/${encodedPath}?ref=${encodeURIComponent(input.ref)}`;
-  const response = await fetch(url, {
-    headers: {
-      accept: "application/vnd.github+json",
-      "user-agent": "cthutool-cli"
-    }
-  });
-  if (!response.ok) {
-    throw new Error(`GitHub content request failed: ${response.status}`);
-  }
-  const value = await response.json();
-  if (!Array.isArray(value)) {
-    throw new Error(`GitHub content path is not a directory: ${input.sourcePath}`);
-  }
-  return value;
-}
-async function findOfficialSkillSource(paths, skill) {
-  const requestedName = getRequestedOfficialSkillName(skill);
-  if (!requestedName) {
-    return;
-  }
-  const candidates = [
-    join2(paths.localCodexRoot, "vendor_imports", "skills", "skills", ".curated", requestedName),
-    join2(paths.localCodexRoot, "vendor_imports", "skills", "skills", ".experimental", requestedName)
-  ];
-  for (const candidate of candidates) {
-    if (await exists(join2(candidate, "SKILL.md"))) {
-      return candidate;
-    }
-  }
-  return;
-}
-function getRequestedOfficialSkillName(skill) {
-  const requestedName = skill.path.startsWith("skill:") ? skill.path.slice("skill:".length) : skill.name;
-  if (!requestedName || requestedName.includes("/") || requestedName.includes("\\")) {
-    return;
-  }
-  return requestedName;
-}
-async function applyPluginsManifest(paths, manifest) {
-  const marketplace = await readMarketplaceEntries(paths);
-  const installedMarketplaceNames = new Set(marketplace.map((plugin) => plugin.name).filter((name) => typeof name === "string"));
-  const unsupported = manifest.plugins.filter((plugin) => plugin.enabled && plugin.source !== "repo" && !installedMarketplaceNames.has(plugin.name)).map((plugin) => plugin.name);
-  const enabled = manifest.plugins.filter((plugin) => plugin.enabled && plugin.source === "repo");
-  const plugins = await Promise.all(enabled.map(async (plugin) => {
-    const root = resolve3(paths.repoRoot, plugin.path);
-    assertPathInside(paths.repoCodexRoot, root);
-    const metadata = await readPluginMetadata(root);
-    return {
-      name: plugin.name,
-      displayName: metadata.displayName,
-      root,
-      marketplacePath: ""
-    };
-  }));
-  const installed = await installCodexPlugins({
+  const selectedNames = plugins.map((plugin) => plugin.name);
+  const installedPlugins = await installCodexPlugins({
     homeRoot: paths.homeRoot,
     configPath: join2(paths.localCodexRoot, "config.toml"),
     marketplacePath: paths.marketplacePath,
     plugins,
-    selectedNames: enabled.map((plugin) => plugin.name)
+    selectedNames
   });
-  const synced = await Promise.all(plugins.map((plugin) => syncCodexPluginCache({
-    cacheRoot: paths.cacheRoot,
-    plugin
-  })));
-  return { installed, synced, unsupported };
+  const syncedPluginCaches = await Promise.all(plugins.map((plugin) => syncCodexPluginCache({ cacheRoot: paths.cacheRoot, plugin })));
+  return { installedPlugins, syncedPluginCaches };
 }
-async function readPluginMetadata(pluginRoot) {
+async function readPluginManifest2(repoCodexRoot) {
+  const path = join2(repoCodexRoot, "plugins.manifest.json");
   try {
-    const raw = await readFile2(join2(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
-    const parsed = JSON.parse(raw);
+    const value = JSON.parse(await readFile2(path, "utf8"));
+    if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.plugins)) {
+      throw new Error("expected version 1 and a plugins array");
+    }
     return {
-      displayName: typeof parsed.interface?.displayName === "string" ? parsed.interface.displayName : basename(pluginRoot)
+      version: 1,
+      plugins: value.plugins.map((entry, index) => validatePluginManifestEntry(entry, index))
     };
-  } catch {
-    return { displayName: basename(pluginRoot) };
-  }
-}
-async function mirrorDirectory(input) {
-  const targetRoot = resolve3(input.targetRoot);
-  assertPathInside(input.writeRoot, targetRoot);
-  if (input.excludeRelativePath) {
-    await mirrorDirectoryWithExcludes({
-      ...input,
-      targetRoot,
-      excludeRelativePath: input.excludeRelativePath
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return { version: 1, plugins: [] };
+    }
+    throw new Error(`Invalid Codex plugins manifest: ${path}`, {
+      cause: error
     });
-    return;
   }
-  await rm2(targetRoot, { recursive: true, force: true });
-  if (!await exists(input.sourceRoot)) {
-    return;
-  }
-  await mkdir2(dirname3(targetRoot), { recursive: true });
-  await cp2(input.sourceRoot, targetRoot, { recursive: true, force: true });
 }
-async function mirrorDirectoryWithExcludes(input) {
-  await walkFiles(input.targetRoot, async (path) => {
-    const relativePath = toSlash(relative3(input.targetRoot, path));
-    if (input.excludeRelativePath(relativePath)) {
-      return;
-    }
-    assertPathInside(input.writeRoot, path);
-    await rm2(path, { force: true });
-  });
-  if (!await exists(input.sourceRoot)) {
-    return;
+function validatePluginManifestEntry(value, index) {
+  if (!isRecord(value) || typeof value.name !== "string" || typeof value.source !== "string" || typeof value.path !== "string" || typeof value.enabled !== "boolean") {
+    throw new Error(`Invalid Codex plugin manifest entry at index ${index}.`);
   }
-  await walkFiles(input.sourceRoot, async (sourcePath) => {
-    const relativePath = toSlash(relative3(input.sourceRoot, sourcePath));
-    if (input.excludeRelativePath(relativePath)) {
-      return;
+  return {
+    name: value.name,
+    source: value.source,
+    path: value.path,
+    enabled: value.enabled
+  };
+}
+async function readPluginDisplayName(root) {
+  try {
+    const value = JSON.parse(await readFile2(join2(root, ".codex-plugin", "plugin.json"), "utf8"));
+    return typeof value.interface?.displayName === "string" ? value.interface.displayName : basename(root);
+  } catch {
+    return basename(root);
+  }
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isMissingFileError(error) {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+// src/domain/codex-skills-backend.ts
+import { execFile as execFileCallback } from "node:child_process";
+import { readFile as readFile3 } from "node:fs/promises";
+import { join as join3 } from "node:path";
+import { promisify } from "node:util";
+var execFile = promisify(execFileCallback);
+var pinnedSkillsCliVersion = "1.5.19";
+
+class SkillsBackendError extends Error {
+  code;
+  constructor(code, message, options) {
+    super(message, options);
+    this.name = "SkillsBackendError";
+    this.code = code;
+  }
+}
+function createNpxSkillsBackend(options) {
+  const run = options.run ?? runSkillsProcess;
+  const fetchRemoteTree = options.fetchRemoteTree ?? fetch;
+  const env2 = {
+    ...process.env,
+    CODEX_HOME: options.localCodexRoot,
+    FORCE_COLOR: "0",
+    HOME: options.homeRoot,
+    NO_COLOR: "1",
+    USERPROFILE: options.homeRoot
+  };
+  return {
+    async listInstalled() {
+      const result = await run(["list", "--global", "--agent", "codex", "--json"], env2);
+      const installed = parseInstalledSkills(result.stdout);
+      const lockEntries = await readSkillLock(options.homeRoot);
+      return installed.map((skill) => {
+        const lock = lockEntries.get(skill.name);
+        const repository = lock ? readGitHubRepository(lock) : undefined;
+        return {
+          ...skill,
+          managed: repository !== undefined,
+          repository
+        };
+      });
+    },
+    async discover(repository) {
+      const result = await run(["add", repository, "--list"], env2);
+      return parseDiscoveredSkills(result.stdout);
+    },
+    async checkUpdates(skills) {
+      if (skills.length === 0) {
+        return new Set;
+      }
+      const lock = await readSkillLock(options.homeRoot);
+      return checkGitHubUpdates(skills, lock, fetchRemoteTree, env2);
+    },
+    async install(skill) {
+      await run([
+        "add",
+        resolveSkillSource(skill),
+        "--skill",
+        skill.selector,
+        "--global",
+        "--agent",
+        "codex",
+        "--yes"
+      ], env2);
+    },
+    async update(skill) {
+      await run([
+        "add",
+        resolveSkillSource(skill),
+        "--skill",
+        skill.selector,
+        "--global",
+        "--agent",
+        "codex",
+        "--yes"
+      ], env2);
+    },
+    async remove(name) {
+      await run(["remove", name, "--global", "--agent", "codex", "--yes"], env2);
     }
-    const targetPath = resolve3(input.targetRoot, relativePath);
-    assertPathInside(input.writeRoot, targetPath);
-    await mkdir2(dirname3(targetPath), { recursive: true });
-    await rm2(targetPath, { recursive: true, force: true });
-    await cp2(sourcePath, targetPath, { force: true });
+  };
+}
+function parseInstalledSkills(value) {
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch (error) {
+    throw new SkillsBackendError("contract_mismatch", "Unsupported skills CLI list output: expected JSON.", {
+      cause: error
+    });
+  }
+  if (!Array.isArray(parsed)) {
+    throw new SkillsBackendError("contract_mismatch", "Unsupported skills CLI list output: expected an array.");
+  }
+  return parsed.map((entry, index) => {
+    if (!isRecord2(entry) || typeof entry.name !== "string" || typeof entry.path !== "string") {
+      throw new SkillsBackendError("contract_mismatch", `Unsupported skills CLI list entry at index ${index}.`);
+    }
+    return {
+      name: entry.name,
+      path: entry.path,
+      managed: false
+    };
   });
 }
-async function writeJsonFile2(path, value, writeRoot) {
-  assertPathInside(writeRoot, path);
+function parseDiscoveredSkills(value) {
+  const plain = stripTerminalSequences(value);
+  const names = new Set;
+  for (const line of plain.split(/\r?\n/u)) {
+    const match = line.match(/^\s*│\s{4}([a-z0-9][a-z0-9-]*)\s*$/u);
+    if (match?.[1]) {
+      names.add(match[1]);
+    }
+  }
+  if (names.size === 0 && !plain.includes("Found 0 skills")) {
+    throw new SkillsBackendError("contract_mismatch", "Unsupported skills CLI discovery output; the pinned contract may have changed.");
+  }
+  return [...names].sort().map((name) => ({ name }));
+}
+async function runSkillsProcess(args, env2) {
+  const executable = process.platform === "win32" ? "npx.cmd" : "npx";
+  try {
+    const result = await execFile(executable, ["--yes", `skills@${pinnedSkillsCliVersion}`, ...args], {
+      encoding: "utf8",
+      env: env2,
+      maxBuffer: 10 * 1024 * 1024
+    });
+    return { stdout: result.stdout, stderr: result.stderr };
+  } catch (error) {
+    const message = error instanceof Error && "stderr" in error ? String(error.stderr ?? error.message) : String(error);
+    throw new SkillsBackendError("process_failed", `skills@${pinnedSkillsCliVersion} failed: ${message.trim() || "unknown error"}`, { cause: error });
+  }
+}
+async function readSkillLock(homeRoot) {
+  try {
+    const parsed = JSON.parse(await readFile3(join3(homeRoot, ".agents", ".skill-lock.json"), "utf8"));
+    if (!isRecord2(parsed) || parsed.version !== 3 || !isRecord2(parsed.skills)) {
+      throw new Error("expected lock version 3 with a skills object");
+    }
+    return new Map(Object.entries(parsed.skills).filter((entry) => isRecord2(entry[1])));
+  } catch (error) {
+    if (isMissingFileError2(error)) {
+      return new Map;
+    }
+    throw new SkillsBackendError("contract_mismatch", "Unsupported skills CLI lock metadata.", { cause: error });
+  }
+}
+function readGitHubRepository(lock) {
+  if (lock.sourceType !== "github") {
+    return;
+  }
+  if (typeof lock.source === "string" && /^[^/\s]+\/[^/\s]+$/u.test(lock.source)) {
+    return lock.source.replace(/\.git$/u, "");
+  }
+  if (typeof lock.sourceUrl !== "string") {
+    return;
+  }
+  const match = lock.sourceUrl.match(/^https:\/\/github\.com\/([^/]+\/[^/#]+?)(?:\.git)?(?:[/#]|$)/u);
+  return match?.[1];
+}
+function resolveSkillSource(skill) {
+  return `${skill.repository}#${encodeURIComponent(skill.tracking.ref)}`;
+}
+async function checkGitHubUpdates(skills, lock, fetchRemoteTree, env2) {
+  const updates = new Set;
+  const trees = new Map;
+  for (const skill of skills) {
+    const entry = lock.get(skill.name);
+    const repository = entry ? readGitHubRepository(entry) : undefined;
+    const skillPath = entry?.skillPath;
+    const installedHash = entry?.skillFolderHash;
+    if (!entry || !repository || typeof skillPath !== "string" || typeof installedHash !== "string" || installedHash.length === 0) {
+      throw new SkillsBackendError("contract_mismatch", `Unsupported skills@${pinnedSkillsCliVersion} lock metadata for ${skill.name}; reinstall it before checking updates.`);
+    }
+    if (repository !== skill.repository) {
+      throw new SkillsBackendError("contract_mismatch", `Installed source mismatch for ${skill.name}: expected ${skill.repository}, found ${repository}.`);
+    }
+    const treeKey = `${repository}@${skill.tracking.ref}`;
+    let tree = trees.get(treeKey);
+    if (!tree) {
+      tree = fetchGitHubTree(repository, skill.tracking.ref, fetchRemoteTree, env2);
+      trees.set(treeKey, tree);
+    }
+    const remoteHash = findSkillTreeHash(await tree, skillPath);
+    if (!remoteHash) {
+      throw new SkillsBackendError("contract_mismatch", `The tracked path for ${skill.name} is absent from ${repository}@${skill.tracking.ref}.`);
+    }
+    if (remoteHash !== installedHash) {
+      updates.add(skill.name);
+    }
+  }
+  return updates;
+}
+async function fetchGitHubTree(repository, ref, fetchRemoteTree, env2) {
+  const encodedRef = encodeURIComponent(ref);
+  const token = env2.GITHUB_TOKEN ?? env2.GH_TOKEN;
+  const response = await fetchRemoteTree(`https://api.github.com/repos/${repository}/git/trees/${encodedRef}?recursive=1`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      ...token ? { Authorization: `Bearer ${token}` } : {},
+      "User-Agent": "CthuTool Codex skills manager"
+    }
+  });
+  if (!response.ok) {
+    throw new SkillsBackendError("network_failed", `GitHub update check failed for ${repository}@${ref}: HTTP ${response.status}.`);
+  }
+  const value = await response.json();
+  if (!isRecord2(value) || !Array.isArray(value.tree)) {
+    throw new SkillsBackendError("contract_mismatch", `Unsupported GitHub tree response for ${repository}@${ref}.`);
+  }
+  if (value.truncated === true) {
+    throw new SkillsBackendError("contract_mismatch", `GitHub tree response was truncated for ${repository}@${ref}; update state is unknown.`);
+  }
+  return value.tree.map((entry, index) => {
+    if (!isRecord2(entry) || typeof entry.path !== "string" || entry.type !== "blob" && entry.type !== "tree" || typeof entry.sha !== "string") {
+      throw new SkillsBackendError("contract_mismatch", `Unsupported GitHub tree entry at index ${index}.`);
+    }
+    return { path: entry.path, type: entry.type, sha: entry.sha };
+  });
+}
+function findSkillTreeHash(tree, skillPath) {
+  let folder = skillPath.replaceAll("\\", "/");
+  if (folder.toLowerCase().endsWith("/skill.md")) {
+    folder = folder.slice(0, -9);
+  } else if (folder.toLowerCase().endsWith("skill.md")) {
+    folder = folder.slice(0, -8);
+  }
+  folder = folder.replace(/\/$/u, "");
+  return tree.find((entry) => entry.type === "tree" && entry.path === folder)?.sha;
+}
+function stripTerminalSequences(value) {
+  const escapeCharacter = String.fromCharCode(27);
+  const bell = String.fromCharCode(7);
+  return value.replace(new RegExp(`${escapeCharacter}\\[[0-9;?]*[ -/]*[@-~]`, "gu"), "").replace(new RegExp(`${escapeCharacter}\\][^${bell}]*(?:${bell}|${escapeCharacter}\\\\)`, "gu"), "").replace(/\r[^\n]*/gu, "");
+}
+function isRecord2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isMissingFileError2(error) {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+// src/domain/codex-skills-manager.ts
+import { mkdir as mkdir3, rename as rename2, rm as rm3 } from "node:fs/promises";
+import { dirname as dirname4, join as join5 } from "node:path";
+
+// src/domain/codex-skills-manifest.ts
+import { mkdir as mkdir2, readFile as readFile4, rename, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
+import { dirname as dirname3, join as join4, resolve as resolve4 } from "node:path";
+var emptyCodexSkillsManifest = () => ({
+  version: 2,
+  skills: []
+});
+async function readCodexSkillsManifest(repoCodexRoot) {
+  const path = getManifestPath(repoCodexRoot);
+  let value;
+  try {
+    value = JSON.parse(await readFile4(path, "utf8"));
+  } catch (error) {
+    if (isMissingFileError3(error)) {
+      return { manifest: emptyCodexSkillsManifest(), legacyEntries: [] };
+    }
+    throw new Error(`Invalid Codex skills manifest JSON: ${path}`, {
+      cause: error
+    });
+  }
+  if (isRecord3(value) && value.version === 1) {
+    const legacyEntries = Array.isArray(value.skills) ? value.skills.map((entry) => isRecord3(entry) && typeof entry.name === "string" ? entry.name : undefined).filter((name) => name !== undefined).sort() : [];
+    return { manifest: emptyCodexSkillsManifest(), legacyEntries };
+  }
+  return {
+    manifest: validateCodexSkillsManifest(value),
+    legacyEntries: []
+  };
+}
+function validateCodexSkillsManifest(value) {
+  if (!isRecord3(value) || value.version !== 2 || !Array.isArray(value.skills)) {
+    throw new Error("Codex skills manifest must have version 2 and a skills array.");
+  }
+  const names = new Set;
+  const skills = value.skills.map((entry, index) => {
+    const skill = validateManagedSkill(entry, index);
+    if (names.has(skill.name)) {
+      throw new Error(`Duplicate Codex skill manifest entry: ${skill.name}`);
+    }
+    names.add(skill.name);
+    return skill;
+  });
+  return {
+    version: 2,
+    skills: skills.sort((left, right) => left.name.localeCompare(right.name))
+  };
+}
+async function writeCodexSkillsManifest(repoCodexRoot, manifest) {
+  const validated = validateCodexSkillsManifest(manifest);
+  const path = getManifestPath(repoCodexRoot);
+  const temporaryPath = join4(dirname3(path), `.skills.manifest.${process.pid}.${Date.now()}.tmp`);
+  assertPathInside(repoCodexRoot, path);
+  assertPathInside(repoCodexRoot, temporaryPath);
   await mkdir2(dirname3(path), { recursive: true });
-  await writeFile2(path, `${JSON.stringify(value, null, 2)}
+  try {
+    await writeFile2(temporaryPath, `${JSON.stringify(validated, null, 2)}
 `, "utf8");
+    await rename(temporaryPath, path);
+  } finally {
+    await rm2(temporaryPath, { force: true });
+  }
 }
-async function walkFiles(root, visit) {
-  for (const entry of await readDirectorySafe(root)) {
-    const path = join2(root, entry.name);
-    if (entry.isDirectory()) {
-      await walkFiles(path, visit);
-    } else if (entry.isFile()) {
-      await visit(path);
+function upsertManagedSkill(manifest, skill) {
+  return validateCodexSkillsManifest({
+    version: 2,
+    skills: [
+      ...manifest.skills.filter((entry) => entry.name !== skill.name),
+      skill
+    ]
+  });
+}
+function removeManagedSkill(manifest, name) {
+  return {
+    version: 2,
+    skills: manifest.skills.filter((skill) => skill.name !== name)
+  };
+}
+function getManifestPath(repoCodexRoot) {
+  const path = resolve4(repoCodexRoot, "skills.manifest.json");
+  assertPathInside(repoCodexRoot, path);
+  return path;
+}
+function validateManagedSkill(value, index) {
+  if (!isRecord3(value)) {
+    throw new Error(`Codex skill entry ${index} must be an object.`);
+  }
+  const name = readNonEmptyString(value.name, `skills[${index}].name`);
+  if (!/^[a-z0-9][a-z0-9-]*$/u.test(name)) {
+    throw new Error(`Invalid Codex skill name: ${name}`);
+  }
+  if (value.source !== "github") {
+    throw new Error(`Codex skill ${name} must use source "github".`);
+  }
+  const repository = readNonEmptyString(value.repository, `skills[${index}].repository`);
+  if (!/^[^/\s]+\/[^/\s]+$/u.test(repository) || repository.includes("..")) {
+    throw new Error(`Invalid GitHub repository for ${name}: ${repository}`);
+  }
+  const selector = readNonEmptyString(value.selector, `skills[${index}].selector`);
+  if (selector.includes("\\") || selector.split("/").includes("..")) {
+    throw new Error(`Invalid skill selector for ${name}: ${selector}`);
+  }
+  if (!isRecord3(value.tracking)) {
+    throw new Error(`Codex skill ${name} must declare tracking.`);
+  }
+  if (value.tracking.type !== "branch" && value.tracking.type !== "pin") {
+    throw new Error(`Invalid tracking type for ${name}.`);
+  }
+  const ref = readNonEmptyString(value.tracking.ref, `skills[${index}].tracking.ref`);
+  if (typeof value.enabled !== "boolean") {
+    throw new Error(`Codex skill ${name} must declare enabled as a boolean.`);
+  }
+  return {
+    name,
+    source: "github",
+    repository,
+    selector,
+    tracking: { type: value.tracking.type, ref },
+    enabled: value.enabled
+  };
+}
+function readNonEmptyString(value, label) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+  return value.trim();
+}
+function isRecord3(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isMissingFileError3(error) {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+// src/domain/codex-skills-manager.ts
+async function buildManagedSkillInventory(input) {
+  if (input.manifest.skills.length === 0) {
+    return input.legacyEntries.map((name) => ({
+      name,
+      source: "legacy manifest entry",
+      state: "legacy",
+      availableActions: ["none"]
+    }));
+  }
+  const installed = await input.backend.listInstalled();
+  const installedByName = new Map(installed.map((skill) => [skill.name, skill]));
+  const trackedSkills = input.manifest.skills.filter((skill) => {
+    const local = installedByName.get(skill.name);
+    return skill.enabled && skill.tracking.type === "branch" && local?.managed === true && local.repository === skill.repository;
+  });
+  const updates = await input.backend.checkUpdates(trackedSkills);
+  const rows = input.manifest.skills.map((skill) => classifyManagedSkill(skill, installedByName.get(skill.name), updates));
+  for (const name of input.legacyEntries) {
+    rows.push({
+      name,
+      source: "legacy manifest entry",
+      state: "legacy",
+      availableActions: ["none"]
+    });
+  }
+  return rows.sort((left, right) => left.name.localeCompare(right.name));
+}
+function classifyManagedSkill(skill, installed, updates) {
+  const source = `${skill.repository}:${skill.selector}@${skill.tracking.ref}`;
+  if (!skill.enabled) {
+    return {
+      name: skill.name,
+      source,
+      state: "disabled",
+      installedPath: installed?.path,
+      installedManaged: installed?.managed === true && installed.repository === skill.repository,
+      availableActions: ["none", "enable", "remove"],
+      skill
+    };
+  }
+  if (!installed) {
+    return {
+      name: skill.name,
+      source,
+      state: "missing",
+      availableActions: ["none", "install", "remove"],
+      skill
+    };
+  }
+  if (!installed.managed || installed.repository !== skill.repository) {
+    return {
+      name: skill.name,
+      source,
+      state: "unmanaged_collision",
+      installedPath: installed.path,
+      installedManaged: false,
+      availableActions: ["none", "replace", "remove"],
+      skill
+    };
+  }
+  if (skill.tracking.type === "branch" && updates.has(skill.name)) {
+    return {
+      name: skill.name,
+      source,
+      state: "update_available",
+      installedPath: installed.path,
+      installedManaged: true,
+      availableActions: ["none", "update", "remove"],
+      skill
+    };
+  }
+  return {
+    name: skill.name,
+    source,
+    state: "installed",
+    installedPath: installed.path,
+    installedManaged: true,
+    availableActions: ["none", "remove"],
+    skill
+  };
+}
+async function executeSkillPlan(input) {
+  let manifest = input.manifest;
+  const completed = [];
+  const failed = [];
+  for (const item of input.items) {
+    if (item.action === "none") {
+      continue;
+    }
+    try {
+      if (item.action === "install" || item.action === "add") {
+        if (!item.skill) {
+          throw new Error(`Missing install metadata for ${item.name}.`);
+        }
+        await input.backend.install(item.skill);
+        manifest = upsertManagedSkill(manifest, item.skill);
+      } else if (item.action === "replace") {
+        if (!item.skill || !item.installedPath) {
+          throw new Error(`Missing replacement metadata for ${item.name}.`);
+        }
+        await replaceSkillWithRollback(item, input.backend);
+        manifest = upsertManagedSkill(manifest, item.skill);
+      } else if (item.action === "update") {
+        if (!item.skill) {
+          throw new Error(`Missing update metadata for ${item.name}.`);
+        }
+        await input.backend.update(item.skill);
+      } else if (item.action === "enable") {
+        if (!item.skill) {
+          throw new Error(`Missing enable metadata for ${item.name}.`);
+        }
+        manifest = upsertManagedSkill(manifest, {
+          ...item.skill,
+          enabled: true
+        });
+      } else if (item.action === "remove") {
+        if (item.installedPath && item.installedManaged === true) {
+          await input.backend.remove(item.name);
+        }
+        manifest = removeManagedSkill(manifest, item.name);
+      }
+      await writeCodexSkillsManifest(input.repoCodexRoot, manifest);
+      completed.push(item);
+    } catch (error) {
+      failed.push({
+        item,
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   }
+  return { manifest, completed, failed };
 }
-async function walkRepoCodex(root, visit) {
-  for (const entry of await readDirectorySafe(root)) {
-    const path = join2(root, entry.name);
-    await visit(path, entry);
-    if (entry.isDirectory()) {
-      await walkRepoCodex(path, visit);
-    }
+async function replaceSkillWithRollback(item, backend) {
+  const skill = item.skill;
+  const installedPath = item.installedPath;
+  if (!skill || !installedPath) {
+    throw new Error(`Missing replacement metadata for ${item.name}.`);
   }
-}
-async function readDirectorySafe(path) {
+  const backupPath = join5(dirname4(installedPath), `.${item.name}.cthutool-backup-${process.pid}-${Date.now()}`);
+  await mkdir3(dirname4(backupPath), { recursive: true });
+  await rename2(installedPath, backupPath);
   try {
-    return await readdir2(path, { withFileTypes: true });
-  } catch {
-    return [];
+    await backend.install(skill);
+    await rm3(backupPath, { recursive: true, force: true });
+  } catch (error) {
+    await rm3(installedPath, { recursive: true, force: true });
+    await rename2(backupPath, installedPath);
+    throw error;
   }
-}
-async function isLocalSkillDirectory(paths, name) {
-  return exists(join2(paths.localCodexRoot, "skills", name, "SKILL.md"));
-}
-async function exists(path) {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-function isUnsafeFile(relativePath) {
-  const name = basename(relativePath);
-  return name === "auth.json" || name === "cap_sid" || name === "config.toml" || name.endsWith(".sqlite") || name.endsWith(".sqlite-shm") || name.endsWith(".sqlite-wal");
-}
-function isUnsafeDirectory(relativePath) {
-  return [
-    "cache",
-    "plugins/cache",
-    "logs",
-    "log",
-    "tmp",
-    ".tmp",
-    "sessions",
-    "archived_sessions",
-    "memories"
-  ].includes(relativePath);
-}
-function isRepoManagedPath(paths, path, area) {
-  const sourceRoot = resolve3(paths.repoRoot, path);
-  try {
-    assertPathInside(join2(paths.repoCodexRoot, area), sourceRoot);
-    return true;
-  } catch {
-    return false;
-  }
-}
-function resolveMarketplacePath(homeRoot, path) {
-  if (typeof path !== "string" || path.trim().length === 0) {
-    return "";
-  }
-  if (path.startsWith("./")) {
-    return resolve3(homeRoot, path.slice(2));
-  }
-  return resolve3(path);
-}
-function sameResolvedPath(left, right) {
-  return resolve3(left).toLowerCase() === resolve3(right).toLowerCase();
-}
-function toSlash(path) {
-  return path.replaceAll("\\", "/");
 }
 
 // src/runtime/cli-context.ts
@@ -4047,7 +4017,7 @@ function isCliCommandError(value) {
 }
 
 // src/runtime/observability.ts
-import { basename as basename2, dirname as dirname4, sep as sep2 } from "node:path";
+import { basename as basename2, dirname as dirname5, sep as sep2 } from "node:path";
 var CLI_DIAGNOSTICS_ENV = "CHC_CLI_DIAGNOSTICS";
 var REDACTED = "[redacted]";
 var MAX_STRING_LENGTH = 160;
@@ -4176,7 +4146,7 @@ function isPathKey(key) {
 function summarizePath(value) {
   const normalized = value.replaceAll("\\", sep2);
   const name = basename2(normalized);
-  const parent = basename2(dirname4(normalized));
+  const parent = basename2(dirname5(normalized));
   return parent && parent !== "." ? `${parent}${sep2}${name}` : name;
 }
 function truncate(value) {
@@ -4272,20 +4242,17 @@ function toDiagnosticCliError(error) {
 }
 
 // src/command/codex.command.ts
-var configArgs = {
+var commonArgs = {
   ...cliContractArgs,
-  repoRoot: {
-    type: "string",
-    description: "Override the repository root"
-  },
-  home: {
-    type: "string",
-    description: "Override the home directory"
-  },
+  repoRoot: { type: "string", description: "Override the repository root" },
+  home: { type: "string", description: "Override the home directory" },
   codexHome: {
     type: "string",
     description: "Override the local Codex home directory"
-  },
+  }
+};
+var installArgs = {
+  ...commonArgs,
   marketplace: {
     type: "string",
     description: "Override the personal marketplace.json path"
@@ -4297,13 +4264,6 @@ var configArgs = {
   cacheRoot: {
     type: "string",
     description: "Override the Codex personal plugin cache directory"
-  }
-};
-var applyArgs = {
-  ...configArgs,
-  yes: {
-    type: "boolean",
-    description: "Confirm overwriting local Codex prompts and rules"
   }
 };
 function getStringArg(value) {
@@ -4319,298 +4279,353 @@ function createPaths(args) {
     cacheRoot: getStringArg(args.cacheRoot)
   });
 }
-function writeDetailedStatusHuman(comparison, paths, args) {
-  const context = createCliContext(args);
-  writeHumanStatus(context, processOutput, import_picocolors2.default.bold(import_picocolors2.default.cyan("Codex Status Details")));
-  writeHumanStatus(context, processOutput, `local: ${paths.localCodexRoot}`);
-  writeHumanStatus(context, processOutput, `repo:  ${paths.repoCodexRoot}`);
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(context, processOutput, import_picocolors2.default.bold("Area      Added  Removed  Modified  Unchanged"));
-  for (const area of ["prompts", "rules"]) {
-    const counts = comparison.areas[area].counts;
-    writeHumanStatus(context, processOutput, `${area.padEnd(9)} ${formatCount(counts.added, "+")} ${formatCount(counts.removed, "-")} ${formatCount(counts.modified, "~")} ${formatCount(counts.unchanged, "=")}`);
-  }
-  for (const area of ["prompts", "rules"]) {
-    writeAreaDiff(context, area, comparison.areas[area].files);
-  }
-  writeIntentSection(context, "Repository-owned assets not installed locally", [
-    ["skills", comparison.missingRepoSkills],
-    ["plugins", comparison.missingRepoPlugins]
-  ]);
-  writeRepoPluginStatusSection(context, comparison.repoPlugins);
-  writeIntentSection(context, "Local backup intent not tracked", [
-    ["skills", comparison.unmanagedSkills],
-    ["plugins", comparison.unmanagedPlugins]
-  ]);
-  writeIntentSection(context, "Unsupported restore intent", [
-    ["skills", comparison.unsupportedSkills],
-    ["plugins", comparison.unsupportedPlugins]
-  ]);
-  writeIntentSection(context, "Unsafe repository content", [
-    ["paths", comparison.unsafeRepoPaths]
-  ]);
-  const next = chooseNextHint(comparison);
-  if (next) {
-    writeHumanStatus(context, processOutput);
-    writeHumanStatus(context, processOutput, import_picocolors2.default.bold("Next"));
-    writeHumanStatus(context, processOutput, next);
-  }
-}
-async function runComparison(args) {
-  const paths = createPaths(args);
-  const comparison = await compareCodexConfig(paths);
-  const ok = comparison.unsafeRepoPaths.length === 0;
-  if (args.json === true) {
-    writeJsonValue(processOutput, {
-      ok,
-      command: "codex status",
-      comparison
-    });
-  } else {
-    writeDetailedStatusHuman(comparison, paths, args);
-  }
-  process.exitCode = ok ? 0 : 1;
-}
-var maxDiffPathsPerState = 5;
-function formatCount(count, state) {
-  const value = `${state}${count}`.padStart(7);
-  if (count === 0) {
-    return import_picocolors2.default.dim(value);
-  }
-  if (state === "+") {
-    return import_picocolors2.default.green(value);
-  }
-  if (state === "-") {
-    return import_picocolors2.default.red(value);
-  }
-  if (state === "~") {
-    return import_picocolors2.default.yellow(value);
-  }
-  return import_picocolors2.default.dim(value);
-}
-function writeAreaDiff(context, area, files) {
-  const rows = [
-    ["+", "added", import_picocolors2.default.green],
-    ["-", "removed", import_picocolors2.default.red],
-    ["~", "modified", import_picocolors2.default.yellow]
-  ];
-  const hasChanges = rows.some(([, state]) => files[state].length > 0);
-  if (!hasChanges) {
-    return;
-  }
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(context, processOutput, import_picocolors2.default.bold(area));
-  for (const [prefix, state, color] of rows) {
-    const paths = files[state];
-    if (paths.length === 0) {
-      continue;
-    }
-    for (const path of paths.slice(0, maxDiffPathsPerState)) {
-      writeHumanStatus(context, processOutput, color(`${prefix} ${path}`));
-    }
-    const omitted = paths.length - maxDiffPathsPerState;
-    if (omitted > 0) {
-      writeHumanStatus(context, processOutput, import_picocolors2.default.dim(`... ${omitted} more ${state} paths`));
-    }
-  }
-}
-function writeIntentSection(context, title, rows) {
-  const visible = rows.filter(([, values]) => values.length > 0);
-  if (visible.length === 0) {
-    return;
-  }
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(context, processOutput, import_picocolors2.default.bold(title));
-  for (const [label, values] of visible) {
-    writeHumanStatus(context, processOutput, `${label}: ${values.join(", ")}`);
-  }
-}
-function writeRepoPluginStatusSection(context, plugins) {
-  if (plugins.length === 0) {
-    return;
-  }
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(context, processOutput, import_picocolors2.default.bold("Repository plugins"));
-  for (const plugin of plugins) {
-    writeHumanStatus(context, processOutput, `${plugin.name}: ${formatRepoPluginStatus(plugin.status)}`);
-  }
-}
-function formatRepoPluginStatus(status) {
-  if (status === "applied") {
-    return import_picocolors2.default.green("applied");
-  }
-  if (status === "not_applied") {
-    return import_picocolors2.default.yellow("not applied");
-  }
-  return import_picocolors2.default.dim("disabled");
-}
-function chooseNextHint(comparison) {
-  if (comparison.missingRepoSkills.length > 0 || comparison.missingRepoPlugins.length > 0) {
-    return "Next: run `chc codex install` to install repository-owned assets locally.";
-  }
-  const hasLocalOnlyChanges = ["prompts", "rules"].some((area) => {
-    const files = comparison.areas[area].files;
-    return files.added.length > 0 || files.modified.length > 0;
-  });
-  if (hasLocalOnlyChanges || comparison.unmanagedSkills.length > 0 || comparison.unmanagedPlugins.length > 0) {
-    return "Next: run `chc codex export` after reviewing local changes.";
-  }
-  if (comparison.unsupportedSkills.length > 0 || comparison.unsupportedPlugins.length > 0) {
-    return "Next: edit manifests or install unsupported entries manually.";
-  }
-  if (comparison.unsafeRepoPaths.length > 0) {
-    return "Next: remove unsafe runtime state from repository codex/.";
-  }
-  return;
-}
-function writeManualInstallHint(context, result) {
-  if (result.unsupportedSkills.length === 0 && result.unsupportedPlugins.length === 0) {
-    return;
-  }
-  writeHumanStatus(context, processOutput);
-  writeHumanStatus(context, processOutput, import_picocolors2.default.bold("Manual install needed"));
-  if (result.unsupportedSkills.length > 0) {
-    writeHumanStatus(context, processOutput, `skills: ${result.unsupportedSkills.join(", ")}`);
-  }
-  if (result.unsupportedPlugins.length > 0) {
-    writeHumanStatus(context, processOutput, `plugins: ${result.unsupportedPlugins.join(", ")}`);
-  }
-}
-function getApplyOverwritePaths(comparison) {
-  return {
-    prompts: [
-      ...comparison.areas.prompts.files.added,
-      ...comparison.areas.prompts.files.modified
-    ].sort(),
-    rules: [
-      ...comparison.areas.rules.files.added,
-      ...comparison.areas.rules.files.modified
-    ].sort()
-  };
-}
-function hasApplyOverwriteRisk(paths) {
-  return paths.prompts.length > 0 || paths.rules.length > 0;
-}
-async function confirmApplyOverwrite(context, paths, args, fail) {
-  if (!hasApplyOverwriteRisk(paths) || args.yes === true) {
-    return true;
-  }
-  const error = createCliError("invalid_option", "codex apply would overwrite or delete local prompts/rules; rerun with --yes to confirm.");
-  if (context.json || !context.interactive) {
-    fail?.(error, { details: { phase: "confirmation" } });
-    writeCommandError(context, processOutput, error);
-    process.exitCode = error.exitCode;
-    return false;
-  }
-  writeHumanStatus(context, processOutput, import_picocolors2.default.yellow(error.message));
-  for (const area of ["prompts", "rules"]) {
-    if (paths[area].length === 0) {
-      continue;
-    }
-    writeHumanStatus(context, processOutput, import_picocolors2.default.bold(area));
-    for (const path of paths[area].slice(0, maxDiffPathsPerState)) {
-      writeHumanStatus(context, processOutput, import_picocolors2.default.yellow(`! ${path}`));
-    }
-    const omitted = paths[area].length - maxDiffPathsPerState;
-    if (omitted > 0) {
-      writeHumanStatus(context, processOutput, import_picocolors2.default.dim(`... ${omitted} more affected paths`));
-    }
-  }
-  const answer = await ce2({
-    message: "Overwrite local Codex prompts/rules from the repository?",
-    initialValue: false
-  });
-  if (lD2(answer) || answer !== true) {
-    const cancelError = createCliError("invalid_option", "codex apply cancelled.");
-    fail?.(cancelError, { details: { phase: "confirmation" } });
-    writeCommandError(context, processOutput, cancelError);
-    process.exitCode = cancelError.exitCode;
-    return false;
-  }
-  return true;
-}
 async function runObservedCodexSubcommand(subcommand, args, run) {
   await runObservedCliCommand(args, { command: "codex", subcommand }, run);
+}
+function failCommand(scope, message) {
+  const error = createCliError("invalid_option", message);
+  scope.fail(error);
+  writeCommandError(scope.context, processOutput, error);
+  process.exitCode = error.exitCode;
+}
+async function runSkills(args, scope, dependencies = {}) {
+  if (!scope.context.json && !scope.context.interactive) {
+    failCommand(scope, "`chc codex skills` requires an interactive terminal; use --json for a read-only snapshot.");
+    return;
+  }
+  const paths = createPaths(args);
+  const manifestResult = await readCodexSkillsManifest(paths.repoCodexRoot);
+  const backend = dependencies.createBackend ? dependencies.createBackend(paths) : createNpxSkillsBackend({
+    homeRoot: paths.homeRoot,
+    localCodexRoot: paths.localCodexRoot
+  });
+  const inventory = await buildManagedSkillInventory({
+    ...manifestResult,
+    backend
+  });
+  if (scope.context.json) {
+    writeJsonValue(processOutput, {
+      ok: true,
+      command: "codex skills",
+      result: {
+        manifestVersion: manifestResult.manifest.version,
+        skills: inventory,
+        legacyEntries: manifestResult.legacyEntries
+      }
+    });
+    process.exitCode = 0;
+    return;
+  }
+  if (manifestResult.legacyEntries.length > 0) {
+    failCommand(scope, `The version 1 skills manifest contains entries without reinstallable sources (${manifestResult.legacyEntries.join(", ")}). Migrate it explicitly to version 2 before making changes.`);
+    return;
+  }
+  writeInventory(scope, inventory);
+  const interaction = dependencies.interaction ?? defaultSkillsInteraction;
+  const mode = await interaction.chooseMode();
+  if (!mode) {
+    return;
+  }
+  const plan = mode === "add" ? await createAddPlan(manifestResult.manifest, backend, interaction) : await createManagePlan(inventory, interaction);
+  if (!plan || plan.length === 0) {
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("No changes selected."));
+    return;
+  }
+  writePlan(scope, plan);
+  const approved = await interaction.confirmPlan(plan);
+  if (approved !== true) {
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("Cancelled."));
+    return;
+  }
+  const result = await executeSkillPlan({
+    repoCodexRoot: paths.repoCodexRoot,
+    manifest: manifestResult.manifest,
+    items: plan,
+    backend
+  });
+  for (const item of result.completed) {
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.green(`done  ${item.action} ${item.name}`));
+  }
+  for (const failure of result.failed) {
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.red(`failed ${failure.item.action} ${failure.item.name}: ${failure.error}`));
+  }
+  process.exitCode = result.failed.length === 0 ? 0 : 1;
+}
+function writeInventory(scope, inventory) {
+  writeHumanStatus(scope.context, processOutput, import_picocolors3.default.bold("Managed Codex skills"));
+  if (inventory.length === 0) {
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("(none)"));
+    return;
+  }
+  for (const row of inventory) {
+    writeHumanStatus(scope.context, processOutput, `${row.name.padEnd(28)} ${row.state.padEnd(20)} ${import_picocolors3.default.dim(row.source)}`);
+  }
+}
+async function createManagePlan(inventory, interaction) {
+  const actionable = inventory.filter((row) => row.availableActions.some((action) => action !== "none"));
+  if (actionable.length === 0) {
+    return [];
+  }
+  const choices = await interaction.chooseManagedActions(actionable);
+  if (!choices) {
+    return;
+  }
+  const plan = [];
+  for (const choice of choices) {
+    const row = actionable.find((candidate) => candidate.name === choice.name);
+    if (!row) {
+      continue;
+    }
+    plan.push({
+      action: choice.action,
+      name: row.name,
+      skill: row.skill,
+      installedPath: row.installedPath,
+      installedManaged: row.installedManaged
+    });
+  }
+  return plan;
+}
+async function createAddPlan(manifest, backend, interaction) {
+  const repositoryAnswer = await interaction.requestRepository();
+  if (!repositoryAnswer) {
+    return;
+  }
+  const repository = repositoryAnswer.trim();
+  const discovered = await backend.discover(repository);
+  const selectedNames = await interaction.chooseDiscoveredNames(discovered);
+  if (!selectedNames) {
+    return;
+  }
+  const trackingType = await interaction.chooseTrackingType();
+  if (!trackingType) {
+    return;
+  }
+  const refAnswer = await interaction.requestTrackingRef(trackingType);
+  if (!refAnswer) {
+    return;
+  }
+  const selectedSkills = selectedNames.map((name) => ({
+    name,
+    source: "github",
+    repository,
+    selector: name,
+    tracking: { type: trackingType, ref: refAnswer.trim() },
+    enabled: true
+  }));
+  const candidateManifest = {
+    version: 2,
+    skills: [
+      ...manifest.skills.filter((existing) => !selectedNames.includes(existing.name)),
+      ...selectedSkills
+    ]
+  };
+  const inventory = await buildManagedSkillInventory({
+    manifest: candidateManifest,
+    legacyEntries: [],
+    backend
+  });
+  return selectedSkills.map((skill) => {
+    const row = inventory.find((candidate) => candidate.name === skill.name);
+    if (row?.state === "unmanaged_collision") {
+      return {
+        action: "replace",
+        name: skill.name,
+        skill,
+        installedPath: row.installedPath
+      };
+    }
+    if (row?.state === "missing") {
+      return { action: "add", name: skill.name, skill };
+    }
+    return { action: "enable", name: skill.name, skill };
+  });
+}
+var defaultSkillsInteraction = {
+  async chooseMode() {
+    const answer = await le2({
+      message: "Codex skills",
+      options: [
+        { value: "manage", label: "Manage tracked skills" },
+        { value: "add", label: "Add skills from GitHub" }
+      ]
+    });
+    return lD2(answer) ? undefined : answer;
+  },
+  async chooseManagedActions(rows) {
+    return promptManagedActionTable(rows);
+  },
+  async requestRepository() {
+    const answer = await ae({
+      message: "GitHub repository (owner/repo)",
+      validate(value) {
+        return /^[^/\s]+\/[^/\s]+$/u.test(value.trim()) ? undefined : "Use owner/repo format.";
+      }
+    });
+    return lD2(answer) ? undefined : answer.trim();
+  },
+  async chooseDiscoveredNames(skills) {
+    const answer = await $e({
+      message: "Select skills to track (Space toggles)",
+      required: true,
+      options: skills.map((skill) => ({
+        value: skill.name,
+        label: skill.name
+      }))
+    });
+    return lD2(answer) ? undefined : answer;
+  },
+  async chooseTrackingType() {
+    const answer = await le2({
+      message: "Tracking mode",
+      options: [
+        { value: "branch", label: "Track a branch" },
+        { value: "pin", label: "Pin a commit or tag" }
+      ]
+    });
+    return lD2(answer) ? undefined : answer;
+  },
+  async requestTrackingRef(type) {
+    const answer = await ae({
+      message: type === "branch" ? "Branch" : "Commit or tag",
+      initialValue: type === "branch" ? "main" : undefined,
+      validate: (value) => value.trim().length > 0 ? undefined : "A ref is required."
+    });
+    return lD2(answer) ? undefined : answer.trim();
+  },
+  async confirmPlan() {
+    const answer = await ce2({
+      message: "Apply this skills plan?",
+      initialValue: false
+    });
+    return lD2(answer) ? undefined : answer;
+  }
+};
+async function promptManagedActionTable(rows) {
+  const input = process.stdin;
+  if (!input.isTTY || typeof input.setRawMode !== "function") {
+    return;
+  }
+  const indexes = rows.map(() => 0);
+  let focused = 0;
+  let renderedLines = 0;
+  const control = String.fromCharCode(27);
+  function render() {
+    const lines = [
+      import_picocolors3.default.bold("Choose managed skill actions"),
+      import_picocolors3.default.dim("↑/↓ move · Space cycles valid actions · Enter reviews plan"),
+      ...rows.map((row, index) => {
+        const action = row.availableActions[indexes[index] ?? 0] ?? "none";
+        const marker = index === focused ? import_picocolors3.default.cyan("›") : " ";
+        const actionLabel = action === "none" ? import_picocolors3.default.dim("none") : import_picocolors3.default.yellow(action);
+        return `${marker} ${row.name.padEnd(26)} ${row.state.padEnd(20)} ${actionLabel.padEnd(18)} ${import_picocolors3.default.dim(row.source)}`;
+      })
+    ];
+    if (renderedLines > 0) {
+      process.stdout.write(`${control}[${renderedLines}A${control}[0J`);
+    }
+    process.stdout.write(`${lines.join(`
+`)}
+`);
+    renderedLines = lines.length;
+  }
+  return await new Promise((resolve5) => {
+    const wasRaw = input.isRaw;
+    const finish = (cancelled) => {
+      input.off("keypress", onKeypress);
+      input.setRawMode(wasRaw);
+      if (!wasRaw) {
+        input.pause();
+      }
+      process.stdout.write(`${control}[?25h`);
+      if (cancelled) {
+        resolve5(undefined);
+        return;
+      }
+      resolve5(rows.flatMap((row, index) => {
+        const action = row.availableActions[indexes[index] ?? 0] ?? "none";
+        return action === "none" ? [] : [{ name: row.name, action }];
+      }));
+    };
+    const onKeypress = (_value, key) => {
+      if (key.ctrl && key.name === "c" || key.name === "escape") {
+        finish(true);
+        return;
+      }
+      if (key.name === "up") {
+        focused = (focused - 1 + rows.length) % rows.length;
+      } else if (key.name === "down") {
+        focused = (focused + 1) % rows.length;
+      } else if (key.name === "space") {
+        indexes[focused] = ((indexes[focused] ?? 0) + 1) % rows[focused].availableActions.length;
+      } else if (key.name === "return" || key.name === "enter") {
+        finish(false);
+        return;
+      } else {
+        return;
+      }
+      render();
+    };
+    emitKeypressEvents2(input);
+    input.setRawMode(true);
+    input.resume();
+    input.on("keypress", onKeypress);
+    process.stdout.write(`${control}[?25l`);
+    render();
+  });
+}
+function writePlan(scope, plan) {
+  writeHumanStatus(scope.context, processOutput);
+  writeHumanStatus(scope.context, processOutput, import_picocolors3.default.bold("Plan"));
+  for (const item of plan) {
+    writeHumanStatus(scope.context, processOutput, `${item.action.padEnd(8)} ${item.name} ${import_picocolors3.default.dim(describePlanEffect(item))}`);
+  }
+}
+function describePlanEffect(item) {
+  if (item.action === "add" || item.action === "install") {
+    return "(install locally; add/retain manifest entry)";
+  }
+  if (item.action === "replace") {
+    return "(snapshot collision; install locally; add/retain manifest entry)";
+  }
+  if (item.action === "remove") {
+    return item.installedManaged ? "(remove managed installation; remove manifest entry)" : "(leave unmanaged local copy; remove manifest entry)";
+  }
+  if (item.action === "enable") {
+    return "(enable manifest entry)";
+  }
+  if (item.action === "update") {
+    return "(update local installation; preserve manifest source)";
+  }
+  return "";
 }
 var codexCommand = defineCommand({
   meta: {
     name: "codex",
-    description: "Manage reproducible Codex configuration."
+    description: "Manage Codex skills and repository plugins."
   },
   subCommands: {
-    status: defineCommand({
+    skills: defineCommand({
       meta: {
-        name: "status",
-        description: "Summarize local-versus-repository Codex config state."
+        name: "skills",
+        description: "Interactively manage manifest-tracked GitHub skills."
       },
-      args: configArgs,
+      args: commonArgs,
       async run({ args }) {
-        await runObservedCodexSubcommand("status", args, async () => {
-          await runComparison(args);
-        });
-      }
-    }),
-    export: defineCommand({
-      meta: {
-        name: "export",
-        description: "Export safe local Codex config into the repository."
-      },
-      args: configArgs,
-      async run({ args }) {
-        await runObservedCodexSubcommand("export", args, async ({ context }) => {
-          const result = await exportCodexConfig(createPaths(args));
-          if (context.json) {
-            writeJsonValue(processOutput, {
-              ok: true,
-              command: "codex export",
-              result
-            });
-          } else {
-            writeHumanStatus(context, processOutput, import_picocolors2.default.cyan("Codex export"));
-            writeHumanStatus(context, processOutput, `exported: ${result.exportedAreas.join(", ")}`);
-          }
-          process.exitCode = 0;
-        });
-      }
-    }),
-    apply: defineCommand({
-      meta: {
-        name: "apply",
-        description: "Restore repository Codex config locally."
-      },
-      args: applyArgs,
-      async run({ args }) {
-        await runObservedCodexSubcommand("apply", args, async ({ context, fail }) => {
-          const paths = createPaths(args);
-          const comparison = await compareCodexConfig(paths);
-          if (!await confirmApplyOverwrite(context, getApplyOverwritePaths(comparison), args, fail)) {
-            return;
-          }
-          const result = await applyCodexConfig(paths);
-          if (context.json) {
-            writeJsonValue(processOutput, {
-              ok: true,
-              command: "codex apply",
-              result
-            });
-          } else {
-            writeHumanStatus(context, processOutput, import_picocolors2.default.cyan("Codex apply"));
-            writeHumanStatus(context, processOutput, `applied: ${result.appliedAreas.join(", ")}`);
-            writeManualInstallHint(context, result);
-          }
-          process.exitCode = 0;
+        await runObservedCodexSubcommand("skills", args, async (scope) => {
+          await runSkills(args, scope);
         });
       }
     }),
     install: defineCommand({
       meta: {
         name: "install",
-        description: "Install repository-owned Codex skills and plugins locally."
+        description: "Install repository-owned Codex plugins locally."
       },
-      args: configArgs,
+      args: installArgs,
       async run({ args }) {
         await runObservedCodexSubcommand("install", args, async ({ context }) => {
-          const result = await installCodexAssets(createPaths(args));
+          const result = await installRepositoryCodexPlugins(createPaths(args));
           if (context.json) {
             writeJsonValue(processOutput, {
               ok: true,
@@ -4618,10 +4633,8 @@ var codexCommand = defineCommand({
               result
             });
           } else {
-            writeHumanStatus(context, processOutput, import_picocolors2.default.cyan("Codex install"));
-            writeHumanStatus(context, processOutput, `installed skills: ${result.installedSkills.join(", ") || "(none)"}`);
+            writeHumanStatus(context, processOutput, import_picocolors3.default.cyan("Codex install"));
             writeHumanStatus(context, processOutput, `installed plugins: ${result.installedPlugins.map((plugin) => plugin.name).join(", ") || "(none)"}`);
-            writeManualInstallHint(context, result);
           }
           process.exitCode = 0;
         });
@@ -4631,11 +4644,11 @@ var codexCommand = defineCommand({
 });
 
 // src/command/completion.command.ts
-import { execFile } from "node:child_process";
-import { mkdir as mkdir3, readFile as readFile3, writeFile as writeFile3 } from "node:fs/promises";
+import { execFile as execFile2 } from "node:child_process";
+import { mkdir as mkdir4, readFile as readFile5, writeFile as writeFile3 } from "node:fs/promises";
 import { homedir as homedir2, platform as platform2 } from "node:os";
-import { dirname as dirname5, join as join3 } from "node:path";
-import { promisify } from "node:util";
+import { dirname as dirname6, join as join6 } from "node:path";
+import { promisify as promisify2 } from "node:util";
 
 // src/domain/completion-candidates.ts
 async function resolveValue2(value) {
@@ -4750,7 +4763,7 @@ if (( ! $+functions[compdef] )); then
 fi
 ${zshCompletionLoadLine}
 ${completionEndMarker}`;
-var execFileAsync = promisify(execFile);
+var execFileAsync = promisify2(execFile2);
 var powershellScript = `Register-ArgumentCompleter -Native -CommandName chc -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
   $words = @($commandAst.CommandElements | Select-Object -Skip 1 | ForEach-Object { $_.Extent.Text })
@@ -4800,7 +4813,7 @@ function removeLegacyZshCompletionLine(content) {
 }
 async function readTextIfExists(path) {
   try {
-    return await readFile3(path, "utf8");
+    return await readFile5(path, "utf8");
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       return "";
@@ -4828,9 +4841,9 @@ async function resolvePowerShellProfilePath() {
     } catch {}
   }
   if (platform2() === "win32") {
-    return join3(process.env.USERPROFILE || homedir2(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
+    return join6(process.env.USERPROFILE || homedir2(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
   }
-  return join3(homedir2(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
+  return join6(homedir2(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
 }
 function resolveZshProfilePath() {
   const override = process.env[zshProfileEnv]?.trim();
@@ -4838,7 +4851,7 @@ function resolveZshProfilePath() {
     return override;
   }
   const zdotdir = process.env.ZDOTDIR?.trim();
-  return join3(zdotdir || homedir2(), ".zshrc");
+  return join6(zdotdir || homedir2(), ".zshrc");
 }
 async function handlePowerShellProfileAction(action) {
   const profilePath = await resolvePowerShellProfilePath();
@@ -4869,7 +4882,7 @@ async function handlePowerShellProfileAction(action) {
   const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
 `) ? migratedContent : `${migratedContent}
 `;
-  await mkdir3(dirname5(profilePath), { recursive: true });
+  await mkdir4(dirname6(profilePath), { recursive: true });
   await writeFile3(profilePath, `${prefix}${powershellCompletionBlock}
 `);
   process.stdout.write(`PowerShell completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
@@ -4908,7 +4921,7 @@ async function handleZshProfileAction(action) {
   const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
 `) ? migratedContent : `${migratedContent}
 `;
-  await mkdir3(dirname5(profilePath), { recursive: true });
+  await mkdir4(dirname6(profilePath), { recursive: true });
   await writeFile3(profilePath, `${prefix}${zshCompletionBlock}
 `);
   process.stdout.write(`zsh completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
@@ -5023,7 +5036,7 @@ function createInternalCompleteCommand(resolveRootCommand) {
 }
 
 // src/command/run-scripts.command.ts
-var import_picocolors4 = __toESM(require_picocolors(), 1);
+var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // ../../node_modules/.pnpm/neverthrow@8.2.0/node_modules/neverthrow/dist/index.cjs.js
 var defaultErrorConfig = {
@@ -5040,11 +5053,11 @@ var createNeverThrowError = (message, result, config = defaultErrorConfig) => {
 };
 function __awaiter(thisArg, _arguments, P5, generator) {
   function adopt(value) {
-    return value instanceof P5 ? value : new P5(function(resolve4) {
-      resolve4(value);
+    return value instanceof P5 ? value : new P5(function(resolve5) {
+      resolve5(value);
     });
   }
-  return new (P5 || (P5 = Promise))(function(resolve4, reject) {
+  return new (P5 || (P5 = Promise))(function(resolve5, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -5060,7 +5073,7 @@ function __awaiter(thisArg, _arguments, P5, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve5(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -5148,14 +5161,14 @@ function __asyncValues(o3) {
   }, i2);
   function verb(n2) {
     i2[n2] = o3[n2] && function(v3) {
-      return new Promise(function(resolve4, reject) {
-        v3 = o3[n2](v3), settle(resolve4, reject, v3.done, v3.value);
+      return new Promise(function(resolve5, reject) {
+        v3 = o3[n2](v3), settle(resolve5, reject, v3.done, v3.value);
       });
     };
   }
-  function settle(resolve4, reject, d3, v3) {
+  function settle(resolve5, reject, d3, v3) {
     Promise.resolve(v3).then(function(v4) {
-      resolve4({ value: v4, done: d3 });
+      resolve5({ value: v4, done: d3 });
     }, reject);
   }
 }
@@ -5502,10 +5515,10 @@ var resolvePackage = (catalog, id) => {
 };
 
 // src/flow/run-bundled-script.ts
-import { join as join4 } from "node:path";
+import { join as join7 } from "node:path";
 import { pathToFileURL } from "node:url";
 function runBundledScript(pkg, args, context) {
-  const entryPath = join4(pkg.rootPath, pkg.entryRelative);
+  const entryPath = join7(pkg.rootPath, pkg.entryRelative);
   const href = pathToFileURL(entryPath).href;
   const startedAt = Date.now();
   const diagnostics = context.diagnostics?.child({ scriptId: pkg.id });
@@ -5582,25 +5595,25 @@ function runBundledScript(pkg, args, context) {
 }
 
 // src/infra/bundled-script-catalog.ts
-var import_picocolors3 = __toESM(require_picocolors(), 1);
+var import_picocolors4 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
 import { existsSync as existsSync2 } from "node:fs";
-import { dirname as dirname6, join as join5 } from "node:path";
+import { dirname as dirname7, join as join8 } from "node:path";
 import { fileURLToPath } from "node:url";
 function getBundledScriptsRoot() {
-  const moduleDir = dirname6(fileURLToPath(import.meta.url));
+  const moduleDir = dirname7(fileURLToPath(import.meta.url));
   const candidates = [
-    join5(moduleDir, "scripts"),
-    join5(moduleDir, "../scripts"),
-    join5(moduleDir, "../src/scripts")
+    join8(moduleDir, "scripts"),
+    join8(moduleDir, "../scripts"),
+    join8(moduleDir, "../src/scripts")
   ];
   return candidates.find((candidate) => existsSync2(candidate)) ?? candidates[0];
 }
 
 // src/infra/discover-scripts.ts
-import { readdir as readdir3, readFile as readFile4, stat as stat2 } from "node:fs/promises";
-import { join as join6 } from "node:path";
+import { readdir as readdir2, readFile as readFile6, stat } from "node:fs/promises";
+import { join as join9 } from "node:path";
 
 // src/domain/script-id.ts
 var KEBAB_CASE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -5947,25 +5960,25 @@ async function scanScriptsRoot(scriptsRoot) {
   const seenIds = new Set;
   let entries;
   try {
-    entries = await readdir3(scriptsRoot, { withFileTypes: true });
+    entries = await readdir2(scriptsRoot, { withFileTypes: true });
   } catch (e3) {
     const msg = e3 instanceof Error ? e3.message : String(e3);
     throw new Error(`cannot read bundled scripts directory (${scriptsRoot}): ${msg}`);
   }
   const names = entries.filter((e3) => e3.isDirectory()).map((e3) => e3.name).sort((a4, b4) => a4.localeCompare(b4));
   for (const name of names) {
-    const dirPath = join6(scriptsRoot, name);
+    const dirPath = join9(scriptsRoot, name);
     const dirIdResult = validateScriptId(name);
     if (dirIdResult.isErr()) {
       pushWarning(warnings, dirPath, `skip non-kebab-case script folder: ${dirIdResult.error.message}`);
       continue;
     }
-    const manifestPath = join6(dirPath, MANIFEST_FILE);
+    const manifestPath = join9(dirPath, MANIFEST_FILE);
     let entryRelative;
     let entryStat;
     for (const candidate of ENTRY_FILES) {
       try {
-        const candidateStat = await stat2(join6(dirPath, candidate));
+        const candidateStat = await stat(join9(dirPath, candidate));
         if (candidateStat.isFile()) {
           entryRelative = candidate;
           entryStat = candidateStat;
@@ -5975,7 +5988,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let manifestStat;
     try {
-      manifestStat = await stat2(manifestPath);
+      manifestStat = await stat(manifestPath);
     } catch {
       pushWarning(warnings, dirPath, `missing ${MANIFEST_FILE} or ${ENTRY_FILES.join("/")} under script package`);
       continue;
@@ -5986,7 +5999,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let rawJson;
     try {
-      rawJson = await readFile4(manifestPath, "utf8");
+      rawJson = await readFile6(manifestPath, "utf8");
     } catch (e3) {
       const msg = e3 instanceof Error ? e3.message : String(e3);
       pushWarning(warnings, manifestPath, `cannot read manifest: ${msg}`);
@@ -6060,7 +6073,7 @@ function formatBundledScriptCatalog(catalog, heading = "AVAILABLE SCRIPTS") {
   } else {
     for (const row of rows) {
       const detail = row.description ? `${row.title} — ${row.description}` : row.title;
-      lines.push(`  ${import_picocolors3.default.cyan(row.id.padEnd(width + 2))}${detail}`);
+      lines.push(`  ${import_picocolors4.default.cyan(row.id.padEnd(width + 2))}${detail}`);
     }
   }
   if (catalog.warnings.length > 0) {
@@ -6093,7 +6106,7 @@ async function renderBundledScriptHelpAppendix() {
 var defaultDeps = {
   isInteractive: () => process.stdin.isTTY === true,
   pickScriptId: async (rows) => {
-    pe(import_picocolors4.default.cyan("▶ Script Selection"));
+    pe(import_picocolors5.default.cyan("▶ Script Selection"));
     const choice = await le2({
       message: "Choose a bundled script to run",
       options: rows.map((o3) => ({
@@ -6189,7 +6202,7 @@ async function executeBundledScript(args, deps) {
     }
   });
   for (const warning of catalog.warnings) {
-    writeWarning(processOutput, import_picocolors4.default.yellow(`${warning.path}: ${warning.message}`));
+    writeWarning(processOutput, import_picocolors5.default.yellow(`${warning.path}: ${warning.message}`));
     diagnostics.emit({
       level: "warn",
       event: "cli.script_discovery_warning",
@@ -6355,14 +6368,14 @@ var createScriptsCommand = (deps = defaultDeps) => {
 var scriptsCommand = createScriptsCommand();
 
 // src/command/self-update.command.ts
-var import_picocolors6 = __toESM(require_picocolors(), 1);
+var import_picocolors7 = __toESM(require_picocolors(), 1);
 
 // src/domain/self-update-manager.ts
 import { spawn } from "node:child_process";
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "node:fs";
-import { mkdir as mkdir4 } from "node:fs/promises";
+import { mkdir as mkdir5 } from "node:fs/promises";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname7, join as join7, resolve as resolve4 } from "node:path";
+import { dirname as dirname8, join as join10, resolve as resolve5 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var defaultSelfUpdateRepo = "https://github.com/mickmetalholic/CthuTool.git";
 var defaultSelfUpdateRef = "main";
@@ -6395,13 +6408,13 @@ Next: ${hint}`);
   }
 }
 function getDefaultSelfUpdateInstallDir(home = homedir3()) {
-  return join7(home, ".cthutool", "source", "CthuTool");
+  return join10(home, ".cthutool", "source", "CthuTool");
 }
 function createSelfUpdateDeps(onEvent) {
   return {
     exists: existsSync3,
     mkdir: async (path) => {
-      await mkdir4(path, { recursive: true });
+      await mkdir5(path, { recursive: true });
     },
     run: runCommand2,
     env: process.env,
@@ -6419,8 +6432,8 @@ async function resolveSelfUpdateSource(options, deps) {
   const envInstallDir = nonEmpty(deps.env.CHC_INSTALL_DIR);
   const explicitInstallDir = options.installDir !== undefined || envInstallDir !== undefined;
   const installDir = options.installDir ?? envInstallDir ?? runtimeRoot;
-  const mode = resolve4(runtimeRoot) === resolve4(managedRoot) ? "remote" : "local";
-  const gitRoot = join7(installDir, ".git");
+  const mode = resolve5(runtimeRoot) === resolve5(managedRoot) ? "remote" : "local";
+  const gitRoot = join10(installDir, ".git");
   const canInspectCheckout = deps.exists(gitRoot);
   const repoOverride = options.repo ?? nonEmpty(deps.env.CHC_REPO_URL) ?? nonEmpty(deps.env.CHC_REPO);
   const refOverride = options.ref ?? nonEmpty(deps.env.CHC_REF);
@@ -6573,7 +6586,7 @@ async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
     installDir: resolved.installDir
   };
   const phases = [];
-  const gitRoot = join7(resolved.installDir, ".git");
+  const gitRoot = join10(resolved.installDir, ".git");
   if (resolved.mode === "local" && !resolved.explicitInstallDir) {
     phases.push("preflight");
     return finishPlan(deps, {
@@ -6649,7 +6662,7 @@ async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
       before: initial,
       target: remote.target,
       targetKind: remote.isBranch ? "branch" : "detached",
-      relinkRequired: resolve4(resolved.installDir) !== resolve4(resolved.runtimeRoot),
+      relinkRequired: resolve5(resolved.installDir) !== resolve5(resolved.runtimeRoot),
       phases
     });
   }
@@ -6763,7 +6776,7 @@ async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
   const isInstall = plan.status === "install_required";
   if (isInstall) {
     await runPhase(deps, "clone", async () => {
-      await deps.mkdir(dirname7(plan.installDir));
+      await deps.mkdir(dirname8(plan.installDir));
       await execute(deps, "clone", "git", [
         "clone",
         resolved.repo,
@@ -6851,8 +6864,8 @@ async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
 }
 async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDeps()) {
   const resolved = await resolveSelfUpdateSource(options, deps);
-  const bundlePath = join7(resolved.installDir, committedCliBundlePath);
-  const gitRoot = join7(resolved.installDir, ".git");
+  const bundlePath = join10(resolved.installDir, committedCliBundlePath);
+  const gitRoot = join10(resolved.installDir, ".git");
   const repo = deps.exists(gitRoot) ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
     cwd: resolved.installDir
   }) ?? resolved.repo : resolved.repo;
@@ -6862,7 +6875,7 @@ async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDep
   }) : undefined;
   return {
     version: getCliVersion(),
-    mode: resolve4(resolved.installDir) === resolve4(resolved.managedRoot) ? "remote" : "local",
+    mode: resolve5(resolved.installDir) === resolve5(resolved.managedRoot) ? "remote" : "local",
     installDir: resolved.installDir,
     repo,
     ref,
@@ -6883,7 +6896,7 @@ async function runOptional(deps, command, args, options) {
   return value.length > 0 ? value : undefined;
 }
 function verifyCommittedBundle(deps, installDir) {
-  const bundlePath = join7(installDir, committedCliBundlePath);
+  const bundlePath = join10(installDir, committedCliBundlePath);
   if (!deps.exists(bundlePath)) {
     throw new SelfUpdateError({
       phase: "verify_bundle",
@@ -6955,12 +6968,12 @@ function runCommand2(command, args, options = {}) {
   });
 }
 function findRepoRootFromModule() {
-  let current = dirname7(fileURLToPath2(import.meta.url));
+  let current = dirname8(fileURLToPath2(import.meta.url));
   while (true) {
     if (isCthuToolRoot(current)) {
       return current;
     }
-    const parent = dirname7(current);
+    const parent = dirname8(current);
     if (parent === current) {
       throw new Error("Unable to locate CthuTool package root.");
     }
@@ -6969,22 +6982,22 @@ function findRepoRootFromModule() {
 }
 function isCthuToolRoot(path) {
   try {
-    const pkg = JSON.parse(readFileSync2(join7(path, "package.json"), "utf8"));
+    const pkg = JSON.parse(readFileSync2(join10(path, "package.json"), "utf8"));
     return pkg.name === "cthutool";
   } catch {
     return false;
   }
 }
 function readPackageVersion(root) {
-  const pkg = JSON.parse(readFileSync2(join7(root, "package.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync2(join10(root, "package.json"), "utf8"));
   if (typeof pkg.version !== "string" || pkg.version.trim().length === 0) {
-    throw new Error(`Package version is missing: ${join7(root, "package.json")}`);
+    throw new Error(`Package version is missing: ${join10(root, "package.json")}`);
   }
   return pkg.version;
 }
 
 // src/command/self-update-output.ts
-var import_picocolors5 = __toESM(require_picocolors(), 1);
+var import_picocolors6 = __toESM(require_picocolors(), 1);
 var defaultDeps2 = {
   output: processOutput,
   isOutputTty: () => process.stdout.isTTY === true,
@@ -7005,7 +7018,7 @@ function identity(value) {
 function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
   const human = !context.json && !context.quiet;
   const interactiveOutput = human && context.isTty && deps.isOutputTty();
-  const colors2 = import_picocolors5.default.createColors(interactiveOutput);
+  const colors2 = import_picocolors6.default.createColors(interactiveOutput);
   let activeSpinner;
   let activePhase;
   let headerWritten = false;
@@ -7300,7 +7313,7 @@ var statusCommand = defineCommand({
             status
           });
         } else {
-          writeHumanStatus(context, processOutput, import_picocolors6.default.cyan("CthuTool status"));
+          writeHumanStatus(context, processOutput, import_picocolors7.default.cyan("CthuTool status"));
           writeHumanStatus(context, processOutput, `version:     ${status.version}`);
           writeHumanStatus(context, processOutput, `mode:        ${status.mode}`);
           writeHumanStatus(context, processOutput, `install dir: ${status.installDir}`);
@@ -7396,7 +7409,7 @@ function normalizeCommandRows(value, hiddenCommands) {
     }
     const width = Math.max(...visibleRows.map((row) => row.name.length));
     for (const row of visibleRows) {
-      normalized.push(`  ${import_picocolors7.default.bold(import_picocolors7.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
+      normalized.push(`  ${import_picocolors8.default.bold(import_picocolors8.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
     }
     pendingRows = [];
   };
