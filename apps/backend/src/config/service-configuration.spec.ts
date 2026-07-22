@@ -4,7 +4,7 @@ describe('parseServiceConfiguration', () => {
   it('returns valid configuration', () => {
     const result = parseServiceConfiguration({
       PORT: '3000',
-      NODE_ENV: 'development',
+      NODE_ENV: 'test',
       LOG_LEVEL: 'debug',
     });
 
@@ -12,8 +12,13 @@ describe('parseServiceConfiguration', () => {
     if (result.isOk()) {
       expect(result.value).toEqual({
         port: 3000,
-        nodeEnv: 'development',
+        nodeEnv: 'test',
         logLevel: 'debug',
+        environmentId: 'local',
+        operatorAccessMode: 'private-development',
+        operatorGatewayHeader: 'x-cthutool-operator',
+        privateDevelopment: true,
+        trustedProxyIps: [],
       });
     }
   });
@@ -44,12 +49,34 @@ describe('parseServiceConfiguration', () => {
   it('uses default log level when LOG_LEVEL is missing', () => {
     const result = parseServiceConfiguration({
       PORT: '3000',
-      NODE_ENV: 'production',
+      NODE_ENV: 'test',
     });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.logLevel).toBe('info');
     }
+  });
+
+  it('rejects production without trusted proxy and Agent secret', () => {
+    const result = parseServiceConfiguration({
+      PORT: '3000',
+      NODE_ENV: 'production',
+    });
+
+    expect(result.isErr()).toBe(true);
+  });
+
+  it('accepts a protected public deployment', () => {
+    const result = parseServiceConfiguration({
+      PORT: '3000',
+      NODE_ENV: 'production',
+      CTHUTOOL_ENVIRONMENT_ID: 'prod',
+      CTHUTOOL_AGENT_SECRET: 'a'.repeat(32),
+      CTHUTOOL_OPERATOR_ACCESS_MODE: 'trusted-proxy',
+      CTHUTOOL_TRUSTED_PROXY_IPS: '10.0.0.2',
+    });
+
+    expect(result.isOk()).toBe(true);
   });
 });

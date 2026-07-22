@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "environmentId": "production",
+      "label": "Production fixture",
+      "webOrigin": "https://app.example.com",
+      "webAgentUrl": "https://app.example.com/agent",
+      "backendHttpUrl": "https://api.example.com",
+      "backendAgentWsUrl": "wss://api.example.com/ws/agents",
+      "namespace": "production"
+    }
+  ]
+}

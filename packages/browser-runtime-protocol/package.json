@@ -4,6 +4,9 @@
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build:deps": "pnpm --filter @cthutool/agent-protocol build",
     "build": "pnpm run build:deps && tsc -p tsconfig.json",

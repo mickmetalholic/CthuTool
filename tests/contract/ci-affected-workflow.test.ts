@@ -33,17 +33,7 @@ describe("CI affected workflow detector", () => {
     expectChanged("backend-image", ["packages/config/src/index.ts"]);
     expectChanged("backend-image", [".github/workflows/backend.yml"]);
     expectChanged("backend-image", ["k8s/deployment.yaml"]);
-    expectUnchanged("backend-image", ["packages/ui/src/index.ts"]);
-  });
-
-  it("marks desktop artifacts affected by desktop and recursive workspace dependencies", () => {
-    expectChanged("desktop-artifacts", ["apps/desktop/src/main/index.ts"]);
-    expectChanged("desktop-artifacts", ["packages/agent-protocol/src/index.ts"]);
-    expectChanged("desktop-artifacts", ["packages/app-shell/src/index.ts"]);
-    expectChanged("desktop-artifacts", ["packages/ui/src/index.ts"]);
-    expectChanged("desktop-artifacts", [".github/workflows/desktop.yml"]);
-    expectChanged("desktop-artifacts", ["tsconfig.json"]);
-    expectUnchanged("desktop-artifacts", ["apps/backend/src/main.ts"]);
+    expectUnchanged("backend-image", ["packages/obsidian-enhancer/src/index.ts"]);
   });
 
   it("marks CLI distribution affected only by bundle inputs", () => {

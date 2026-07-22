@@ -20,10 +20,18 @@ describe('AgentCommandGateway', () => {
     const gateway = createGateway(socket);
     const command = createCommandRequest('cmd-1');
 
-    const result = await gateway.sendCommandByCapability('browser', command);
+    const result = await gateway.sendCommandByCapability(
+      'local',
+      'browser',
+      command,
+    );
 
     expect(socket.sendCommand).toHaveBeenCalledWith(
-      'agent-1',
+      {
+        environmentId: 'local',
+        agentId: 'agent-1',
+        connectionGeneration: 1,
+      },
       expect.objectContaining({ id: 'cmd-1', method: 'test.echo' }),
       undefined,
     );
@@ -34,7 +42,11 @@ describe('AgentCommandGateway', () => {
     const gateway = createGateway(createSocketMock(), false);
 
     await expect(
-      gateway.sendCommandByCapability('browser', createCommandRequest('cmd-1')),
+      gateway.sendCommandByCapability(
+        'local',
+        'browser',
+        createCommandRequest('cmd-1'),
+      ),
     ).rejects.toBeInstanceOf(AgentCommandGatewayError);
   });
 
@@ -47,7 +59,10 @@ describe('AgentCommandGateway', () => {
     const gateway = createGateway(createSocketMock(response));
 
     await expect(
-      gateway.sendCommand('agent-1', createCommandRequest('cmd-1')),
+      gateway.sendCommand(
+        { environmentId: 'local', agentId: 'agent-1' },
+        createCommandRequest('cmd-1'),
+      ),
     ).resolves.toEqual(response);
   });
 
@@ -55,17 +70,24 @@ describe('AgentCommandGateway', () => {
     const socket = createSocketMock();
     const gateway = createGateway(socket);
 
-    await gateway.sendCommand('agent-1', {
-      ...createCommandRequest('cmd-1'),
-      observability: {
-        commandId: 'cmd-1',
-        operation: 'browser.capturePage',
-        requestId: 'req-1',
+    await gateway.sendCommand(
+      { environmentId: 'local', agentId: 'agent-1' },
+      {
+        ...createCommandRequest('cmd-1'),
+        observability: {
+          commandId: 'cmd-1',
+          operation: 'browser.capturePage',
+          requestId: 'req-1',
+        },
       },
-    });
+    );
 
     expect(socket.sendCommand).toHaveBeenCalledWith(
-      'agent-1',
+      {
+        environmentId: 'local',
+        agentId: 'agent-1',
+        connectionGeneration: 1,
+      },
       expect.objectContaining({
         id: 'cmd-1',
         method: 'test.echo',
@@ -85,7 +107,10 @@ describe('AgentCommandGateway', () => {
     const socket = createSocketMock();
     const gateway = createGateway(socket, true, observability, metrics);
 
-    await gateway.sendCommand('agent-1', createCommandRequest('cmd-1'));
+    await gateway.sendCommand(
+      { environmentId: 'local', agentId: 'agent-1' },
+      createCommandRequest('cmd-1'),
+    );
 
     expect(observability.record).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -129,7 +154,10 @@ describe('AgentCommandGateway', () => {
     );
 
     await expect(
-      gateway.sendCommand('agent-1', createCommandRequest('cmd-1')),
+      gateway.sendCommand(
+        { environmentId: 'local', agentId: 'agent-1' },
+        createCommandRequest('cmd-1'),
+      ),
     ).rejects.toMatchObject({ code: 'AGENT_NOT_AVAILABLE' });
 
     expect(observability.record).toHaveBeenCalledWith(
@@ -157,11 +185,51 @@ describe('AgentCommandGateway', () => {
     );
 
     await expect(
-      gateway.sendCommand('agent-1', createCommandRequest('cmd-1')),
+      gateway.sendCommand(
+        { environmentId: 'local', agentId: 'agent-1' },
+        createCommandRequest('cmd-1'),
+      ),
     ).rejects.toMatchObject({
       code: 'AGENT_NOT_AVAILABLE',
       message: 'socket closed',
     });
+  });
+
+  it('requires trusted environment context and never falls back across environments', async () => {
+    const socket = createSocketMock();
+    const registry = new AgentRegistryService();
+    registry.register({
+      connectionId: 'prod-connection',
+      hello: {
+        environmentId: 'prod',
+        agentId: 'agent-1',
+        protocolVersion: 1,
+        capabilities: ['browser'],
+        deviceName: 'desktop',
+        platform: 'win32',
+        version: '0.0.0',
+      },
+    });
+    const gateway = new AgentCommandGateway(
+      registry,
+      socket as unknown as AgentWebSocketServer,
+    );
+
+    await expect(
+      gateway.sendCommandByCapability(
+        'test',
+        'browser',
+        createCommandRequest('cmd-test'),
+      ),
+    ).rejects.toMatchObject({ code: 'AGENT_CAPABILITY_MISSING' });
+    await expect(
+      gateway.sendCommandByCapability(
+        '',
+        'browser',
+        createCommandRequest('cmd-missing'),
+      ),
+    ).rejects.toMatchObject({ code: 'ENVIRONMENT_CONTEXT_REQUIRED' });
+    expect(socket.sendCommand).not.toHaveBeenCalled();
   });
 });
 
@@ -180,7 +248,9 @@ function createGateway(
     registry.register({
       connectionId: 'connection-1',
       hello: {
+        environmentId: 'local',
         agentId: 'agent-1',
+        protocolVersion: 1,
         capabilities: ['browser'],
         deviceName: 'desktop',
         platform: 'win32',

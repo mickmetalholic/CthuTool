@@ -20,10 +20,10 @@ describe("CI workflow contract", () => {
     expect(readWorkflow("ci.yml")).toMatch(/^name: CI$/m);
     expect(readWorkflow("cli.yml")).toMatch(/^name: CLI Distribution$/m);
     expect(readWorkflow("backend.yml")).toMatch(/^name: Backend Image$/m);
-    expect(readWorkflow("desktop.yml")).toMatch(/^name: Desktop Artifacts$/m);
 
     expect(hasWorkflow("backend-image.yml")).toBe(false);
     expect(hasWorkflow("desktop-artifacts.yml")).toBe(false);
+    expect(hasWorkflow("desktop.yml")).toBe(false);
   });
 
   it("uses npmjs in GitHub Actions while preserving the local registry mirror", () => {
@@ -87,7 +87,6 @@ describe("CI workflow contract", () => {
       readWorkflow("ci.yml"),
       readWorkflow("cli.yml"),
       readWorkflow("backend.yml"),
-      readWorkflow("desktop.yml"),
     ]) {
       expect(yml).toMatch(/concurrency:/);
       expect(yml).toContain(
@@ -98,7 +97,7 @@ describe("CI workflow contract", () => {
   });
 
   it("restores Turbo cache for jobs that run Turbo tasks", () => {
-    const workflows = [readWorkflow("ci.yml"), readWorkflow("desktop.yml")];
+    const workflows = [readWorkflow("ci.yml")];
 
     for (const yml of workflows) {
       expect(yml).toContain("actions/cache@v4");
@@ -123,8 +122,6 @@ describe("CI workflow contract", () => {
     expect(yml).toMatch(/issues:\s+write/);
     expect(yml).toContain("coverage/coverage-summary.json");
     expect(yml).toContain("apps/backend/coverage/coverage-summary.json");
-    expect(yml).toContain("apps/desktop/coverage/coverage-summary.json");
-    expect(yml).toContain("packages/ui/coverage/coverage-summary.json");
     expect(yml).toContain("missingSummaries");
     expect(yml).toContain("core.setFailed");
     expect(yml).not.toContain(
@@ -144,25 +141,6 @@ describe("CI workflow contract", () => {
     expect(cliYml).toMatch(
       /cli-dist:\n(?:.|\n)*?permissions:\n\s+contents: read/,
     );
-  });
-
-  it("packages desktop artifacts for macOS and Windows through the Turbo graph", () => {
-    const yml = readWorkflow("desktop.yml");
-
-    expect(yml).toContain("macos-latest");
-    expect(yml).toContain("windows-latest");
-    expect(yml).toContain(
-      "node scripts/ci/affected-workflow.mjs desktop-artifacts",
-    );
-    expect(yml).toContain("Skip desktop artifact package");
-    expect(yml).toContain("if: steps.affected.outputs.changed != 'true'");
-    expect(yml).toContain("if: steps.affected.outputs.changed == 'true'");
-    expect(yml).toMatch(/turbo\s+run\s+typecheck\s+test\s+build/);
-    expect(yml).toContain("--filter=@cthutool/desktop...");
-    expect(yml).toMatch(/@cthutool\/desktop\s+package:win:from-build/);
-    expect(yml).toMatch(/@cthutool\/desktop\s+package:mac:from-build/);
-    expect(yml).toContain("actions/upload-artifact@v4");
-    expect(yml).toContain("Package desktop (${{ matrix.os }})");
   });
 
   it("validates backend images on pull requests and publishes only on main", () => {

@@ -2,37 +2,36 @@
 
 ## Purpose
 Define the backend desktop agent registry for WebSocket registration, heartbeat freshness, connected-agent status, diagnostics, and transport-only delegation.
-
 ## Requirements
 ### Requirement: Agent WebSocket endpoint
-The backend SHALL expose a WebSocket endpoint that accepts desktop agent connections.
+The backend SHALL expose a WebSocket endpoint that authenticates the configured environment's static Agent secret before accepting Agent registration.
 
-#### Scenario: Desktop agent connects
-- **WHEN** a desktop agent opens a WebSocket connection to the agent endpoint
-- **THEN** the backend accepts the socket and waits for an `agent.hello` registration message
+#### Scenario: Environment Agent connects
+- **WHEN** an Agent opens WSS with a valid environment id and matching static Agent secret and then sends a valid versioned `agent.hello`
+- **THEN** the backend authenticates the environment and registers the stable non-secret Agent id
 
 #### Scenario: Invalid registration is rejected
-- **WHEN** a socket sends an invalid registration message or omits required agent metadata
-- **THEN** the backend closes the socket without registering the agent
+- **WHEN** a socket omits or fails environment authentication, sends invalid registration, or reports an unexpected environment id
+- **THEN** the backend closes the socket without registering the Agent and records a redacted failure category
 
-#### Scenario: Registered agent is acknowledged
-- **WHEN** a socket sends a valid `agent.hello` registration message
-- **THEN** the backend records the agent as online and sends an acknowledgement containing the registered agent id and server time
+#### Scenario: Registered Agent is acknowledged
+- **WHEN** an authenticated socket sends a valid `agent.hello`
+- **THEN** the backend records it online and acknowledges environment id, Agent id, connection generation, negotiated protocol version, and server time
 
 ### Requirement: Agent registry state
-The backend SHALL maintain an in-memory registry of currently connected desktop agents.
+The backend SHALL maintain an in-memory registry keyed by environment id and stable non-secret Agent id, with one authoritative connection for the personal-use deployment.
 
 #### Scenario: Agent status is recorded
-- **WHEN** an agent registers successfully
-- **THEN** the registry stores the agent id, connection id, display name, platform, version, capabilities, connected time, and last seen time
+- **WHEN** an environment Agent registers successfully
+- **THEN** the registry stores environment id, Agent id, connection id/generation, display metadata, platform, version, capabilities, connected time, and last-seen time without storing the presented secret
 
-#### Scenario: Duplicate agent id reconnects
-- **WHEN** a new connection registers with an agent id that is already online
-- **THEN** the backend replaces the previous active connection for that agent id and marks the latest connection as authoritative
+#### Scenario: Same Agent reconnects
+- **WHEN** a new authenticated connection registers with the same environment and Agent id
+- **THEN** the backend replaces the previous connection, increments generation, and marks only the latest connection authoritative
 
 #### Scenario: Agent disconnects
-- **WHEN** a registered agent socket closes
-- **THEN** the backend removes or marks that connection offline so it no longer appears as an active agent
+- **WHEN** the authoritative socket closes
+- **THEN** the registry marks that environment Agent offline and does not substitute a connection from another environment
 
 ### Requirement: Agent heartbeat handling
 The backend SHALL use heartbeat messages to keep agent freshness current and detect stale connections.
@@ -46,15 +45,19 @@ The backend SHALL use heartbeat messages to keep agent freshness current and det
 - **THEN** the backend marks that agent offline or removes it from the active agent list
 
 ### Requirement: Connected agents API
-The backend SHALL expose an HTTP API for reading connected agent state.
+The backend SHALL expose Agent connection state only through the configured single-operator access boundary when publicly reachable.
 
-#### Scenario: Online agents are listed
-- **WHEN** a caller requests the connected agent list
-- **THEN** the backend returns currently online agents with id, display name, platform, version, capabilities, connected time, last seen time, and connection state
+#### Scenario: Operator lists environment Agent
+- **WHEN** an authenticated operator requests Agent state for the deployment environment
+- **THEN** the backend returns environment id, Agent id, display metadata, platform, version, capabilities, connected time, last-seen time, generation, and connection state
 
-#### Scenario: Raw socket internals are hidden
-- **WHEN** the connected agent list is returned
-- **THEN** it does not include WebSocket objects, raw headers, private connection tokens, or implementation-specific socket internals
+#### Scenario: Anonymous caller lists Agents
+- **WHEN** an unauthenticated caller requests the public Agent status API
+- **THEN** the backend rejects the request without revealing whether an Agent is online
+
+#### Scenario: Raw internals are hidden
+- **WHEN** Agent state is returned
+- **THEN** it excludes WebSocket objects, raw headers, static secrets, operator sessions, local bridge tickets, and socket internals
 
 ### Requirement: Agent registry is capability-neutral
 The backend SHALL store agent capabilities generically without requiring browser-specific behavior in this change.
@@ -68,26 +71,26 @@ The backend SHALL store agent capabilities generically without requiring browser
 - **THEN** the registry preserves the capability value in status output without attempting to execute it
 
 ### Requirement: Agent registry diagnostics
-The backend SHALL expose enough diagnostics to troubleshoot registration without leaking sensitive data.
+The backend SHALL expose enough diagnostics to troubleshoot environment authentication and connection lifecycle without leaking sensitive values.
 
-#### Scenario: Connection events are logged
-- **WHEN** an agent connects, registers, reconnects, heartbeats, or disconnects
-- **THEN** the backend logs a structured event with agent id when available, connection id, event type, and timestamp
+#### Scenario: Connection event is logged
+- **WHEN** an Agent connects, authenticates, registers, reconnects, heartbeats, or disconnects
+- **THEN** the backend logs environment id, Agent id when available, connection id/generation, event type, and timestamp
 
-#### Scenario: Invalid payloads are summarized
-- **WHEN** a socket sends an invalid agent message
-- **THEN** the backend logs the validation failure summary without logging arbitrary large payload bodies
+#### Scenario: Authentication or payload is invalid
+- **WHEN** a socket fails static-secret or protocol validation
+- **THEN** diagnostics include a bounded failure category without secret values, authorization headers, cookies, or arbitrary payload bodies
 
 ### Requirement: Agent registry delegates command dispatch
-The backend agent registry SHALL provide connection lookup and online status to the command gateway without exposing command correlation or business command behavior as registry responsibilities.
+The registry SHALL provide authoritative connection lookup for an explicit environment and Agent id without owning operator authentication, command correlation, or capability-specific business behavior.
 
-#### Scenario: Command gateway asks for active connection
-- **WHEN** `AgentCommandGateway` needs to dispatch a command to an online agent
-- **THEN** the agent registry or WebSocket server provides the authoritative active connection without making business command decisions
+#### Scenario: Gateway asks for environment connection
+- **WHEN** `AgentCommandGateway` dispatches for a trusted environment context
+- **THEN** the registry returns only that environment's authoritative Agent connection and generation
 
-#### Scenario: Business module does not use registry directly
-- **WHEN** a browser module needs to execute a desktop command
-- **THEN** it uses the command gateway or a browser-facing provider instead of directly using the agent registry or raw WebSocket server
+#### Scenario: Business module needs browser execution
+- **WHEN** a browser module needs an Agent command
+- **THEN** it uses the command gateway or browser-facing provider with environment context instead of the registry or raw socket server
 
 ### Requirement: Agent registry is transport-only
 The backend agent registry SHALL own only desktop client connection lifecycle, public client metadata, online status, heartbeat freshness, and generic capability advertisement.

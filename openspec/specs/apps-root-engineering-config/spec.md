@@ -124,43 +124,9 @@ Every root-managed package under `apps/*` and `packages/*` SHALL provide a `test
 ### Requirement: Type-only contracts run through typecheck
 Type-only public API and import contract checks SHALL run through `typecheck` rather than through package `test` scripts.
 
-#### Scenario: Shared UI type contracts are typechecked
-- **WHEN** root `pnpm run typecheck` executes
-- **THEN** type-only contract files for shared UI packages are included in the package typecheck command
-- **AND** those contracts do not require the package `test` script to run
-
 #### Scenario: Test scripts are not typecheck-only
 - **WHEN** root engineering contract tests inspect package `test` scripts
 - **THEN** no package `test` script is satisfied only by `tsc --noEmit`
-
-### Requirement: App shell runtime behavior is covered
-The app-shell package SHALL include runtime tests for navigation and runtime contract behavior used by root-managed applications.
-
-#### Scenario: Navigation contracts are covered
-- **WHEN** app-shell tests inspect navigation definitions
-- **THEN** they verify stable ids, labels, ordering, and route metadata expected by consumers
-- **AND** they catch accidental removal of required navigation entries
-
-#### Scenario: Runtime factories are covered
-- **WHEN** app-shell tests exercise runtime creation
-- **THEN** they verify web and desktop runtime behavior through public exports
-- **AND** type-only contracts remain covered by `typecheck`
-
-### Requirement: Shared UI component behavior is covered
-The UI package SHALL include component behavior tests beyond utility smoke coverage.
-
-#### Scenario: UI components expose expected interactions
-- **WHEN** UI component tests render shared components
-- **THEN** they verify accessible roles, event behavior, disabled states, and class composition
-- **AND** they do not rely only on snapshot output
-
-### Requirement: Shared frontend package coverage is evaluated per package
-App-shell and UI coverage gate decisions SHALL be made independently based on each package's baseline and test quality.
-
-#### Scenario: Package baselines are reviewed separately
-- **WHEN** coverage baselines are recorded
-- **THEN** app-shell and UI each receive an explicit visibility-only or threshold-gated decision
-- **AND** any threshold values are package-local and conservative
 
 ### Requirement: Coverage artifacts use stable package-local paths
 Root-managed runtime test suites with coverage support SHALL write coverage
@@ -579,37 +545,8 @@ Repository GitHub Actions workflow files SHALL use short area names while their 
 - **THEN** root validation behavior is defined in `.github/workflows/ci.yml`
 - **AND** CLI distribution behavior is defined in `.github/workflows/cli.yml`
 - **AND** backend behavior is defined in `.github/workflows/backend.yml`
-- **AND** desktop behavior is defined in `.github/workflows/desktop.yml`
+- **AND** Agent release behavior is defined in `.github/workflows/agent-release.yml`
 - **AND** workflow display names remain descriptive enough to identify the purpose in GitHub checks
-
-### Requirement: Desktop runtime coverage covers persistence and browser orchestration
-The root-managed desktop package SHALL include runtime tests for browser profile persistence, pending auth state, and Playwright host orchestration paths that can affect desktop reliability.
-
-#### Scenario: Browser profile metadata replacement is covered
-- **WHEN** desktop tests exercise browser profile persistence
-- **THEN** they cover successful metadata writes and retryable replacement failures
-- **AND** the tests verify that profile state remains readable after replacement
-
-#### Scenario: Playwright profile verification flows are covered
-- **WHEN** desktop tests exercise login and verification flows
-- **THEN** they cover verified, login-required, blocked, and pending auth resolution outcomes
-- **AND** the tests assert profile and pending task state changes
-
-### Requirement: Desktop renderer coverage includes user workflows
-The desktop package SHALL include renderer tests for workflows that coordinate settings, agent status, task state, and browser actions.
-
-#### Scenario: Renderer workflow tests validate state transitions
-- **WHEN** desktop renderer tests run
-- **THEN** they cover user-visible state changes rather than only import smoke checks
-- **AND** mocked desktop APIs are asserted through observable workflow effects
-
-### Requirement: Desktop coverage baseline is reviewed before gating
-Desktop coverage SHALL remain visibility-only unless this change records a baseline and explicitly graduates it to threshold-gated coverage.
-
-#### Scenario: Desktop coverage policy remains explicit
-- **WHEN** the desktop coverage baseline is reviewed
-- **THEN** the coverage policy documents whether desktop remains visibility-only or becomes threshold-gated
-- **AND** any threshold values are conservative relative to the recorded baseline
 
 ### Requirement: Web package behavior is covered beyond utility smoke tests
 The web package SHALL include runtime tests for app-owned utilities and project shell behavior.

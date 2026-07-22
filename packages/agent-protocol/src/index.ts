@@ -1,11 +1,13 @@
 import * as v from 'valibot';
 
 const AGENT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
+const ENVIRONMENT_ID_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const CAPABILITY_PATTERN = /^[a-z][a-z0-9._:-]{0,63}$/;
 const OBSERVABILITY_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 const OPERATION_NAME_PATTERN = /^[a-z][a-zA-Z0-9._:-]{0,127}$/;
 
 export const JSON_RPC_VERSION = '2.0';
+export const AGENT_PROTOCOL_VERSION = 1;
 export const JSON_RPC_PARSE_ERROR = -32700;
 export const JSON_RPC_INVALID_REQUEST = -32600;
 export const JSON_RPC_METHOD_NOT_FOUND = -32601;
@@ -35,6 +37,22 @@ const AgentIdSchema = v.pipe(
   v.maxLength(128),
   v.regex(AGENT_ID_PATTERN),
 );
+
+const EnvironmentIdSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(64),
+  v.regex(ENVIRONMENT_ID_PATTERN),
+);
+
+const ConnectionGenerationSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+);
+
+const ProtocolVersionSchema = v.literal(AGENT_PROTOCOL_VERSION);
 
 const NonEmptyDisplayStringSchema = v.pipe(
   v.string(),
@@ -96,8 +114,16 @@ export const AgentObservabilityMetadataSchema = v.object({
   commandId: v.optional(JsonRpcIdSchema),
 });
 
-export const AgentHelloPayloadSchema = v.object({
+export const AgentCommandRoutingSchema = v.object({
+  environmentId: EnvironmentIdSchema,
   agentId: AgentIdSchema,
+  connectionGeneration: ConnectionGenerationSchema,
+});
+
+export const AgentHelloPayloadSchema = v.object({
+  environmentId: EnvironmentIdSchema,
+  agentId: AgentIdSchema,
+  protocolVersion: ProtocolVersionSchema,
   deviceName: NonEmptyDisplayStringSchema,
   platform: v.picklist(AGENT_PLATFORMS),
   version: VersionSchema,
@@ -111,7 +137,9 @@ export const AgentHelloMessageSchema = v.object({
 });
 
 export const AgentHeartbeatPayloadSchema = v.object({
+  environmentId: EnvironmentIdSchema,
   agentId: AgentIdSchema,
+  connectionGeneration: v.optional(ConnectionGenerationSchema),
   sentAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
   observability: v.optional(AgentObservabilityMetadataSchema),
 });
@@ -124,7 +152,10 @@ export const AgentHeartbeatMessageSchema = v.object({
 export const AgentRegisteredMessageSchema = v.object({
   type: v.literal('agent.registered'),
   payload: v.object({
+    environmentId: EnvironmentIdSchema,
     agentId: AgentIdSchema,
+    connectionGeneration: ConnectionGenerationSchema,
+    protocolVersion: ProtocolVersionSchema,
     serverTime: v.pipe(v.string(), v.isoTimestamp()),
     observability: v.optional(AgentObservabilityMetadataSchema),
   }),
@@ -162,6 +193,7 @@ export const JsonRpcRequestSchema = v.object({
   method: JsonRpcMethodSchema,
   params: v.optional(v.unknown()),
   observability: v.optional(AgentObservabilityMetadataSchema),
+  routing: v.optional(AgentCommandRoutingSchema),
 });
 
 export const JsonRpcErrorObjectSchema = v.object({
@@ -175,6 +207,7 @@ export const JsonRpcSuccessResponseSchema = v.object({
   id: JsonRpcIdSchema,
   result: v.unknown(),
   observability: v.optional(AgentObservabilityMetadataSchema),
+  routing: v.optional(AgentCommandRoutingSchema),
 });
 
 export const JsonRpcErrorResponseSchema = v.object({
@@ -182,6 +215,7 @@ export const JsonRpcErrorResponseSchema = v.object({
   id: JsonRpcIdSchema,
   error: JsonRpcErrorObjectSchema,
   observability: v.optional(AgentObservabilityMetadataSchema),
+  routing: v.optional(AgentCommandRoutingSchema),
 });
 
 export const JsonRpcResponseSchema = v.union([
@@ -200,8 +234,10 @@ export const AgentServerMessageSchema = v.union([
 ]);
 
 export const PublicAgentStatusSchema = v.object({
+  environmentId: EnvironmentIdSchema,
   agentId: AgentIdSchema,
-  connectionId: NonEmptyDisplayStringSchema,
+  connectionGeneration: ConnectionGenerationSchema,
+  protocolVersion: ProtocolVersionSchema,
   deviceName: NonEmptyDisplayStringSchema,
   platform: v.picklist(AGENT_PLATFORMS),
   version: VersionSchema,
@@ -231,6 +267,9 @@ export type AgentHeartbeatMessage = v.InferOutput<
 export type AgentObservabilityMetadata = v.InferOutput<
   typeof AgentObservabilityMetadataSchema
 >;
+export type AgentCommandRouting = v.InferOutput<
+  typeof AgentCommandRoutingSchema
+>;
 export type AgentRegisteredMessage = v.InferOutput<
   typeof AgentRegisteredMessageSchema
 >;
@@ -251,6 +290,7 @@ export type JsonRpcRequest<TParams = unknown> = {
   readonly method: string;
   readonly params?: TParams;
   readonly observability?: AgentObservabilityMetadata;
+  readonly routing?: AgentCommandRouting;
 };
 export type JsonRpcErrorObject<TData = unknown> = {
   readonly code: number;
@@ -262,12 +302,14 @@ export type JsonRpcSuccessResponse<TResult = unknown> = {
   readonly id: JsonRpcId;
   readonly result: TResult;
   readonly observability?: AgentObservabilityMetadata;
+  readonly routing?: AgentCommandRouting;
 };
 export type JsonRpcErrorResponse<TData = unknown> = {
   readonly jsonrpc: typeof JSON_RPC_VERSION;
   readonly id: JsonRpcId;
   readonly error: JsonRpcErrorObject<TData>;
   readonly observability?: AgentObservabilityMetadata;
+  readonly routing?: AgentCommandRouting;
 };
 export type JsonRpcResponse<TResult = unknown, TErrorData = unknown> =
   | JsonRpcSuccessResponse<TResult>
@@ -283,30 +325,45 @@ export type ValidationResult<T> =
 export function validateAgentHelloMessage(
   input: unknown,
 ): ValidationResult<AgentHelloMessage> {
+  if (containsForbiddenPublicMetadata(input)) {
+    return { ok: false, message: 'agent lifecycle metadata contains secrets' };
+  }
   return parseSchema(AgentHelloMessageSchema, input);
 }
 
 export function validateAgentHeartbeatMessage(
   input: unknown,
 ): ValidationResult<AgentHeartbeatMessage> {
+  if (containsForbiddenPublicMetadata(input)) {
+    return { ok: false, message: 'agent lifecycle metadata contains secrets' };
+  }
   return parseSchema(AgentHeartbeatMessageSchema, input);
 }
 
 export function validateAgentClientLifecycleMessage(
   input: unknown,
 ): ValidationResult<AgentClientLifecycleMessage> {
+  if (containsForbiddenPublicMetadata(input)) {
+    return { ok: false, message: 'agent lifecycle metadata contains secrets' };
+  }
   return parseSchema(AgentClientLifecycleMessageSchema, input);
 }
 
 export function validateAgentServerLifecycleMessage(
   input: unknown,
 ): ValidationResult<AgentServerLifecycleMessage> {
+  if (containsForbiddenPublicMetadata(input)) {
+    return { ok: false, message: 'agent lifecycle metadata contains secrets' };
+  }
   return parseSchema(AgentServerLifecycleMessageSchema, input);
 }
 
 export function validateAgentLifecycleMessage(
   input: unknown,
 ): ValidationResult<AgentLifecycleMessage> {
+  if (containsForbiddenPublicMetadata(input)) {
+    return { ok: false, message: 'agent lifecycle metadata contains secrets' };
+  }
   return parseSchema(AgentLifecycleMessageSchema, input);
 }
 
@@ -322,6 +379,14 @@ export function validateJsonRpcRequest(
 export function validateJsonRpcResponse(
   input: unknown,
 ): ValidationResult<JsonRpcResponse> {
+  if (
+    input &&
+    typeof input === 'object' &&
+    'error' in input &&
+    containsForbiddenPublicMetadata((input as { error?: unknown }).error)
+  ) {
+    return { ok: false, message: 'agent error data contains secrets' };
+  }
   return parseSchema(
     JsonRpcResponseSchema,
     input,
@@ -331,12 +396,23 @@ export function validateJsonRpcResponse(
 export function validateAgentClientMessage(
   input: unknown,
 ): ValidationResult<AgentClientMessage> {
+  if (containsForbiddenAgentMessageMetadata(input)) {
+    return { ok: false, message: 'agent message metadata contains secrets' };
+  }
   return parseSchema(AgentClientMessageSchema, input);
 }
 
 export function validateAgentServerMessage(
   input: unknown,
 ): ValidationResult<AgentServerMessage> {
+  if (
+    input &&
+    typeof input === 'object' &&
+    'type' in input &&
+    containsForbiddenPublicMetadata(input)
+  ) {
+    return { ok: false, message: 'agent lifecycle metadata contains secrets' };
+  }
   return parseSchema(AgentServerMessageSchema, input);
 }
 
@@ -386,15 +462,21 @@ export function isJsonRpcErrorResponse(
   return 'error' in input;
 }
 
-export function createAgentRegisteredMessage(
-  agentId: string,
-  serverTime: string,
-): AgentRegisteredMessage {
+export function createAgentRegisteredMessage(input: {
+  readonly environmentId: string;
+  readonly agentId: string;
+  readonly connectionGeneration: number;
+  readonly protocolVersion?: typeof AGENT_PROTOCOL_VERSION;
+  readonly serverTime: string;
+}): AgentRegisteredMessage {
   return {
     type: 'agent.registered',
     payload: {
-      agentId,
-      serverTime,
+      environmentId: input.environmentId,
+      agentId: input.agentId,
+      connectionGeneration: input.connectionGeneration,
+      protocolVersion: input.protocolVersion ?? AGENT_PROTOCOL_VERSION,
+      serverTime: input.serverTime,
     },
   };
 }
@@ -417,6 +499,7 @@ export function createJsonRpcRequest<TParams = unknown>(input: {
   readonly method: string;
   readonly params?: TParams;
   readonly observability?: AgentObservabilityMetadata;
+  readonly routing?: AgentCommandRouting;
 }): JsonRpcRequest<TParams> {
   return {
     jsonrpc: JSON_RPC_VERSION,
@@ -424,6 +507,7 @@ export function createJsonRpcRequest<TParams = unknown>(input: {
     method: input.method,
     ...(input.params === undefined ? {} : { params: input.params }),
     ...(input.observability ? { observability: input.observability } : {}),
+    ...(input.routing ? { routing: input.routing } : {}),
   };
 }
 
@@ -431,12 +515,14 @@ export function createJsonRpcSuccessResponse<TResult = unknown>(
   id: JsonRpcId,
   result: TResult,
   observability?: AgentObservabilityMetadata,
+  routing?: AgentCommandRouting,
 ): JsonRpcSuccessResponse<TResult> {
   return {
     jsonrpc: JSON_RPC_VERSION,
     id,
     result,
     ...(observability ? { observability } : {}),
+    ...(routing ? { routing } : {}),
   };
 }
 
@@ -444,12 +530,14 @@ export function createJsonRpcErrorResponse<TData = unknown>(
   id: JsonRpcId,
   error: JsonRpcErrorObject<TData>,
   observability?: AgentObservabilityMetadata,
+  routing?: AgentCommandRouting,
 ): JsonRpcErrorResponse<TData> {
   return {
     jsonrpc: JSON_RPC_VERSION,
     id,
     error,
     ...(observability ? { observability } : {}),
+    ...(routing ? { routing } : {}),
   };
 }
 
@@ -487,6 +575,38 @@ const OBSERVABILITY_METADATA_KEYS = new Set([
   'operation',
   'commandId',
 ]);
+
+const FORBIDDEN_PUBLIC_METADATA_KEY =
+  /authorization|bridge.?ticket|cookie|operator|password|secret|session|token/i;
+
+function containsForbiddenPublicMetadata(input: unknown): boolean {
+  if (Array.isArray(input)) {
+    return input.some((item) => containsForbiddenPublicMetadata(item));
+  }
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+  return Object.entries(input).some(
+    ([key, value]) =>
+      FORBIDDEN_PUBLIC_METADATA_KEY.test(key) ||
+      containsForbiddenPublicMetadata(value),
+  );
+}
+
+function containsForbiddenAgentMessageMetadata(input: unknown): boolean {
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+  if ('type' in input) {
+    return containsForbiddenPublicMetadata(input);
+  }
+  if ('error' in input) {
+    return containsForbiddenPublicMetadata(
+      (input as { readonly error?: unknown }).error,
+    );
+  }
+  return false;
+}
 
 function containsUnsafeObservabilityMetadata(input: unknown): boolean {
   if (Array.isArray(input)) {

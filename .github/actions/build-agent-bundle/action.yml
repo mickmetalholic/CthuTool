@@ -1,0 +1,262 @@
+name: Build CthuTool Agent bundle
+description: Assemble, platform-sign, smoke-test, and attest one Agent target
+
+inputs:
+  target:
+    required: true
+  rust-target:
+    required: true
+  release-version:
+    required: true
+  provenance:
+    required: true
+  pull-request-marker:
+    required: false
+  immutable-base-url:
+    required: true
+  catalog-json:
+    required: false
+  macos-certificate-p12-base64:
+    required: false
+  macos-certificate-password:
+    required: false
+  macos-signing-identity:
+    required: false
+  macos-notary-key-id:
+    required: false
+  macos-notary-issuer-id:
+    required: false
+  macos-notary-key-p8:
+    required: false
+  windows-certificate-pfx-base64:
+    required: false
+  windows-certificate-password:
+    required: false
+  release-private-key-pem:
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9.15.4
+
+    - name: Set up build Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "24.14.1"
+        cache: pnpm
+
+    - name: Set up Rust target
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        target: ${{ inputs.rust-target }}
+        toolchain: "1.96.0"
+
+    - name: Restore Rust target cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: agent-release-${{ inputs.target }}
+        workspaces: ". -> target"
+
+    - name: Verify native runner architecture
+      shell: bash
+      run: |
+        node -e "const target=process.argv[1]; const expected=target === 'darwin-arm64' ? ['darwin','arm64'] : target === 'darwin-x64' ? ['darwin','x64'] : ['win32','x64']; if (process.platform !== expected[0] || process.arch !== expected[1]) throw new Error('Runner architecture does not match ' + target + ': ' + process.platform + '-' + process.arch);" "${{ inputs.target }}"
+
+    - name: Install locked workspace dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Build release tooling and Agent
+      shell: bash
+      run: |
+        pnpm --filter @cthutool/agent-release build
+        pnpm --filter @cthutool/agent build
+        cargo build --locked --release --target "${{ inputs.rust-target }}" -p cthutool-agent-tray
+
+    - name: Prepare release environment catalog
+      shell: bash
+      env:
+        AGENT_ENVIRONMENT_CATALOG_JSON: ${{ inputs.catalog-json }}
+        AGENT_RELEASE_PROVENANCE: ${{ inputs.provenance }}
+      run: |
+        mkdir -p .release/catalog .release/node .release/stage .release/out .release/user-data
+        if [ "$AGENT_RELEASE_PROVENANCE" = "production" ]; then
+          node -e "const fs=require('node:fs'); const value=process.env.AGENT_ENVIRONMENT_CATALOG_JSON; if (!value) throw new Error('Protected production catalog is missing'); fs.writeFileSync('.release/catalog/environments.json', value.endsWith('\n') ? value : value + '\n', {mode: 0o600});"
+        else
+          cp packages/agent-release/fixtures/catalog.valid.json .release/catalog/environments.json
+        fi
+        node packages/agent-release/dist/cli.js validate-catalog --input .release/catalog/environments.json
+
+    - name: Prepare exact pinned Node.js runtime
+      shell: bash
+      run: |
+        node packages/agent-release/dist/cli.js prepare-node \
+          --lock release/agent/node-runtime.lock.json \
+          --target "${{ inputs.target }}" \
+          --output-dir .release/node
+
+    - name: Create production dependency deployment
+      shell: bash
+      run: pnpm --filter @cthutool/agent --prod deploy .release/deployed-agent
+
+    - name: Assemble immutable bundle staging tree
+      shell: bash
+      env:
+        RELEASE_PROVENANCE: ${{ inputs.provenance }}
+      run: |
+        TRAY_PATH="target/${{ inputs.rust-target }}/release/cthutool-agent-tray"
+        NODE_PATH=".release/node/node"
+        PR_ARGUMENTS=()
+        if [ "${{ inputs.target }}" = "windows-x64" ]; then
+          TRAY_PATH="$TRAY_PATH.exe"
+          NODE_PATH=".release/node/node.exe"
+        fi
+        if [ "$RELEASE_PROVENANCE" = "pull-request-validation" ]; then
+          PR_ARGUMENTS=(--pull-request-marker "${{ inputs.pull-request-marker }}")
+        fi
+        node packages/agent-release/dist/cli.js assemble \
+          --target "${{ inputs.target }}" \
+          --version "${{ inputs.release-version }}" \
+          --tray "$TRAY_PATH" \
+          --node "$NODE_PATH" \
+          --node-license .release/node/LICENSE \
+          --agent-dir .release/deployed-agent \
+          --catalog .release/catalog/environments.json \
+          --notices release/agent/licenses/THIRD_PARTY_NOTICES.txt \
+          --stage-dir .release/stage \
+          --output-dir .release/out \
+          "${PR_ARGUMENTS[@]}"
+
+    - name: Sign and notarize macOS application
+      if: inputs.provenance == 'production' && runner.os == 'macOS'
+      shell: bash
+      env:
+        MACOS_CERTIFICATE_P12_BASE64: ${{ inputs.macos-certificate-p12-base64 }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ inputs.macos-certificate-password }}
+        MACOS_SIGNING_IDENTITY: ${{ inputs.macos-signing-identity }}
+        MACOS_NOTARY_ISSUER_ID: ${{ inputs.macos-notary-issuer-id }}
+        MACOS_NOTARY_KEY_ID: ${{ inputs.macos-notary-key-id }}
+        MACOS_NOTARY_KEY_P8: ${{ inputs.macos-notary-key-p8 }}
+      run: |
+        : "${MACOS_CERTIFICATE_P12_BASE64:?missing protected macOS certificate}"
+        : "${MACOS_CERTIFICATE_PASSWORD:?missing protected macOS certificate password}"
+        : "${MACOS_SIGNING_IDENTITY:?missing protected macOS signing identity}"
+        : "${MACOS_NOTARY_KEY_ID:?missing protected macOS notary key id}"
+        : "${MACOS_NOTARY_ISSUER_ID:?missing protected macOS notary issuer}"
+        : "${MACOS_NOTARY_KEY_P8:?missing protected macOS notary key}"
+        CERTIFICATE_PATH="$RUNNER_TEMP/cthutool-agent-signing.p12"
+        KEYCHAIN_PATH="$RUNNER_TEMP/cthutool-agent-signing.keychain-db"
+        NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+        printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+        printf '%s' "$MACOS_NOTARY_KEY_P8" > "$NOTARY_KEY_PATH"
+        security create-keychain -p temporary "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p temporary "$KEYCHAIN_PATH"
+        security import "$CERTIFICATE_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple: -s -k temporary "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH"
+        APP_PATH=".release/stage/bin/CthuTool Agent.app"
+        codesign --verify --strict --verbose=2 .release/stage/runtime/node/bin/node
+        codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$APP_PATH"
+        codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+        ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/cthutool-agent-notarize.zip"
+        xcrun notarytool submit "$RUNNER_TEMP/cthutool-agent-notarize.zip" \
+          --key "$NOTARY_KEY_PATH" \
+          --key-id "$MACOS_NOTARY_KEY_ID" \
+          --issuer "$MACOS_NOTARY_ISSUER_ID" \
+          --wait
+        xcrun stapler staple "$APP_PATH"
+        xcrun stapler validate "$APP_PATH"
+
+    - name: Clean macOS signing material
+      if: always() && inputs.provenance == 'production' && runner.os == 'macOS'
+      shell: bash
+      run: |
+        security delete-keychain "$RUNNER_TEMP/cthutool-agent-signing.keychain-db" 2>/dev/null || true
+        rm -f "$RUNNER_TEMP/cthutool-agent-signing.p12" "$RUNNER_TEMP"/AuthKey_*.p8 "$RUNNER_TEMP/cthutool-agent-notarize.zip"
+
+    - name: Sign and verify Windows executable
+      if: inputs.provenance == 'production' && runner.os == 'Windows'
+      shell: pwsh
+      env:
+        WINDOWS_CERTIFICATE_PFX_BASE64: ${{ inputs.windows-certificate-pfx-base64 }}
+        WINDOWS_CERTIFICATE_PASSWORD: ${{ inputs.windows-certificate-password }}
+      run: |
+        if (-not $env:WINDOWS_CERTIFICATE_PFX_BASE64) { throw "Missing protected Windows certificate" }
+        if (-not $env:WINDOWS_CERTIFICATE_PASSWORD) { throw "Missing protected Windows certificate password" }
+        $pfxPath = Join-Path $env:RUNNER_TEMP "cthutool-agent-signing.pfx"
+        [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
+        $nodeStatus = (Get-AuthenticodeSignature ".release/stage/runtime/node/node.exe").Status
+        if ($nodeStatus -ne "Valid") { throw "Bundled upstream Node.js signature is not valid: $nodeStatus" }
+        signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $pfxPath /p $env:WINDOWS_CERTIFICATE_PASSWORD ".release/stage/bin/cthutool-agent-tray.exe"
+        signtool verify /pa /all ".release/stage/bin/cthutool-agent-tray.exe"
+
+    - name: Clean Windows signing material
+      if: always() && inputs.provenance == 'production' && runner.os == 'Windows'
+      shell: pwsh
+      run: Remove-Item (Join-Path $env:RUNNER_TEMP "cthutool-agent-signing.pfx") -Force -ErrorAction SilentlyContinue
+
+    - name: Archive signed staging tree
+      if: inputs.provenance == 'production'
+      shell: bash
+      run: |
+        node packages/agent-release/dist/cli.js archive-stage \
+          --target "${{ inputs.target }}" \
+          --version "${{ inputs.release-version }}" \
+          --stage-dir .release/stage \
+          --output-dir .release/out
+
+    - name: Run clean-host bundled-Node smoke
+      shell: bash
+      run: |
+        node packages/agent-release/dist/cli.js smoke \
+          --bundle-root .release/stage \
+          --user-data-dir .release/user-data \
+          --timeout-ms 30000
+
+    - name: Sign production archive
+      if: inputs.provenance == 'production'
+      shell: bash
+      env:
+        AGENT_RELEASE_PRIVATE_KEY_PEM: ${{ inputs.release-private-key-pem }}
+      run: |
+        : "${AGENT_RELEASE_PRIVATE_KEY_PEM:?missing protected release signing key}"
+        ARCHIVE_PATH="$(find .release/out -maxdepth 1 -name '*.zip' -print -quit)"
+        node packages/agent-release/dist/cli.js sign-blob \
+          --input "$ARCHIVE_PATH" \
+          --output "$ARCHIVE_PATH.sig"
+
+    - name: Create target receipt and checksum
+      shell: bash
+      env:
+        RELEASE_PROVENANCE: ${{ inputs.provenance }}
+      run: |
+        ARCHIVE_PATH="$(find .release/out -maxdepth 1 -name '*.zip' -print -quit)"
+        RECEIPT_FLAGS=(--clean-host-smoke)
+        if [ "$RELEASE_PROVENANCE" = "production" ]; then
+          RECEIPT_FLAGS+=(--platform-signed)
+          if [ "${{ inputs.target }}" != "windows-x64" ]; then
+            RECEIPT_FLAGS+=(--notarization-stapled)
+          fi
+        fi
+        node packages/agent-release/dist/cli.js receipt \
+          --target "${{ inputs.target }}" \
+          --version "${{ inputs.release-version }}" \
+          --archive "$ARCHIVE_PATH" \
+          --bundle-root .release/stage \
+          --base-url "${{ inputs.immutable-base-url }}" \
+          --provenance "$RELEASE_PROVENANCE" \
+          --output ".release/out/receipt-${{ inputs.target }}.json" \
+          "${RECEIPT_FLAGS[@]}"
+        node -e "const fs=require('node:fs'); const crypto=require('node:crypto'); const path=process.argv[1]; const digest=crypto.createHash('sha256').update(fs.readFileSync(path)).digest('hex'); fs.writeFileSync(path + '.sha256', digest + '  ' + require('node:path').basename(path) + '\n');" "$ARCHIVE_PATH"
+
+    - name: Revalidate final inventory
+      shell: bash
+      run: |
+        node packages/agent-release/dist/cli.js validate-inventory \
+          --target "${{ inputs.target }}" \
+          --bundle-root .release/stage

@@ -26,7 +26,10 @@ export type AgentCommandResponse<
 
 export class AgentCommandGatewayError extends Error {
   constructor(
-    readonly code: 'AGENT_NOT_AVAILABLE' | 'AGENT_CAPABILITY_MISSING',
+    readonly code:
+      | 'AGENT_NOT_AVAILABLE'
+      | 'AGENT_CAPABILITY_MISSING'
+      | 'ENVIRONMENT_CONTEXT_REQUIRED',
     message: string,
   ) {
     super(message);
@@ -45,25 +48,55 @@ export class AgentCommandGateway {
     private readonly metrics?: BackendMetricsService,
   ) {}
 
-  selectAgentByCapability(capability: string): PublicAgentStatus | undefined {
-    return this.registry
-      .listOnlineAgents()
-      .find((status) => status.capabilities.includes(capability));
+  selectAgentByCapability(
+    environmentId: string,
+    capability: string,
+  ): PublicAgentStatus | undefined {
+    if (!environmentId) {
+      return undefined;
+    }
+    const status = this.registry.findByEnvironmentAndCapability(
+      environmentId,
+      capability,
+    );
+    if (!status) {
+      return undefined;
+    }
+    const { connectionId: _connectionId, ...publicStatus } = status;
+    return publicStatus;
   }
 
   async sendCommand<
     TResponse extends AgentCommandResponse = AgentCommandResponse,
   >(
-    agentId: string,
+    target: { readonly environmentId: string; readonly agentId: string },
     command: AgentCommandRequest,
     timeoutMs?: number,
   ): Promise<TResponse> {
     const startedAt = Date.now();
+    if (!target.environmentId) {
+      throw new AgentCommandGatewayError(
+        'ENVIRONMENT_CONTEXT_REQUIRED',
+        'Trusted environment context is required',
+      );
+    }
+    const authoritative = this.registry.findAuthoritative(
+      target.environmentId,
+      target.agentId,
+    );
+    if (!authoritative) {
+      throw new AgentCommandGatewayError(
+        'AGENT_NOT_AVAILABLE',
+        `Agent "${target.agentId}" is not online in environment "${target.environmentId}"`,
+      );
+    }
     const commandType = command.method;
     this.observability?.record({
       event: 'agent.command_dispatched',
       details: {
-        agentId,
+        environmentId: target.environmentId,
+        agentId: target.agentId,
+        connectionGeneration: authoritative.connectionGeneration,
         commandId: String(command.id),
         commandType,
         timeoutMs,
@@ -72,7 +105,11 @@ export class AgentCommandGateway {
     this.metrics?.recordAgentCommandDispatched({ commandType });
     try {
       const response = await this.agentSocketServer.sendCommand<TResponse>(
-        agentId,
+        {
+          environmentId: target.environmentId,
+          agentId: target.agentId,
+          connectionGeneration: authoritative.connectionGeneration,
+        },
         attachObservability(command),
         timeoutMs,
       );
@@ -82,7 +119,9 @@ export class AgentCommandGateway {
       this.observability?.record({
         event: 'agent.command_completed',
         details: {
-          agentId,
+          environmentId: target.environmentId,
+          agentId: target.agentId,
+          connectionGeneration: authoritative.connectionGeneration,
           commandId: String(command.id),
           commandType,
           durationMs,
@@ -104,7 +143,9 @@ export class AgentCommandGateway {
         event: 'agent.command_failed',
         level: 'warn',
         details: {
-          agentId,
+          environmentId: target.environmentId,
+          agentId: target.agentId,
+          connectionGeneration: authoritative.connectionGeneration,
           commandId: String(command.id),
           commandType,
           durationMs,
@@ -132,18 +173,29 @@ export class AgentCommandGateway {
   async sendCommandByCapability<
     TResponse extends AgentCommandResponse = AgentCommandResponse,
   >(
+    environmentId: string,
     capability: string,
     command: AgentCommandRequest,
     timeoutMs?: number,
   ): Promise<TResponse> {
-    const agent = this.selectAgentByCapability(capability);
+    if (!environmentId) {
+      throw new AgentCommandGatewayError(
+        'ENVIRONMENT_CONTEXT_REQUIRED',
+        'Trusted environment context is required',
+      );
+    }
+    const agent = this.selectAgentByCapability(environmentId, capability);
     if (!agent) {
       throw new AgentCommandGatewayError(
         'AGENT_CAPABILITY_MISSING',
         `No online desktop agent with "${capability}" capability`,
       );
     }
-    return this.sendCommand<TResponse>(agent.agentId, command, timeoutMs);
+    return this.sendCommand<TResponse>(
+      { environmentId, agentId: agent.agentId },
+      command,
+      timeoutMs,
+    );
   }
 }
 

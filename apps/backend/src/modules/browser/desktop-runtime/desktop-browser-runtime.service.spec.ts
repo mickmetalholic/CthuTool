@@ -25,7 +25,7 @@ describe('DesktopBrowserRuntimeService', () => {
       expect(result.value.html).toBe('<html>ok</html>');
     }
     expect(gateway.sendCommand).toHaveBeenCalledWith(
-      'agent-1',
+      { environmentId: 'local', agentId: 'agent-1' },
       expect.objectContaining({
         id: expect.any(String),
         jsonrpc: '2.0',
@@ -64,7 +64,7 @@ describe('DesktopBrowserRuntimeService', () => {
     });
 
     expect(gateway.sendCommand).toHaveBeenCalledWith(
-      'agent-1',
+      { environmentId: 'local', agentId: 'agent-1' },
       expect.objectContaining({
         observability: expect.objectContaining({
           operation: 'browser.capturePage',
@@ -102,7 +102,7 @@ describe('DesktopBrowserRuntimeService', () => {
       },
     });
     expect(gateway.sendCommand).toHaveBeenCalledWith(
-      'agent-1',
+      { environmentId: 'local', agentId: 'agent-1' },
       expect.objectContaining({
         jsonrpc: '2.0',
         method: 'browser.openLogin',
@@ -471,7 +471,7 @@ describe('DesktopBrowserRuntimeService', () => {
       },
     });
     expect(gateway.sendCommand).toHaveBeenCalledWith(
-      'agent-1',
+      { environmentId: 'local', agentId: 'agent-1' },
       expect.objectContaining({
         method: 'browser.createSession',
         params: expect.objectContaining({
@@ -523,7 +523,7 @@ describe('DesktopBrowserRuntimeService', () => {
       },
     });
     expect(gateway.sendCommand).toHaveBeenCalledWith(
-      'agent-owner',
+      { environmentId: 'local', agentId: 'agent-owner' },
       expect.objectContaining({
         method: 'browser.runActions',
         params: expect.objectContaining({
@@ -557,7 +557,7 @@ describe('DesktopBrowserRuntimeService', () => {
       value: { sessionId: 'session-1' },
     });
     expect(gateway.sendCommand).toHaveBeenCalledWith(
-      'agent-owner',
+      { environmentId: 'local', agentId: 'agent-owner' },
       expect.objectContaining({
         method: 'browser.closeSession',
         params: expect.objectContaining({

@@ -1,0 +1,28 @@
+{
+  "name": "@cthutool/agent-data-migration",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check ."
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
+    "@types/node": "^22.13.10",
+    "typescript": "5.9.2",
+    "vitest": "^2.1.9"
+  }
+}

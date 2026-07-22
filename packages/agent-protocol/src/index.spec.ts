@@ -29,7 +29,9 @@ describe('agent protocol validation', () => {
   const hello = {
     type: 'agent.hello',
     payload: {
+      environmentId: 'prod',
       agentId: 'homelab-mac',
+      protocolVersion: 1,
       deviceName: 'Homelab Mac',
       platform: 'darwin',
       version: '0.1.0',
@@ -92,6 +94,7 @@ describe('agent protocol validation', () => {
     const heartbeat = {
       type: 'agent.heartbeat',
       payload: {
+        environmentId: 'prod',
         agentId: 'homelab-mac',
         sentAt: '2026-06-13T12:00:00.000Z',
       },
@@ -128,10 +131,12 @@ describe('agent protocol validation', () => {
   });
 
   it('accepts server lifecycle messages', () => {
-    const registered = createAgentRegisteredMessage(
-      'homelab-mac',
-      '2026-06-13T12:00:00.000Z',
-    );
+    const registered = createAgentRegisteredMessage({
+      environmentId: 'prod',
+      agentId: 'homelab-mac',
+      connectionGeneration: 2,
+      serverTime: '2026-06-13T12:00:00.000Z',
+    });
     const error = createAgentErrorMessage('BAD_HELLO', 'Invalid hello');
 
     expect(validateAgentServerMessage(registered)).toEqual({
@@ -152,6 +157,7 @@ describe('agent protocol validation', () => {
     const heartbeat = {
       type: 'agent.heartbeat',
       payload: {
+        environmentId: 'prod',
         agentId: 'homelab-mac',
         observability: {
           requestId: 'req-1',
@@ -179,6 +185,11 @@ describe('agent protocol validation', () => {
         commandId: 'cmd-1',
         operation: 'browser.capturePage',
         requestId: 'req-1',
+      },
+      routing: {
+        environmentId: 'prod',
+        agentId: 'homelab-mac',
+        connectionGeneration: 2,
       },
     });
 
@@ -330,6 +341,43 @@ describe('agent protocol validation', () => {
           command: 'browser.capturePage',
           commandId: 'cmd-1',
           siteId: 'douban',
+        },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects secret-shaped lifecycle and public error metadata', () => {
+    expect(
+      parseAgentLifecycleMessage({
+        ...hello,
+        payload: { ...hello.payload, agentSecret: 'not-public' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateAgentHelloMessage({
+        ...hello,
+        payload: { ...hello.payload, operatorSession: 'not-public' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateAgentClientMessage({
+        jsonrpc: '2.0',
+        id: 'cmd-1',
+        error: {
+          code: -32603,
+          message: 'failed',
+          data: { authorization: 'Bearer not-public' },
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateJsonRpcResponse({
+        jsonrpc: '2.0',
+        id: 'cmd-1',
+        error: {
+          code: -32603,
+          message: 'failed',
+          data: { bridgeTicket: 'not-public' },
         },
       }).ok,
     ).toBe(false);

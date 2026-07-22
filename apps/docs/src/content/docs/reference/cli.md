@@ -54,6 +54,61 @@ Commands that support the agent contract accept common flags:
 
 In JSON mode, stdout is reserved for the JSON response. Human warnings and diagnostics are written to stderr.
 
+## Local Agent
+
+Bare `chc agent` shows the statically registered command tree:
+
+```bash
+chc agent install [--channel stable|beta] [--version 1.2.3]
+chc agent update [--channel stable|beta]
+chc agent start
+chc agent stop
+chc agent restart
+chc agent status [--json]
+chc agent settings
+chc agent logs [--lines 200] [--follow]
+chc agent doctor [--json]
+chc agent uninstall [--purge --yes]
+```
+
+Environment and autostart operations are nested public groups:
+
+```bash
+chc agent env list
+chc agent env get [environment-id]
+chc agent env set <environment-id>
+chc agent env set-secret <environment-id> --secret-stdin
+chc agent env set-secret <environment-id> --secret-file ./agent-secret
+chc agent autostart enable|disable|status
+```
+
+Only environments from the verified release catalog can be selected. Catalog
+entries require HTTPS Web/backend origins, a WSS Agent endpoint, and the exact
+same-origin `/agent` Web page. Secrets are stored per environment in
+user-private mutable storage and are represented only as `configured` or
+`missing` in human and schema-version-1 JSON output.
+
+`settings` auto-starts the tray and opens a newly issued one-time bridge URL in
+the default browser; the URL and ticket are never written to CLI output.
+`logs` reads the Agent-owned redacted JSON-lines source. `--follow` is a human
+streaming mode and cannot be combined with `--json`.
+
+`doctor` includes the legacy CthuDesktop migration state. A zero or ambiguous
+trusted-environment match requires `env set`; an active profile lock requires
+stopping the tray/Agent before retry. The report may provide an exact next
+command but never includes legacy credentials, Agent secrets, bridge tickets,
+or authorization headers.
+
+`chc agent uninstall` preserves environment selection, secrets, browser
+profiles, and logs. `--purge` additionally removes those categories and
+requires an interactive confirmation, or `--yes` when prompts are disabled.
+The command never removes data when purge confirmation is absent.
+
+`chc update` and `chc agent update` are intentionally unrelated: the first
+updates the CLI source/install, while the second stages a signed Agent release,
+checks readiness, and automatically restores the prior active version when the
+new version cannot start.
+
 ## Shell Completion
 
 Run `chc completion` to show the registered `powershell`, `zsh`, `enable`,

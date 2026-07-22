@@ -71,7 +71,7 @@ const DEFAULT_MAX_OBJECT_KEYS = 30;
 const MAX_REDACTION_DEPTH = 4;
 
 const SENSITIVE_KEY_PATTERN =
-  /token|secret|password|cookie|authorization|auth|credential|session|storageState|localStorage|html|screenshot|base64|profilePath|profileDir|inputValue|formValue/i;
+  /token|ticket|secret|password|cookie|authorization|bearer|auth|credential|session|fragment|endpoint|storageState|localStorage|html|screenshot|base64|profilePath|profileDir|inputValue|formValue/i;
 
 const REQUEST_ID_HEADERS = [
   'x-request-id',
@@ -333,7 +333,15 @@ function sanitizeScalar(value: string | undefined): string | undefined {
   if (!value) {
     return undefined;
   }
-  const normalized = value.replace(/\s+/g, ' ').trim();
+  const normalized = value
+    .replace(/Bearer\s+[a-zA-Z0-9_-]+/gi, 'Bearer [Redacted]')
+    .replace(/(https?:\/\/[^\s#]+)#\S+/gi, '$1#[Redacted]')
+    .replace(
+      /([?&#](?:ticket|token|session|authorization)=)[^&\s]+/gi,
+      '$1[Redacted]',
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!normalized) {
     return undefined;
   }

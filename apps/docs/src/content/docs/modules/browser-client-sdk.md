@@ -5,7 +5,9 @@ description: TypeScript SDK for trusted applications that use CthuTool browser s
 
 `@cthutool/browser-client` is a TypeScript SDK for third-party applications that use CthuTool's backend public browser session API.
 
-The SDK provides a small Playwright-like page interface, but it does not connect to Playwright, CthuDesktop agents, CDP, or a browser process directly. It sends controlled session and action requests to the configured CthuTool backend.
+The SDK provides a small Playwright-like page interface, but it does not
+connect to Playwright, local Agents, CDP, or a browser process directly. It
+sends controlled session and action requests to the configured backend.
 
 ## Runtime Flow
 
@@ -13,11 +15,13 @@ The SDK provides a small Playwright-like page interface, but it does not connect
 Third-party app
   -> @cthutool/browser-client
   -> Backend public browser API
-  -> Online CthuDesktop browser agent
-  -> Desktop-owned Playwright context and page
+  -> Online local browser Agent
+  -> Agent-owned Playwright context and page
 ```
 
-The SDK stores only the public session ID. The backend stores thin routing metadata. CthuDesktop owns the real Playwright context, page, browser profile, and browser storage.
+The SDK stores only the public session ID. The backend stores thin routing
+metadata. The local Agent owns the real Playwright context, page, browser
+profile, and browser storage.
 
 ## Basic Usage
 
@@ -126,8 +130,8 @@ The first public browser API does not include API key handling. Use it only behi
 - Provides a crawler-focused Playwright-like subset, not full Playwright API compatibility.
 - Does not expose raw Playwright objects or arbitrary `evaluate` script execution.
 - Does not expose route interception, browser context storage, downloads, uploads, or Playwright Test assertions.
-- Does not connect directly to CthuDesktop agents, CDP, or browser WebSocket endpoints.
-- Does not expose cookies, localStorage, Playwright storage-state contents, desktop profile paths, or raw browser handles.
+- Does not connect directly to local Agents, CDP, or browser WebSocket endpoints.
+- Does not expose cookies, localStorage, Playwright storage-state contents, local profile paths, or raw browser handles.
 - Navigation is constrained by configured site `allowedOrigins`.
 
 Source reference: `packages/browser-client/README.md`.

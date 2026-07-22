@@ -1,40 +1,26 @@
 ---
 title: Agent Protocol
-description: Backend and desktop agent connection overview.
+description: Authenticated backend and local Agent connection overview.
 ---
 
-CthuDesktop connects to the backend as an agent over WebSocket.
+The local Agent opens an outbound WebSocket to the selected environment's
+catalog WSS endpoint. A separate static Agent secret authenticates the
+connection; the stable Agent id is correlation metadata, not a credential.
+
+After opening the socket, the Agent sends `agent.hello` with its identity,
+platform, version, and capabilities. The backend acknowledges registration and
+tracks heartbeats. Browser capability is advertised only while the local
+Playwright host is ready.
 
 ```text
-ws://<backend>/ws/agents
+Local Agent -> authenticated WSS -> Backend Agent Registry
+Backend -> structured browser command -> Agent Playwright Host
+Backend -> public status -> authorized operator/Web APIs
 ```
 
-After opening the socket, desktop sends an `agent.hello` payload with agent identity, platform, version, and capabilities. The backend acknowledges registration and tracks heartbeat state.
+Environment catalogs require HTTPS/WSS in release builds. Public operator
+access is a separate reverse-proxy/access-gateway boundary and does not replace
+Agent authentication.
 
-```json
-{
-  "type": "agent.hello",
-  "payload": {
-    "agentId": "windows-pc",
-    "deviceName": "Windows PC",
-    "platform": "win32",
-    "version": "0.1.0",
-    "capabilities": ["browser"]
-  }
-}
-```
-
-Desktop advertises the `browser` capability only when its local Playwright host is ready.
-
-```text
-Desktop App -> WebSocket -> Backend Agent Registry
-Desktop App -> HTTP GET /api/agents -> Backend Agent Registry
-Backend -> structured browser command -> Desktop Playwright Host
-```
-
-## Requirements Sources
-
-- CLI agent contract: `openspec/specs/apps-cli-agent-contract/spec.md`
-- Backend agent registry: `openspec/specs/apps-backend-agent-registry/spec.md`
-- Agent command gateway: `openspec/specs/apps-backend-agent-command-gateway/spec.md`
-- Agent state: `openspec/specs/apps-backend-agent-state/spec.md`
+Main requirements remain in the backend `apps-backend-agent-*` specs; the local
+runtime requirements are in the ordered Agent changes until archive/sync.

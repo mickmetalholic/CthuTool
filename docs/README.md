@@ -16,8 +16,11 @@ and reference reading paths.
 | --- | --- |
 | `../README.md` | Repository entry point: prerequisites, common commands, workspace layout, and documentation routing. |
 | `../apps/docs/` | Astro Starlight documentation site for users, operators, architecture readers, and OpenSpec browsing. |
-| `desktop-agent-console.md` | Source notes for CthuDesktop product shell, backend agent connection, local browser host model, APIs, and packaging. |
-| `browser-auth.md` | Source notes for browser auth profile ownership across backend, desktop, and CLI. |
+| `agent-migration.md` | Safe migration from legacy CthuDesktop data into environment-scoped Agent storage. |
+| `agent-deployment-security.md` | Personal-use public-deployment and static Agent-secret boundary. |
+| `agent-release.md` | Signed UI-free Agent bundle, publication, and rollback contract. |
+| `agent-local-network-access.md` | Browser local-network permission and one-time bridge launch troubleshooting. |
+| `browser-auth.md` | Source notes for browser auth profile ownership across backend, Agent, and CLI. |
 | `assets/cthutool-logo.png` | Repository logo used by the root README. |
 
 ## Related Docs
@@ -35,7 +38,8 @@ and reference reading paths.
 - User or operator: start with `../apps/docs/`.
 - New contributor: start with `../README.md`, then read the package README for
   the area you are changing.
-- Desktop or browser implementation work: read `desktop-agent-console.md`,
-  `browser-auth.md`, and the relevant OpenSpec capability specs.
+- Agent or browser implementation work: read `agent-migration.md`,
+  `agent-deployment-security.md`, `browser-auth.md`, and the relevant OpenSpec
+  capability specs.
 - CLI implementation work: read `../apps/cli/README.md` and the `apps-cli-*`
   OpenSpec specs.

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "target": "darwin-arm64",
+      "runner": "macos-14",
+      "rustTarget": "aarch64-apple-darwin",
+      "archiveFormat": "zip"
+    },
+    {
+      "target": "darwin-x64",
+      "runner": "macos-15-intel",
+      "rustTarget": "x86_64-apple-darwin",
+      "archiveFormat": "zip"
+    },
+    {
+      "target": "windows-x64",
+      "runner": "windows-2025",
+      "rustTarget": "x86_64-pc-windows-msvc",
+      "archiveFormat": "zip"
+    }
+  ]
+}

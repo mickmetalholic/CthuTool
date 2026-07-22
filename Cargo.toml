@@ -1,0 +1,8 @@
+[workspace]
+members = ["apps/agent-tray"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+rust-version = "1.96"

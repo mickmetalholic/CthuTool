@@ -40,24 +40,6 @@ const thresholdGatedPackages = {
       lines: 75,
     },
   },
-  "@cthutool/app-shell": {
-    configPath: "packages/app-shell/vitest.config.ts",
-    thresholds: {
-      statements: 50,
-      branches: 65,
-      functions: 35,
-      lines: 50,
-    },
-  },
-  "@cthutool/ui": {
-    configPath: "packages/ui/vitest.config.ts",
-    thresholds: {
-      statements: 80,
-      branches: 85,
-      functions: 75,
-      lines: 80,
-    },
-  },
   "@cthutool/browser-client": {
     configPath: "packages/browser-client/vitest.config.ts",
     thresholds: {
@@ -74,11 +56,6 @@ const visibilityOnlyPackages = [
     name: "@cthutool/cli",
     configPath: "apps/cli/package.json",
     runner: "bun",
-  },
-  {
-    name: "@cthutool/desktop",
-    configPath: "apps/desktop/vitest.config.ts",
-    runner: "vitest",
   },
   {
     name: "@cthutool/docs",
@@ -177,16 +154,11 @@ describe("coverage quality gate policy", () => {
     expect(filterScript).not.toContain("cthutool-script-");
   });
 
-  it("documents shared frontend package baselines and threshold decisions", () => {
+  it("documents the browser client baseline and threshold decision", () => {
     const policy = readText("docs/coverage-quality-gates.md");
 
-    expect(policy).toContain("@cthutool/app-shell");
-    expect(policy).toContain("@cthutool/ui");
     expect(policy).toContain("@cthutool/browser-client");
-    expect(policy).toContain("frontend behavior tests");
     expect(policy).toContain("request and response handling tests");
-    expect(policy).toContain("| `@cthutool/app-shell` | 53.44 | 72.97 | 38.88 | 53.44 | 50 | 65 | 35 | 50 |");
-    expect(policy).toContain("| `@cthutool/ui` | 84.22 | 92.50 | 81.08 | 84.22 | 80 | 85 | 75 | 80 |");
     expect(policy).toContain("| `@cthutool/browser-client` | 74.49 | 67.39 | 88.09 | 74.49 | 70 | 65 | 85 | 70 |");
   });
 

@@ -10,7 +10,7 @@ description: Start here for CthuTool homelab deployment, client installation, mo
       <h1 id="cthu-home-title">CthuTool Docs</h1>
       <p class="cthu-lede">
         Ship a personal automation stack from one clear map. These docs cover
-        homelab services, desktop clients, the CLI, browser automation, and
+        homelab services, the local Agent, the CLI, browser automation, and
         Codex-facing assets.
       </p>
       <div class="cthu-actions" aria-label="Primary documentation links">
@@ -49,7 +49,7 @@ chc --help</code></pre>
     <a class="cthu-card" href="/client/">
       <span class="cthu-card-kicker">03</span>
       <strong>Client Installation</strong>
-      <span>Set up CthuDesktop and the <code>chc</code> command-line tool on user machines.</span>
+      <span>Install the tray-owned local Agent and <code>chc</code> on user machines.</span>
     </a>
   </section>
 
@@ -69,7 +69,7 @@ chc --help</code></pre>
       </a>
       <a href="/architecture/" class="cthu-path">
         <span>Architecture</span>
-        <strong>Trace backend, desktop, CLI, browser auth, and package contracts.</strong>
+        <strong>Trace backend, Agent, CLI, browser auth, and package contracts.</strong>
       </a>
       <a href="/operations/" class="cthu-path">
         <span>Operations</span>
@@ -95,8 +95,8 @@ chc --help</code></pre>
       </li>
       <li>
         <span>Install the surfaces</span>
-        Bring up backend services first, then connect desktop clients and the
-        CLI from user machines.
+        Bring up backend services first, then install the Agent and CLI on user
+        machines.
       </li>
       <li>
         <span>Choose a module</span>

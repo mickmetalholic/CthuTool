@@ -14,6 +14,7 @@ export const cliContractArgs = {
   },
   noInteractive: {
     type: 'boolean',
+    alias: 'no-interactive',
     description: 'Disable prompts even when stdin is a TTY',
   },
   quiet: {

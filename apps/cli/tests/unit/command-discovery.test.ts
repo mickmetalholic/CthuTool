@@ -49,6 +49,7 @@ describe('command discovery registry', () => {
       .sort();
 
     expect(bareHelpNames).toEqual([
+      'agent',
       'codex',
       'completion',
       'opencode',

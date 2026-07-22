@@ -16,6 +16,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@cthutool/agent-bridge-protocol': fileURLToPath(
+        new URL(
+          '../../packages/agent-bridge-protocol/src/index.ts',
+          import.meta.url,
+        ),
+      ),
     },
   },
 });

@@ -10,6 +10,11 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 ## Applications
 
 <!-- openspec-index:start -->
+- `apps-agent-environment-routing`
+- `apps-agent-local-bridge`
+- `apps-agent-release-artifacts`
+- `apps-agent-runtime`
+- `apps-agent-tray`
 - `apps-backend-agent-command-gateway`
 - `apps-backend-agent-registry`
 - `apps-backend-browser-auth`
@@ -20,25 +25,25 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 - `apps-backend-douban-movie-info`
 - `apps-backend-image-ci`
 - `apps-backend-observability`
+- `apps-backend-single-user-agent-access`
 - `apps-backend-sites-config`
 - `apps-cli-agent-contract`
+- `apps-cli-agent-lifecycle`
 - `apps-cli-bundled-script-execution`
 - `apps-cli-codex-config`
 - `apps-cli-codex-plugin-management`
+- `apps-cli-codex-skill-management`
+- `apps-cli-command-discovery`
 - `apps-cli-distribution-ci`
 - `apps-cli-observability`
 - `apps-cli-self-installation`
 - `apps-cli-shell-completion`
-- `apps-desktop-agent-console`
-- `apps-desktop-browser-host`
-- `apps-desktop-douban-movie-info`
-- `apps-desktop-observability`
-- `apps-desktop-packaging-ci`
-- `apps-desktop-product-shell`
+- `apps-cli-update-experience`
 - `apps-docs-site`
 - `apps-root-engineering-config`
 - `apps-runtime-structured-logs`
 - `apps-web-observability`
+- `apps-web-agent-console`
 - `apps-web-project-shell`
 
 ## Codex Plugins
@@ -48,6 +53,8 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 - `codex-plugins-cthu-codex-japanese-sentence-skill`
 - `codex-plugins-cthu-codex-japanese-vocabulary-skill`
 - `codex-plugins-cthu-codex-language-coach`
+- `codex-plugins-cthu-codex-notion-album-skill`
+- `codex-plugins-cthu-codex-notion-channel-skill`
 
 ## GitOps
 
@@ -57,10 +64,8 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 ## Packages
 
 - `packages-agent-protocol`
-- `packages-app-shell-runtime`
 - `packages-browser-client-sdk`
 - `packages-browser-runtime-protocol`
 - `packages-config-browser-sites`
 - `packages-config-observability`
-- `packages-ui-shared-components`
 <!-- openspec-index:end -->

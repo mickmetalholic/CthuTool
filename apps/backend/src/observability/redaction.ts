@@ -43,7 +43,12 @@ export function redactDetails(input: unknown): unknown {
 }
 
 function isSensitiveKey(key: string): boolean {
-  return SENSITIVE_KEYS.has(key) || /token|secret|cookie|password/i.test(key);
+  return (
+    SENSITIVE_KEYS.has(key) ||
+    /authorization|bridge.?ticket|token|secret|cookie|password|session/i.test(
+      key,
+    )
+  );
 }
 
 function truncate(value: string): string {

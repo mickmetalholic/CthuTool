@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Current configuration references for backend, desktop, CLI, and browser site policy.
+description: Current configuration references for backend, Agent, CLI, and browser site policy.
 ---
 
 ## Backend
@@ -44,17 +44,19 @@ Example source: `docs/examples/browser-sites.json`.
 
 If this policy is used in the Kubernetes deployment, mount it through Kubernetes-managed configuration and set `BROWSER_SITES_CONFIG_FILE` in the backend environment. Do not bake private runtime files into the backend image.
 
-## Desktop
+## Local Agent
 
-CthuDesktop stores backend URL, appearance, and browser runtime configuration locally. Host Chrome can be selected by explicit executable path when discovery is not enough.
+Agent endpoints come only from the signed release environment catalog. Select
+one environment and store its static Agent secret with `chc agent env`; do not
+put secrets in the catalog or command argv. Mutable settings and browser
+profiles are isolated by environment namespace.
 
 Default browser runtime:
 
 ```json
 {
-  "browserRuntime": {
-    "kind": "host-chrome"
-  }
+  "deviceName": "my-client",
+  "connectionEnabled": true
 }
 ```
 
@@ -62,12 +64,14 @@ Explicit Chrome binary:
 
 ```json
 {
-  "browserRuntime": {
-    "kind": "host-chrome",
-    "executablePath": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-  }
+  "browserExecutablePath": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
 }
 ```
+
+Settings are normally edited through the deployed Web `/agent` page opened by
+the tray. Legacy CthuDesktop config is copied only after exact trusted
+environment resolution; appearance, window state, device ids, and credentials
+are not migrated.
 
 ## CLI
 

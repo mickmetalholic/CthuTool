@@ -78,13 +78,13 @@ The OpenTelemetry Collector accepts OTLP HTTP and gRPC and forwards traces to Te
 
 ## Dashboards and Alerts
 
-The kube-prometheus-stack values include a starter Grafana dashboard for CthuTool Kubernetes workloads. The current alert rule foundation covers backend target availability, readiness degradation, HTTP error rate, HTTP p95 latency, browser task timeouts, and desktop agent command failures.
+The kube-prometheus-stack values include a starter Grafana dashboard for CthuTool Kubernetes workloads. The current alert rule foundation covers backend target availability, readiness degradation, HTTP error rate, HTTP p95 latency, browser task timeouts, and local Agent command failures.
 
 Notification receivers such as email, Slack, PagerDuty, or webhooks are environment-specific and are not configured by this repository.
 
 ## Safety Boundary
 
-Observability output must not expose cookies, tokens, authorization headers, localStorage, sessionStorage, Playwright storage-state contents, raw screenshots, raw HTML, desktop profile paths, raw URLs as labels, or unbounded user-provided values as labels.
+Observability output must not expose cookies, tokens, authorization headers, localStorage, sessionStorage, Playwright storage-state contents, raw screenshots, raw HTML, local profile paths, raw URLs as labels, or unbounded user-provided values as labels.
 
 Requirement sources:
 

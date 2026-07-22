@@ -20,7 +20,10 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@cthutool/agent-bridge-protocol": [
+        "../../packages/agent-bridge-protocol/src/index.ts"
+      ]
     }
   },
   "include": [

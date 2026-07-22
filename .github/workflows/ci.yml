@@ -251,15 +251,12 @@ jobs:
             const expectedSummaries = [
               ['Root tests', 'coverage/coverage-summary.json'],
               ['apps/backend', 'apps/backend/coverage/coverage-summary.json'],
-              ['apps/desktop', 'apps/desktop/coverage/coverage-summary.json'],
               ['apps/docs', 'apps/docs/coverage/coverage-summary.json'],
               ['apps/web', 'apps/web/coverage/coverage-summary.json'],
               ['packages/agent-protocol', 'packages/agent-protocol/coverage/coverage-summary.json'],
-              ['packages/app-shell', 'packages/app-shell/coverage/coverage-summary.json'],
               ['packages/browser-runtime-protocol', 'packages/browser-runtime-protocol/coverage/coverage-summary.json'],
               ['packages/config', 'packages/config/coverage/coverage-summary.json'],
               ['packages/obsidian-enhancer', 'packages/obsidian-enhancer/coverage/coverage-summary.json'],
-              ['packages/ui', 'packages/ui/coverage/coverage-summary.json'],
             ];
             const missingSummaries = expectedSummaries.filter(
               ([, summaryPath]) => !fs.existsSync(summaryPath),

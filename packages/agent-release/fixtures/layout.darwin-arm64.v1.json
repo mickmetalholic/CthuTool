@@ -1,0 +1,12 @@
+{
+  "layoutVersion": 1,
+  "releaseVersion": "1.2.3",
+  "target": "darwin-arm64",
+  "entryPoints": {
+    "tray": "bin/CthuTool Agent.app/Contents/MacOS/cthutool-agent-tray",
+    "node": "runtime/node/bin/node",
+    "agent": "agent/dist/index.js",
+    "environmentCatalog": "agent/environments.json"
+  },
+  "mutableDataRoot": "external-user-data"
+}

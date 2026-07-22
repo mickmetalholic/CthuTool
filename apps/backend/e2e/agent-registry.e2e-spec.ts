@@ -34,7 +34,10 @@ describe('Agent registry (e2e)', () => {
     expect(registered).toEqual({
       type: 'agent.registered',
       payload: {
+        environmentId: 'local',
         agentId: 'homelab-mac',
+        connectionGeneration: 1,
+        protocolVersion: 1,
         serverTime: expect.any(String),
       },
     });
@@ -67,7 +70,9 @@ describe('Agent registry (e2e)', () => {
   });
 
   it('rejects invalid registration without listing the agent', async () => {
-    const ws = new WebSocket(`${baseUrl.replace('http', 'ws')}/ws/agents`);
+    const ws = new WebSocket(`${baseUrl.replace('http', 'ws')}/ws/agents`, {
+      headers: { 'x-cthutool-environment-id': 'local' },
+    });
     await onceOpen(ws);
     ws.send(
       JSON.stringify({ type: 'agent.hello', payload: { agentId: '../bad' } }),
@@ -107,13 +112,17 @@ describe('Agent registry (e2e)', () => {
 });
 
 async function connectAgent(baseUrl: string): Promise<WebSocket> {
-  const ws = new WebSocket(`${baseUrl.replace('http', 'ws')}/ws/agents`);
+  const ws = new WebSocket(`${baseUrl.replace('http', 'ws')}/ws/agents`, {
+    headers: { 'x-cthutool-environment-id': 'local' },
+  });
   await onceOpen(ws);
   ws.send(
     JSON.stringify({
       type: 'agent.hello',
       payload: {
+        environmentId: 'local',
         agentId: 'homelab-mac',
+        protocolVersion: 1,
         deviceName: 'Homelab Mac',
         platform: 'darwin',
         version: '0.1.0',

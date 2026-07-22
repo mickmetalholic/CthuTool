@@ -103,6 +103,11 @@ describe('BackendObservabilityService', () => {
         profilePath: '/Users/example/profile',
         screenshotBase64: 'c2VjcmV0',
         storageState: { cookies: ['secret'] },
+        agentSecret: 'agent-secret-value',
+        operatorPassword: 'operator-password-value',
+        operatorSession: 'operator-session-value',
+        authorization: 'Bearer operator-token',
+        bridgeTicket: 'bridge-ticket-value',
         token: 'secret-token',
         safe: 'visible',
       },
@@ -111,6 +116,11 @@ describe('BackendObservabilityService', () => {
     const raw = sink.stderr.mock.calls[0]?.[0] ?? '';
     expect(raw).toContain('"safe":"visible"');
     expect(raw).not.toContain('session=secret');
+    expect(raw).not.toContain('agent-secret-value');
+    expect(raw).not.toContain('operator-password-value');
+    expect(raw).not.toContain('operator-session-value');
+    expect(raw).not.toContain('operator-token');
+    expect(raw).not.toContain('bridge-ticket-value');
     expect(raw).not.toContain('<html>secret</html>');
     expect(raw).not.toContain('/Users/example/profile');
     expect(raw).not.toContain('c2VjcmV0');

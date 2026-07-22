@@ -68,7 +68,7 @@ kubectl -n cthutool port-forward service/cthutool-backend 3000:3000
 curl http://localhost:3000/health
 ```
 
-For normal use, expose the Service through your homelab networking layer and point CthuDesktop or other clients at that URL.
+For normal use, expose the Service through your homelab networking layer and point the local CthuTool Agent or other clients at that URL.
 
 ## Development Debugging
 

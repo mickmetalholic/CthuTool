@@ -24,7 +24,11 @@ describe('AgentWebSocketServer', () => {
     handleMessage(server, socket, state, helloMessage());
     handleMessage(server, socket, state, {
       type: 'agent.heartbeat',
-      payload: { agentId: 'agent-1' },
+      payload: {
+        environmentId: 'local',
+        agentId: 'agent-1',
+        connectionGeneration: 1,
+      },
     });
 
     expect(socket.closed).toBeUndefined();
@@ -41,7 +45,9 @@ describe('AgentWebSocketServer', () => {
 
     socket.emitClose();
 
-    expect(lifecycleEvents.emitAgentDisconnected).toHaveBeenCalledWith(status);
+    expect(lifecycleEvents.emitAgentDisconnected).toHaveBeenCalledWith(
+      expect.objectContaining(status),
+    );
   });
 
   it('rejects heartbeat for unregistered agent', () => {
@@ -49,7 +55,7 @@ describe('AgentWebSocketServer', () => {
 
     handleMessage(server, socket, state, {
       type: 'agent.heartbeat',
-      payload: { agentId: 'unknown' },
+      payload: { environmentId: 'local', agentId: 'unknown' },
     });
 
     expect(socket.closed).toEqual(
@@ -79,7 +85,11 @@ describe('AgentWebSocketServer', () => {
     handleMessage(server, socket, state, helloMessage());
 
     const sendPromise = server.sendCommand(
-      'agent-1',
+      {
+        environmentId: 'local',
+        agentId: 'agent-1',
+        connectionGeneration: 1,
+      },
       createJsonRpcRequest({
         id: 'cmd-1',
         method: 'browser.capturePage',
@@ -95,12 +105,21 @@ describe('AgentWebSocketServer', () => {
       server,
       socket,
       state,
-      createJsonRpcSuccessResponse('cmd-1', {
-        capturedAt: new Date().toISOString(),
-        detection: { kind: 'ok' },
-        finalUrl: 'https://example.com/',
-        status: 200,
-      }),
+      createJsonRpcSuccessResponse(
+        'cmd-1',
+        {
+          capturedAt: new Date().toISOString(),
+          detection: { kind: 'ok' },
+          finalUrl: 'https://example.com/',
+          status: 200,
+        },
+        undefined,
+        {
+          environmentId: 'local',
+          agentId: 'agent-1',
+          connectionGeneration: 1,
+        },
+      ),
     );
 
     return expect(sendPromise).resolves.toMatchObject({
@@ -117,12 +136,21 @@ describe('AgentWebSocketServer', () => {
       server,
       socket,
       state,
-      createJsonRpcSuccessResponse('unknown-cmd', {
-        capturedAt: new Date().toISOString(),
-        detection: { kind: 'ok' },
-        finalUrl: 'https://example.com/',
-        status: 200,
-      }),
+      createJsonRpcSuccessResponse(
+        'unknown-cmd',
+        {
+          capturedAt: new Date().toISOString(),
+          detection: { kind: 'ok' },
+          finalUrl: 'https://example.com/',
+          status: 200,
+        },
+        undefined,
+        {
+          environmentId: 'local',
+          agentId: 'agent-1',
+          connectionGeneration: 1,
+        },
+      ),
     );
 
     expect(socket.closed).toEqual(expect.objectContaining({ code: 1008 }));
@@ -145,7 +173,7 @@ function createHarness() {
   const lifecycleEvents = createLifecycleEvents();
   const server = createServer(registry, logger, lifecycleEvents);
   const socket = new FakeSocket();
-  const state = { connectionId: 'conn-1' };
+  const state = { connectionId: 'conn-1', environmentId: 'local' };
   // Register the socket in the server's internal map (as handleConnection would)
   // biome-ignore lint/complexity/useLiteralKeys: accessing private map
   (server as unknown as { sockets: Map<string, FakeSocket> })['sockets'].set(
@@ -178,6 +206,10 @@ function createServer(
     registry,
     logger as AgentRegistryLogger,
     lifecycleEvents as never,
+    {
+      authenticateAgent: () => ({ ok: true, environmentId: 'local' }),
+      environmentId: 'local',
+    } as never,
   );
 }
 
@@ -205,7 +237,12 @@ function handleConnection(server: AgentWebSocketServer, socket: FakeSocket) {
 function handleMessage(
   server: AgentWebSocketServer,
   socket: FakeSocket,
-  state: { connectionId: string; agentId?: string },
+  state: {
+    connectionId: string;
+    environmentId: string;
+    agentId?: string;
+    connectionGeneration?: number;
+  },
   message: unknown,
 ): void {
   handleRawMessage(server, socket, state, JSON.stringify(message));
@@ -214,14 +251,24 @@ function handleMessage(
 function handleRawMessage(
   server: AgentWebSocketServer,
   socket: FakeSocket,
-  state: { connectionId: string; agentId?: string },
+  state: {
+    connectionId: string;
+    environmentId: string;
+    agentId?: string;
+    connectionGeneration?: number;
+  },
   data: string,
 ): void {
   (
     server as unknown as {
       handleMessage: (
         socket: FakeSocket,
-        state: { connectionId: string; agentId?: string },
+        state: {
+          connectionId: string;
+          environmentId: string;
+          agentId?: string;
+          connectionGeneration?: number;
+        },
         data: string,
       ) => void;
     }
@@ -232,7 +279,9 @@ function helloMessage() {
   return {
     type: 'agent.hello',
     payload: {
+      environmentId: 'local',
       agentId: 'agent-1',
+      protocolVersion: 1,
       capabilities: ['browser'],
       deviceName: 'Desktop Agent',
       platform: 'win32',

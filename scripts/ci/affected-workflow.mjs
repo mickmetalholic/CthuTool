@@ -19,17 +19,6 @@ const targets = {
       'tsconfig.json',
     ],
   },
-  'desktop-artifacts': {
-    workspacePackage: '@cthutool/desktop',
-    extraPaths: [
-      '.github/workflows/desktop.yml',
-      'package.json',
-      'pnpm-lock.yaml',
-      'pnpm-workspace.yaml',
-      'tsconfig.json',
-      'turbo.json',
-    ],
-  },
   'cli-dist': {
     workspacePackage: '@cthutool/cli',
     extraPaths: [
