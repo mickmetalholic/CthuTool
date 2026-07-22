@@ -30,6 +30,7 @@ kubectl apply -f gitops/apps/ --recursive
 curl http://&lt;homelab-backend-url&gt;/health
 
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash
+# Windows PowerShell: irm https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.ps1 | iex
 chc --help</code></pre>
     </div>
   </section>
