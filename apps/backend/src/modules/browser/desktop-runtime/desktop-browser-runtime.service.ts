@@ -25,6 +25,9 @@ import {
   AgentCommandGateway,
   AgentCommandGatewayError,
 } from '../../agent/command-gateway/agent-command-gateway.service';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { SingleOperatorAccessService } from '../../operator-access/single-operator-access.service';
 import type {
   DesktopBrowserCaptureResult,
   DesktopBrowserProfileStatus,
@@ -43,6 +46,8 @@ export class DesktopBrowserRuntimeService {
     private readonly commandGateway: AgentCommandGateway,
     @Optional()
     private readonly observability?: BackendObservabilityService,
+    @Optional()
+    private readonly access?: SingleOperatorAccessService,
   ) {}
 
   async capturePage(options: {
@@ -113,8 +118,10 @@ export class DesktopBrowserRuntimeService {
     readonly expiresAt: string;
     readonly timeoutMs?: number;
   }): Promise<DesktopBrowserRuntimeResult<DesktopBrowserSessionMetadata>> {
-    const agent =
-      this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
+    const agent = this.commandGateway.selectAgentByCapability(
+      this.environmentId,
+      BROWSER_CAPABILITY,
+    );
     if (!agent) {
       return {
         ok: false,
@@ -263,8 +270,10 @@ export class DesktopBrowserRuntimeService {
   }
 
   async getStatus(): Promise<DesktopBrowserRuntimeStatus> {
-    const agent =
-      this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
+    const agent = this.commandGateway.selectAgentByCapability(
+      this.environmentId,
+      BROWSER_CAPABILITY,
+    );
     if (!agent) {
       return {
         agentId: 'unknown',
@@ -279,8 +288,10 @@ export class DesktopBrowserRuntimeService {
   }
 
   async getDiagnostics(): Promise<DesktopBrowserRuntimeDiagnostics> {
-    const agent =
-      this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
+    const agent = this.commandGateway.selectAgentByCapability(
+      this.environmentId,
+      BROWSER_CAPABILITY,
+    );
     return {
       agentId: agent?.agentId ?? 'unknown',
       online: !!agent,
@@ -325,8 +336,10 @@ export class DesktopBrowserRuntimeService {
     method: TMethod,
     params: BrowserRuntimeParamsByMethod[TMethod],
   ): Promise<DesktopBrowserRuntimeResult<BrowserRuntimeResponse<TMethod>>> {
-    const agent =
-      this.commandGateway.selectAgentByCapability(BROWSER_CAPABILITY);
+    const agent = this.commandGateway.selectAgentByCapability(
+      this.environmentId,
+      BROWSER_CAPABILITY,
+    );
     if (!agent) {
       this.observability?.record({
         event: 'desktop_browser_runtime.unavailable',
@@ -361,7 +374,7 @@ export class DesktopBrowserRuntimeService {
       const response = await this.commandGateway.sendCommand<
         BrowserRuntimeResponse<TMethod>
       >(
-        agentId,
+        { environmentId: this.environmentId, agentId },
         {
           ...createBrowserRuntimeRequest(commandId, method, params),
           observability,
@@ -412,6 +425,14 @@ export class DesktopBrowserRuntimeService {
         code: 'AGENT_NOT_AVAILABLE',
       };
     }
+  }
+
+  private get environmentId(): string {
+    return (
+      this.access?.environmentId ??
+      process.env.CTHUTOOL_ENVIRONMENT_ID ??
+      'local'
+    );
   }
 
   private parseResponse<TMethod extends BrowserRuntimeMethod>(

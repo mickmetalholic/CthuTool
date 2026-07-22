@@ -1,6 +1,7 @@
 import type { PublicAgentStatus } from '@cthutool/agent-protocol';
 import { Injectable } from '@nestjs/common';
 import type {
+  AgentRegistryStatus,
   HeartbeatResult,
   RegisterAgentInput,
   RegisterAgentResult,
@@ -8,18 +9,31 @@ import type {
 
 @Injectable()
 export class AgentRegistryService {
-  private readonly agents = new Map<string, PublicAgentStatus>();
+  private readonly agents = new Map<string, AgentRegistryStatus>();
   private readonly connectionToAgent = new Map<string, string>();
+  private readonly generations = new Map<string, number>();
 
   register(input: RegisterAgentInput): RegisterAgentResult {
     const now = toIso(input.now ?? new Date());
-    const previous = this.agents.get(input.hello.agentId);
+    if (
+      input.authenticatedEnvironmentId &&
+      input.authenticatedEnvironmentId !== input.hello.environmentId
+    ) {
+      throw new Error('authenticated Agent environment does not match hello');
+    }
+    const key = registryKey(input.hello.environmentId, input.hello.agentId);
+    const previous = this.agents.get(key);
     if (previous) {
       this.connectionToAgent.delete(previous.connectionId);
     }
 
-    const status: PublicAgentStatus = {
+    const connectionGeneration = (this.generations.get(key) ?? 0) + 1;
+    this.generations.set(key, connectionGeneration);
+    const status: AgentRegistryStatus = {
+      environmentId: input.hello.environmentId,
       agentId: input.hello.agentId,
+      connectionGeneration,
+      protocolVersion: input.hello.protocolVersion,
       connectionId: input.connectionId,
       deviceName: input.hello.deviceName,
       platform: input.hello.platform,
@@ -30,8 +44,8 @@ export class AgentRegistryService {
       state: 'online',
     };
 
-    this.agents.set(input.hello.agentId, status);
-    this.connectionToAgent.set(input.connectionId, input.hello.agentId);
+    this.agents.set(key, status);
+    this.connectionToAgent.set(input.connectionId, key);
 
     return {
       status,
@@ -40,12 +54,12 @@ export class AgentRegistryService {
   }
 
   heartbeat(connectionId: string, now: Date = new Date()): HeartbeatResult {
-    const agentId = this.connectionToAgent.get(connectionId);
-    if (!agentId) {
+    const key = this.connectionToAgent.get(connectionId);
+    if (!key) {
       return { ok: false, reason: 'agent_not_found' };
     }
 
-    const current = this.agents.get(agentId);
+    const current = this.agents.get(key);
     if (!current) {
       this.connectionToAgent.delete(connectionId);
       return { ok: false, reason: 'agent_not_found' };
@@ -60,20 +74,20 @@ export class AgentRegistryService {
       ...current,
       lastSeenAt: toIso(now),
     };
-    this.agents.set(agentId, status);
+    this.agents.set(key, status);
     return { ok: true, status };
   }
 
   disconnect(connectionId: string): PublicAgentStatus | undefined {
-    const agentId = this.connectionToAgent.get(connectionId);
-    if (!agentId) {
+    const key = this.connectionToAgent.get(connectionId);
+    if (!key) {
       return undefined;
     }
 
-    const current = this.agents.get(agentId);
+    const current = this.agents.get(key);
     this.connectionToAgent.delete(connectionId);
     if (current?.connectionId === connectionId) {
-      this.agents.delete(agentId);
+      this.agents.delete(key);
       return current;
     }
     return undefined;
@@ -82,12 +96,12 @@ export class AgentRegistryService {
   pruneStale(
     staleTimeoutMs: number,
     now: Date = new Date(),
-  ): PublicAgentStatus[] {
-    const stale: PublicAgentStatus[] = [];
-    for (const status of this.agents.values()) {
+  ): AgentRegistryStatus[] {
+    const stale: AgentRegistryStatus[] = [];
+    for (const [key, status] of this.agents.entries()) {
       const lastSeenMs = new Date(status.lastSeenAt).getTime();
       if (now.getTime() - lastSeenMs > staleTimeoutMs) {
-        this.agents.delete(status.agentId);
+        this.agents.delete(key);
         this.connectionToAgent.delete(status.connectionId);
         stale.push(status);
       }
@@ -97,12 +111,52 @@ export class AgentRegistryService {
 
   listOnlineAgents(): PublicAgentStatus[] {
     return [...this.agents.values()]
-      .map((status) => ({
+      .map(({ connectionId: _connectionId, ...status }) => ({
         ...status,
         capabilities: [...status.capabilities],
       }))
-      .sort((left, right) => left.agentId.localeCompare(right.agentId));
+      .sort((left, right) =>
+        registryKey(left.environmentId, left.agentId).localeCompare(
+          registryKey(right.environmentId, right.agentId),
+        ),
+      );
   }
+
+  listOnlineConnections(): AgentRegistryStatus[] {
+    return [...this.agents.values()].map((status) => ({
+      ...status,
+      capabilities: [...status.capabilities],
+    }));
+  }
+
+  findAuthoritative(
+    environmentId: string,
+    agentId?: string,
+  ): AgentRegistryStatus | undefined {
+    if (agentId) {
+      return this.agents.get(registryKey(environmentId, agentId));
+    }
+    const matches = [...this.agents.values()].filter(
+      (status) => status.environmentId === environmentId,
+    );
+    return matches.length === 1 ? matches[0] : undefined;
+  }
+
+  findByEnvironmentAndCapability(
+    environmentId: string,
+    capability: string,
+  ): AgentRegistryStatus | undefined {
+    const matches = [...this.agents.values()].filter(
+      (status) =>
+        status.environmentId === environmentId &&
+        status.capabilities.includes(capability),
+    );
+    return matches.length === 1 ? matches[0] : undefined;
+  }
+}
+
+function registryKey(environmentId: string, agentId: string): string {
+  return `${environmentId}\u0000${agentId}`;
 }
 
 function toIso(date: Date): string {

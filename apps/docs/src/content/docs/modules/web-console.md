@@ -11,7 +11,9 @@ Homelab/web host when deployed, local development host during development.
 
 ## Current State
 
-The web app intentionally contains placeholder-safe content. Real management console pages should arrive through shared UI/runtime work so `apps/desktop` and `apps/web` can reuse product pages.
+The Web application is the only product UI surface for Agent settings and local
+browser workflows. It connects to the loopback Agent bridge only after a fresh
+tray/CLI launch; the Agent does not package or serve Web assets.
 
 ## Development
 

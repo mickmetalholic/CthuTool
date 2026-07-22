@@ -4,7 +4,9 @@
   <img src="docs/assets/cthutool-logo.png" alt="CthuTool logo" width="560" />
 </p>
 
-CthuTool is a homelab-oriented Turborepo monorepo with backend/web services, desktop client workflows, CLI tooling, browser automation support, and Codex-facing assets.
+CthuTool is a homelab-oriented Turborepo monorepo with backend/Web services, a
+tray-owned local Agent, CLI tooling, browser automation support, and Codex-facing
+assets.
 
 For user-facing deployment, installation, module usage, operations, and architecture docs, start with the docs site in `apps/docs/`:
 
@@ -196,7 +198,7 @@ pnpm run check:cli-dist
 
 ## Layout
 
-- **`apps/`** — application packages (`apps/*` are matched by `pnpm-workspace.yaml`), including backend, CLI, and desktop apps.
+- **`apps/`** — application packages (`apps/*` are matched by `pnpm-workspace.yaml`), including backend, Web, Agent, native tray, CLI, and docs apps.
 - **`packages/`** — libraries and tooling packages (`packages/*`), including shared protocol and package tooling.
 - **Package names** — use the `@cthutool/*` scope (see **Naming** below).
 

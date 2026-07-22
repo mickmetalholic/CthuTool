@@ -32,7 +32,7 @@ export default defineConfig({
           label: 'Client Installation',
           items: [
             { label: 'Client Overview', slug: 'client' },
-            { label: 'Desktop App', slug: 'client/desktop' },
+            { label: 'Local Agent', slug: 'client/desktop' },
             { label: 'CLI Tool', slug: 'client/cli' },
           ],
         },
@@ -41,7 +41,7 @@ export default defineConfig({
           items: [
             { label: 'Modules Overview', slug: 'modules' },
             { label: 'CLI', slug: 'modules/cli' },
-            { label: 'Desktop', slug: 'modules/desktop' },
+            { label: 'Local Agent', slug: 'modules/desktop' },
             { label: 'Web Console', slug: 'modules/web-console' },
             { label: 'Browser Auth', slug: 'modules/browser-auth' },
             { label: 'Browser Automation', slug: 'modules/browser-automation' },
@@ -67,7 +67,10 @@ export default defineConfig({
             { label: 'System Overview', slug: 'architecture' },
             { label: 'Topology', slug: 'architecture/topology' },
             { label: 'Backend and Web', slug: 'architecture/backend-web' },
-            { label: 'Desktop Runtime', slug: 'architecture/desktop-runtime' },
+            {
+              label: 'Local Agent Runtime',
+              slug: 'architecture/desktop-runtime',
+            },
             { label: 'CLI Architecture', slug: 'architecture/cli' },
             { label: 'Browser Auth Model', slug: 'architecture/browser-auth' },
             { label: 'Agent Protocol', slug: 'architecture/agent-protocol' },

@@ -2,7 +2,9 @@ import { AgentRegistryService } from './agent-registry.service';
 
 describe('AgentRegistryService', () => {
   const baseHello = {
+    environmentId: 'local',
     agentId: 'homelab-mac',
+    protocolVersion: 1 as const,
     deviceName: 'Homelab Mac',
     platform: 'darwin' as const,
     version: '0.1.0',
@@ -19,7 +21,10 @@ describe('AgentRegistryService', () => {
     });
 
     expect(result.status).toEqual({
+      environmentId: 'local',
       agentId: 'homelab-mac',
+      connectionGeneration: 1,
+      protocolVersion: 1,
       connectionId: 'conn-1',
       deviceName: 'Homelab Mac',
       platform: 'darwin',
@@ -30,7 +35,14 @@ describe('AgentRegistryService', () => {
       state: 'online',
     });
     expect(JSON.stringify(result.status)).not.toContain('socket');
-    expect(registry.listOnlineAgents()).toEqual([result.status]);
+    expect(registry.listOnlineAgents()).toEqual([
+      expect.objectContaining({
+        environmentId: 'local',
+        agentId: 'homelab-mac',
+        connectionGeneration: 1,
+      }),
+    ]);
+    expect(registry.listOnlineAgents()[0]).not.toHaveProperty('connectionId');
   });
 
   it('keeps browser capability as metadata without browser state', () => {
@@ -74,7 +86,7 @@ describe('AgentRegistryService', () => {
     expect(registry.listOnlineAgents()).toEqual([
       expect.objectContaining({
         agentId: 'homelab-mac',
-        connectionId: 'new-conn',
+        connectionGeneration: 2,
         deviceName: 'Renamed Mac',
         capabilities: ['browser'],
       }),
@@ -125,5 +137,35 @@ describe('AgentRegistryService', () => {
       registry.pruneStale(1000, new Date('2026-06-13T10:00:02.000Z')),
     ).toEqual([expect.objectContaining({ agentId: 'homelab-mac' })]);
     expect(registry.listOnlineAgents()).toEqual([]);
+  });
+
+  it('isolates the same stable Agent id by environment and advances generations', () => {
+    const registry = new AgentRegistryService();
+    const prod = registry.register({
+      authenticatedEnvironmentId: 'prod',
+      connectionId: 'prod-1',
+      hello: { ...baseHello, environmentId: 'prod' },
+    });
+    registry.disconnect('prod-1');
+    const prodReconnect = registry.register({
+      authenticatedEnvironmentId: 'prod',
+      connectionId: 'prod-2',
+      hello: { ...baseHello, environmentId: 'prod' },
+    });
+    const testAgent = registry.register({
+      authenticatedEnvironmentId: 'test',
+      connectionId: 'test-1',
+      hello: { ...baseHello, environmentId: 'test' },
+    });
+
+    expect(prod.status.connectionGeneration).toBe(1);
+    expect(prodReconnect.status.connectionGeneration).toBe(2);
+    expect(testAgent.status.connectionGeneration).toBe(1);
+    expect(
+      registry.findAuthoritative('prod', 'homelab-mac')?.connectionId,
+    ).toBe('prod-2');
+    expect(
+      registry.findAuthoritative('test', 'homelab-mac')?.connectionId,
+    ).toBe('test-1');
   });
 });

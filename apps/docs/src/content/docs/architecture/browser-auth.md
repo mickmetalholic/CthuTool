@@ -1,6 +1,6 @@
 ---
 title: Browser Auth Model
-description: Browser profile ownership and backend/desktop trust boundary.
+description: Browser profile ownership and backend/Agent trust boundary.
 ---
 
 Browser auth is intentionally split.
@@ -9,16 +9,19 @@ Browser auth is intentionally split.
 
 The backend stores site policy, login and verify URLs, auth requirements, public pending tasks, and public profile summaries.
 
-## Desktop Owns Secrets
+## Agent Owns Secrets
 
-CthuDesktop stores browser profile directories locally and runs login/verification flows. Raw cookies, localStorage, Playwright storage-state bundles, and profile paths do not move to the backend.
+The local Agent stores browser profile directories locally and runs
+login/verification flows. Raw cookies, localStorage, Playwright storage-state
+bundles, and profile paths do not move to the backend.
 
 ## CLI Boundary
 
-The CLI does not install browsers, inspect browser runtime status, open login browsers, read backend browser status, or store browser profiles.
+The CLI controls Agent lifecycle and can report bounded browser readiness, but
+it does not store profiles, inspect browser storage, or execute browser work.
 
 ## Requirements Sources
 
 - Backend browser auth: `openspec/specs/apps-backend-browser-auth/spec.md`
-- Desktop browser host: `openspec/specs/apps-desktop-browser-host/spec.md`
+- Local Agent requirements: the ordered Agent changes until archive/sync.
 - Browser sites config: `openspec/specs/packages-config-browser-sites/spec.md`

@@ -35,6 +35,8 @@ describe('web observability logger', () => {
           token: 'abc',
           safe: 'kept',
         },
+        launchEndpoint: 'http://127.0.0.1:4567',
+        launchTicket: 'ticket-value',
         screenshotBase64: 'abc123',
       }),
     ).toEqual({
@@ -44,8 +46,24 @@ describe('web observability logger', () => {
         safe: 'kept',
         token: '[Redacted]',
       },
+      launchEndpoint: '[Redacted]',
+      launchTicket: '[Redacted]',
       screenshotBase64: '[Redacted]',
     });
+  });
+
+  it('removes bridge fragments and bearer values from scalar telemetry', () => {
+    expect(
+      sanitizeEvent({
+        event: 'agent.bridge_failed',
+        level: 'warn',
+        message:
+          'Open https://app.example.com/agent#endpoint=http://127.0.0.1:4123&ticket=super-secret with Bearer session-secret',
+        scope: 'web.agent',
+      }).message,
+    ).toBe(
+      'Open https://app.example.com/agent#[Redacted] with Bearer [Redacted]',
+    );
   });
 
   it('sanitizes route and bounded string fields', () => {

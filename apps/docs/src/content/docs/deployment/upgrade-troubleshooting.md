@@ -44,17 +44,25 @@ If a reverse proxy or ingress is in front of the backend, verify both the Servic
 - Confirm `k8s/deployment.yaml` contains `ghcr.io/mickmetalholic/cthutool-backend:main`.
 - Confirm the Image Updater or equivalent rollout trigger detected the new `:main` digest and restarted the Deployment.
 
-## Desktop Connectivity
+## Agent Connectivity
 
-CthuDesktop connects to the backend through HTTP APIs and a WebSocket agent connection. If desktop status is offline:
+The local Agent connects to its catalog backend through WSS. If Agent status is
+offline:
 
-- verify the backend URL in desktop settings
-- confirm the homelab URL is reachable from the client computer
-- check whether the backend WebSocket endpoint is allowed by the proxy or ingress layer
+- run `chc agent doctor` and confirm an environment and secret are configured
+- confirm the catalog HTTPS/WSS endpoints are reachable from the client
+- check whether the Agent WebSocket endpoint is allowed by the proxy or ingress
 - confirm the backend pod is ready and `/health` responds
+- use `chc agent logs --lines 200` for redacted local diagnostics
+
+If deployed Web settings cannot reach the loopback bridge, allow local-network
+access for the deployed origin and reopen settings from the tray or
+`chc agent settings` to obtain a fresh one-time ticket.
 
 ## Browser Auth
 
-Required-auth browser work needs an online CthuDesktop instance with a working host Chrome runtime. Raw browser storage stays on the client computer.
+Required-auth browser work needs an online Agent with a working host Chrome
+runtime. Raw browser storage stays on the client computer. For legacy data,
+follow the repair command from `chc agent doctor`; source data is not deleted.
 
 Use [GitOps Rollouts](/operations/gitops-rollouts/) for deeper ArgoCD and rollout checks.

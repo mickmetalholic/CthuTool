@@ -64,7 +64,7 @@ describe('global bin', () => {
     expect(cliPackage.scripts.prepare).toBeUndefined();
     expect(cliPackage.scripts.prepack).toBeUndefined();
     expect(cliPackage.scripts.build).toBe(
-      'node ../../scripts/build-cli-dist.mjs',
+      'pnpm run build:deps && node ../../scripts/build-cli-dist.mjs',
     );
     expect(cliPackage.scripts.dev).toBe(
       'bun build src/index.ts --outdir dist --target node --watch',
@@ -237,6 +237,7 @@ describe('global bin', () => {
   test('omitted command groups print native help without an error', async () => {
     for (const [args, explicitHelpArgs] of [
       [[], ['--help']],
+      [['agent'], ['agent', '--help']],
       [['codex'], ['codex', '--help']],
       [['opencode'], ['opencode', '--help']],
       [['scripts'], ['scripts', '--help']],
@@ -294,6 +295,12 @@ describe('global bin', () => {
         expect(plain).toContain(
           '\n  mcp     Sync repository plugin MCP servers to OpenCode.',
         );
+      } else if (args[0] === 'agent') {
+        expect(out).toContain('COMMANDS');
+        expect(plain).toContain('install');
+        expect(plain).toContain('settings');
+        expect(plain).toContain('autostart');
+        expect(plain).toContain('uninstall');
       } else if (args[0] === 'codex') {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(

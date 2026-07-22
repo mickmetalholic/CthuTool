@@ -16,8 +16,6 @@ the current package `test:cov` commands.
 | `@cthutool/config` | 81.88 | 69.90 | 100.00 | 81.88 | 75 | 60 | 90 | 75 |
 | `@cthutool/agent-protocol` | 94.35 | 97.43 | 90.47 | 94.35 | 90 | 90 | 85 | 90 |
 | `@cthutool/obsidian-enhancer` | 81.91 | 73.13 | 94.44 | 81.91 | 75 | 65 | 85 | 75 |
-| `@cthutool/app-shell` | 53.44 | 72.97 | 38.88 | 53.44 | 50 | 65 | 35 | 50 |
-| `@cthutool/ui` | 84.22 | 92.50 | 81.08 | 84.22 | 80 | 85 | 75 | 80 |
 | `@cthutool/browser-client` | 74.49 | 67.39 | 88.09 | 74.49 | 70 | 65 | 85 | 70 |
 
 Thresholds are configured in each package's Vitest coverage configuration, not
@@ -34,7 +32,6 @@ These packages still produce and publish coverage artifacts, but their coverage
 percentages are not threshold-gated yet:
 
 - `@cthutool/cli`
-- `@cthutool/desktop`
 - `@cthutool/docs`
 - `@cthutool/web`
 
@@ -52,20 +49,6 @@ Bun does not provide the same package-local threshold configuration surface used
 by the Vitest packages, and the next useful improvements are broader behavioral
 tests around command entrypoints, completion candidates, update flows, and
 bundled script execution.
-
-`@cthutool/desktop` remains visibility-only after expanding desktop runtime and
-renderer workflow tests. The recorded `pnpm --filter @cthutool/desktop
-test:cov` baseline is 80.97 statements, 80.57 branches, 84.10 functions, and
-80.97 lines. It is not threshold-gated yet because Electron entrypoints and
-preload bootstrap files still require more appropriate integration coverage
-before a package-wide percentage gate would be a stable signal.
-
-`@cthutool/app-shell` and `@cthutool/ui` are threshold-gated after adding shared
-frontend behavior tests for runtime contracts, rendered shell composition,
-component interactions, disabled states, class composition, and utility edge
-cases. App-shell thresholds track the current larger shell source surface after
-the workflow-layout rebase and remain conservative relative to the recorded
-baseline above.
 
 `@cthutool/browser-client` is threshold-gated after adding browser API client
 request and response handling tests for session creation, action execution,

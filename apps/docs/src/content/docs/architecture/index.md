@@ -7,7 +7,7 @@ CthuTool is organized around a Kubernetes-managed homelab service core, local cl
 
 ```text
 Client Computers
-  CthuDesktop
+  the local CthuTool Agent
   chc CLI
   Host Chrome / Anki / Obsidian
 
@@ -51,7 +51,7 @@ Repository Internals
 - Backend owns service APIs, public browser sessions, agent registry, browser task orchestration, metrics, readiness, and public status.
 - Kubernetes and ArgoCD own homelab backend deployment state.
 - GitOps observability resources own Prometheus, Grafana, Loki, Alloy, Tempo, and OpenTelemetry Collector deployment state.
-- Desktop owns local browser runtime, login windows, profiles, and browser-capable agent execution.
+- Agent owns local browser runtime, login windows, profiles, and browser-capable agent execution.
 - `@cthutool/browser-client` owns a typed third-party client surface for backend public browser sessions; it does not own Playwright runtime state.
 - CLI owns local command-line workflows and installable utility behavior.
 - OpenSpec owns normative capability requirements.

@@ -6,6 +6,17 @@ export type CliErrorCode =
   | 'script_load_failed'
   | 'script_execution_failed'
   | 'invalid_option'
+  | 'agent_not_running'
+  | 'agent_control_failed'
+  | 'agent_not_installed'
+  | 'agent_release_untrusted'
+  | 'agent_integrity_failed'
+  | 'agent_incompatible'
+  | 'agent_environment_invalid'
+  | 'agent_secret_input_invalid'
+  | 'agent_start_failed'
+  | 'agent_autostart_unsupported'
+  | 'agent_purge_confirmation_required'
   | 'update_failed';
 
 export type CliError = {

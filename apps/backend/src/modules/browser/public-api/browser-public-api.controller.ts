@@ -1,9 +1,18 @@
-import { Body, Controller, Delete, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { OperatorAccessGuard } from '../../operator-access/operator-access.guard';
 // Nest DI needs runtime class reference.
 // biome-ignore lint/style/useImportType: constructor injection token
 import { BrowserPublicApiService } from './browser-public-api.service';
 
 @Controller('api/browser')
+@UseGuards(OperatorAccessGuard)
 export class BrowserPublicApiController {
   constructor(private readonly browserApi: BrowserPublicApiService) {}
 

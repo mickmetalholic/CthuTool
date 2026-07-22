@@ -20,6 +20,9 @@ import {
 import { HttpAdapterHost } from '@nestjs/core';
 import type WebSocket from 'ws';
 import { WebSocketServer } from 'ws';
+// Nest DI needs runtime class reference; `import type` strips metadata.
+// biome-ignore lint/style/useImportType: constructor injection token
+import { SingleOperatorAccessService } from '../../operator-access/single-operator-access.service';
 import type {
   AgentCommandRequest,
   AgentCommandResponse,
@@ -40,11 +43,15 @@ const STALE_SWEEP_INTERVAL_MS = 15_000;
 
 type SocketState = {
   readonly connectionId: string;
+  readonly environmentId: string;
   agentId?: string;
+  connectionGeneration?: number;
 };
 
 type PendingCommand = {
+  readonly environmentId: string;
   readonly agentId: string;
+  readonly connectionGeneration: number;
   readonly timer: NodeJS.Timeout;
   readonly resolve: (message: AgentCommandResponse) => void;
   readonly reject: (error: Error) => void;
@@ -62,6 +69,7 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
     private readonly registry: AgentRegistryService,
     private readonly registryLogger: AgentRegistryLogger,
     private readonly lifecycleEvents: AgentLifecycleEvents,
+    private readonly access: SingleOperatorAccessService,
   ) {}
 
   onModuleInit(): void {
@@ -96,44 +104,68 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
   }
 
   sendCommand<TResponse extends AgentCommandResponse = AgentCommandResponse>(
-    agentId: string,
+    target: {
+      readonly environmentId: string;
+      readonly agentId: string;
+      readonly connectionGeneration: number;
+    },
     command: AgentCommandRequest,
     timeoutMs = 30_000,
   ): Promise<TResponse> {
-    const status = this.registry
-      .listOnlineAgents()
-      .find((agent) => agent.agentId === agentId);
-    if (!status) {
-      return Promise.reject(new Error(`Agent "${agentId}" is not online`));
+    const status = this.registry.findAuthoritative(
+      target.environmentId,
+      target.agentId,
+    );
+    if (
+      !status ||
+      status.connectionGeneration !== target.connectionGeneration
+    ) {
+      return Promise.reject(
+        new Error(`Agent "${target.agentId}" is not authoritative`),
+      );
     }
 
     const socket = this.sockets.get(status.connectionId);
     if (!socket || socket.readyState !== 1) {
-      return Promise.reject(new Error(`Agent "${agentId}" socket is not open`));
+      return Promise.reject(
+        new Error(`Agent "${target.agentId}" socket is not open`),
+      );
     }
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.pendingCommands.delete(String(command.id));
+        this.pendingCommands.delete(pendingKey(target, command.id));
         reject(new Error(`Command "${String(command.id)}" timed out`));
       }, timeoutMs);
       timer.unref();
 
-      this.pendingCommands.set(String(command.id), {
-        agentId,
+      this.pendingCommands.set(pendingKey(target, command.id), {
+        environmentId: target.environmentId,
+        agentId: target.agentId,
+        connectionGeneration: target.connectionGeneration,
         reject,
         resolve: (message) => resolve(message as TResponse),
         timer,
       });
 
-      socket.send(JSON.stringify(command), (error) => {
-        if (!error) {
-          return;
-        }
-        clearTimeout(timer);
-        this.pendingCommands.delete(String(command.id));
-        reject(error);
-      });
+      socket.send(
+        JSON.stringify({
+          ...command,
+          routing: {
+            environmentId: target.environmentId,
+            agentId: target.agentId,
+            connectionGeneration: target.connectionGeneration,
+          },
+        }),
+        (error) => {
+          if (!error) {
+            return;
+          }
+          clearTimeout(timer);
+          this.pendingCommands.delete(pendingKey(target, command.id));
+          reject(error);
+        },
+      );
     });
   }
 
@@ -147,14 +179,30 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    const authentication = this.access.authenticateAgent(request);
+    if (!authentication.ok) {
+      this.registryLogger.warn({
+        event: 'authentication_failed',
+        connectionId: 'unregistered',
+        details: { category: authentication.category },
+      });
+      socket.destroy();
+      return;
+    }
+
     this.server.handleUpgrade(request, socket, head, (ws) => {
-      this.server.emit('connection', ws, request);
+      this.server.emit('connection', ws, request, authentication.environmentId);
     });
   };
 
-  private readonly handleConnection = (socket: WebSocket): void => {
+  private readonly handleConnection = (
+    socket: WebSocket,
+    _request?: IncomingMessage,
+    authenticatedEnvironmentId = this.access.environmentId,
+  ): void => {
     const state: SocketState = {
       connectionId: randomUUID(),
+      environmentId: authenticatedEnvironmentId,
     };
     this.sockets.set(state.connectionId, socket);
     this.registryLogger.log({
@@ -176,6 +224,7 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       if (status) {
         this.lifecycleEvents.emitAgentDisconnected(status);
       }
+      this.failPendingForConnection(state, 'agent connection closed');
     });
   };
 
@@ -212,11 +261,21 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
     state: SocketState,
     message: AgentHelloMessage,
   ): void {
+    if (message.payload.environmentId !== state.environmentId) {
+      this.reject(
+        socket,
+        state,
+        'hello environment does not match authentication',
+      );
+      return;
+    }
     const result = this.registry.register({
+      authenticatedEnvironmentId: state.environmentId,
       connectionId: state.connectionId,
       hello: message.payload,
     });
     state.agentId = result.status.agentId;
+    state.connectionGeneration = result.status.connectionGeneration;
 
     if (
       result.replacedConnectionId &&
@@ -242,10 +301,12 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
 
     socket.send(
       JSON.stringify(
-        createAgentRegisteredMessage(
-          result.status.agentId,
-          new Date().toISOString(),
-        ),
+        createAgentRegisteredMessage({
+          environmentId: result.status.environmentId,
+          agentId: result.status.agentId,
+          connectionGeneration: result.status.connectionGeneration,
+          serverTime: new Date().toISOString(),
+        }),
       ),
     );
   }
@@ -255,7 +316,13 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
     state: SocketState,
     message: AgentHeartbeatMessage,
   ): void {
-    if (!state.agentId || state.agentId !== message.payload.agentId) {
+    if (
+      !state.agentId ||
+      state.agentId !== message.payload.agentId ||
+      state.environmentId !== message.payload.environmentId ||
+      (message.payload.connectionGeneration !== undefined &&
+        state.connectionGeneration !== message.payload.connectionGeneration)
+    ) {
       this.reject(socket, state, 'heartbeat must match registered agent');
       return;
     }
@@ -278,7 +345,12 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
     state: SocketState,
     message: AgentCommandResponse,
   ): void {
-    const commandId = getCommandId(message.id);
+    const routing = message.routing;
+    if (!routing) {
+      this.reject(socket, state, 'command response routing is required');
+      return;
+    }
+    const commandId = pendingKey(routing, message.id);
     const pending = this.pendingCommands.get(commandId);
     if (!pending) {
       this.reject(
@@ -288,7 +360,12 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       );
       return;
     }
-    if (!state.agentId || state.agentId !== pending.agentId) {
+    if (
+      !state.agentId ||
+      state.agentId !== pending.agentId ||
+      state.environmentId !== pending.environmentId ||
+      state.connectionGeneration !== pending.connectionGeneration
+    ) {
       this.reject(
         socket,
         state,
@@ -328,8 +405,33 @@ export class AgentWebSocketServer implements OnModuleInit, OnModuleDestroy {
       this.sockets.delete(status.connectionId);
     }
   }
+
+  private failPendingForConnection(state: SocketState, message: string): void {
+    for (const [key, pending] of this.pendingCommands.entries()) {
+      if (
+        pending.environmentId === state.environmentId &&
+        pending.agentId === state.agentId &&
+        pending.connectionGeneration === state.connectionGeneration
+      ) {
+        clearTimeout(pending.timer);
+        this.pendingCommands.delete(key);
+        pending.reject(new Error(message));
+      }
+    }
+  }
 }
 
 function getCommandId(id: JsonRpcId): string {
   return String(id);
+}
+
+function pendingKey(
+  target: {
+    readonly environmentId: string;
+    readonly agentId: string;
+    readonly connectionGeneration: number;
+  },
+  id: JsonRpcId,
+): string {
+  return `${target.environmentId}\u0000${target.agentId}\u0000${target.connectionGeneration}\u0000${getCommandId(id)}`;
 }

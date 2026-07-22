@@ -11,7 +11,7 @@ CthuTool server-side services deploy to a homelab Kubernetes cluster through Git
 | --- | --- | --- |
 | Backend service | Kubernetes namespace `cthutool` | `gitops/` Application plus `k8s/` manifests |
 | Backend image | GHCR | `.github/workflows/backend.yml` |
-| CthuDesktop | Client computers | Desktop installer or local development build |
+| Local Agent | Client computers | Signed `chc agent install` bundle and native tray |
 | `chc` CLI | Client computers | `scripts/install-chc.sh`, `scripts/install-chc.ps1`, and CLI update commands |
 | Web console | Browser/client surface | `apps/web` project shell; deployment is not yet the primary path |
 

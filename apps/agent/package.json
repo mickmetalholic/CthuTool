@@ -1,0 +1,30 @@
+{
+  "name": "@cthutool/agent",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:deps": "pnpm --filter @cthutool/agent-data-migration build && pnpm --filter @cthutool/agent-runtime build",
+    "build": "pnpm run build:deps && tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "pnpm run build:deps && vitest run",
+    "test:cov": "pnpm run build:deps && vitest run --coverage",
+    "typecheck": "pnpm run build:deps && tsc -p tsconfig.json --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@cthutool/agent-data-migration": "workspace:*",
+    "@cthutool/agent-runtime": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/ws": "^8.5.13",
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "5.9.2",
+    "vitest": "^2.1.9"
+  }
+}

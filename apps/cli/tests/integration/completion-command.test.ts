@@ -140,6 +140,7 @@ describe('shell completion command', () => {
     });
 
     expect(lines((await runCli(['__complete', ''])).out)).toEqual([
+      'agent',
       'codex',
       'completion',
       'opencode',
@@ -173,6 +174,23 @@ describe('shell completion command', () => {
     expect(lines((await runCli(['__complete', 'codex'])).out)).toEqual([
       'codex',
     ]);
+    expect(lines((await runCli(['__complete', 'agent', ''])).out)).toEqual([
+      'autostart',
+      'doctor',
+      'env',
+      'install',
+      'logs',
+      'restart',
+      'settings',
+      'start',
+      'status',
+      'stop',
+      'uninstall',
+      'update',
+    ]);
+    expect(
+      lines((await runCli(['__complete', 'agent', 'env', ''])).out),
+    ).toEqual(['get', 'list', 'set', 'set-secret']);
     expect(lines((await runCli(['__complete', 'completion', ''])).out)).toEqual(
       ['disable', 'enable', 'powershell', 'status', 'zsh'],
     );

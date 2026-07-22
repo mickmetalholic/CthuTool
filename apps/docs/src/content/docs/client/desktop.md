@@ -1,48 +1,87 @@
 ---
-title: Desktop App
-description: Install and run CthuDesktop on a client computer.
+title: Local Agent
+description: Install and operate the lightweight tray-owned CthuTool Agent.
 ---
 
-CthuDesktop is the client-side app for local browser execution and user-visible login state.
+The CthuTool Agent is the supported client-side runtime for browser control and
+local browser profiles. It runs without an application window. A small native
+tray owns the background Agent process; opening settings launches the deployed
+Web `/agent` page in the default browser through a short-lived loopback bridge.
 
-## Development Run
+The Agent does not embed, package, or serve the Web application.
 
-From a repository checkout:
+## Install
 
-```bash
-pnpm install
-pnpm --filter @cthutool/desktop dev
-```
-
-For local desktop development, either point the app at a homelab backend URL or start a development backend separately:
+Install `chc` first, then install the signed Agent release:
 
 ```bash
-PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/backend run start:dev
+chc agent install
+chc agent env list
+chc agent env set production
+printf '%s\n' "$AGENT_SECRET" | chc agent env set-secret production --secret-stdin
+chc agent autostart enable
+chc agent start
 ```
 
-The local backend command is for development and debugging. The homelab backend deployment runs in Kubernetes and is reconciled by ArgoCD.
+`install` verifies the pinned release signature, immutable archive digest,
+platform, protocol versions, bundle inventory, and release environment catalog
+before activation. macOS arm64/x64 and Windows x64 are supported release
+targets.
 
-The desktop app defaults to `http://localhost:3000`. Change the Backend URL in Settings when connecting to a homelab backend exposed from the cluster, such as `http://homelab.local:3000`.
+## Tray and Web settings
 
-## Packaging
-
-Current local packaging commands:
+The tray menu exposes the selected environment, environment switching, Open
+Settings, and Exit. Double-clicking the tray icon also opens settings. Exit
+shuts down both the tray and its Agent; there is no tray-only idle mode.
 
 ```bash
-pnpm --filter @cthutool/desktop package:win
-pnpm --filter @cthutool/desktop package:mac
+chc agent settings
 ```
 
-GitHub Actions runs `.github/workflows/desktop-artifacts.yml` on relevant desktop changes and uploads unsigned macOS and Windows artifacts. The workflow does not notarize, sign, or publish installers yet.
+The command starts the tray if necessary and opens a fresh deployed-Web URL.
+The launch ticket is single-use, short-lived, bound to the selected environment
+and Web origin, and is never printed by the CLI. The loopback API requires the
+negotiated bearer session after launch.
 
-On local Windows machines, `package:win` may require Developer Mode or an administrator terminal because electron-builder extracts `winCodeSign` files that include symlinks before it edits executable resources. A directory package smoke test can be run without executable resource editing:
+## Environments and secrets
 
-```powershell
-pnpm --filter @cthutool/desktop exec electron-builder --dir --config.win.signAndEditExecutable=false
+Only environments from the signed release catalog can be selected. Each has
+its own settings, Agent secret, browser profiles, runtime state, and logs. A Web
+page cannot add or replace catalog endpoints.
+
+This personal-use design intentionally uses one static Agent secret per
+environment rather than device enrollment. Supply it only through stdin or a
+user-private file:
+
+```bash
+chc agent env set-secret production --secret-stdin
+chc agent env set-secret production --secret-file ./agent-secret
 ```
 
-## Runtime Notes
+## Update, diagnostics, and uninstall
 
-CthuDesktop uses the host Google Chrome binary for local browser automation while keeping CthuDesktop-owned profile directories under app data. It does not reuse the user's everyday Chrome profile.
+```bash
+chc agent status
+chc agent doctor
+chc agent logs --lines 200
+chc agent update
+chc agent uninstall
+```
 
-Source reference: `docs/desktop-agent-console.md`.
+Agent update is independent of `chc update`. A failed Agent readiness check
+restores the previous active Agent version. Uninstall removes binaries and
+autostart but preserves settings, secrets, profiles, and logs unless
+`--purge --yes` is explicitly confirmed.
+
+## Legacy Desktop migration
+
+On first Agent start, legacy CthuDesktop settings and browser profiles are
+detected and copied into exactly one trusted environment. Exact legacy backend
+matching is used when possible; otherwise run `chc agent env set <id>` and
+restart. Old device identifiers and credentials are never reused, so configure
+a new static Agent secret.
+
+The migration is locked, validated, idempotent, and non-destructive. The
+original CthuDesktop data remains in place for rollback. See
+[Agent migration](https://github.com/mickmetalholic/CthuTool/blob/main/docs/agent-migration.md)
+and use `chc agent doctor` for redacted repair guidance.

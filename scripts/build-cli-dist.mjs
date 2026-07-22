@@ -10,6 +10,8 @@ import { dirname, join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const bunVersion = process.env.BUN_VERSION ?? '1.3.11';
+const agentReleasePublicKey =
+  process.env.AGENT_RELEASE_PUBLIC_KEY_PEM ?? '';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cliRoot = join(repoRoot, 'apps', 'cli');
 const sourceScriptsRoot = join(cliRoot, 'src', 'scripts');
@@ -66,6 +68,8 @@ const buildArgs = [
   'node',
   '--define',
   'process.env.NODE_ENV="production"',
+  '--define',
+  `process.env.CTHUTOOL_PINNED_AGENT_RELEASE_PUBLIC_KEY_PEM=${JSON.stringify(agentReleasePublicKey)}`,
 ];
 
 await mkdir(outputRoot, { recursive: true });

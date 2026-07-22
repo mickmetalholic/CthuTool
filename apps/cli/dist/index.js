@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 var __create = Object.create;
 var __getProtoOf = Object.getPrototypeOf;
 var __defProp = Object.defineProperty;
@@ -43,6 +44,7 @@ var __export = (target, all) => {
     });
 };
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
+var __require = /* @__PURE__ */ createRequire(import.meta.url);
 
 // ../../node_modules/.pnpm/consola@3.4.2/node_modules/consola/dist/chunks/prompt.mjs
 var exports_prompt = {};
@@ -926,6 +928,4290 @@ var require_src = __commonJS((exports, module) => {
     }
   };
   module.exports = { cursor, scroll, erase, beep };
+});
+
+// ../../packages/agent-data-migration/dist/legacy-desktop-migration.js
+var require_legacy_desktop_migration = __commonJS((exports) => {
+  Object.defineProperty(exports, "__esModule", { value: true });
+  exports.LEGACY_DESKTOP_MIGRATION_VERSION = undefined;
+  exports.resolveLegacyDesktopDataRoot = resolveLegacyDesktopDataRoot;
+  exports.inspectLegacyDesktopMigration = inspectLegacyDesktopMigration;
+  exports.readLegacyDesktopMigrationStatus = readLegacyDesktopMigrationStatus;
+  exports.migrateLegacyDesktopData = migrateLegacyDesktopData;
+  exports.legacyDesktopMigrationMarkerPath = legacyDesktopMigrationMarkerPath;
+  var node_crypto_1 = __require("node:crypto");
+  var node_fs_1 = __require("node:fs");
+  var promises_1 = __require("node:fs/promises");
+  var node_os_1 = __require("node:os");
+  var node_path_1 = __require("node:path");
+  exports.LEGACY_DESKTOP_MIGRATION_VERSION = 1;
+  var MARKER_NAME = ".legacy-desktop-migration-v1.json";
+  var LOCK_NAME = ".legacy-desktop-migration-v1.lock";
+  var PROFILE_LOCK_NAME = ".cthutool-agent.lock";
+  var STATUS_PATH = (0, node_path_1.join)("migration", "legacy-desktop-status.json");
+  function resolveLegacyDesktopDataRoot(options = {}) {
+    const platform2 = options.platform ?? process.platform;
+    const home = (0, node_path_1.resolve)(options.homeDir ?? (0, node_os_1.homedir)());
+    const environment = options.env ?? process.env;
+    if (platform2 === "darwin") {
+      return (0, node_path_1.join)(home, "Library", "Application Support", "CthuDesktop");
+    }
+    if (platform2 === "win32") {
+      return (0, node_path_1.join)(environment.APPDATA ?? (0, node_path_1.join)(home, "AppData", "Roaming"), "CthuDesktop");
+    }
+    return (0, node_path_1.join)(environment.XDG_CONFIG_HOME ?? (0, node_path_1.join)(home, ".config"), "CthuDesktop");
+  }
+  async function inspectLegacyDesktopMigration(input) {
+    return publicReport(await createMigrationPlan(input));
+  }
+  async function readLegacyDesktopMigrationStatus(agentRootDir) {
+    try {
+      return parseReport(JSON.parse(await (0, promises_1.readFile)((0, node_path_1.join)(agentRootDir, STATUS_PATH), "utf8")));
+    } catch (error) {
+      if (error.code === "ENOENT")
+        return;
+      return;
+    }
+  }
+  async function migrateLegacyDesktopData(input) {
+    const plan = await createMigrationPlan(input);
+    if (plan.status !== "ready" || !plan.target || !plan.targetRootDir) {
+      const report2 = publicReport(plan);
+      await persistReport(input.agentRootDir, report2);
+      return report2;
+    }
+    await (0, promises_1.mkdir)(plan.targetRootDir, { mode: 448, recursive: true });
+    const profileLockPath = (0, node_path_1.join)(plan.targetRootDir, "browser-profiles", PROFILE_LOCK_NAME);
+    if (await isActiveLock(profileLockPath)) {
+      return persistAndReturn(input.agentRootDir, report({
+        status: "locked",
+        reason: "migration-active-lock",
+        message: "Legacy data migration is blocked by an active Agent profile lock; stop the Agent and retry.",
+        environmentId: plan.target.environmentId,
+        secretRequired: await secretRequired(plan.targetRootDir),
+        retryCommand: "chc agent stop && chc agent start"
+      }));
+    }
+    const lockPath = (0, node_path_1.join)(plan.targetRootDir, LOCK_NAME);
+    const lock = await acquireMigrationLock(lockPath);
+    if (!lock) {
+      return persistAndReturn(input.agentRootDir, report({
+        status: "locked",
+        reason: "migration-active-lock",
+        message: "Another legacy data migration owns the environment lock; retry after it finishes.",
+        environmentId: plan.target.environmentId,
+        secretRequired: await secretRequired(plan.targetRootDir),
+        retryCommand: "chc agent doctor"
+      }));
+    }
+    const stagingRoot = (0, node_path_1.join)(plan.targetRootDir, `.legacy-desktop-staging-${(0, node_crypto_1.randomUUID)()}`);
+    try {
+      await (0, promises_1.mkdir)(stagingRoot, { mode: 448, recursive: false });
+      const sourceEntries = plan.legacyProfilesDir ? await collectTree(plan.legacyProfilesDir) : [];
+      const stagedProfiles = (0, node_path_1.join)(stagingRoot, "browser-profiles");
+      await copyTreeEntries(plan.legacyProfilesDir, stagedProfiles, sourceEntries);
+      await assertTreeMatches(stagedProfiles, sourceEntries);
+      const transformedConfig = transformLegacyConfig(plan.legacyConfig);
+      const stagedConfigPath = (0, node_path_1.join)(stagingRoot, "config.json");
+      if (transformedConfig) {
+        await writePrivateJson(stagedConfigPath, transformedConfig);
+      }
+      await input.hooks?.afterStaging?.();
+      const targetProfiles = (0, node_path_1.join)(plan.targetRootDir, "browser-profiles");
+      await assertDestinationCompatible(targetProfiles, sourceEntries);
+      await copyTreeEntries(stagedProfiles, targetProfiles, sourceEntries);
+      await assertTreeContains(targetProfiles, sourceEntries);
+      const sourceAfterCommit = plan.legacyProfilesDir ? await collectTree(plan.legacyProfilesDir) : [];
+      if (treeDigest(sourceAfterCommit) !== treeDigest(sourceEntries)) {
+        throw new Error("Legacy browser profiles changed during migration");
+      }
+      let configApplied = false;
+      const targetConfigPath = (0, node_path_1.join)(plan.targetRootDir, "config.json");
+      if (transformedConfig && !await pathExists(targetConfigPath)) {
+        await (0, promises_1.copyFile)(stagedConfigPath, targetConfigPath, node_fs_1.constants.COPYFILE_EXCL);
+        await chmodPrivate(targetConfigPath);
+        configApplied = true;
+      }
+      const marker = {
+        schemaVersion: exports.LEGACY_DESKTOP_MIGRATION_VERSION,
+        environmentId: plan.target.environmentId,
+        legacyRootDir: (0, node_path_1.resolve)(input.legacyRootDir),
+        sourceProfileDigest: treeDigest(sourceEntries),
+        sourceProfileFiles: sourceEntries.filter((entry) => entry.kind === "file").length,
+        configApplied,
+        completedAt: new Date().toISOString()
+      };
+      await writePrivateJson((0, node_path_1.join)(plan.targetRootDir, MARKER_NAME), marker);
+      return persistAndReturn(input.agentRootDir, report({
+        status: "migrated",
+        reason: "migration-complete",
+        message: "Legacy Desktop settings and browser profiles were copied without changing the originals.",
+        environmentId: plan.target.environmentId,
+        secretRequired: await secretRequired(plan.targetRootDir),
+        copiedProfileFiles: marker.sourceProfileFiles,
+        configApplied,
+        retryCommand: await secretRequired(plan.targetRootDir) ? `chc agent env set-secret ${plan.target.environmentId} --secret-stdin` : undefined
+      }));
+    } catch (error) {
+      return persistAndReturn(input.agentRootDir, report({
+        status: "failed",
+        reason: "migration-failed",
+        message: safeErrorMessage(error),
+        environmentId: plan.target.environmentId,
+        secretRequired: await secretRequired(plan.targetRootDir),
+        retryCommand: "chc agent doctor"
+      }));
+    } finally {
+      await (0, promises_1.rm)(stagingRoot, { force: true, recursive: true });
+      await lock.close().catch(() => {
+        return;
+      });
+      await (0, promises_1.rm)(lockPath, { force: true });
+    }
+  }
+  function legacyDesktopMigrationMarkerPath(agentRootDir, environment) {
+    return (0, node_path_1.join)(agentRootDir, "environments", environment.namespace, MARKER_NAME);
+  }
+  async function createMigrationPlan(input) {
+    const legacyRootDir = (0, node_path_1.resolve)(input.legacyRootDir);
+    const configPath = (0, node_path_1.join)(legacyRootDir, "config.json");
+    const profilesDir = (0, node_path_1.join)(legacyRootDir, "browser-profiles");
+    const [hasConfig, hasProfiles] = await Promise.all([
+      pathExists(configPath),
+      directoryHasEntries(profilesDir)
+    ]);
+    if (!hasConfig && !hasProfiles) {
+      return report({
+        status: "absent",
+        reason: "legacy-data-absent",
+        message: "No legacy Electron Desktop settings or profiles were found."
+      });
+    }
+    let legacyConfig;
+    if (hasConfig) {
+      try {
+        const parsed = JSON.parse(await (0, promises_1.readFile)(configPath, "utf8"));
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("Legacy Desktop config is not a JSON object");
+        }
+        legacyConfig = parsed;
+      } catch (error) {
+        return report({
+          status: "failed",
+          reason: "migration-failed",
+          message: safeErrorMessage(error),
+          retryCommand: "chc agent doctor"
+        });
+      }
+    }
+    const trusted = input.environments.filter(isTrustedMigrationEnvironment);
+    const legacyBackend = legacyBackendUrl(legacyConfig);
+    const exactMatches = legacyBackend ? trusted.filter((environment) => comparableUrl(environment.backendHttpUrl) === comparableUrl(legacyBackend)) : [];
+    let target;
+    let selectionReason;
+    if (exactMatches.length === 1) {
+      target = exactMatches[0];
+      selectionReason = "exact-backend-match";
+    } else if (input.explicitEnvironmentId) {
+      target = trusted.find((environment) => environment.environmentId === input.explicitEnvironmentId);
+      if (!target) {
+        return report({
+          status: "selection-required",
+          reason: "explicit-environment-untrusted-or-unknown",
+          message: "The explicitly selected environment is not present in the trusted release catalog.",
+          retryCommand: "chc agent env list && chc agent env set <id>"
+        });
+      }
+      selectionReason = "explicit-environment-selection";
+    } else {
+      const reason = !legacyBackend ? "legacy-backend-missing" : exactMatches.length > 1 ? "legacy-backend-ambiguous" : "legacy-backend-unmatched";
+      return report({
+        status: "selection-required",
+        reason,
+        message: "Legacy data cannot be assigned to exactly one trusted environment; select it explicitly before retrying.",
+        retryCommand: "chc agent env list && chc agent env set <id>"
+      });
+    }
+    const targetRootDir = (0, node_path_1.join)((0, node_path_1.resolve)(input.agentRootDir), "environments", target.namespace);
+    let marker;
+    try {
+      marker = await readMarker((0, node_path_1.join)(targetRootDir, MARKER_NAME));
+    } catch (error) {
+      return report({
+        status: "failed",
+        reason: "migration-failed",
+        message: safeErrorMessage(error),
+        environmentId: target.environmentId,
+        secretRequired: await secretRequired(targetRootDir),
+        retryCommand: "chc agent doctor"
+      });
+    }
+    if (marker) {
+      if (marker.environmentId !== target.environmentId || marker.legacyRootDir !== legacyRootDir) {
+        return report({
+          status: "failed",
+          reason: "migration-failed",
+          message: "The environment migration marker belongs to a different legacy root or environment.",
+          environmentId: target.environmentId,
+          secretRequired: await secretRequired(targetRootDir),
+          retryCommand: "chc agent doctor"
+        });
+      }
+      return {
+        ...report({
+          status: "already-migrated",
+          reason: "migration-already-complete",
+          message: "Legacy Desktop data was already migrated; the original data remains available for rollback.",
+          environmentId: target.environmentId,
+          secretRequired: await secretRequired(targetRootDir),
+          copiedProfileFiles: marker.sourceProfileFiles,
+          configApplied: marker.configApplied,
+          retryCommand: await secretRequired(targetRootDir) ? `chc agent env set-secret ${target.environmentId} --secret-stdin` : undefined
+        }),
+        legacyConfig,
+        legacyProfilesDir: hasProfiles ? profilesDir : undefined,
+        target,
+        targetRootDir
+      };
+    }
+    return {
+      ...report({
+        status: "ready",
+        reason: selectionReason,
+        message: "Legacy Desktop data is ready for non-destructive migration.",
+        environmentId: target.environmentId,
+        secretRequired: await secretRequired(targetRootDir)
+      }),
+      legacyConfig,
+      legacyProfilesDir: hasProfiles ? profilesDir : undefined,
+      target,
+      targetRootDir
+    };
+  }
+  function legacyBackendUrl(config) {
+    const activeId = text(config?.activeEnvironmentId);
+    const activeProfile = config?.environmentProfiles?.find((profile) => text(profile.id) === activeId);
+    return text(activeProfile?.backendUrl) ?? text(config?.activeEnvironment?.backendUrl) ?? text(config?.backendUrl);
+  }
+  function transformLegacyConfig(config) {
+    if (!config)
+      return;
+    const deviceName = text(config.deviceName);
+    const browserExecutablePath = text(config.browserRuntime?.executablePath);
+    const connectionEnabled = typeof config.connectionEnabled === "boolean" ? config.connectionEnabled : undefined;
+    const transformed = {
+      ...deviceName ? { deviceName } : {},
+      ...connectionEnabled === undefined ? {} : { connectionEnabled },
+      ...browserExecutablePath ? { browserExecutablePath } : {}
+    };
+    return Object.keys(transformed).length > 0 ? transformed : undefined;
+  }
+  function comparableUrl(value) {
+    try {
+      const url = new URL(value.trim());
+      if (url.username || url.password || url.search || url.hash)
+        return;
+      return url.href.replace(/\/+$/, "");
+    } catch {
+      return;
+    }
+  }
+  function isTrustedMigrationEnvironment(environment) {
+    if (environment.trust === "custom-development" || !/^[a-z][a-z0-9-]{0,63}$/.test(environment.environmentId) || !/^[a-z][a-z0-9_-]{0,63}$/.test(environment.namespace)) {
+      return false;
+    }
+    const backend = comparableUrl(environment.backendHttpUrl);
+    return Boolean(backend && new URL(backend).protocol === "https:");
+  }
+  async function collectTree(root) {
+    if (!await pathExists(root))
+      return [];
+    const output = [];
+    await walkTree((0, node_path_1.resolve)(root), (0, node_path_1.resolve)(root), output);
+    return output.sort((left, right) => left.path.localeCompare(right.path));
+  }
+  async function walkTree(root, directory, output) {
+    for (const entry of await (0, promises_1.readdir)(directory, { withFileTypes: true })) {
+      if (entry.name === PROFILE_LOCK_NAME)
+        continue;
+      const absolutePath = (0, node_path_1.join)(directory, entry.name);
+      const relativePath = portablePath((0, node_path_1.relative)(root, absolutePath));
+      if (entry.isDirectory()) {
+        await walkTree(root, absolutePath, output);
+      } else if (entry.isFile()) {
+        const metadata = await (0, promises_1.stat)(absolutePath);
+        output.push({
+          kind: "file",
+          path: relativePath,
+          sha256: await sha256File(absolutePath),
+          mode: metadata.mode & 511
+        });
+      } else if (entry.isSymbolicLink()) {
+        const rawTarget = await (0, promises_1.readlink)(absolutePath);
+        const resolvedTarget = (0, node_path_1.resolve)((0, node_path_1.dirname)(absolutePath), rawTarget);
+        assertInside(root, resolvedTarget);
+        output.push({
+          kind: "symlink",
+          path: relativePath,
+          targetPath: portablePath((0, node_path_1.relative)(root, resolvedTarget))
+        });
+      } else {
+        throw new Error(`Unsupported legacy profile entry: ${relativePath}`);
+      }
+    }
+  }
+  async function copyTreeEntries(sourceRoot, destinationRoot, entries) {
+    if (!sourceRoot || entries.length === 0)
+      return;
+    await (0, promises_1.mkdir)(destinationRoot, { mode: 448, recursive: true });
+    for (const entry of entries) {
+      const source = joinPortable(sourceRoot, entry.path);
+      const destination = joinPortable(destinationRoot, entry.path);
+      await (0, promises_1.mkdir)((0, node_path_1.dirname)(destination), { mode: 448, recursive: true });
+      if (await pathExists(destination))
+        continue;
+      if (entry.kind === "file") {
+        await (0, promises_1.copyFile)(source, destination, node_fs_1.constants.COPYFILE_EXCL);
+        if (process.platform !== "win32")
+          await (0, promises_1.chmod)(destination, entry.mode);
+      } else {
+        const target = joinPortable(destinationRoot, entry.targetPath);
+        const linkTarget = (0, node_path_1.relative)((0, node_path_1.dirname)(destination), target) || ".";
+        await (0, promises_1.symlink)(linkTarget, destination);
+      }
+    }
+  }
+  async function assertDestinationCompatible(destinationRoot, entries) {
+    for (const entry of entries) {
+      const destination = joinPortable(destinationRoot, entry.path);
+      if (!await pathExists(destination))
+        continue;
+      if (entry.kind === "file") {
+        const metadata = await (0, promises_1.lstat)(destination);
+        if (!metadata.isFile() || await sha256File(destination) !== entry.sha256) {
+          throw new Error(`Agent profile destination conflicts at ${entry.path}`);
+        }
+      } else {
+        const metadata = await (0, promises_1.lstat)(destination);
+        if (!metadata.isSymbolicLink()) {
+          throw new Error(`Agent profile destination conflicts at ${entry.path}`);
+        }
+        const actual = (0, node_path_1.resolve)((0, node_path_1.dirname)(destination), await (0, promises_1.readlink)(destination));
+        const expected = joinPortable(destinationRoot, entry.targetPath);
+        if (actual !== expected) {
+          throw new Error(`Agent profile destination conflicts at ${entry.path}`);
+        }
+      }
+    }
+  }
+  async function assertTreeMatches(root, expected) {
+    const actual = await collectTree(root);
+    if (treeDigest(actual) !== treeDigest(expected)) {
+      throw new Error("Staged legacy browser profile validation failed");
+    }
+  }
+  async function assertTreeContains(root, expected) {
+    await assertDestinationCompatible(root, expected);
+  }
+  function treeDigest(entries) {
+    return (0, node_crypto_1.createHash)("sha256").update(JSON.stringify(entries)).digest("hex");
+  }
+  async function sha256File(path) {
+    const hash = (0, node_crypto_1.createHash)("sha256");
+    await new Promise((resolvePromise, reject) => {
+      const stream = (0, node_fs_1.createReadStream)(path);
+      stream.on("data", (chunk) => hash.update(chunk));
+      stream.once("end", resolvePromise);
+      stream.once("error", reject);
+    });
+    return hash.digest("hex");
+  }
+  async function readMarker(path) {
+    try {
+      const input = JSON.parse(await (0, promises_1.readFile)(path, "utf8"));
+      if (input?.schemaVersion !== exports.LEGACY_DESKTOP_MIGRATION_VERSION || typeof input.environmentId !== "string" || typeof input.legacyRootDir !== "string" || typeof input.sourceProfileDigest !== "string" || typeof input.sourceProfileFiles !== "number" || typeof input.configApplied !== "boolean") {
+        throw new Error("Legacy migration marker is invalid");
+      }
+      return input;
+    } catch (error) {
+      if (error.code === "ENOENT")
+        return;
+      throw error;
+    }
+  }
+  async function persistReport(agentRootDir, value) {
+    await writePrivateJson((0, node_path_1.join)(agentRootDir, STATUS_PATH), value);
+  }
+  async function persistAndReturn(agentRootDir, value) {
+    await persistReport(agentRootDir, value);
+    return value;
+  }
+  async function writePrivateJson(path, value) {
+    await (0, promises_1.mkdir)((0, node_path_1.dirname)(path), { mode: 448, recursive: true });
+    const temporary = `${path}.tmp-${(0, node_crypto_1.randomUUID)()}`;
+    await (0, promises_1.writeFile)(temporary, `${JSON.stringify(value, null, 2)}
+`, {
+      mode: 384
+    });
+    await chmodPrivate(temporary);
+    await (0, promises_1.rename)(temporary, path);
+  }
+  async function chmodPrivate(path) {
+    if (process.platform !== "win32")
+      await (0, promises_1.chmod)(path, 384);
+  }
+  async function secretRequired(environmentRoot) {
+    try {
+      const metadata = await (0, promises_1.stat)((0, node_path_1.join)(environmentRoot, "agent-secret"));
+      return !metadata.isFile() || metadata.size < 33;
+    } catch (error) {
+      if (error.code === "ENOENT")
+        return true;
+      throw error;
+    }
+  }
+  async function directoryHasEntries(path) {
+    try {
+      return (await (0, promises_1.readdir)(path)).some((name) => name !== PROFILE_LOCK_NAME);
+    } catch (error) {
+      if (error.code === "ENOENT")
+        return false;
+      throw error;
+    }
+  }
+  async function pathExists(path) {
+    try {
+      await (0, promises_1.lstat)(path);
+      return true;
+    } catch (error) {
+      if (error.code === "ENOENT")
+        return false;
+      throw error;
+    }
+  }
+  async function acquireMigrationLock(path) {
+    for (let attempt = 0;attempt < 4; attempt += 1) {
+      try {
+        const handle = await (0, promises_1.open)(path, "wx", 384);
+        await handle.writeFile(`${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}
+`);
+        return handle;
+      } catch (error) {
+        if (error.code !== "EEXIST")
+          throw error;
+        const raw = await (0, promises_1.readFile)(path, "utf8").catch(() => {
+          return;
+        });
+        if (raw === undefined)
+          continue;
+        const pid = lockPid(raw);
+        if (pid && isProcessAlive(pid))
+          return;
+        if (!pid && await isRecentFile(path))
+          return;
+        await removeIfUnchanged(path, raw);
+      }
+    }
+    throw new Error("Unable to acquire the legacy data migration lock");
+  }
+  async function isActiveLock(path) {
+    const raw = await (0, promises_1.readFile)(path, "utf8").catch((error) => {
+      if (error.code === "ENOENT")
+        return;
+      throw error;
+    });
+    if (raw === undefined)
+      return false;
+    const pid = lockPid(raw);
+    if (pid && isProcessAlive(pid))
+      return true;
+    await removeIfUnchanged(path, raw);
+    return false;
+  }
+  async function removeIfUnchanged(path, expected) {
+    const current = await (0, promises_1.readFile)(path, "utf8").catch(() => {
+      return;
+    });
+    if (current === expected)
+      await (0, promises_1.rm)(path, { force: true });
+  }
+  function lockPid(raw) {
+    try {
+      const value = JSON.parse(raw);
+      return typeof value.pid === "number" && Number.isSafeInteger(value.pid) && value.pid > 0 ? value.pid : undefined;
+    } catch {
+      return;
+    }
+  }
+  function isProcessAlive(pid) {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return error.code === "EPERM";
+    }
+  }
+  async function isRecentFile(path) {
+    try {
+      return Date.now() - (await (0, promises_1.stat)(path)).mtimeMs < 60000;
+    } catch (error) {
+      if (error.code === "ENOENT")
+        return false;
+      throw error;
+    }
+  }
+  function report(input) {
+    return {
+      schemaVersion: exports.LEGACY_DESKTOP_MIGRATION_VERSION,
+      status: input.status,
+      reason: input.reason,
+      message: input.message,
+      secretRequired: input.secretRequired ?? false,
+      copiedProfileFiles: input.copiedProfileFiles ?? 0,
+      configApplied: input.configApplied ?? false,
+      ...input.environmentId ? { environmentId: input.environmentId } : {},
+      ...input.retryCommand ? { retryCommand: input.retryCommand } : {}
+    };
+  }
+  function publicReport(plan) {
+    return {
+      schemaVersion: plan.schemaVersion,
+      status: plan.status,
+      reason: plan.reason,
+      message: plan.message,
+      secretRequired: plan.secretRequired,
+      copiedProfileFiles: plan.copiedProfileFiles,
+      configApplied: plan.configApplied,
+      ...plan.environmentId ? { environmentId: plan.environmentId } : {},
+      ...plan.retryCommand ? { retryCommand: plan.retryCommand } : {}
+    };
+  }
+  function parseReport(input) {
+    if (!input || typeof input !== "object")
+      return;
+    const value = input;
+    return value.schemaVersion === exports.LEGACY_DESKTOP_MIGRATION_VERSION && typeof value.status === "string" && typeof value.reason === "string" && typeof value.message === "string" ? value : undefined;
+  }
+  function safeErrorMessage(error) {
+    const message = error instanceof Error ? error.message : "Migration failed";
+    return message.replace(/(secret|token|password)\s*[=:]\s*\S+/gi, "$1=[redacted]").slice(0, 500);
+  }
+  function text(input) {
+    return typeof input === "string" && input.trim() ? input.trim() : undefined;
+  }
+  function joinPortable(root, path) {
+    const segments = path.split("/").filter(Boolean);
+    const output = (0, node_path_1.resolve)(root, ...segments);
+    assertInside((0, node_path_1.resolve)(root), output);
+    return output;
+  }
+  function portablePath(path) {
+    return path.split(node_path_1.sep).join("/");
+  }
+  function assertInside(root, path) {
+    const child = (0, node_path_1.relative)((0, node_path_1.resolve)(root), (0, node_path_1.resolve)(path));
+    if (child === ".." || child.startsWith(`..${node_path_1.sep}`) || (0, node_path_1.isAbsolute)(child)) {
+      throw new Error("Legacy profile entry escapes its profile root");
+    }
+  }
+});
+
+// ../../packages/agent-data-migration/dist/index.js
+var require_dist = __commonJS((exports) => {
+  var __createBinding = exports && exports.__createBinding || (Object.create ? function(o3, m3, k4, k22) {
+    if (k22 === undefined)
+      k22 = k4;
+    var desc = Object.getOwnPropertyDescriptor(m3, k4);
+    if (!desc || ("get" in desc ? !m3.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() {
+        return m3[k4];
+      } };
+    }
+    Object.defineProperty(o3, k22, desc);
+  } : function(o3, m3, k4, k22) {
+    if (k22 === undefined)
+      k22 = k4;
+    o3[k22] = m3[k4];
+  });
+  var __exportStar = exports && exports.__exportStar || function(m3, exports2) {
+    for (var p in m3)
+      if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports2, p))
+        __createBinding(exports2, m3, p);
+  };
+  Object.defineProperty(exports, "__esModule", { value: true });
+  __exportStar(require_legacy_desktop_migration(), exports);
+});
+
+// ../../packages/agent-release/dist/layout.js
+var require_layout = __commonJS((exports) => {
+  Object.defineProperty(exports, "__esModule", { value: true });
+  exports.BundleLayoutError = exports.MUTABLE_AGENT_PATH_SEGMENTS = exports.REQUIRED_COMMON_BUNDLE_PATHS = undefined;
+  exports.createBundleLayout = createBundleLayout;
+  exports.validateBundleLayout = validateBundleLayout;
+  exports.validateBundleInventory = validateBundleInventory;
+  exports.normalizeArchivePath = normalizeArchivePath;
+  exports.REQUIRED_COMMON_BUNDLE_PATHS = [
+    "layout.json",
+    "agent/dist/index.js",
+    "agent/environments.json",
+    "licenses/NODE_LICENSE",
+    "licenses/THIRD_PARTY_NOTICES.txt"
+  ];
+  exports.MUTABLE_AGENT_PATH_SEGMENTS = [
+    "environment.json",
+    "agent-secret",
+    "browser-profiles",
+    "logs",
+    "config.json"
+  ];
+
+  class BundleLayoutError extends Error {
+    code;
+    constructor(code, message) {
+      super(message);
+      this.code = code;
+      this.name = "BundleLayoutError";
+    }
+  }
+  exports.BundleLayoutError = BundleLayoutError;
+  function createBundleLayout(target, releaseVersion) {
+    const windows = target === "windows-x64";
+    return {
+      layoutVersion: 1,
+      releaseVersion,
+      target,
+      entryPoints: {
+        tray: windows ? "bin/cthutool-agent-tray.exe" : "bin/CthuTool Agent.app/Contents/MacOS/cthutool-agent-tray",
+        node: windows ? "runtime/node/node.exe" : "runtime/node/bin/node",
+        agent: "agent/dist/index.js",
+        environmentCatalog: "agent/environments.json"
+      },
+      mutableDataRoot: "external-user-data"
+    };
+  }
+  function validateBundleLayout(input) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new BundleLayoutError("INVALID_PATH", "Bundle layout must be an object");
+    }
+    const value = input;
+    const keys = Object.keys(value).sort();
+    const expectedKeys = [
+      "entryPoints",
+      "layoutVersion",
+      "mutableDataRoot",
+      "releaseVersion",
+      "target"
+    ];
+    if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index]) || value.layoutVersion !== 1 || value.mutableDataRoot !== "external-user-data" || !SUPPORTED_TARGET_SET.has(value.target) || typeof value.releaseVersion !== "string") {
+      throw new BundleLayoutError("INVALID_PATH", "Bundle layout contract is invalid");
+    }
+    const expected = createBundleLayout(value.target, value.releaseVersion);
+    const entryPoints = value.entryPoints;
+    if (!entryPoints || typeof entryPoints !== "object" || Array.isArray(entryPoints) || Object.keys(entryPoints).sort().join(",") !== ["agent", "environmentCatalog", "node", "tray"].join(",") || Object.entries(expected.entryPoints).some(([key, entryPoint]) => entryPoints[key] !== entryPoint)) {
+      throw new BundleLayoutError("INVALID_PATH", "Bundle layout entry points do not match the target contract");
+    }
+    return expected;
+  }
+  var SUPPORTED_TARGET_SET = new Set([
+    "darwin-arm64",
+    "darwin-x64",
+    "windows-x64"
+  ]);
+  function validateBundleInventory(target, rawPaths) {
+    const paths = [...new Set(rawPaths.map(normalizeArchivePath))].sort();
+    const layout = createBundleLayout(target, "0.0.0");
+    const required = [
+      ...exports.REQUIRED_COMMON_BUNDLE_PATHS,
+      layout.entryPoints.tray,
+      layout.entryPoints.node,
+      ...target.startsWith("darwin-") ? ["bin/CthuTool Agent.app/Contents/Info.plist"] : []
+    ];
+    for (const expected of required) {
+      if (!paths.includes(expected)) {
+        throw new BundleLayoutError("MISSING_FILE", `Agent bundle is missing ${expected}`);
+      }
+    }
+    for (const browserDependency of ["playwright", "playwright-core"]) {
+      if (!paths.some((path) => path.startsWith("agent/node_modules/") && path.endsWith(`/node_modules/${browserDependency}/package.json`) || path === `agent/node_modules/${browserDependency}/package.json`)) {
+        throw new BundleLayoutError("MISSING_FILE", `Agent bundle is missing the ${browserDependency} browser dependency`);
+      }
+    }
+    for (const path of paths) {
+      const lower = path.toLowerCase();
+      const dependencyAsset = lower.startsWith("agent/node_modules/");
+      if (lower.startsWith("electron/") || lower.includes("/node_modules/electron/") || lower.includes("electron framework") || lower.startsWith("webview/") || lower.includes("/embeddedwebview.framework/") || lower.startsWith("desktop/") || lower.includes("/renderer/") || lower.startsWith("web/") || lower.includes("/_next/") || !dependencyAsset && (lower.endsWith(".html") || lower.endsWith(".css")) || lower.endsWith(".js") && !lower.startsWith("agent/")) {
+        throw new BundleLayoutError("FORBIDDEN_CONTENT", `Agent bundle contains local UI runtime or assets: ${path}`);
+      }
+      if (exports.MUTABLE_AGENT_PATH_SEGMENTS.some((segment) => path === segment || path.split("/").includes(segment))) {
+        throw new BundleLayoutError("MUTABLE_CONTENT", `Mutable Agent data must remain outside version contents: ${path}`);
+      }
+    }
+    return paths;
+  }
+  function normalizeArchivePath(input) {
+    const path = input.replaceAll("\\", "/").replace(/^\.\//, "");
+    if (!path || path.startsWith("/") || /^[A-Za-z]:/.test(path) || path.split("/").some((part) => !part || part === "." || part === "..")) {
+      throw new BundleLayoutError("INVALID_PATH", `Unsafe Agent archive path: ${input}`);
+    }
+    return path;
+  }
+});
+
+// ../../packages/agent-release/dist/activation.js
+var require_activation = __commonJS((exports) => {
+  Object.defineProperty(exports, "__esModule", { value: true });
+  exports.stageVersion = stageVersion;
+  exports.activateVersion = activateVersion;
+  exports.rollbackActiveVersion = rollbackActiveVersion;
+  exports.readActiveVersion = readActiveVersion;
+  var node_crypto_1 = __require("node:crypto");
+  var promises_1 = __require("node:fs/promises");
+  var node_path_1 = __require("node:path");
+  var layout_1 = require_layout();
+  async function stageVersion(input) {
+    assertVersion(input.version);
+    const versionsRoot = (0, node_path_1.join)(input.installRoot, "versions");
+    const versionRoot = (0, node_path_1.join)(versionsRoot, input.version);
+    const stagingRoot = (0, node_path_1.join)(versionsRoot, `.${input.version}.staging-${(0, node_crypto_1.randomUUID)()}`);
+    await (0, promises_1.mkdir)(versionsRoot, { recursive: true });
+    if (await pathExists(versionRoot)) {
+      (0, layout_1.validateBundleInventory)(input.target, await listRelativeFiles(versionRoot));
+      return versionRoot;
+    }
+    try {
+      await (0, promises_1.cp)(input.extractedRoot, stagingRoot, {
+        errorOnExist: true,
+        force: false,
+        recursive: true
+      });
+      (0, layout_1.validateBundleInventory)(input.target, await listRelativeFiles(stagingRoot));
+      try {
+        await (0, promises_1.rename)(stagingRoot, versionRoot);
+      } catch (error) {
+        if (error.code !== "EEXIST" && error.code !== "ENOTEMPTY") {
+          throw error;
+        }
+        await (0, promises_1.rm)(stagingRoot, { force: true, recursive: true });
+        (0, layout_1.validateBundleInventory)(input.target, await listRelativeFiles(versionRoot));
+      }
+      return versionRoot;
+    } catch (error) {
+      await (0, promises_1.rm)(stagingRoot, { force: true, recursive: true });
+      throw error;
+    }
+  }
+  async function pathExists(path) {
+    try {
+      await (0, promises_1.stat)(path);
+      return true;
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        return false;
+      }
+      throw error;
+    }
+  }
+  async function activateVersion(input) {
+    assertVersion(input.version);
+    const versionRoot = (0, node_path_1.join)(input.installRoot, "versions", input.version);
+    const activePath = (0, node_path_1.join)(input.installRoot, "active.json");
+    const previous = await readActiveVersion(input.installRoot);
+    await input.smokeCheck(versionRoot);
+    const pointer = {
+      schemaVersion: 1,
+      version: input.version,
+      activatedAt: (input.now ?? (() => new Date))().toISOString()
+    };
+    await atomicWrite(activePath, pointer);
+    if (previous && previous.version !== pointer.version) {
+      await atomicWrite((0, node_path_1.join)(input.installRoot, "previous.json"), previous);
+    }
+    return pointer;
+  }
+  async function rollbackActiveVersion(input) {
+    const previousPath = (0, node_path_1.join)(input.installRoot, "previous.json");
+    const previous = parsePointer(JSON.parse(await (0, promises_1.readFile)(previousPath, "utf8")));
+    await input.smokeCheck((0, node_path_1.join)(input.installRoot, "versions", previous.version));
+    await atomicWrite((0, node_path_1.join)(input.installRoot, "active.json"), previous);
+    return previous;
+  }
+  async function readActiveVersion(installRoot) {
+    try {
+      return parsePointer(JSON.parse(await (0, promises_1.readFile)((0, node_path_1.join)(installRoot, "active.json"), "utf8")));
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+  }
+  function parsePointer(input) {
+    if (!input || typeof input !== "object" || input.schemaVersion !== 1 || typeof input.version !== "string" || typeof input.activatedAt !== "string") {
+      throw new Error("Active Agent version pointer is invalid");
+    }
+    const pointer = input;
+    assertVersion(pointer.version);
+    return pointer;
+  }
+  async function atomicWrite(path, value) {
+    await (0, promises_1.mkdir)((0, node_path_1.dirname)(path), { recursive: true });
+    const temporary = `${path}.tmp-${(0, node_crypto_1.randomUUID)()}`;
+    await (0, promises_1.writeFile)(temporary, `${JSON.stringify(value, null, 2)}
+`, {
+      mode: 384
+    });
+    await (0, promises_1.rename)(temporary, path);
+  }
+  async function listRelativeFiles(root, directory = root) {
+    const output = [];
+    for (const entry of await (0, promises_1.readdir)(directory, { withFileTypes: true })) {
+      const path = (0, node_path_1.join)(directory, entry.name);
+      if (entry.isDirectory()) {
+        output.push(...await listRelativeFiles(root, path));
+      } else if (entry.isFile()) {
+        output.push(path.slice(root.length + 1).replaceAll("\\", "/"));
+      }
+    }
+    return output;
+  }
+  function assertVersion(version) {
+    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+      throw new Error("Agent version directory name is invalid");
+    }
+  }
+});
+
+// ../../node_modules/.pnpm/fflate@0.8.2/node_modules/fflate/lib/node.cjs
+var require_node = __commonJS((exports) => {
+  var Worker;
+  var workerAdd = ";var __w=require('worker_threads');__w.parentPort.on('message',function(m){onmessage({data:m})}),postMessage=function(m,t){__w.parentPort.postMessage(m,t)},close=process.exit;self=global";
+  try {
+    Worker = __require("worker_threads").Worker;
+  } catch (e3) {}
+  var node_worker_1 = {};
+  node_worker_1["default"] = Worker ? function(c4, _5, msg, transfer, cb) {
+    var done = false;
+    var w3 = new Worker(c4 + workerAdd, { eval: true }).on("error", function(e3) {
+      return cb(e3, null);
+    }).on("message", function(m3) {
+      return cb(null, m3);
+    }).on("exit", function(c5) {
+      if (c5 && !done)
+        cb(new Error("exited with code " + c5), null);
+    });
+    w3.postMessage(msg, transfer);
+    w3.terminate = function() {
+      done = true;
+      return Worker.prototype.terminate.call(w3);
+    };
+    return w3;
+  } : function(_5, __, ___, ____, cb) {
+    setImmediate(function() {
+      return cb(new Error("async operations unsupported - update to Node 12+ (or Node 10-11 with the --experimental-worker CLI flag)"), null);
+    });
+    var NOP = function() {};
+    return {
+      terminate: NOP,
+      postMessage: NOP
+    };
+  };
+  var u8 = Uint8Array;
+  var u16 = Uint16Array;
+  var i32 = Int32Array;
+  var fleb = new u8([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 0, 0, 0]);
+  var fdeb = new u8([0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 0, 0]);
+  var clim = new u8([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]);
+  var freb = function(eb, start) {
+    var b5 = new u16(31);
+    for (var i3 = 0;i3 < 31; ++i3) {
+      b5[i3] = start += 1 << eb[i3 - 1];
+    }
+    var r4 = new i32(b5[30]);
+    for (var i3 = 1;i3 < 30; ++i3) {
+      for (var j3 = b5[i3];j3 < b5[i3 + 1]; ++j3) {
+        r4[j3] = j3 - b5[i3] << 5 | i3;
+      }
+    }
+    return { b: b5, r: r4 };
+  };
+  var _a = freb(fleb, 2);
+  var fl = _a.b;
+  var revfl = _a.r;
+  fl[28] = 258, revfl[258] = 28;
+  var _b = freb(fdeb, 0);
+  var fd = _b.b;
+  var revfd = _b.r;
+  var rev = new u16(32768);
+  for (i2 = 0;i2 < 32768; ++i2) {
+    x3 = (i2 & 43690) >> 1 | (i2 & 21845) << 1;
+    x3 = (x3 & 52428) >> 2 | (x3 & 13107) << 2;
+    x3 = (x3 & 61680) >> 4 | (x3 & 3855) << 4;
+    rev[i2] = ((x3 & 65280) >> 8 | (x3 & 255) << 8) >> 1;
+  }
+  var x3;
+  var i2;
+  var hMap = function(cd, mb, r4) {
+    var s2 = cd.length;
+    var i3 = 0;
+    var l3 = new u16(mb);
+    for (;i3 < s2; ++i3) {
+      if (cd[i3])
+        ++l3[cd[i3] - 1];
+    }
+    var le3 = new u16(mb);
+    for (i3 = 1;i3 < mb; ++i3) {
+      le3[i3] = le3[i3 - 1] + l3[i3 - 1] << 1;
+    }
+    var co;
+    if (r4) {
+      co = new u16(1 << mb);
+      var rvb = 15 - mb;
+      for (i3 = 0;i3 < s2; ++i3) {
+        if (cd[i3]) {
+          var sv = i3 << 4 | cd[i3];
+          var r_1 = mb - cd[i3];
+          var v3 = le3[cd[i3] - 1]++ << r_1;
+          for (var m3 = v3 | (1 << r_1) - 1;v3 <= m3; ++v3) {
+            co[rev[v3] >> rvb] = sv;
+          }
+        }
+      }
+    } else {
+      co = new u16(s2);
+      for (i3 = 0;i3 < s2; ++i3) {
+        if (cd[i3]) {
+          co[i3] = rev[le3[cd[i3] - 1]++] >> 15 - cd[i3];
+        }
+      }
+    }
+    return co;
+  };
+  var flt = new u8(288);
+  for (i2 = 0;i2 < 144; ++i2)
+    flt[i2] = 8;
+  var i2;
+  for (i2 = 144;i2 < 256; ++i2)
+    flt[i2] = 9;
+  var i2;
+  for (i2 = 256;i2 < 280; ++i2)
+    flt[i2] = 7;
+  var i2;
+  for (i2 = 280;i2 < 288; ++i2)
+    flt[i2] = 8;
+  var i2;
+  var fdt = new u8(32);
+  for (i2 = 0;i2 < 32; ++i2)
+    fdt[i2] = 5;
+  var i2;
+  var flm = /* @__PURE__ */ hMap(flt, 9, 0);
+  var flrm = /* @__PURE__ */ hMap(flt, 9, 1);
+  var fdm = /* @__PURE__ */ hMap(fdt, 5, 0);
+  var fdrm = /* @__PURE__ */ hMap(fdt, 5, 1);
+  var max = function(a4) {
+    var m3 = a4[0];
+    for (var i3 = 1;i3 < a4.length; ++i3) {
+      if (a4[i3] > m3)
+        m3 = a4[i3];
+    }
+    return m3;
+  };
+  var bits = function(d3, p, m3) {
+    var o3 = p / 8 | 0;
+    return (d3[o3] | d3[o3 + 1] << 8) >> (p & 7) & m3;
+  };
+  var bits16 = function(d3, p) {
+    var o3 = p / 8 | 0;
+    return (d3[o3] | d3[o3 + 1] << 8 | d3[o3 + 2] << 16) >> (p & 7);
+  };
+  var shft = function(p) {
+    return (p + 7) / 8 | 0;
+  };
+  var slc = function(v3, s2, e3) {
+    if (s2 == null || s2 < 0)
+      s2 = 0;
+    if (e3 == null || e3 > v3.length)
+      e3 = v3.length;
+    return new u8(v3.subarray(s2, e3));
+  };
+  exports.FlateErrorCode = {
+    UnexpectedEOF: 0,
+    InvalidBlockType: 1,
+    InvalidLengthLiteral: 2,
+    InvalidDistance: 3,
+    StreamFinished: 4,
+    NoStreamHandler: 5,
+    InvalidHeader: 6,
+    NoCallback: 7,
+    InvalidUTF8: 8,
+    ExtraFieldTooLong: 9,
+    InvalidDate: 10,
+    FilenameTooLong: 11,
+    StreamFinishing: 12,
+    InvalidZipData: 13,
+    UnknownCompressionMethod: 14
+  };
+  var ec = [
+    "unexpected EOF",
+    "invalid block type",
+    "invalid length/literal",
+    "invalid distance",
+    "stream finished",
+    "no stream handler",
+    ,
+    "no callback",
+    "invalid UTF-8 data",
+    "extra field too long",
+    "date not in range 1980-2099",
+    "filename too long",
+    "stream finishing",
+    "invalid zip data"
+  ];
+  var err = function(ind, msg, nt) {
+    var e3 = new Error(msg || ec[ind]);
+    e3.code = ind;
+    if (Error.captureStackTrace)
+      Error.captureStackTrace(e3, err);
+    if (!nt)
+      throw e3;
+    return e3;
+  };
+  var inflt = function(dat, st, buf, dict) {
+    var sl = dat.length, dl = dict ? dict.length : 0;
+    if (!sl || st.f && !st.l)
+      return buf || new u8(0);
+    var noBuf = !buf;
+    var resize = noBuf || st.i != 2;
+    var noSt = st.i;
+    if (noBuf)
+      buf = new u8(sl * 3);
+    var cbuf = function(l4) {
+      var bl = buf.length;
+      if (l4 > bl) {
+        var nbuf = new u8(Math.max(bl * 2, l4));
+        nbuf.set(buf);
+        buf = nbuf;
+      }
+    };
+    var final = st.f || 0, pos = st.p || 0, bt = st.b || 0, lm = st.l, dm = st.d, lbt = st.m, dbt = st.n;
+    var tbts = sl * 8;
+    do {
+      if (!lm) {
+        final = bits(dat, pos, 1);
+        var type = bits(dat, pos + 1, 3);
+        pos += 3;
+        if (!type) {
+          var s2 = shft(pos) + 4, l3 = dat[s2 - 4] | dat[s2 - 3] << 8, t2 = s2 + l3;
+          if (t2 > sl) {
+            if (noSt)
+              err(0);
+            break;
+          }
+          if (resize)
+            cbuf(bt + l3);
+          buf.set(dat.subarray(s2, t2), bt);
+          st.b = bt += l3, st.p = pos = t2 * 8, st.f = final;
+          continue;
+        } else if (type == 1)
+          lm = flrm, dm = fdrm, lbt = 9, dbt = 5;
+        else if (type == 2) {
+          var hLit = bits(dat, pos, 31) + 257, hcLen = bits(dat, pos + 10, 15) + 4;
+          var tl = hLit + bits(dat, pos + 5, 31) + 1;
+          pos += 14;
+          var ldt = new u8(tl);
+          var clt = new u8(19);
+          for (var i3 = 0;i3 < hcLen; ++i3) {
+            clt[clim[i3]] = bits(dat, pos + i3 * 3, 7);
+          }
+          pos += hcLen * 3;
+          var clb = max(clt), clbmsk = (1 << clb) - 1;
+          var clm = hMap(clt, clb, 1);
+          for (var i3 = 0;i3 < tl; ) {
+            var r4 = clm[bits(dat, pos, clbmsk)];
+            pos += r4 & 15;
+            var s2 = r4 >> 4;
+            if (s2 < 16) {
+              ldt[i3++] = s2;
+            } else {
+              var c4 = 0, n2 = 0;
+              if (s2 == 16)
+                n2 = 3 + bits(dat, pos, 3), pos += 2, c4 = ldt[i3 - 1];
+              else if (s2 == 17)
+                n2 = 3 + bits(dat, pos, 7), pos += 3;
+              else if (s2 == 18)
+                n2 = 11 + bits(dat, pos, 127), pos += 7;
+              while (n2--)
+                ldt[i3++] = c4;
+            }
+          }
+          var lt = ldt.subarray(0, hLit), dt = ldt.subarray(hLit);
+          lbt = max(lt);
+          dbt = max(dt);
+          lm = hMap(lt, lbt, 1);
+          dm = hMap(dt, dbt, 1);
+        } else
+          err(1);
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+      }
+      if (resize)
+        cbuf(bt + 131072);
+      var lms = (1 << lbt) - 1, dms = (1 << dbt) - 1;
+      var lpos = pos;
+      for (;; lpos = pos) {
+        var c4 = lm[bits16(dat, pos) & lms], sym = c4 >> 4;
+        pos += c4 & 15;
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+        if (!c4)
+          err(2);
+        if (sym < 256)
+          buf[bt++] = sym;
+        else if (sym == 256) {
+          lpos = pos, lm = null;
+          break;
+        } else {
+          var add = sym - 254;
+          if (sym > 264) {
+            var i3 = sym - 257, b5 = fleb[i3];
+            add = bits(dat, pos, (1 << b5) - 1) + fl[i3];
+            pos += b5;
+          }
+          var d3 = dm[bits16(dat, pos) & dms], dsym = d3 >> 4;
+          if (!d3)
+            err(3);
+          pos += d3 & 15;
+          var dt = fd[dsym];
+          if (dsym > 3) {
+            var b5 = fdeb[dsym];
+            dt += bits16(dat, pos) & (1 << b5) - 1, pos += b5;
+          }
+          if (pos > tbts) {
+            if (noSt)
+              err(0);
+            break;
+          }
+          if (resize)
+            cbuf(bt + 131072);
+          var end = bt + add;
+          if (bt < dt) {
+            var shift = dl - dt, dend = Math.min(dt, end);
+            if (shift + bt < 0)
+              err(3);
+            for (;bt < dend; ++bt)
+              buf[bt] = dict[shift + bt];
+          }
+          for (;bt < end; ++bt)
+            buf[bt] = buf[bt - dt];
+        }
+      }
+      st.l = lm, st.p = lpos, st.b = bt, st.f = final;
+      if (lm)
+        final = 1, st.m = lbt, st.d = dm, st.n = dbt;
+    } while (!final);
+    return bt != buf.length && noBuf ? slc(buf, 0, bt) : buf.subarray(0, bt);
+  };
+  var wbits = function(d3, p, v3) {
+    v3 <<= p & 7;
+    var o3 = p / 8 | 0;
+    d3[o3] |= v3;
+    d3[o3 + 1] |= v3 >> 8;
+  };
+  var wbits16 = function(d3, p, v3) {
+    v3 <<= p & 7;
+    var o3 = p / 8 | 0;
+    d3[o3] |= v3;
+    d3[o3 + 1] |= v3 >> 8;
+    d3[o3 + 2] |= v3 >> 16;
+  };
+  var hTree = function(d3, mb) {
+    var t2 = [];
+    for (var i3 = 0;i3 < d3.length; ++i3) {
+      if (d3[i3])
+        t2.push({ s: i3, f: d3[i3] });
+    }
+    var s2 = t2.length;
+    var t22 = t2.slice();
+    if (!s2)
+      return { t: et, l: 0 };
+    if (s2 == 1) {
+      var v3 = new u8(t2[0].s + 1);
+      v3[t2[0].s] = 1;
+      return { t: v3, l: 1 };
+    }
+    t2.sort(function(a4, b5) {
+      return a4.f - b5.f;
+    });
+    t2.push({ s: -1, f: 25001 });
+    var l3 = t2[0], r4 = t2[1], i0 = 0, i1 = 1, i22 = 2;
+    t2[0] = { s: -1, f: l3.f + r4.f, l: l3, r: r4 };
+    while (i1 != s2 - 1) {
+      l3 = t2[t2[i0].f < t2[i22].f ? i0++ : i22++];
+      r4 = t2[i0 != i1 && t2[i0].f < t2[i22].f ? i0++ : i22++];
+      t2[i1++] = { s: -1, f: l3.f + r4.f, l: l3, r: r4 };
+    }
+    var maxSym = t22[0].s;
+    for (var i3 = 1;i3 < s2; ++i3) {
+      if (t22[i3].s > maxSym)
+        maxSym = t22[i3].s;
+    }
+    var tr = new u16(maxSym + 1);
+    var mbt = ln(t2[i1 - 1], tr, 0);
+    if (mbt > mb) {
+      var i3 = 0, dt = 0;
+      var lft = mbt - mb, cst = 1 << lft;
+      t22.sort(function(a4, b5) {
+        return tr[b5.s] - tr[a4.s] || a4.f - b5.f;
+      });
+      for (;i3 < s2; ++i3) {
+        var i2_1 = t22[i3].s;
+        if (tr[i2_1] > mb) {
+          dt += cst - (1 << mbt - tr[i2_1]);
+          tr[i2_1] = mb;
+        } else
+          break;
+      }
+      dt >>= lft;
+      while (dt > 0) {
+        var i2_2 = t22[i3].s;
+        if (tr[i2_2] < mb)
+          dt -= 1 << mb - tr[i2_2]++ - 1;
+        else
+          ++i3;
+      }
+      for (;i3 >= 0 && dt; --i3) {
+        var i2_3 = t22[i3].s;
+        if (tr[i2_3] == mb) {
+          --tr[i2_3];
+          ++dt;
+        }
+      }
+      mbt = mb;
+    }
+    return { t: new u8(tr), l: mbt };
+  };
+  var ln = function(n2, l3, d3) {
+    return n2.s == -1 ? Math.max(ln(n2.l, l3, d3 + 1), ln(n2.r, l3, d3 + 1)) : l3[n2.s] = d3;
+  };
+  var lc = function(c4) {
+    var s2 = c4.length;
+    while (s2 && !c4[--s2])
+      ;
+    var cl = new u16(++s2);
+    var cli = 0, cln = c4[0], cls = 1;
+    var w3 = function(v3) {
+      cl[cli++] = v3;
+    };
+    for (var i3 = 1;i3 <= s2; ++i3) {
+      if (c4[i3] == cln && i3 != s2)
+        ++cls;
+      else {
+        if (!cln && cls > 2) {
+          for (;cls > 138; cls -= 138)
+            w3(32754);
+          if (cls > 2) {
+            w3(cls > 10 ? cls - 11 << 5 | 28690 : cls - 3 << 5 | 12305);
+            cls = 0;
+          }
+        } else if (cls > 3) {
+          w3(cln), --cls;
+          for (;cls > 6; cls -= 6)
+            w3(8304);
+          if (cls > 2)
+            w3(cls - 3 << 5 | 8208), cls = 0;
+        }
+        while (cls--)
+          w3(cln);
+        cls = 1;
+        cln = c4[i3];
+      }
+    }
+    return { c: cl.subarray(0, cli), n: s2 };
+  };
+  var clen = function(cf, cl) {
+    var l3 = 0;
+    for (var i3 = 0;i3 < cl.length; ++i3)
+      l3 += cf[i3] * cl[i3];
+    return l3;
+  };
+  var wfblk = function(out, pos, dat) {
+    var s2 = dat.length;
+    var o3 = shft(pos + 2);
+    out[o3] = s2 & 255;
+    out[o3 + 1] = s2 >> 8;
+    out[o3 + 2] = out[o3] ^ 255;
+    out[o3 + 3] = out[o3 + 1] ^ 255;
+    for (var i3 = 0;i3 < s2; ++i3)
+      out[o3 + i3 + 4] = dat[i3];
+    return (o3 + 4 + s2) * 8;
+  };
+  var wblk = function(dat, out, final, syms, lf, df, eb, li, bs, bl, p) {
+    wbits(out, p++, final);
+    ++lf[256];
+    var _a2 = hTree(lf, 15), dlt = _a2.t, mlb = _a2.l;
+    var _b2 = hTree(df, 15), ddt = _b2.t, mdb = _b2.l;
+    var _c = lc(dlt), lclt = _c.c, nlc = _c.n;
+    var _d = lc(ddt), lcdt = _d.c, ndc = _d.n;
+    var lcfreq = new u16(19);
+    for (var i3 = 0;i3 < lclt.length; ++i3)
+      ++lcfreq[lclt[i3] & 31];
+    for (var i3 = 0;i3 < lcdt.length; ++i3)
+      ++lcfreq[lcdt[i3] & 31];
+    var _e = hTree(lcfreq, 7), lct = _e.t, mlcb = _e.l;
+    var nlcc = 19;
+    for (;nlcc > 4 && !lct[clim[nlcc - 1]]; --nlcc)
+      ;
+    var flen = bl + 5 << 3;
+    var ftlen = clen(lf, flt) + clen(df, fdt) + eb;
+    var dtlen = clen(lf, dlt) + clen(df, ddt) + eb + 14 + 3 * nlcc + clen(lcfreq, lct) + 2 * lcfreq[16] + 3 * lcfreq[17] + 7 * lcfreq[18];
+    if (bs >= 0 && flen <= ftlen && flen <= dtlen)
+      return wfblk(out, p, dat.subarray(bs, bs + bl));
+    var lm, ll, dm, dl;
+    wbits(out, p, 1 + (dtlen < ftlen)), p += 2;
+    if (dtlen < ftlen) {
+      lm = hMap(dlt, mlb, 0), ll = dlt, dm = hMap(ddt, mdb, 0), dl = ddt;
+      var llm = hMap(lct, mlcb, 0);
+      wbits(out, p, nlc - 257);
+      wbits(out, p + 5, ndc - 1);
+      wbits(out, p + 10, nlcc - 4);
+      p += 14;
+      for (var i3 = 0;i3 < nlcc; ++i3)
+        wbits(out, p + 3 * i3, lct[clim[i3]]);
+      p += 3 * nlcc;
+      var lcts = [lclt, lcdt];
+      for (var it = 0;it < 2; ++it) {
+        var clct = lcts[it];
+        for (var i3 = 0;i3 < clct.length; ++i3) {
+          var len = clct[i3] & 31;
+          wbits(out, p, llm[len]), p += lct[len];
+          if (len > 15)
+            wbits(out, p, clct[i3] >> 5 & 127), p += clct[i3] >> 12;
+        }
+      }
+    } else {
+      lm = flm, ll = flt, dm = fdm, dl = fdt;
+    }
+    for (var i3 = 0;i3 < li; ++i3) {
+      var sym = syms[i3];
+      if (sym > 255) {
+        var len = sym >> 18 & 31;
+        wbits16(out, p, lm[len + 257]), p += ll[len + 257];
+        if (len > 7)
+          wbits(out, p, sym >> 23 & 31), p += fleb[len];
+        var dst = sym & 31;
+        wbits16(out, p, dm[dst]), p += dl[dst];
+        if (dst > 3)
+          wbits16(out, p, sym >> 5 & 8191), p += fdeb[dst];
+      } else {
+        wbits16(out, p, lm[sym]), p += ll[sym];
+      }
+    }
+    wbits16(out, p, lm[256]);
+    return p + ll[256];
+  };
+  var deo = /* @__PURE__ */ new i32([65540, 131080, 131088, 131104, 262176, 1048704, 1048832, 2114560, 2117632]);
+  var et = /* @__PURE__ */ new u8(0);
+  var dflt = function(dat, lvl, plvl, pre, post, st) {
+    var s2 = st.z || dat.length;
+    var o3 = new u8(pre + s2 + 5 * (1 + Math.ceil(s2 / 7000)) + post);
+    var w3 = o3.subarray(pre, o3.length - post);
+    var lst = st.l;
+    var pos = (st.r || 0) & 7;
+    if (lvl) {
+      if (pos)
+        w3[0] = st.r >> 3;
+      var opt = deo[lvl - 1];
+      var n2 = opt >> 13, c4 = opt & 8191;
+      var msk_1 = (1 << plvl) - 1;
+      var prev = st.p || new u16(32768), head = st.h || new u16(msk_1 + 1);
+      var bs1_1 = Math.ceil(plvl / 3), bs2_1 = 2 * bs1_1;
+      var hsh = function(i4) {
+        return (dat[i4] ^ dat[i4 + 1] << bs1_1 ^ dat[i4 + 2] << bs2_1) & msk_1;
+      };
+      var syms = new i32(25000);
+      var lf = new u16(288), df = new u16(32);
+      var lc_1 = 0, eb = 0, i3 = st.i || 0, li = 0, wi = st.w || 0, bs = 0;
+      for (;i3 + 2 < s2; ++i3) {
+        var hv = hsh(i3);
+        var imod = i3 & 32767, pimod = head[hv];
+        prev[imod] = pimod;
+        head[hv] = imod;
+        if (wi <= i3) {
+          var rem = s2 - i3;
+          if ((lc_1 > 7000 || li > 24576) && (rem > 423 || !lst)) {
+            pos = wblk(dat, w3, 0, syms, lf, df, eb, li, bs, i3 - bs, pos);
+            li = lc_1 = eb = 0, bs = i3;
+            for (var j3 = 0;j3 < 286; ++j3)
+              lf[j3] = 0;
+            for (var j3 = 0;j3 < 30; ++j3)
+              df[j3] = 0;
+          }
+          var l3 = 2, d3 = 0, ch_1 = c4, dif = imod - pimod & 32767;
+          if (rem > 2 && hv == hsh(i3 - dif)) {
+            var maxn = Math.min(n2, rem) - 1;
+            var maxd = Math.min(32767, i3);
+            var ml = Math.min(258, rem);
+            while (dif <= maxd && --ch_1 && imod != pimod) {
+              if (dat[i3 + l3] == dat[i3 + l3 - dif]) {
+                var nl = 0;
+                for (;nl < ml && dat[i3 + nl] == dat[i3 + nl - dif]; ++nl)
+                  ;
+                if (nl > l3) {
+                  l3 = nl, d3 = dif;
+                  if (nl > maxn)
+                    break;
+                  var mmd = Math.min(dif, nl - 2);
+                  var md = 0;
+                  for (var j3 = 0;j3 < mmd; ++j3) {
+                    var ti = i3 - dif + j3 & 32767;
+                    var pti = prev[ti];
+                    var cd = ti - pti & 32767;
+                    if (cd > md)
+                      md = cd, pimod = ti;
+                  }
+                }
+              }
+              imod = pimod, pimod = prev[imod];
+              dif += imod - pimod & 32767;
+            }
+          }
+          if (d3) {
+            syms[li++] = 268435456 | revfl[l3] << 18 | revfd[d3];
+            var lin = revfl[l3] & 31, din = revfd[d3] & 31;
+            eb += fleb[lin] + fdeb[din];
+            ++lf[257 + lin];
+            ++df[din];
+            wi = i3 + l3;
+            ++lc_1;
+          } else {
+            syms[li++] = dat[i3];
+            ++lf[dat[i3]];
+          }
+        }
+      }
+      for (i3 = Math.max(i3, wi);i3 < s2; ++i3) {
+        syms[li++] = dat[i3];
+        ++lf[dat[i3]];
+      }
+      pos = wblk(dat, w3, lst, syms, lf, df, eb, li, bs, i3 - bs, pos);
+      if (!lst) {
+        st.r = pos & 7 | w3[pos / 8 | 0] << 3;
+        pos -= 7;
+        st.h = head, st.p = prev, st.i = i3, st.w = wi;
+      }
+    } else {
+      for (var i3 = st.w || 0;i3 < s2 + lst; i3 += 65535) {
+        var e3 = i3 + 65535;
+        if (e3 >= s2) {
+          w3[pos / 8 | 0] = lst;
+          e3 = s2;
+        }
+        pos = wfblk(w3, pos + 1, dat.subarray(i3, e3));
+      }
+      st.i = s2;
+    }
+    return slc(o3, 0, pre + shft(pos) + post);
+  };
+  var crct = /* @__PURE__ */ function() {
+    var t2 = new Int32Array(256);
+    for (var i3 = 0;i3 < 256; ++i3) {
+      var c4 = i3, k4 = 9;
+      while (--k4)
+        c4 = (c4 & 1 && -306674912) ^ c4 >>> 1;
+      t2[i3] = c4;
+    }
+    return t2;
+  }();
+  var crc = function() {
+    var c4 = -1;
+    return {
+      p: function(d3) {
+        var cr = c4;
+        for (var i3 = 0;i3 < d3.length; ++i3)
+          cr = crct[cr & 255 ^ d3[i3]] ^ cr >>> 8;
+        c4 = cr;
+      },
+      d: function() {
+        return ~c4;
+      }
+    };
+  };
+  var adler = function() {
+    var a4 = 1, b5 = 0;
+    return {
+      p: function(d3) {
+        var n2 = a4, m3 = b5;
+        var l3 = d3.length | 0;
+        for (var i3 = 0;i3 != l3; ) {
+          var e3 = Math.min(i3 + 2655, l3);
+          for (;i3 < e3; ++i3)
+            m3 += n2 += d3[i3];
+          n2 = (n2 & 65535) + 15 * (n2 >> 16), m3 = (m3 & 65535) + 15 * (m3 >> 16);
+        }
+        a4 = n2, b5 = m3;
+      },
+      d: function() {
+        a4 %= 65521, b5 %= 65521;
+        return (a4 & 255) << 24 | (a4 & 65280) << 8 | (b5 & 255) << 8 | b5 >> 8;
+      }
+    };
+  };
+  var dopt = function(dat, opt, pre, post, st) {
+    if (!st) {
+      st = { l: 1 };
+      if (opt.dictionary) {
+        var dict = opt.dictionary.subarray(-32768);
+        var newDat = new u8(dict.length + dat.length);
+        newDat.set(dict);
+        newDat.set(dat, dict.length);
+        dat = newDat;
+        st.w = dict.length;
+      }
+    }
+    return dflt(dat, opt.level == null ? 6 : opt.level, opt.mem == null ? st.l ? Math.ceil(Math.max(8, Math.min(13, Math.log(dat.length))) * 1.5) : 20 : 12 + opt.mem, pre, post, st);
+  };
+  var mrg = function(a4, b5) {
+    var o3 = {};
+    for (var k4 in a4)
+      o3[k4] = a4[k4];
+    for (var k4 in b5)
+      o3[k4] = b5[k4];
+    return o3;
+  };
+  var wcln = function(fn, fnStr, td2) {
+    var dt = fn();
+    var st = fn.toString();
+    var ks = st.slice(st.indexOf("[") + 1, st.lastIndexOf("]")).replace(/\s+/g, "").split(",");
+    for (var i3 = 0;i3 < dt.length; ++i3) {
+      var v3 = dt[i3], k4 = ks[i3];
+      if (typeof v3 == "function") {
+        fnStr += ";" + k4 + "=";
+        var st_1 = v3.toString();
+        if (v3.prototype) {
+          if (st_1.indexOf("[native code]") != -1) {
+            var spInd = st_1.indexOf(" ", 8) + 1;
+            fnStr += st_1.slice(spInd, st_1.indexOf("(", spInd));
+          } else {
+            fnStr += st_1;
+            for (var t2 in v3.prototype)
+              fnStr += ";" + k4 + ".prototype." + t2 + "=" + v3.prototype[t2].toString();
+          }
+        } else
+          fnStr += st_1;
+      } else
+        td2[k4] = v3;
+    }
+    return fnStr;
+  };
+  var ch = [];
+  var cbfs = function(v3) {
+    var tl = [];
+    for (var k4 in v3) {
+      if (v3[k4].buffer) {
+        tl.push((v3[k4] = new v3[k4].constructor(v3[k4])).buffer);
+      }
+    }
+    return tl;
+  };
+  var wrkr = function(fns, init2, id, cb) {
+    if (!ch[id]) {
+      var fnStr = "", td_1 = {}, m3 = fns.length - 1;
+      for (var i3 = 0;i3 < m3; ++i3)
+        fnStr = wcln(fns[i3], fnStr, td_1);
+      ch[id] = { c: wcln(fns[m3], fnStr, td_1), e: td_1 };
+    }
+    var td2 = mrg({}, ch[id].e);
+    return (0, node_worker_1.default)(ch[id].c + ";onmessage=function(e){for(var k in e.data)self[k]=e.data[k];onmessage=" + init2.toString() + "}", id, td2, cbfs(td2), cb);
+  };
+  var bInflt = function() {
+    return [u8, u16, i32, fleb, fdeb, clim, fl, fd, flrm, fdrm, rev, ec, hMap, max, bits, bits16, shft, slc, err, inflt, inflateSync, pbf, gopt];
+  };
+  var bDflt = function() {
+    return [u8, u16, i32, fleb, fdeb, clim, revfl, revfd, flm, flt, fdm, fdt, rev, deo, et, hMap, wbits, wbits16, hTree, ln, lc, clen, wfblk, wblk, shft, slc, dflt, dopt, deflateSync, pbf];
+  };
+  var gze = function() {
+    return [gzh, gzhl, wbytes, crc, crct];
+  };
+  var guze = function() {
+    return [gzs, gzl];
+  };
+  var zle = function() {
+    return [zlh, wbytes, adler];
+  };
+  var zule = function() {
+    return [zls];
+  };
+  var pbf = function(msg) {
+    return postMessage(msg, [msg.buffer]);
+  };
+  var gopt = function(o3) {
+    return o3 && {
+      out: o3.size && new u8(o3.size),
+      dictionary: o3.dictionary
+    };
+  };
+  var cbify = function(dat, opts, fns, init2, id, cb) {
+    var w3 = wrkr(fns, init2, id, function(err2, dat2) {
+      w3.terminate();
+      cb(err2, dat2);
+    });
+    w3.postMessage([dat, opts], opts.consume ? [dat.buffer] : []);
+    return function() {
+      w3.terminate();
+    };
+  };
+  var astrm = function(strm) {
+    strm.ondata = function(dat, final) {
+      return postMessage([dat, final], [dat.buffer]);
+    };
+    return function(ev) {
+      if (ev.data.length) {
+        strm.push(ev.data[0], ev.data[1]);
+        postMessage([ev.data[0].length]);
+      } else
+        strm.flush();
+    };
+  };
+  var astrmify = function(fns, strm, opts, init2, id, flush, ext) {
+    var t2;
+    var w3 = wrkr(fns, init2, id, function(err2, dat) {
+      if (err2)
+        w3.terminate(), strm.ondata.call(strm, err2);
+      else if (!Array.isArray(dat))
+        ext(dat);
+      else if (dat.length == 1) {
+        strm.queuedSize -= dat[0];
+        if (strm.ondrain)
+          strm.ondrain(dat[0]);
+      } else {
+        if (dat[1])
+          w3.terminate();
+        strm.ondata.call(strm, err2, dat[0], dat[1]);
+      }
+    });
+    w3.postMessage(opts);
+    strm.queuedSize = 0;
+    strm.push = function(d3, f4) {
+      if (!strm.ondata)
+        err(5);
+      if (t2)
+        strm.ondata(err(4, 0, 1), null, !!f4);
+      strm.queuedSize += d3.length;
+      w3.postMessage([d3, t2 = f4], [d3.buffer]);
+    };
+    strm.terminate = function() {
+      w3.terminate();
+    };
+    if (flush) {
+      strm.flush = function() {
+        w3.postMessage([]);
+      };
+    }
+  };
+  var b22 = function(d3, b5) {
+    return d3[b5] | d3[b5 + 1] << 8;
+  };
+  var b4 = function(d3, b5) {
+    return (d3[b5] | d3[b5 + 1] << 8 | d3[b5 + 2] << 16 | d3[b5 + 3] << 24) >>> 0;
+  };
+  var b8 = function(d3, b5) {
+    return b4(d3, b5) + b4(d3, b5 + 4) * 4294967296;
+  };
+  var wbytes = function(d3, b5, v3) {
+    for (;v3; ++b5)
+      d3[b5] = v3, v3 >>>= 8;
+  };
+  var gzh = function(c4, o3) {
+    var fn = o3.filename;
+    c4[0] = 31, c4[1] = 139, c4[2] = 8, c4[8] = o3.level < 2 ? 4 : o3.level == 9 ? 2 : 0, c4[9] = 3;
+    if (o3.mtime != 0)
+      wbytes(c4, 4, Math.floor(new Date(o3.mtime || Date.now()) / 1000));
+    if (fn) {
+      c4[3] = 8;
+      for (var i3 = 0;i3 <= fn.length; ++i3)
+        c4[i3 + 10] = fn.charCodeAt(i3);
+    }
+  };
+  var gzs = function(d3) {
+    if (d3[0] != 31 || d3[1] != 139 || d3[2] != 8)
+      err(6, "invalid gzip data");
+    var flg = d3[3];
+    var st = 10;
+    if (flg & 4)
+      st += (d3[10] | d3[11] << 8) + 2;
+    for (var zs = (flg >> 3 & 1) + (flg >> 4 & 1);zs > 0; zs -= !d3[st++])
+      ;
+    return st + (flg & 2);
+  };
+  var gzl = function(d3) {
+    var l3 = d3.length;
+    return (d3[l3 - 4] | d3[l3 - 3] << 8 | d3[l3 - 2] << 16 | d3[l3 - 1] << 24) >>> 0;
+  };
+  var gzhl = function(o3) {
+    return 10 + (o3.filename ? o3.filename.length + 1 : 0);
+  };
+  var zlh = function(c4, o3) {
+    var lv = o3.level, fl2 = lv == 0 ? 0 : lv < 6 ? 1 : lv == 9 ? 3 : 2;
+    c4[0] = 120, c4[1] = fl2 << 6 | (o3.dictionary && 32);
+    c4[1] |= 31 - (c4[0] << 8 | c4[1]) % 31;
+    if (o3.dictionary) {
+      var h3 = adler();
+      h3.p(o3.dictionary);
+      wbytes(c4, 2, h3.d());
+    }
+  };
+  var zls = function(d3, dict) {
+    if ((d3[0] & 15) != 8 || d3[0] >> 4 > 7 || (d3[0] << 8 | d3[1]) % 31)
+      err(6, "invalid zlib data");
+    if ((d3[1] >> 5 & 1) == +!dict)
+      err(6, "invalid zlib data: " + (d3[1] & 32 ? "need" : "unexpected") + " dictionary");
+    return (d3[1] >> 3 & 4) + 2;
+  };
+  function StrmOpt(opts, cb) {
+    if (typeof opts == "function")
+      cb = opts, opts = {};
+    this.ondata = cb;
+    return opts;
+  }
+  var Deflate = /* @__PURE__ */ function() {
+    function Deflate2(opts, cb) {
+      if (typeof opts == "function")
+        cb = opts, opts = {};
+      this.ondata = cb;
+      this.o = opts || {};
+      this.s = { l: 0, i: 32768, w: 32768, z: 32768 };
+      this.b = new u8(98304);
+      if (this.o.dictionary) {
+        var dict = this.o.dictionary.subarray(-32768);
+        this.b.set(dict, 32768 - dict.length);
+        this.s.i = 32768 - dict.length;
+      }
+    }
+    Deflate2.prototype.p = function(c4, f4) {
+      this.ondata(dopt(c4, this.o, 0, 0, this.s), f4);
+    };
+    Deflate2.prototype.push = function(chunk, final) {
+      if (!this.ondata)
+        err(5);
+      if (this.s.l)
+        err(4);
+      var endLen = chunk.length + this.s.z;
+      if (endLen > this.b.length) {
+        if (endLen > 2 * this.b.length - 32768) {
+          var newBuf = new u8(endLen & -32768);
+          newBuf.set(this.b.subarray(0, this.s.z));
+          this.b = newBuf;
+        }
+        var split = this.b.length - this.s.z;
+        this.b.set(chunk.subarray(0, split), this.s.z);
+        this.s.z = this.b.length;
+        this.p(this.b, false);
+        this.b.set(this.b.subarray(-32768));
+        this.b.set(chunk.subarray(split), 32768);
+        this.s.z = chunk.length - split + 32768;
+        this.s.i = 32766, this.s.w = 32768;
+      } else {
+        this.b.set(chunk, this.s.z);
+        this.s.z += chunk.length;
+      }
+      this.s.l = final & 1;
+      if (this.s.z > this.s.w + 8191 || final) {
+        this.p(this.b, final || false);
+        this.s.w = this.s.i, this.s.i -= 2;
+      }
+    };
+    Deflate2.prototype.flush = function() {
+      if (!this.ondata)
+        err(5);
+      if (this.s.l)
+        err(4);
+      this.p(this.b, false);
+      this.s.w = this.s.i, this.s.i -= 2;
+    };
+    return Deflate2;
+  }();
+  exports.Deflate = Deflate;
+  var AsyncDeflate = /* @__PURE__ */ function() {
+    function AsyncDeflate2(opts, cb) {
+      astrmify([
+        bDflt,
+        function() {
+          return [astrm, Deflate];
+        }
+      ], this, StrmOpt.call(this, opts, cb), function(ev) {
+        var strm = new Deflate(ev.data);
+        onmessage = astrm(strm);
+      }, 6, 1);
+    }
+    return AsyncDeflate2;
+  }();
+  exports.AsyncDeflate = AsyncDeflate;
+  function deflate(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bDflt
+    ], function(ev) {
+      return pbf(deflateSync(ev.data[0], ev.data[1]));
+    }, 0, cb);
+  }
+  exports.deflate = deflate;
+  function deflateSync(data, opts) {
+    return dopt(data, opts || {}, 0, 0);
+  }
+  exports.deflateSync = deflateSync;
+  var Inflate = /* @__PURE__ */ function() {
+    function Inflate2(opts, cb) {
+      if (typeof opts == "function")
+        cb = opts, opts = {};
+      this.ondata = cb;
+      var dict = opts && opts.dictionary && opts.dictionary.subarray(-32768);
+      this.s = { i: 0, b: dict ? dict.length : 0 };
+      this.o = new u8(32768);
+      this.p = new u8(0);
+      if (dict)
+        this.o.set(dict);
+    }
+    Inflate2.prototype.e = function(c4) {
+      if (!this.ondata)
+        err(5);
+      if (this.d)
+        err(4);
+      if (!this.p.length)
+        this.p = c4;
+      else if (c4.length) {
+        var n2 = new u8(this.p.length + c4.length);
+        n2.set(this.p), n2.set(c4, this.p.length), this.p = n2;
+      }
+    };
+    Inflate2.prototype.c = function(final) {
+      this.s.i = +(this.d = final || false);
+      var bts = this.s.b;
+      var dt = inflt(this.p, this.s, this.o);
+      this.ondata(slc(dt, bts, this.s.b), this.d);
+      this.o = slc(dt, this.s.b - 32768), this.s.b = this.o.length;
+      this.p = slc(this.p, this.s.p / 8 | 0), this.s.p &= 7;
+    };
+    Inflate2.prototype.push = function(chunk, final) {
+      this.e(chunk), this.c(final);
+    };
+    return Inflate2;
+  }();
+  exports.Inflate = Inflate;
+  var AsyncInflate = /* @__PURE__ */ function() {
+    function AsyncInflate2(opts, cb) {
+      astrmify([
+        bInflt,
+        function() {
+          return [astrm, Inflate];
+        }
+      ], this, StrmOpt.call(this, opts, cb), function(ev) {
+        var strm = new Inflate(ev.data);
+        onmessage = astrm(strm);
+      }, 7, 0);
+    }
+    return AsyncInflate2;
+  }();
+  exports.AsyncInflate = AsyncInflate;
+  function inflate(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bInflt
+    ], function(ev) {
+      return pbf(inflateSync(ev.data[0], gopt(ev.data[1])));
+    }, 1, cb);
+  }
+  exports.inflate = inflate;
+  function inflateSync(data, opts) {
+    return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
+  }
+  exports.inflateSync = inflateSync;
+  var Gzip = /* @__PURE__ */ function() {
+    function Gzip2(opts, cb) {
+      this.c = crc();
+      this.l = 0;
+      this.v = 1;
+      Deflate.call(this, opts, cb);
+    }
+    Gzip2.prototype.push = function(chunk, final) {
+      this.c.p(chunk);
+      this.l += chunk.length;
+      Deflate.prototype.push.call(this, chunk, final);
+    };
+    Gzip2.prototype.p = function(c4, f4) {
+      var raw = dopt(c4, this.o, this.v && gzhl(this.o), f4 && 8, this.s);
+      if (this.v)
+        gzh(raw, this.o), this.v = 0;
+      if (f4)
+        wbytes(raw, raw.length - 8, this.c.d()), wbytes(raw, raw.length - 4, this.l);
+      this.ondata(raw, f4);
+    };
+    Gzip2.prototype.flush = function() {
+      Deflate.prototype.flush.call(this);
+    };
+    return Gzip2;
+  }();
+  exports.Gzip = Gzip;
+  exports.Compress = Gzip;
+  var AsyncGzip = /* @__PURE__ */ function() {
+    function AsyncGzip2(opts, cb) {
+      astrmify([
+        bDflt,
+        gze,
+        function() {
+          return [astrm, Deflate, Gzip];
+        }
+      ], this, StrmOpt.call(this, opts, cb), function(ev) {
+        var strm = new Gzip(ev.data);
+        onmessage = astrm(strm);
+      }, 8, 1);
+    }
+    return AsyncGzip2;
+  }();
+  exports.AsyncGzip = AsyncGzip;
+  exports.AsyncCompress = AsyncGzip;
+  function gzip(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bDflt,
+      gze,
+      function() {
+        return [gzipSync];
+      }
+    ], function(ev) {
+      return pbf(gzipSync(ev.data[0], ev.data[1]));
+    }, 2, cb);
+  }
+  exports.gzip = gzip;
+  exports.compress = gzip;
+  function gzipSync(data, opts) {
+    if (!opts)
+      opts = {};
+    var c4 = crc(), l3 = data.length;
+    c4.p(data);
+    var d3 = dopt(data, opts, gzhl(opts), 8), s2 = d3.length;
+    return gzh(d3, opts), wbytes(d3, s2 - 8, c4.d()), wbytes(d3, s2 - 4, l3), d3;
+  }
+  exports.gzipSync = gzipSync;
+  exports.compressSync = gzipSync;
+  var Gunzip = /* @__PURE__ */ function() {
+    function Gunzip2(opts, cb) {
+      this.v = 1;
+      this.r = 0;
+      Inflate.call(this, opts, cb);
+    }
+    Gunzip2.prototype.push = function(chunk, final) {
+      Inflate.prototype.e.call(this, chunk);
+      this.r += chunk.length;
+      if (this.v) {
+        var p = this.p.subarray(this.v - 1);
+        var s2 = p.length > 3 ? gzs(p) : 4;
+        if (s2 > p.length) {
+          if (!final)
+            return;
+        } else if (this.v > 1 && this.onmember) {
+          this.onmember(this.r - p.length);
+        }
+        this.p = p.subarray(s2), this.v = 0;
+      }
+      Inflate.prototype.c.call(this, final);
+      if (this.s.f && !this.s.l && !final) {
+        this.v = shft(this.s.p) + 9;
+        this.s = { i: 0 };
+        this.o = new u8(0);
+        this.push(new u8(0), final);
+      }
+    };
+    return Gunzip2;
+  }();
+  exports.Gunzip = Gunzip;
+  var AsyncGunzip = /* @__PURE__ */ function() {
+    function AsyncGunzip2(opts, cb) {
+      var _this = this;
+      astrmify([
+        bInflt,
+        guze,
+        function() {
+          return [astrm, Inflate, Gunzip];
+        }
+      ], this, StrmOpt.call(this, opts, cb), function(ev) {
+        var strm = new Gunzip(ev.data);
+        strm.onmember = function(offset) {
+          return postMessage(offset);
+        };
+        onmessage = astrm(strm);
+      }, 9, 0, function(offset) {
+        return _this.onmember && _this.onmember(offset);
+      });
+    }
+    return AsyncGunzip2;
+  }();
+  exports.AsyncGunzip = AsyncGunzip;
+  function gunzip(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bInflt,
+      guze,
+      function() {
+        return [gunzipSync];
+      }
+    ], function(ev) {
+      return pbf(gunzipSync(ev.data[0], ev.data[1]));
+    }, 3, cb);
+  }
+  exports.gunzip = gunzip;
+  function gunzipSync(data, opts) {
+    var st = gzs(data);
+    if (st + 8 > data.length)
+      err(6, "invalid gzip data");
+    return inflt(data.subarray(st, -8), { i: 2 }, opts && opts.out || new u8(gzl(data)), opts && opts.dictionary);
+  }
+  exports.gunzipSync = gunzipSync;
+  var Zlib = /* @__PURE__ */ function() {
+    function Zlib2(opts, cb) {
+      this.c = adler();
+      this.v = 1;
+      Deflate.call(this, opts, cb);
+    }
+    Zlib2.prototype.push = function(chunk, final) {
+      this.c.p(chunk);
+      Deflate.prototype.push.call(this, chunk, final);
+    };
+    Zlib2.prototype.p = function(c4, f4) {
+      var raw = dopt(c4, this.o, this.v && (this.o.dictionary ? 6 : 2), f4 && 4, this.s);
+      if (this.v)
+        zlh(raw, this.o), this.v = 0;
+      if (f4)
+        wbytes(raw, raw.length - 4, this.c.d());
+      this.ondata(raw, f4);
+    };
+    Zlib2.prototype.flush = function() {
+      Deflate.prototype.flush.call(this);
+    };
+    return Zlib2;
+  }();
+  exports.Zlib = Zlib;
+  var AsyncZlib = /* @__PURE__ */ function() {
+    function AsyncZlib2(opts, cb) {
+      astrmify([
+        bDflt,
+        zle,
+        function() {
+          return [astrm, Deflate, Zlib];
+        }
+      ], this, StrmOpt.call(this, opts, cb), function(ev) {
+        var strm = new Zlib(ev.data);
+        onmessage = astrm(strm);
+      }, 10, 1);
+    }
+    return AsyncZlib2;
+  }();
+  exports.AsyncZlib = AsyncZlib;
+  function zlib(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bDflt,
+      zle,
+      function() {
+        return [zlibSync];
+      }
+    ], function(ev) {
+      return pbf(zlibSync(ev.data[0], ev.data[1]));
+    }, 4, cb);
+  }
+  exports.zlib = zlib;
+  function zlibSync(data, opts) {
+    if (!opts)
+      opts = {};
+    var a4 = adler();
+    a4.p(data);
+    var d3 = dopt(data, opts, opts.dictionary ? 6 : 2, 4);
+    return zlh(d3, opts), wbytes(d3, d3.length - 4, a4.d()), d3;
+  }
+  exports.zlibSync = zlibSync;
+  var Unzlib = /* @__PURE__ */ function() {
+    function Unzlib2(opts, cb) {
+      Inflate.call(this, opts, cb);
+      this.v = opts && opts.dictionary ? 2 : 1;
+    }
+    Unzlib2.prototype.push = function(chunk, final) {
+      Inflate.prototype.e.call(this, chunk);
+      if (this.v) {
+        if (this.p.length < 6 && !final)
+          return;
+        this.p = this.p.subarray(zls(this.p, this.v - 1)), this.v = 0;
+      }
+      if (final) {
+        if (this.p.length < 4)
+          err(6, "invalid zlib data");
+        this.p = this.p.subarray(0, -4);
+      }
+      Inflate.prototype.c.call(this, final);
+    };
+    return Unzlib2;
+  }();
+  exports.Unzlib = Unzlib;
+  var AsyncUnzlib = /* @__PURE__ */ function() {
+    function AsyncUnzlib2(opts, cb) {
+      astrmify([
+        bInflt,
+        zule,
+        function() {
+          return [astrm, Inflate, Unzlib];
+        }
+      ], this, StrmOpt.call(this, opts, cb), function(ev) {
+        var strm = new Unzlib(ev.data);
+        onmessage = astrm(strm);
+      }, 11, 0);
+    }
+    return AsyncUnzlib2;
+  }();
+  exports.AsyncUnzlib = AsyncUnzlib;
+  function unzlib(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bInflt,
+      zule,
+      function() {
+        return [unzlibSync];
+      }
+    ], function(ev) {
+      return pbf(unzlibSync(ev.data[0], gopt(ev.data[1])));
+    }, 5, cb);
+  }
+  exports.unzlib = unzlib;
+  function unzlibSync(data, opts) {
+    return inflt(data.subarray(zls(data, opts && opts.dictionary), -4), { i: 2 }, opts && opts.out, opts && opts.dictionary);
+  }
+  exports.unzlibSync = unzlibSync;
+  var Decompress = /* @__PURE__ */ function() {
+    function Decompress2(opts, cb) {
+      this.o = StrmOpt.call(this, opts, cb) || {};
+      this.G = Gunzip;
+      this.I = Inflate;
+      this.Z = Unzlib;
+    }
+    Decompress2.prototype.i = function() {
+      var _this = this;
+      this.s.ondata = function(dat, final) {
+        _this.ondata(dat, final);
+      };
+    };
+    Decompress2.prototype.push = function(chunk, final) {
+      if (!this.ondata)
+        err(5);
+      if (!this.s) {
+        if (this.p && this.p.length) {
+          var n2 = new u8(this.p.length + chunk.length);
+          n2.set(this.p), n2.set(chunk, this.p.length);
+        } else
+          this.p = chunk;
+        if (this.p.length > 2) {
+          this.s = this.p[0] == 31 && this.p[1] == 139 && this.p[2] == 8 ? new this.G(this.o) : (this.p[0] & 15) != 8 || this.p[0] >> 4 > 7 || (this.p[0] << 8 | this.p[1]) % 31 ? new this.I(this.o) : new this.Z(this.o);
+          this.i();
+          this.s.push(this.p, final);
+          this.p = null;
+        }
+      } else
+        this.s.push(chunk, final);
+    };
+    return Decompress2;
+  }();
+  exports.Decompress = Decompress;
+  var AsyncDecompress = /* @__PURE__ */ function() {
+    function AsyncDecompress2(opts, cb) {
+      Decompress.call(this, opts, cb);
+      this.queuedSize = 0;
+      this.G = AsyncGunzip;
+      this.I = AsyncInflate;
+      this.Z = AsyncUnzlib;
+    }
+    AsyncDecompress2.prototype.i = function() {
+      var _this = this;
+      this.s.ondata = function(err2, dat, final) {
+        _this.ondata(err2, dat, final);
+      };
+      this.s.ondrain = function(size) {
+        _this.queuedSize -= size;
+        if (_this.ondrain)
+          _this.ondrain(size);
+      };
+    };
+    AsyncDecompress2.prototype.push = function(chunk, final) {
+      this.queuedSize += chunk.length;
+      Decompress.prototype.push.call(this, chunk, final);
+    };
+    return AsyncDecompress2;
+  }();
+  exports.AsyncDecompress = AsyncDecompress;
+  function decompress(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return data[0] == 31 && data[1] == 139 && data[2] == 8 ? gunzip(data, opts, cb) : (data[0] & 15) != 8 || data[0] >> 4 > 7 || (data[0] << 8 | data[1]) % 31 ? inflate(data, opts, cb) : unzlib(data, opts, cb);
+  }
+  exports.decompress = decompress;
+  function decompressSync(data, opts) {
+    return data[0] == 31 && data[1] == 139 && data[2] == 8 ? gunzipSync(data, opts) : (data[0] & 15) != 8 || data[0] >> 4 > 7 || (data[0] << 8 | data[1]) % 31 ? inflateSync(data, opts) : unzlibSync(data, opts);
+  }
+  exports.decompressSync = decompressSync;
+  var fltn = function(d3, p, t2, o3) {
+    for (var k4 in d3) {
+      var val = d3[k4], n2 = p + k4, op = o3;
+      if (Array.isArray(val))
+        op = mrg(o3, val[1]), val = val[0];
+      if (val instanceof u8)
+        t2[n2] = [val, op];
+      else {
+        t2[n2 += "/"] = [new u8(0), op];
+        fltn(val, n2, t2, o3);
+      }
+    }
+  };
+  var te2 = typeof TextEncoder != "undefined" && /* @__PURE__ */ new TextEncoder;
+  var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder;
+  var tds = 0;
+  try {
+    td.decode(et, { stream: true });
+    tds = 1;
+  } catch (e3) {}
+  var dutf8 = function(d3) {
+    for (var r4 = "", i3 = 0;; ) {
+      var c4 = d3[i3++];
+      var eb = (c4 > 127) + (c4 > 223) + (c4 > 239);
+      if (i3 + eb > d3.length)
+        return { s: r4, r: slc(d3, i3 - 1) };
+      if (!eb)
+        r4 += String.fromCharCode(c4);
+      else if (eb == 3) {
+        c4 = ((c4 & 15) << 18 | (d3[i3++] & 63) << 12 | (d3[i3++] & 63) << 6 | d3[i3++] & 63) - 65536, r4 += String.fromCharCode(55296 | c4 >> 10, 56320 | c4 & 1023);
+      } else if (eb & 1)
+        r4 += String.fromCharCode((c4 & 31) << 6 | d3[i3++] & 63);
+      else
+        r4 += String.fromCharCode((c4 & 15) << 12 | (d3[i3++] & 63) << 6 | d3[i3++] & 63);
+    }
+  };
+  var DecodeUTF8 = /* @__PURE__ */ function() {
+    function DecodeUTF82(cb) {
+      this.ondata = cb;
+      if (tds)
+        this.t = new TextDecoder;
+      else
+        this.p = et;
+    }
+    DecodeUTF82.prototype.push = function(chunk, final) {
+      if (!this.ondata)
+        err(5);
+      final = !!final;
+      if (this.t) {
+        this.ondata(this.t.decode(chunk, { stream: true }), final);
+        if (final) {
+          if (this.t.decode().length)
+            err(8);
+          this.t = null;
+        }
+        return;
+      }
+      if (!this.p)
+        err(4);
+      var dat = new u8(this.p.length + chunk.length);
+      dat.set(this.p);
+      dat.set(chunk, this.p.length);
+      var _a2 = dutf8(dat), s2 = _a2.s, r4 = _a2.r;
+      if (final) {
+        if (r4.length)
+          err(8);
+        this.p = null;
+      } else
+        this.p = r4;
+      this.ondata(s2, final);
+    };
+    return DecodeUTF82;
+  }();
+  exports.DecodeUTF8 = DecodeUTF8;
+  var EncodeUTF8 = /* @__PURE__ */ function() {
+    function EncodeUTF82(cb) {
+      this.ondata = cb;
+    }
+    EncodeUTF82.prototype.push = function(chunk, final) {
+      if (!this.ondata)
+        err(5);
+      if (this.d)
+        err(4);
+      this.ondata(strToU8(chunk), this.d = final || false);
+    };
+    return EncodeUTF82;
+  }();
+  exports.EncodeUTF8 = EncodeUTF8;
+  function strToU8(str, latin1) {
+    if (latin1) {
+      var ar_1 = new u8(str.length);
+      for (var i3 = 0;i3 < str.length; ++i3)
+        ar_1[i3] = str.charCodeAt(i3);
+      return ar_1;
+    }
+    if (te2)
+      return te2.encode(str);
+    var l3 = str.length;
+    var ar = new u8(str.length + (str.length >> 1));
+    var ai = 0;
+    var w3 = function(v3) {
+      ar[ai++] = v3;
+    };
+    for (var i3 = 0;i3 < l3; ++i3) {
+      if (ai + 5 > ar.length) {
+        var n2 = new u8(ai + 8 + (l3 - i3 << 1));
+        n2.set(ar);
+        ar = n2;
+      }
+      var c4 = str.charCodeAt(i3);
+      if (c4 < 128 || latin1)
+        w3(c4);
+      else if (c4 < 2048)
+        w3(192 | c4 >> 6), w3(128 | c4 & 63);
+      else if (c4 > 55295 && c4 < 57344)
+        c4 = 65536 + (c4 & 1023 << 10) | str.charCodeAt(++i3) & 1023, w3(240 | c4 >> 18), w3(128 | c4 >> 12 & 63), w3(128 | c4 >> 6 & 63), w3(128 | c4 & 63);
+      else
+        w3(224 | c4 >> 12), w3(128 | c4 >> 6 & 63), w3(128 | c4 & 63);
+    }
+    return slc(ar, 0, ai);
+  }
+  exports.strToU8 = strToU8;
+  function strFromU8(dat, latin1) {
+    if (latin1) {
+      var r4 = "";
+      for (var i3 = 0;i3 < dat.length; i3 += 16384)
+        r4 += String.fromCharCode.apply(null, dat.subarray(i3, i3 + 16384));
+      return r4;
+    } else if (td) {
+      return td.decode(dat);
+    } else {
+      var _a2 = dutf8(dat), s2 = _a2.s, r4 = _a2.r;
+      if (r4.length)
+        err(8);
+      return s2;
+    }
+  }
+  exports.strFromU8 = strFromU8;
+  var dbf = function(l3) {
+    return l3 == 1 ? 3 : l3 < 6 ? 2 : l3 == 9 ? 1 : 0;
+  };
+  var slzh = function(d3, b5) {
+    return b5 + 30 + b22(d3, b5 + 26) + b22(d3, b5 + 28);
+  };
+  var zh = function(d3, b5, z3) {
+    var fnl = b22(d3, b5 + 28), fn = strFromU8(d3.subarray(b5 + 46, b5 + 46 + fnl), !(b22(d3, b5 + 8) & 2048)), es = b5 + 46 + fnl, bs = b4(d3, b5 + 20);
+    var _a2 = z3 && bs == 4294967295 ? z64e(d3, es) : [bs, b4(d3, b5 + 24), b4(d3, b5 + 42)], sc = _a2[0], su = _a2[1], off = _a2[2];
+    return [b22(d3, b5 + 10), sc, su, fn, es + b22(d3, b5 + 30) + b22(d3, b5 + 32), off];
+  };
+  var z64e = function(d3, b5) {
+    for (;b22(d3, b5) != 1; b5 += 4 + b22(d3, b5 + 2))
+      ;
+    return [b8(d3, b5 + 12), b8(d3, b5 + 4), b8(d3, b5 + 20)];
+  };
+  var exfl = function(ex) {
+    var le3 = 0;
+    if (ex) {
+      for (var k4 in ex) {
+        var l3 = ex[k4].length;
+        if (l3 > 65535)
+          err(9);
+        le3 += l3 + 4;
+      }
+    }
+    return le3;
+  };
+  var wzh = function(d3, b5, f4, fn, u4, c4, ce3, co) {
+    var fl2 = fn.length, ex = f4.extra, col = co && co.length;
+    var exl = exfl(ex);
+    wbytes(d3, b5, ce3 != null ? 33639248 : 67324752), b5 += 4;
+    if (ce3 != null)
+      d3[b5++] = 20, d3[b5++] = f4.os;
+    d3[b5] = 20, b5 += 2;
+    d3[b5++] = f4.flag << 1 | (c4 < 0 && 8), d3[b5++] = u4 && 8;
+    d3[b5++] = f4.compression & 255, d3[b5++] = f4.compression >> 8;
+    var dt = new Date(f4.mtime == null ? Date.now() : f4.mtime), y5 = dt.getFullYear() - 1980;
+    if (y5 < 0 || y5 > 119)
+      err(10);
+    wbytes(d3, b5, y5 << 25 | dt.getMonth() + 1 << 21 | dt.getDate() << 16 | dt.getHours() << 11 | dt.getMinutes() << 5 | dt.getSeconds() >> 1), b5 += 4;
+    if (c4 != -1) {
+      wbytes(d3, b5, f4.crc);
+      wbytes(d3, b5 + 4, c4 < 0 ? -c4 - 2 : c4);
+      wbytes(d3, b5 + 8, f4.size);
+    }
+    wbytes(d3, b5 + 12, fl2);
+    wbytes(d3, b5 + 14, exl), b5 += 16;
+    if (ce3 != null) {
+      wbytes(d3, b5, col);
+      wbytes(d3, b5 + 6, f4.attrs);
+      wbytes(d3, b5 + 10, ce3), b5 += 14;
+    }
+    d3.set(fn, b5);
+    b5 += fl2;
+    if (exl) {
+      for (var k4 in ex) {
+        var exf = ex[k4], l3 = exf.length;
+        wbytes(d3, b5, +k4);
+        wbytes(d3, b5 + 2, l3);
+        d3.set(exf, b5 + 4), b5 += 4 + l3;
+      }
+    }
+    if (col)
+      d3.set(co, b5), b5 += col;
+    return b5;
+  };
+  var wzf = function(o3, b5, c4, d3, e3) {
+    wbytes(o3, b5, 101010256);
+    wbytes(o3, b5 + 8, c4);
+    wbytes(o3, b5 + 10, c4);
+    wbytes(o3, b5 + 12, d3);
+    wbytes(o3, b5 + 16, e3);
+  };
+  var ZipPassThrough = /* @__PURE__ */ function() {
+    function ZipPassThrough2(filename) {
+      this.filename = filename;
+      this.c = crc();
+      this.size = 0;
+      this.compression = 0;
+    }
+    ZipPassThrough2.prototype.process = function(chunk, final) {
+      this.ondata(null, chunk, final);
+    };
+    ZipPassThrough2.prototype.push = function(chunk, final) {
+      if (!this.ondata)
+        err(5);
+      this.c.p(chunk);
+      this.size += chunk.length;
+      if (final)
+        this.crc = this.c.d();
+      this.process(chunk, final || false);
+    };
+    return ZipPassThrough2;
+  }();
+  exports.ZipPassThrough = ZipPassThrough;
+  var ZipDeflate = /* @__PURE__ */ function() {
+    function ZipDeflate2(filename, opts) {
+      var _this = this;
+      if (!opts)
+        opts = {};
+      ZipPassThrough.call(this, filename);
+      this.d = new Deflate(opts, function(dat, final) {
+        _this.ondata(null, dat, final);
+      });
+      this.compression = 8;
+      this.flag = dbf(opts.level);
+    }
+    ZipDeflate2.prototype.process = function(chunk, final) {
+      try {
+        this.d.push(chunk, final);
+      } catch (e3) {
+        this.ondata(e3, null, final);
+      }
+    };
+    ZipDeflate2.prototype.push = function(chunk, final) {
+      ZipPassThrough.prototype.push.call(this, chunk, final);
+    };
+    return ZipDeflate2;
+  }();
+  exports.ZipDeflate = ZipDeflate;
+  var AsyncZipDeflate = /* @__PURE__ */ function() {
+    function AsyncZipDeflate2(filename, opts) {
+      var _this = this;
+      if (!opts)
+        opts = {};
+      ZipPassThrough.call(this, filename);
+      this.d = new AsyncDeflate(opts, function(err2, dat, final) {
+        _this.ondata(err2, dat, final);
+      });
+      this.compression = 8;
+      this.flag = dbf(opts.level);
+      this.terminate = this.d.terminate;
+    }
+    AsyncZipDeflate2.prototype.process = function(chunk, final) {
+      this.d.push(chunk, final);
+    };
+    AsyncZipDeflate2.prototype.push = function(chunk, final) {
+      ZipPassThrough.prototype.push.call(this, chunk, final);
+    };
+    return AsyncZipDeflate2;
+  }();
+  exports.AsyncZipDeflate = AsyncZipDeflate;
+  var Zip = /* @__PURE__ */ function() {
+    function Zip2(cb) {
+      this.ondata = cb;
+      this.u = [];
+      this.d = 1;
+    }
+    Zip2.prototype.add = function(file) {
+      var _this = this;
+      if (!this.ondata)
+        err(5);
+      if (this.d & 2)
+        this.ondata(err(4 + (this.d & 1) * 8, 0, 1), null, false);
+      else {
+        var f4 = strToU8(file.filename), fl_1 = f4.length;
+        var com = file.comment, o3 = com && strToU8(com);
+        var u4 = fl_1 != file.filename.length || o3 && com.length != o3.length;
+        var hl_1 = fl_1 + exfl(file.extra) + 30;
+        if (fl_1 > 65535)
+          this.ondata(err(11, 0, 1), null, false);
+        var header = new u8(hl_1);
+        wzh(header, 0, file, f4, u4, -1);
+        var chks_1 = [header];
+        var pAll_1 = function() {
+          for (var _i = 0, chks_2 = chks_1;_i < chks_2.length; _i++) {
+            var chk = chks_2[_i];
+            _this.ondata(null, chk, false);
+          }
+          chks_1 = [];
+        };
+        var tr_1 = this.d;
+        this.d = 0;
+        var ind_1 = this.u.length;
+        var uf_1 = mrg(file, {
+          f: f4,
+          u: u4,
+          o: o3,
+          t: function() {
+            if (file.terminate)
+              file.terminate();
+          },
+          r: function() {
+            pAll_1();
+            if (tr_1) {
+              var nxt = _this.u[ind_1 + 1];
+              if (nxt)
+                nxt.r();
+              else
+                _this.d = 1;
+            }
+            tr_1 = 1;
+          }
+        });
+        var cl_1 = 0;
+        file.ondata = function(err2, dat, final) {
+          if (err2) {
+            _this.ondata(err2, dat, final);
+            _this.terminate();
+          } else {
+            cl_1 += dat.length;
+            chks_1.push(dat);
+            if (final) {
+              var dd = new u8(16);
+              wbytes(dd, 0, 134695760);
+              wbytes(dd, 4, file.crc);
+              wbytes(dd, 8, cl_1);
+              wbytes(dd, 12, file.size);
+              chks_1.push(dd);
+              uf_1.c = cl_1, uf_1.b = hl_1 + cl_1 + 16, uf_1.crc = file.crc, uf_1.size = file.size;
+              if (tr_1)
+                uf_1.r();
+              tr_1 = 1;
+            } else if (tr_1)
+              pAll_1();
+          }
+        };
+        this.u.push(uf_1);
+      }
+    };
+    Zip2.prototype.end = function() {
+      var _this = this;
+      if (this.d & 2) {
+        this.ondata(err(4 + (this.d & 1) * 8, 0, 1), null, true);
+        return;
+      }
+      if (this.d)
+        this.e();
+      else
+        this.u.push({
+          r: function() {
+            if (!(_this.d & 1))
+              return;
+            _this.u.splice(-1, 1);
+            _this.e();
+          },
+          t: function() {}
+        });
+      this.d = 3;
+    };
+    Zip2.prototype.e = function() {
+      var bt = 0, l3 = 0, tl = 0;
+      for (var _i = 0, _a2 = this.u;_i < _a2.length; _i++) {
+        var f4 = _a2[_i];
+        tl += 46 + f4.f.length + exfl(f4.extra) + (f4.o ? f4.o.length : 0);
+      }
+      var out = new u8(tl + 22);
+      for (var _b2 = 0, _c = this.u;_b2 < _c.length; _b2++) {
+        var f4 = _c[_b2];
+        wzh(out, bt, f4, f4.f, f4.u, -f4.c - 2, l3, f4.o);
+        bt += 46 + f4.f.length + exfl(f4.extra) + (f4.o ? f4.o.length : 0), l3 += f4.b;
+      }
+      wzf(out, bt, this.u.length, tl, l3);
+      this.ondata(null, out, true);
+      this.d = 2;
+    };
+    Zip2.prototype.terminate = function() {
+      for (var _i = 0, _a2 = this.u;_i < _a2.length; _i++) {
+        var f4 = _a2[_i];
+        f4.t();
+      }
+      this.d = 2;
+    };
+    return Zip2;
+  }();
+  exports.Zip = Zip;
+  function zip(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    var r4 = {};
+    fltn(data, "", r4, opts);
+    var k4 = Object.keys(r4);
+    var lft = k4.length, o3 = 0, tot = 0;
+    var slft = lft, files = new Array(lft);
+    var term = [];
+    var tAll = function() {
+      for (var i4 = 0;i4 < term.length; ++i4)
+        term[i4]();
+    };
+    var cbd = function(a4, b5) {
+      mt(function() {
+        cb(a4, b5);
+      });
+    };
+    mt(function() {
+      cbd = cb;
+    });
+    var cbf = function() {
+      var out = new u8(tot + 22), oe = o3, cdl = tot - o3;
+      tot = 0;
+      for (var i4 = 0;i4 < slft; ++i4) {
+        var f4 = files[i4];
+        try {
+          var l3 = f4.c.length;
+          wzh(out, tot, f4, f4.f, f4.u, l3);
+          var badd = 30 + f4.f.length + exfl(f4.extra);
+          var loc = tot + badd;
+          out.set(f4.c, loc);
+          wzh(out, o3, f4, f4.f, f4.u, l3, tot, f4.m), o3 += 16 + badd + (f4.m ? f4.m.length : 0), tot = loc + l3;
+        } catch (e3) {
+          return cbd(e3, null);
+        }
+      }
+      wzf(out, o3, files.length, cdl, oe);
+      cbd(null, out);
+    };
+    if (!lft)
+      cbf();
+    var _loop_1 = function(i4) {
+      var fn = k4[i4];
+      var _a2 = r4[fn], file = _a2[0], p = _a2[1];
+      var c4 = crc(), size = file.length;
+      c4.p(file);
+      var f4 = strToU8(fn), s2 = f4.length;
+      var com = p.comment, m3 = com && strToU8(com), ms = m3 && m3.length;
+      var exl = exfl(p.extra);
+      var compression = p.level == 0 ? 0 : 8;
+      var cbl = function(e3, d3) {
+        if (e3) {
+          tAll();
+          cbd(e3, null);
+        } else {
+          var l3 = d3.length;
+          files[i4] = mrg(p, {
+            size,
+            crc: c4.d(),
+            c: d3,
+            f: f4,
+            m: m3,
+            u: s2 != fn.length || m3 && com.length != ms,
+            compression
+          });
+          o3 += 30 + s2 + exl + l3;
+          tot += 76 + 2 * (s2 + exl) + (ms || 0) + l3;
+          if (!--lft)
+            cbf();
+        }
+      };
+      if (s2 > 65535)
+        cbl(err(11, 0, 1), null);
+      if (!compression)
+        cbl(null, file);
+      else if (size < 160000) {
+        try {
+          cbl(null, deflateSync(file, p));
+        } catch (e3) {
+          cbl(e3, null);
+        }
+      } else
+        term.push(deflate(file, p, cbl));
+    };
+    for (var i3 = 0;i3 < slft; ++i3) {
+      _loop_1(i3);
+    }
+    return tAll;
+  }
+  exports.zip = zip;
+  function zipSync(data, opts) {
+    if (!opts)
+      opts = {};
+    var r4 = {};
+    var files = [];
+    fltn(data, "", r4, opts);
+    var o3 = 0;
+    var tot = 0;
+    for (var fn in r4) {
+      var _a2 = r4[fn], file = _a2[0], p = _a2[1];
+      var compression = p.level == 0 ? 0 : 8;
+      var f4 = strToU8(fn), s2 = f4.length;
+      var com = p.comment, m3 = com && strToU8(com), ms = m3 && m3.length;
+      var exl = exfl(p.extra);
+      if (s2 > 65535)
+        err(11);
+      var d3 = compression ? deflateSync(file, p) : file, l3 = d3.length;
+      var c4 = crc();
+      c4.p(file);
+      files.push(mrg(p, {
+        size: file.length,
+        crc: c4.d(),
+        c: d3,
+        f: f4,
+        m: m3,
+        u: s2 != fn.length || m3 && com.length != ms,
+        o: o3,
+        compression
+      }));
+      o3 += 30 + s2 + exl + l3;
+      tot += 76 + 2 * (s2 + exl) + (ms || 0) + l3;
+    }
+    var out = new u8(tot + 22), oe = o3, cdl = tot - o3;
+    for (var i3 = 0;i3 < files.length; ++i3) {
+      var f4 = files[i3];
+      wzh(out, f4.o, f4, f4.f, f4.u, f4.c.length);
+      var badd = 30 + f4.f.length + exfl(f4.extra);
+      out.set(f4.c, f4.o + badd);
+      wzh(out, o3, f4, f4.f, f4.u, f4.c.length, f4.o, f4.m), o3 += 16 + badd + (f4.m ? f4.m.length : 0);
+    }
+    wzf(out, o3, files.length, cdl, oe);
+    return out;
+  }
+  exports.zipSync = zipSync;
+  var UnzipPassThrough = /* @__PURE__ */ function() {
+    function UnzipPassThrough2() {}
+    UnzipPassThrough2.prototype.push = function(data, final) {
+      this.ondata(null, data, final);
+    };
+    UnzipPassThrough2.compression = 0;
+    return UnzipPassThrough2;
+  }();
+  exports.UnzipPassThrough = UnzipPassThrough;
+  var UnzipInflate = /* @__PURE__ */ function() {
+    function UnzipInflate2() {
+      var _this = this;
+      this.i = new Inflate(function(dat, final) {
+        _this.ondata(null, dat, final);
+      });
+    }
+    UnzipInflate2.prototype.push = function(data, final) {
+      try {
+        this.i.push(data, final);
+      } catch (e3) {
+        this.ondata(e3, null, final);
+      }
+    };
+    UnzipInflate2.compression = 8;
+    return UnzipInflate2;
+  }();
+  exports.UnzipInflate = UnzipInflate;
+  var AsyncUnzipInflate = /* @__PURE__ */ function() {
+    function AsyncUnzipInflate2(_5, sz) {
+      var _this = this;
+      if (sz < 320000) {
+        this.i = new Inflate(function(dat, final) {
+          _this.ondata(null, dat, final);
+        });
+      } else {
+        this.i = new AsyncInflate(function(err2, dat, final) {
+          _this.ondata(err2, dat, final);
+        });
+        this.terminate = this.i.terminate;
+      }
+    }
+    AsyncUnzipInflate2.prototype.push = function(data, final) {
+      if (this.i.terminate)
+        data = slc(data, 0);
+      this.i.push(data, final);
+    };
+    AsyncUnzipInflate2.compression = 8;
+    return AsyncUnzipInflate2;
+  }();
+  exports.AsyncUnzipInflate = AsyncUnzipInflate;
+  var Unzip = /* @__PURE__ */ function() {
+    function Unzip2(cb) {
+      this.onfile = cb;
+      this.k = [];
+      this.o = {
+        0: UnzipPassThrough
+      };
+      this.p = et;
+    }
+    Unzip2.prototype.push = function(chunk, final) {
+      var _this = this;
+      if (!this.onfile)
+        err(5);
+      if (!this.p)
+        err(4);
+      if (this.c > 0) {
+        var len = Math.min(this.c, chunk.length);
+        var toAdd = chunk.subarray(0, len);
+        this.c -= len;
+        if (this.d)
+          this.d.push(toAdd, !this.c);
+        else
+          this.k[0].push(toAdd);
+        chunk = chunk.subarray(len);
+        if (chunk.length)
+          return this.push(chunk, final);
+      } else {
+        var f4 = 0, i3 = 0, is = undefined, buf = undefined;
+        if (!this.p.length)
+          buf = chunk;
+        else if (!chunk.length)
+          buf = this.p;
+        else {
+          buf = new u8(this.p.length + chunk.length);
+          buf.set(this.p), buf.set(chunk, this.p.length);
+        }
+        var l3 = buf.length, oc = this.c, add = oc && this.d;
+        var _loop_2 = function() {
+          var _a2;
+          var sig = b4(buf, i3);
+          if (sig == 67324752) {
+            f4 = 1, is = i3;
+            this_1.d = null;
+            this_1.c = 0;
+            var bf = b22(buf, i3 + 6), cmp_1 = b22(buf, i3 + 8), u4 = bf & 2048, dd = bf & 8, fnl = b22(buf, i3 + 26), es = b22(buf, i3 + 28);
+            if (l3 > i3 + 30 + fnl + es) {
+              var chks_3 = [];
+              this_1.k.unshift(chks_3);
+              f4 = 2;
+              var sc_1 = b4(buf, i3 + 18), su_1 = b4(buf, i3 + 22);
+              var fn_1 = strFromU8(buf.subarray(i3 + 30, i3 += 30 + fnl), !u4);
+              if (sc_1 == 4294967295) {
+                _a2 = dd ? [-2] : z64e(buf, i3), sc_1 = _a2[0], su_1 = _a2[1];
+              } else if (dd)
+                sc_1 = -1;
+              i3 += es;
+              this_1.c = sc_1;
+              var d_1;
+              var file_1 = {
+                name: fn_1,
+                compression: cmp_1,
+                start: function() {
+                  if (!file_1.ondata)
+                    err(5);
+                  if (!sc_1)
+                    file_1.ondata(null, et, true);
+                  else {
+                    var ctr = _this.o[cmp_1];
+                    if (!ctr)
+                      file_1.ondata(err(14, "unknown compression type " + cmp_1, 1), null, false);
+                    d_1 = sc_1 < 0 ? new ctr(fn_1) : new ctr(fn_1, sc_1, su_1);
+                    d_1.ondata = function(err2, dat3, final2) {
+                      file_1.ondata(err2, dat3, final2);
+                    };
+                    for (var _i = 0, chks_4 = chks_3;_i < chks_4.length; _i++) {
+                      var dat2 = chks_4[_i];
+                      d_1.push(dat2, false);
+                    }
+                    if (_this.k[0] == chks_3 && _this.c)
+                      _this.d = d_1;
+                    else
+                      d_1.push(et, true);
+                  }
+                },
+                terminate: function() {
+                  if (d_1 && d_1.terminate)
+                    d_1.terminate();
+                }
+              };
+              if (sc_1 >= 0)
+                file_1.size = sc_1, file_1.originalSize = su_1;
+              this_1.onfile(file_1);
+            }
+            return "break";
+          } else if (oc) {
+            if (sig == 134695760) {
+              is = i3 += 12 + (oc == -2 && 8), f4 = 3, this_1.c = 0;
+              return "break";
+            } else if (sig == 33639248) {
+              is = i3 -= 4, f4 = 3, this_1.c = 0;
+              return "break";
+            }
+          }
+        };
+        var this_1 = this;
+        for (;i3 < l3 - 4; ++i3) {
+          var state_1 = _loop_2();
+          if (state_1 === "break")
+            break;
+        }
+        this.p = et;
+        if (oc < 0) {
+          var dat = f4 ? buf.subarray(0, is - 12 - (oc == -2 && 8) - (b4(buf, is - 16) == 134695760 && 4)) : buf.subarray(0, i3);
+          if (add)
+            add.push(dat, !!f4);
+          else
+            this.k[+(f4 == 2)].push(dat);
+        }
+        if (f4 & 2)
+          return this.push(buf.subarray(i3), final);
+        this.p = buf.subarray(i3);
+      }
+      if (final) {
+        if (this.c)
+          err(13);
+        this.p = null;
+      }
+    };
+    Unzip2.prototype.register = function(decoder) {
+      this.o[decoder.compression] = decoder;
+    };
+    return Unzip2;
+  }();
+  exports.Unzip = Unzip;
+  var mt = typeof queueMicrotask == "function" ? queueMicrotask : typeof setTimeout == "function" ? setTimeout : function(fn) {
+    fn();
+  };
+  function unzip(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    var term = [];
+    var tAll = function() {
+      for (var i4 = 0;i4 < term.length; ++i4)
+        term[i4]();
+    };
+    var files = {};
+    var cbd = function(a4, b5) {
+      mt(function() {
+        cb(a4, b5);
+      });
+    };
+    mt(function() {
+      cbd = cb;
+    });
+    var e3 = data.length - 22;
+    for (;b4(data, e3) != 101010256; --e3) {
+      if (!e3 || data.length - e3 > 65558) {
+        cbd(err(13, 0, 1), null);
+        return tAll;
+      }
+    }
+    var lft = b22(data, e3 + 8);
+    if (lft) {
+      var c4 = lft;
+      var o3 = b4(data, e3 + 16);
+      var z3 = o3 == 4294967295 || c4 == 65535;
+      if (z3) {
+        var ze = b4(data, e3 - 12);
+        z3 = b4(data, ze) == 101075792;
+        if (z3) {
+          c4 = lft = b4(data, ze + 32);
+          o3 = b4(data, ze + 48);
+        }
+      }
+      var fltr = opts && opts.filter;
+      var _loop_3 = function(i4) {
+        var _a2 = zh(data, o3, z3), c_1 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b5 = slzh(data, off);
+        o3 = no;
+        var cbl = function(e4, d3) {
+          if (e4) {
+            tAll();
+            cbd(e4, null);
+          } else {
+            if (d3)
+              files[fn] = d3;
+            if (!--lft)
+              cbd(null, files);
+          }
+        };
+        if (!fltr || fltr({
+          name: fn,
+          size: sc,
+          originalSize: su,
+          compression: c_1
+        })) {
+          if (!c_1)
+            cbl(null, slc(data, b5, b5 + sc));
+          else if (c_1 == 8) {
+            var infl = data.subarray(b5, b5 + sc);
+            if (su < 524288 || sc > 0.8 * su) {
+              try {
+                cbl(null, inflateSync(infl, { out: new u8(su) }));
+              } catch (e4) {
+                cbl(e4, null);
+              }
+            } else
+              term.push(inflate(infl, { size: su }, cbl));
+          } else
+            cbl(err(14, "unknown compression type " + c_1, 1), null);
+        } else
+          cbl(null, null);
+      };
+      for (var i3 = 0;i3 < c4; ++i3) {
+        _loop_3(i3);
+      }
+    } else
+      cbd(null, {});
+    return tAll;
+  }
+  exports.unzip = unzip;
+  function unzipSync(data, opts) {
+    var files = {};
+    var e3 = data.length - 22;
+    for (;b4(data, e3) != 101010256; --e3) {
+      if (!e3 || data.length - e3 > 65558)
+        err(13);
+    }
+    var c4 = b22(data, e3 + 8);
+    if (!c4)
+      return {};
+    var o3 = b4(data, e3 + 16);
+    var z3 = o3 == 4294967295 || c4 == 65535;
+    if (z3) {
+      var ze = b4(data, e3 - 12);
+      z3 = b4(data, ze) == 101075792;
+      if (z3) {
+        c4 = b4(data, ze + 32);
+        o3 = b4(data, ze + 48);
+      }
+    }
+    var fltr = opts && opts.filter;
+    for (var i3 = 0;i3 < c4; ++i3) {
+      var _a2 = zh(data, o3, z3), c_2 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b5 = slzh(data, off);
+      o3 = no;
+      if (!fltr || fltr({
+        name: fn,
+        size: sc,
+        originalSize: su,
+        compression: c_2
+      })) {
+        if (!c_2)
+          files[fn] = slc(data, b5, b5 + sc);
+        else if (c_2 == 8)
+          files[fn] = inflateSync(data.subarray(b5, b5 + sc), { out: new u8(su) });
+        else
+          err(14, "unknown compression type " + c_2);
+      }
+    }
+    return files;
+  }
+  exports.unzipSync = unzipSync;
+});
+
+// ../../packages/agent-release/dist/contracts.js
+var require_contracts = __commonJS((exports) => {
+  Object.defineProperty(exports, "__esModule", { value: true });
+  exports.AgentReleaseValidationError = exports.SUPPORTED_AGENT_TARGETS = exports.AGENT_BUNDLE_LAYOUT_VERSION = exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION = exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION = undefined;
+  exports.validateEnvironmentCatalog = validateEnvironmentCatalog;
+  exports.validateReleaseManifest = validateReleaseManifest;
+  exports.validateChannelPointer = validateChannelPointer;
+  exports.selectReleaseArtifact = selectReleaseArtifact;
+  exports.assertCliCompatibility = assertCliCompatibility;
+  exports.assertCatalogBinding = assertCatalogBinding;
+  exports.assertArchiveBinding = assertArchiveBinding;
+  exports.signManifest = signManifest;
+  exports.verifyManifestSignature = verifyManifestSignature;
+  exports.signReleaseBlob = signReleaseBlob;
+  exports.verifyReleaseBlobSignature = verifyReleaseBlobSignature;
+  exports.canonicalJson = canonicalJson;
+  exports.sha256 = sha256;
+  var node_crypto_1 = __require("node:crypto");
+  exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION = 1;
+  exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION = 1;
+  exports.AGENT_BUNDLE_LAYOUT_VERSION = 1;
+  exports.SUPPORTED_AGENT_TARGETS = [
+    "darwin-arm64",
+    "darwin-x64",
+    "windows-x64"
+  ];
+
+  class AgentReleaseValidationError extends Error {
+    code;
+    constructor(code, message) {
+      super(message);
+      this.code = code;
+      this.name = "AgentReleaseValidationError";
+    }
+  }
+  exports.AgentReleaseValidationError = AgentReleaseValidationError;
+  function validateEnvironmentCatalog(input) {
+    const catalog = requireObject(input, "environment catalog");
+    requireExactKeys(catalog, ["schemaVersion", "profiles"], "catalog");
+    if (catalog.schemaVersion !== exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION || !Array.isArray(catalog.profiles) || catalog.profiles.length === 0) {
+      invalidCatalog("Catalog schema or environment list is invalid");
+    }
+    const ids = new Set;
+    const namespaces = new Set;
+    const profiles = catalog.profiles.map((value, index) => {
+      const environment = requireObject(value, `environment ${index}`);
+      requireExactKeys(environment, [
+        "environmentId",
+        "label",
+        "webOrigin",
+        "webAgentUrl",
+        "backendHttpUrl",
+        "backendAgentWsUrl",
+        "namespace"
+      ], `environment ${index}`);
+      const environmentId = requirePattern(environment.environmentId, /^[a-z][a-z0-9-]{0,63}$/, "environmentId");
+      const namespace = requirePattern(environment.namespace, /^[a-z][a-z0-9_-]{0,63}$/, "namespace");
+      if (ids.has(environmentId) || namespaces.has(namespace)) {
+        invalidCatalog("Environment ids and namespaces must be unique");
+      }
+      ids.add(environmentId);
+      namespaces.add(namespace);
+      const webOrigin = requireExactOrigin(environment.webOrigin, "webOrigin");
+      const webAgentUrl = requireHttpsUrl(environment.webAgentUrl, "webAgentUrl");
+      if (webAgentUrl.origin !== webOrigin || webAgentUrl.pathname !== "/agent" || webAgentUrl.search || webAgentUrl.hash) {
+        invalidCatalog("webAgentUrl must be the same-origin exact /agent console URL");
+      }
+      const backendHttpUrl = requireHttpsUrl(environment.backendHttpUrl, "backendHttpUrl");
+      const backendAgentWsUrl = requireUrl(environment.backendAgentWsUrl, "backendAgentWsUrl");
+      if (backendAgentWsUrl.protocol !== "wss:") {
+        invalidCatalog("backendAgentWsUrl must use WSS");
+      }
+      return {
+        environmentId,
+        label: requireText(environment.label, "label"),
+        webOrigin,
+        webAgentUrl: webAgentUrl.href,
+        backendHttpUrl: trimTrailingSlash(backendHttpUrl.href),
+        backendAgentWsUrl: trimTrailingSlash(backendAgentWsUrl.href),
+        namespace
+      };
+    });
+    return {
+      schemaVersion: exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION,
+      profiles
+    };
+  }
+  function validateReleaseManifest(input, options = {}) {
+    const manifest = requireObject(input, "release manifest");
+    requireExactKeys(manifest, [
+      "schemaVersion",
+      "releaseVersion",
+      "minimumCliVersion",
+      "layoutVersion",
+      "protocols",
+      "environmentCatalog",
+      "provenance",
+      "artifacts"
+    ], "manifest");
+    if (manifest.schemaVersion !== exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION) {
+      throw new AgentReleaseValidationError("INCOMPATIBLE_SCHEMA", "Release manifest schema is unsupported");
+    }
+    if (manifest.layoutVersion !== exports.AGENT_BUNDLE_LAYOUT_VERSION) {
+      invalidManifest("Bundle layout version is unsupported");
+    }
+    const releaseVersion = requireSemver(manifest.releaseVersion, "releaseVersion");
+    const minimumCliVersion = requireSemver(manifest.minimumCliVersion, "minimumCliVersion");
+    const protocols = validateProtocolObject(manifest.protocols);
+    const environmentCatalog = validateCatalogBinding(manifest.environmentCatalog);
+    const provenance = validateProvenance(manifest.provenance);
+    if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) {
+      invalidManifest("Release manifest must contain platform artifacts");
+    }
+    const artifacts = manifest.artifacts.map(validateArtifact);
+    const targets = artifacts.map((artifact) => artifact.target);
+    if (new Set(targets).size !== targets.length) {
+      invalidManifest("Release manifest target entries must be unique");
+    }
+    const requiresMatrix = options.requireProductionMatrix ?? provenance.kind === "production";
+    if (requiresMatrix && !exports.SUPPORTED_AGENT_TARGETS.every((target) => targets.includes(target))) {
+      invalidManifest("Production manifest must contain every supported target");
+    }
+    if (provenance.kind === "production" && !provenance.signed) {
+      invalidManifest("Production manifest must be signed");
+    }
+    if (provenance.kind === "production" && artifacts.some((artifact) => artifact.archiveUrl.includes("-unsigned-pr-"))) {
+      invalidManifest("Production manifest cannot reference pull-request artifacts");
+    }
+    if (provenance.kind === "pull-request-validation" && (provenance.signed || artifacts.some((artifact) => !artifact.archiveUrl.includes("-unsigned-pr-")))) {
+      invalidManifest("Pull-request artifacts must be unsigned and marked");
+    }
+    return {
+      schemaVersion: exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
+      releaseVersion,
+      minimumCliVersion,
+      layoutVersion: exports.AGENT_BUNDLE_LAYOUT_VERSION,
+      protocols,
+      environmentCatalog,
+      provenance,
+      artifacts
+    };
+  }
+  function validateChannelPointer(input) {
+    const pointer = requireObject(input, "channel pointer");
+    requireExactKeys(pointer, [
+      "schemaVersion",
+      "channel",
+      "releaseVersion",
+      "manifestUrl",
+      "manifestSha256"
+    ], "channel pointer");
+    if (pointer.schemaVersion !== 1 || pointer.channel !== "stable" && pointer.channel !== "beta") {
+      invalidChannel("Channel pointer schema or channel is invalid");
+    }
+    const releaseVersion = requireSemver(pointer.releaseVersion, "releaseVersion");
+    const manifestUrl = requireManifestHttpsUrl(pointer.manifestUrl, "manifestUrl");
+    if (!manifestUrl.pathname.includes(`/${releaseVersion}/`)) {
+      invalidChannel("Channel pointer must reference an immutable version URL");
+    }
+    return {
+      schemaVersion: 1,
+      channel: pointer.channel,
+      releaseVersion,
+      manifestUrl: manifestUrl.href,
+      manifestSha256: requireSha256(pointer.manifestSha256, "manifestSha256")
+    };
+  }
+  function selectReleaseArtifact(manifest, target) {
+    const artifact = manifest.artifacts.find((candidate) => candidate.target === target);
+    if (!artifact) {
+      throw new AgentReleaseValidationError("UNSUPPORTED_TARGET", `Agent release does not support target "${target}"`);
+    }
+    return artifact;
+  }
+  function assertCliCompatibility(manifest, cliVersion) {
+    const running = parseSemver(requireSemver(cliVersion, "cliVersion"));
+    const minimum = parseSemver(manifest.minimumCliVersion);
+    if (compareSemver(running, minimum) < 0) {
+      throw new AgentReleaseValidationError("INCOMPATIBLE_CLI", `Agent release requires chc ${manifest.minimumCliVersion} or newer`);
+    }
+  }
+  function assertCatalogBinding(manifest, catalogBytes) {
+    const catalog = validateEnvironmentCatalog(JSON.parse(Buffer.from(catalogBytes).toString("utf8")));
+    if (catalog.schemaVersion !== manifest.environmentCatalog.schemaVersion || sha256(catalogBytes) !== manifest.environmentCatalog.sha256) {
+      throw new AgentReleaseValidationError("INTEGRITY_MISMATCH", "Environment catalog does not match the release manifest");
+    }
+    return catalog;
+  }
+  function assertArchiveBinding(artifact, archiveBytes) {
+    if (archiveBytes.byteLength !== artifact.archiveSize || sha256(archiveBytes) !== artifact.archiveSha256) {
+      throw new AgentReleaseValidationError("INTEGRITY_MISMATCH", "Agent archive size or digest does not match the release manifest");
+    }
+  }
+  function signManifest(manifest, privateKeyPem) {
+    return (0, node_crypto_1.sign)(null, Buffer.from(canonicalJson(manifest)), (0, node_crypto_1.createPrivateKey)(privateKeyPem)).toString("base64");
+  }
+  function verifyManifestSignature(manifest, signatureBase64, publicKeyPem) {
+    const accepted = (0, node_crypto_1.verify)(null, Buffer.from(canonicalJson(manifest)), (0, node_crypto_1.createPublicKey)(publicKeyPem), Buffer.from(signatureBase64, "base64"));
+    if (!accepted) {
+      throw new AgentReleaseValidationError("INVALID_SIGNATURE", "Agent release manifest signature is invalid");
+    }
+  }
+  function signReleaseBlob(bytes, privateKeyPem) {
+    return (0, node_crypto_1.sign)(null, bytes, (0, node_crypto_1.createPrivateKey)(privateKeyPem)).toString("base64");
+  }
+  function verifyReleaseBlobSignature(bytes, signatureBase64, publicKeyPem) {
+    if (!(0, node_crypto_1.verify)(null, bytes, (0, node_crypto_1.createPublicKey)(publicKeyPem), Buffer.from(signatureBase64, "base64"))) {
+      throw new AgentReleaseValidationError("INVALID_SIGNATURE", "Agent release blob signature is invalid");
+    }
+  }
+  function canonicalJson(input) {
+    return `${JSON.stringify(sortJson(input))}
+`;
+  }
+  function sha256(bytes) {
+    return (0, node_crypto_1.createHash)("sha256").update(bytes).digest("hex");
+  }
+  function validateArtifact(input) {
+    const artifact = requireObject(input, "artifact");
+    requireExactKeys(artifact, [
+      "target",
+      "platform",
+      "architecture",
+      "archiveUrl",
+      "archiveSize",
+      "archiveSha256",
+      "archiveSignatureUrl",
+      "trayEntryPoint",
+      "nodeEntryPoint",
+      "agentEntryPoint",
+      "platformSignature"
+    ], "artifact");
+    if (!exports.SUPPORTED_AGENT_TARGETS.includes(artifact.target)) {
+      invalidManifest("Artifact target is unsupported");
+    }
+    const expected = targetParts(artifact.target);
+    if (artifact.platform !== expected.platform || artifact.architecture !== expected.architecture || !Number.isSafeInteger(artifact.archiveSize) || artifact.archiveSize <= 0) {
+      invalidManifest("Artifact platform, architecture, or size is invalid");
+    }
+    const signature = requireObject(artifact.platformSignature, "platformSignature");
+    requireExactKeys(signature, ["required", "notarizationRequired"], "platformSignature");
+    if (signature.required !== true || typeof signature.notarizationRequired !== "boolean" || signature.notarizationRequired !== (expected.platform === "darwin")) {
+      invalidManifest("Platform signing requirements are invalid");
+    }
+    const entryPoints = targetEntryPoints(artifact.target);
+    const trayEntryPoint = requireRelativePath(artifact.trayEntryPoint, "trayEntryPoint");
+    const nodeEntryPoint = requireRelativePath(artifact.nodeEntryPoint, "nodeEntryPoint");
+    const agentEntryPoint = requireRelativePath(artifact.agentEntryPoint, "agentEntryPoint");
+    if (trayEntryPoint !== entryPoints.tray || nodeEntryPoint !== entryPoints.node || agentEntryPoint !== entryPoints.agent) {
+      invalidManifest("Artifact entry points do not match the target layout");
+    }
+    return {
+      target: artifact.target,
+      platform: expected.platform,
+      architecture: expected.architecture,
+      archiveUrl: requireManifestHttpsUrl(artifact.archiveUrl, "archiveUrl").href,
+      archiveSize: artifact.archiveSize,
+      archiveSha256: requireSha256(artifact.archiveSha256, "archiveSha256"),
+      archiveSignatureUrl: requireManifestHttpsUrl(artifact.archiveSignatureUrl, "archiveSignatureUrl").href,
+      trayEntryPoint,
+      nodeEntryPoint,
+      agentEntryPoint,
+      platformSignature: {
+        required: true,
+        notarizationRequired: signature.notarizationRequired
+      }
+    };
+  }
+  function targetEntryPoints(target) {
+    return {
+      tray: target === "windows-x64" ? "bin/cthutool-agent-tray.exe" : "bin/CthuTool Agent.app/Contents/MacOS/cthutool-agent-tray",
+      node: target === "windows-x64" ? "runtime/node/node.exe" : "runtime/node/bin/node",
+      agent: "agent/dist/index.js"
+    };
+  }
+  function validateProtocolObject(input) {
+    const protocols = requireObject(input, "protocols");
+    const keys = ["agentBackend", "agentControl", "localBridge", "trayControl"];
+    requireExactKeys(protocols, keys, "protocols");
+    if (keys.some((key) => !Number.isSafeInteger(protocols[key]) || protocols[key] !== 1)) {
+      invalidManifest("Release protocol compatibility is unsupported");
+    }
+    return protocols;
+  }
+  function validateCatalogBinding(input) {
+    const binding = requireObject(input, "environmentCatalog");
+    requireExactKeys(binding, ["schemaVersion", "sha256"], "environmentCatalog");
+    if (binding.schemaVersion !== exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION) {
+      invalidManifest("Environment catalog schema is unsupported");
+    }
+    return {
+      schemaVersion: exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION,
+      sha256: requireSha256(binding.sha256, "environmentCatalog.sha256")
+    };
+  }
+  function validateProvenance(input) {
+    const provenance = requireObject(input, "provenance");
+    requireExactKeys(provenance, ["kind", "signed"], "provenance");
+    if (provenance.kind !== "production" && provenance.kind !== "pull-request-validation" || typeof provenance.signed !== "boolean") {
+      invalidManifest("Manifest provenance is invalid");
+    }
+    return provenance;
+  }
+  function targetParts(target) {
+    const [platform2, architecture] = target.split("-");
+    return {
+      platform: platform2,
+      architecture
+    };
+  }
+  function requireObject(input, label) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new AgentReleaseValidationError(label.includes("catalog") || label.includes("environment") ? "INVALID_CATALOG" : "INVALID_MANIFEST", `${label} must be an object`);
+    }
+    return input;
+  }
+  function requireExactKeys(input, keys, label) {
+    const actual = Object.keys(input).sort();
+    const expected = [...keys].sort();
+    if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+      const message = `${label} has unknown or missing fields`;
+      if (label.includes("catalog") || label.includes("environment")) {
+        invalidCatalog(message);
+      }
+      invalidManifest(message);
+    }
+  }
+  function requireText(input, label) {
+    if (typeof input !== "string" || !input.trim() || input.length > 256) {
+      invalidCatalog(`${label} must be non-empty text`);
+    }
+    return input.trim();
+  }
+  function requirePattern(input, pattern, label) {
+    if (typeof input !== "string" || !pattern.test(input)) {
+      invalidCatalog(`${label} is invalid`);
+    }
+    return input;
+  }
+  function requireUrl(input, label) {
+    if (typeof input !== "string") {
+      invalidCatalog(`${label} must be a URL`);
+    }
+    let url;
+    try {
+      url = new URL(input);
+    } catch {
+      invalidCatalog(`${label} must be a URL`);
+    }
+    if (url.username || url.password || url.hash) {
+      invalidCatalog(`${label} must not contain credentials or a fragment`);
+    }
+    return url;
+  }
+  function requireHttpsUrl(input, label) {
+    const url = requireUrl(input, label);
+    if (url.protocol !== "https:") {
+      invalidCatalog(`${label} must use HTTPS`);
+    }
+    return url;
+  }
+  function requireManifestHttpsUrl(input, label) {
+    if (typeof input !== "string") {
+      invalidManifest(`${label} must be a URL`);
+    }
+    let url;
+    try {
+      url = new URL(input);
+    } catch {
+      invalidManifest(`${label} must be a URL`);
+    }
+    if (url.protocol !== "https:" || url.username || url.password || url.hash) {
+      invalidManifest(`${label} must be an HTTPS URL without credentials or fragment`);
+    }
+    return url;
+  }
+  function requireExactOrigin(input, label) {
+    const url = requireHttpsUrl(input, label);
+    if (url.href !== `${url.origin}/`) {
+      invalidCatalog(`${label} must be an exact origin without path or query`);
+    }
+    return url.origin;
+  }
+  function requireSemver(input, label) {
+    if (typeof input !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(input)) {
+      invalidManifest(`${label} must be a semantic version`);
+    }
+    return input;
+  }
+  function requireSha256(input, label) {
+    if (typeof input !== "string" || !/^[a-f0-9]{64}$/.test(input)) {
+      invalidManifest(`${label} must be a lowercase SHA-256 digest`);
+    }
+    return input;
+  }
+  function requireRelativePath(input, label) {
+    if (typeof input !== "string" || !input || input.startsWith("/") || input.includes("\\") || input.split("/").some((part) => !part || part === "." || part === "..")) {
+      invalidManifest(`${label} must be a safe relative path`);
+    }
+    return input;
+  }
+  function parseSemver(version) {
+    return version.split("-", 1)[0].split(".").map((value) => Number.parseInt(value, 10));
+  }
+  function compareSemver(left, right) {
+    for (let index = 0;index < 3; index += 1) {
+      if (left[index] !== right[index]) {
+        return (left[index] ?? 0) - (right[index] ?? 0);
+      }
+    }
+    return 0;
+  }
+  function sortJson(value) {
+    if (Array.isArray(value)) {
+      return value.map(sortJson);
+    }
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, child]) => [key, sortJson(child)]));
+    }
+    return value;
+  }
+  function trimTrailingSlash(value) {
+    return value.endsWith("/") ? value.slice(0, -1) : value;
+  }
+  function invalidCatalog(message) {
+    throw new AgentReleaseValidationError("INVALID_CATALOG", message);
+  }
+  function invalidManifest(message) {
+    throw new AgentReleaseValidationError("INVALID_MANIFEST", message);
+  }
+  function invalidChannel(message) {
+    throw new AgentReleaseValidationError("INVALID_CHANNEL_POINTER", message);
+  }
+});
+
+// ../../packages/agent-release/dist/assembly.js
+var require_assembly = __commonJS((exports) => {
+  Object.defineProperty(exports, "__esModule", { value: true });
+  exports.assembleAgentBundle = assembleAgentBundle;
+  exports.archiveBundleDirectory = archiveBundleDirectory;
+  exports.releaseTargetFromPlatform = releaseTargetFromPlatform;
+  exports.archiveBasename = archiveBasename;
+  var node_crypto_1 = __require("node:crypto");
+  var promises_1 = __require("node:fs/promises");
+  var node_path_1 = __require("node:path");
+  var fflate_1 = require_node();
+  var contracts_1 = require_contracts();
+  var layout_1 = require_layout();
+  var REPRODUCIBLE_TIMESTAMP = new Date("1980-01-01T00:00:00.000Z");
+  async function assembleAgentBundle(input) {
+    const layout = (0, layout_1.createBundleLayout)(input.target, input.releaseVersion);
+    const files = new Map;
+    files.set("layout.json", {
+      bytes: Buffer.from((0, contracts_1.canonicalJson)(layout)),
+      mode: 420
+    });
+    files.set(layout.entryPoints.tray, {
+      bytes: await (0, promises_1.readFile)(input.trayExecutablePath),
+      mode: 493
+    });
+    files.set(layout.entryPoints.node, {
+      bytes: await (0, promises_1.readFile)(input.nodeExecutablePath),
+      mode: 493
+    });
+    const catalogBytes = await (0, promises_1.readFile)(input.environmentCatalogPath);
+    (0, contracts_1.validateEnvironmentCatalog)(JSON.parse(catalogBytes.toString("utf8")));
+    files.set(layout.entryPoints.environmentCatalog, {
+      bytes: catalogBytes,
+      mode: 420
+    });
+    files.set("licenses/NODE_LICENSE", {
+      bytes: await (0, promises_1.readFile)(input.nodeLicensePath),
+      mode: 420
+    });
+    files.set("licenses/THIRD_PARTY_NOTICES.txt", {
+      bytes: await (0, promises_1.readFile)(input.thirdPartyNoticesPath),
+      mode: 420
+    });
+    files.set("agent/package.json", {
+      bytes: await (0, promises_1.readFile)((0, node_path_1.join)(input.deployedAgentDir, "package.json")),
+      mode: 420
+    });
+    await collectDirectoryFiles((0, node_path_1.join)(input.deployedAgentDir, "dist"), "agent/dist", files, { exclude: new Set });
+    await collectDirectoryFiles((0, node_path_1.join)(input.deployedAgentDir, "node_modules"), "agent/node_modules", files, {
+      exclude: new Set([
+        "agent/node_modules/.modules.yaml",
+        "agent/node_modules/.pnpm"
+      ])
+    });
+    await collectDirectoryFiles((0, node_path_1.join)(input.deployedAgentDir, "node_modules/.pnpm/node_modules"), "agent/node_modules", files, {
+      exclude: new Set(["agent/node_modules/@cthutool/agent"]),
+      trustedRoot: (0, node_path_1.join)(input.deployedAgentDir, "node_modules")
+    });
+    if (input.target.startsWith("darwin-")) {
+      files.set("bin/CthuTool Agent.app/Contents/Info.plist", {
+        bytes: Buffer.from(macInfoPlist(input.releaseVersion)),
+        mode: 420
+      });
+    }
+    (0, layout_1.validateBundleInventory)(input.target, [...files.keys()]);
+    if (input.stageDir) {
+      await materializeBundle(files, input.stageDir);
+      return archiveBundleDirectory({
+        outputDir: input.outputDir,
+        pullRequestMarker: input.pullRequestMarker,
+        releaseVersion: input.releaseVersion,
+        stageDir: input.stageDir,
+        target: input.target
+      });
+    }
+    return archiveBundleFiles(files, {
+      outputDir: input.outputDir,
+      pullRequestMarker: input.pullRequestMarker,
+      releaseVersion: input.releaseVersion,
+      target: input.target
+    });
+  }
+  async function archiveBundleDirectory(input) {
+    const files = new Map;
+    await collectDirectoryFiles(input.stageDir, "", files, {
+      exclude: new Set
+    });
+    return archiveBundleFiles(files, input);
+  }
+  async function archiveBundleFiles(files, input) {
+    const inventory = (0, layout_1.validateBundleInventory)(input.target, [...files.keys()]);
+    const zipInput = {};
+    for (const path of inventory) {
+      const file = files.get(path);
+      if (!file) {
+        throw new Error(`Bundle assembly lost inventory entry ${path}`);
+      }
+      zipInput[path] = [
+        file.bytes,
+        {
+          attrs: file.mode << 16,
+          mtime: REPRODUCIBLE_TIMESTAMP,
+          os: 3
+        }
+      ];
+    }
+    const archiveBytes = (0, fflate_1.zipSync)(zipInput, {
+      level: 9,
+      mtime: REPRODUCIBLE_TIMESTAMP
+    });
+    await (0, promises_1.mkdir)(input.outputDir, { recursive: true });
+    const marker = input.pullRequestMarker ? `-unsigned-pr-${sanitizeMarker(input.pullRequestMarker)}` : "";
+    const archiveName = `cthutool-agent-${input.releaseVersion}-${input.target}${marker}.zip`;
+    const archivePath = (0, node_path_1.join)(input.outputDir, archiveName);
+    await (0, promises_1.writeFile)(archivePath, archiveBytes);
+    await (0, promises_1.chmod)(archivePath, 420);
+    return {
+      archivePath,
+      archiveName,
+      archiveSize: archiveBytes.byteLength,
+      archiveSha256: (0, node_crypto_1.createHash)("sha256").update(archiveBytes).digest("hex"),
+      inventory
+    };
+  }
+  async function materializeBundle(files, stageDir) {
+    await (0, promises_1.mkdir)(stageDir, { recursive: true });
+    if ((await (0, promises_1.readdir)(stageDir)).length > 0) {
+      throw new Error(`Agent bundle staging directory must be empty: ${stageDir}`);
+    }
+    for (const [archivePath, file] of files) {
+      const destination = (0, node_path_1.join)(stageDir, ...archivePath.split("/"));
+      await (0, promises_1.mkdir)((0, node_path_1.dirname)(destination), { recursive: true });
+      await (0, promises_1.writeFile)(destination, file.bytes, { mode: file.mode });
+      await (0, promises_1.chmod)(destination, file.mode);
+    }
+  }
+  async function collectDirectoryFiles(root, archiveRoot, files, options) {
+    const resolvedRoot = await (0, promises_1.realpath)((0, node_path_1.resolve)(root));
+    const trustedRoot = await (0, promises_1.realpath)((0, node_path_1.resolve)(options.trustedRoot ?? root));
+    await collectTree(trustedRoot, resolvedRoot, archiveRoot, files, options, new Set);
+  }
+  async function collectTree(trustedRoot, source, archivePath, files, options, ancestors) {
+    const normalizedArchivePath = archivePath ? (0, layout_1.normalizeArchivePath)(archivePath) : "";
+    if (normalizedArchivePath && options.exclude.has(normalizedArchivePath)) {
+      return;
+    }
+    const metadata = await (0, promises_1.lstat)(source);
+    const resolvedSource = metadata.isSymbolicLink() ? await (0, promises_1.realpath)(source) : source;
+    if (metadata.isSymbolicLink()) {
+      const targetRelative = (0, node_path_1.relative)(trustedRoot, resolvedSource);
+      if (targetRelative === ".." || targetRelative.startsWith(`..${node_path_1.sep}`)) {
+        throw new Error(`Agent deployment symlink escapes its root: ${source}`);
+      }
+    }
+    const followed = await (0, promises_1.stat)(source);
+    if (followed.isFile()) {
+      if (!normalizedArchivePath) {
+        throw new Error("Agent bundle file is missing an archive path");
+      }
+      files.set(normalizedArchivePath, {
+        bytes: await (0, promises_1.readFile)(source),
+        mode: followed.mode & 73 ? 493 : 420
+      });
+      return;
+    }
+    if (!followed.isDirectory()) {
+      return;
+    }
+    const directoryIdentity = await (0, promises_1.realpath)(source);
+    if (ancestors.has(directoryIdentity)) {
+      throw new Error(`Agent deployment contains a recursive symlink: ${source}`);
+    }
+    const nextAncestors = new Set(ancestors);
+    nextAncestors.add(directoryIdentity);
+    for (const entry of (await (0, promises_1.readdir)(source, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))) {
+      await collectTree(trustedRoot, (0, node_path_1.join)(source, entry.name), archivePath ? `${archivePath}/${entry.name}` : entry.name, files, options, nextAncestors);
+    }
+  }
+  function sanitizeMarker(value) {
+    const marker = value.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
+    if (!marker) {
+      throw new Error("Pull-request marker is invalid");
+    }
+    return marker;
+  }
+  function macInfoPlist(version) {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleDisplayName</key><string>CthuTool Agent</string>
+<key>CFBundleExecutable</key><string>cthutool-agent-tray</string>
+<key>CFBundleIdentifier</key><string>dev.cthutool.agent</string>
+<key>CFBundleName</key><string>CthuTool Agent</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>${version}</string>
+<key>CFBundleVersion</key><string>${version}</string>
+<key>LSUIElement</key><true/>
+<key>NSLocalNetworkUsageDescription</key><string>Connect the deployed CthuTool console to this local Agent.</string>
+</dict></plist>
+`;
+  }
+  function releaseTargetFromPlatform(platform2, architecture) {
+    if (platform2 === "darwin" && architecture === "arm64") {
+      return "darwin-arm64";
+    }
+    if (platform2 === "darwin" && architecture === "x64") {
+      return "darwin-x64";
+    }
+    if (platform2 === "win32" && architecture === "x64") {
+      return "windows-x64";
+    }
+    return;
+  }
+  function archiveBasename(path) {
+    return (0, node_path_1.basename)(path);
+  }
+});
+
+// ../../packages/agent-release/dist/node-runtime.js
+var require_node_runtime = __commonJS((exports) => {
+  Object.defineProperty(exports, "__esModule", { value: true });
+  exports.preparePinnedNodeRuntime = preparePinnedNodeRuntime;
+  exports.validateNodeRuntimeLock = validateNodeRuntimeLock;
+  var node_crypto_1 = __require("node:crypto");
+  var promises_1 = __require("node:fs/promises");
+  var node_path_1 = __require("node:path");
+  var fflate_1 = require_node();
+  async function preparePinnedNodeRuntime(input) {
+    const lock = validateNodeRuntimeLock(JSON.parse(await (0, promises_1.readFile)(input.lockPath, "utf8")));
+    const source = lock.sources[input.target];
+    const response = await (input.fetchImpl ?? fetch)(source.url, {
+      redirect: "error"
+    });
+    if (!response.ok) {
+      throw new Error(`Pinned Node.js download failed with HTTP ${response.status}`);
+    }
+    const archive = new Uint8Array(await response.arrayBuffer());
+    const digest = (0, node_crypto_1.createHash)("sha256").update(archive).digest("hex");
+    if (digest !== source.sha256) {
+      throw new Error("Pinned Node.js archive digest does not match the lock file");
+    }
+    const root = source.archive.replace(/\.(?:tar\.gz|zip)$/, "");
+    const entries = source.archive.endsWith(".zip") ? unzipEntries(archive) : untarEntries((0, fflate_1.gunzipSync)(archive));
+    const executableName = input.target === "windows-x64" ? "node.exe" : "bin/node";
+    const executable = entries.get(`${root}/${executableName}`);
+    const license = entries.get(`${root}/LICENSE`);
+    if (!executable || !license) {
+      throw new Error("Pinned Node.js archive is missing its runtime or LICENSE");
+    }
+    await (0, promises_1.mkdir)(input.outputDir, { recursive: true });
+    const executablePath = (0, node_path_1.join)(input.outputDir, input.target === "windows-x64" ? "node.exe" : "node");
+    const licensePath = (0, node_path_1.join)(input.outputDir, "LICENSE");
+    await (0, promises_1.writeFile)(executablePath, executable, { mode: 493 });
+    await (0, promises_1.chmod)(executablePath, 493);
+    await (0, promises_1.writeFile)(licensePath, license, { mode: 420 });
+    return {
+      version: lock.version,
+      executablePath,
+      licensePath,
+      sourceSha256: digest
+    };
+  }
+  function validateNodeRuntimeLock(input) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new Error("Node.js runtime lock must be an object");
+    }
+    const value = input;
+    if (value.schemaVersion !== 1 || typeof value.version !== "string" || !/^\d+\.\d+\.\d+$/.test(value.version) || !value.sources) {
+      throw new Error("Node.js runtime lock contract is invalid");
+    }
+    const targets = [
+      "darwin-arm64",
+      "darwin-x64",
+      "windows-x64"
+    ];
+    for (const target of targets) {
+      const source = value.sources[target];
+      const platformName = target === "windows-x64" ? "win-x64" : target.replace("darwin-", "darwin-");
+      const expectedArchive = `node-v${value.version}-${platformName}.${target === "windows-x64" ? "zip" : "tar.gz"}`;
+      if (!source || source.archive !== expectedArchive || source.url !== `https://nodejs.org/dist/v${value.version}/${source.archive}` || !/^[a-f0-9]{64}$/.test(source.sha256)) {
+        throw new Error(`Node.js runtime lock source is invalid for ${target}`);
+      }
+    }
+    return value;
+  }
+  function unzipEntries(archive) {
+    return new Map(Object.entries((0, fflate_1.unzipSync)(archive)));
+  }
+  function untarEntries(archive) {
+    const entries = new Map;
+    for (let offset = 0;offset + 512 <= archive.byteLength; ) {
+      const header = archive.subarray(offset, offset + 512);
+      if (header.every((byte) => byte === 0)) {
+        break;
+      }
+      const name = readTarString(header.subarray(0, 100));
+      const prefix = readTarString(header.subarray(345, 500));
+      const path = prefix ? `${prefix}/${name}` : name;
+      const sizeText = readTarString(header.subarray(124, 136)).trim();
+      const size = Number.parseInt(sizeText || "0", 8);
+      if (!Number.isSafeInteger(size) || size < 0) {
+        throw new Error("Pinned Node.js tar archive contains an invalid size");
+      }
+      const contentStart = offset + 512;
+      const contentEnd = contentStart + size;
+      if (contentEnd > archive.byteLength) {
+        throw new Error("Pinned Node.js tar archive is truncated");
+      }
+      if (header[156] === 0 || header[156] === 48) {
+        entries.set(path, archive.slice(contentStart, contentEnd));
+      }
+      offset = contentStart + Math.ceil(size / 512) * 512;
+    }
+    return entries;
+  }
+  function readTarString(bytes) {
+    const end = bytes.indexOf(0);
+    return Buffer.from(end >= 0 ? bytes.subarray(0, end) : bytes).toString("utf8");
+  }
+});
+
+// ../../packages/agent-release/dist/publication.js
+var require_publication = __commonJS((exports) => {
+  Object.defineProperty(exports, "__esModule", { value: true });
+  exports.createArtifactReceipt = createArtifactReceipt;
+  exports.createReleaseManifest = createReleaseManifest;
+  exports.createChannelPointer = createChannelPointer;
+  exports.verifyProductionReleaseSet = verifyProductionReleaseSet;
+  exports.validateReceipt = validateReceipt;
+  var promises_1 = __require("node:fs/promises");
+  var node_path_1 = __require("node:path");
+  var contracts_1 = require_contracts();
+  var layout_1 = require_layout();
+  async function createArtifactReceipt(input) {
+    const layout = (0, layout_1.validateBundleLayout)(JSON.parse(await (0, promises_1.readFile)((0, node_path_1.join)(input.bundleRoot, "layout.json"), "utf8")));
+    if (layout.target !== input.target || layout.releaseVersion !== input.releaseVersion) {
+      throw new Error("Artifact receipt does not match the staged bundle layout");
+    }
+    (0, layout_1.validateBundleInventory)(input.target, await listFiles(input.bundleRoot));
+    const archiveBytes = await (0, promises_1.readFile)(input.archivePath);
+    const archiveName = (0, node_path_1.basename)(input.archivePath);
+    const expectedPrefix = `cthutool-agent-${input.releaseVersion}-${input.target}`;
+    if (!archiveName.startsWith(expectedPrefix) || !archiveName.endsWith(".zip")) {
+      throw new Error("Agent archive name does not match its version and target");
+    }
+    const baseUrl = requireImmutableBaseUrl(input.immutableBaseUrl, input.releaseVersion);
+    const archiveUrl = new URL(archiveName, baseUrl).href;
+    const windows = input.target === "windows-x64";
+    const receipt = {
+      schemaVersion: 1,
+      releaseVersion: input.releaseVersion,
+      provenance: input.provenance,
+      artifact: {
+        target: input.target,
+        platform: windows ? "windows" : "darwin",
+        architecture: input.target.endsWith("arm64") ? "arm64" : "x64",
+        archiveUrl,
+        archiveSize: archiveBytes.byteLength,
+        archiveSha256: (0, contracts_1.sha256)(archiveBytes),
+        archiveSignatureUrl: `${archiveUrl}.sig`,
+        trayEntryPoint: layout.entryPoints.tray,
+        nodeEntryPoint: layout.entryPoints.node,
+        agentEntryPoint: layout.entryPoints.agent,
+        platformSignature: {
+          required: true,
+          notarizationRequired: !windows
+        }
+      },
+      validation: {
+        cleanHostSmoke: input.cleanHostSmoke,
+        platformSigned: input.platformSigned,
+        notarizationStapled: input.notarizationStapled
+      }
+    };
+    validateReceipt(receipt);
+    return receipt;
+  }
+  function createReleaseManifest(input) {
+    const catalog = (0, contracts_1.validateEnvironmentCatalog)(JSON.parse(Buffer.from(input.catalogBytes).toString("utf8")));
+    const receipts = input.receipts.map(validateReceipt);
+    if (new Set(receipts.map((receipt) => receipt.artifact.target)).size !== receipts.length) {
+      throw new Error("Artifact receipts contain duplicate targets");
+    }
+    if (receipts.some((receipt) => receipt.releaseVersion !== input.releaseVersion || receipt.provenance !== input.provenance)) {
+      throw new Error("Artifact receipts have mixed versions or provenance");
+    }
+    if (input.provenance === "production" && receipts.some((receipt) => !receipt.validation.cleanHostSmoke || !receipt.validation.platformSigned || receipt.artifact.platform === "darwin" && !receipt.validation.notarizationStapled)) {
+      throw new Error("Production artifacts require clean-host smoke, platform signing, and macOS stapling");
+    }
+    const receiptByTarget = new Map(receipts.map((receipt) => [receipt.artifact.target, receipt]));
+    if (input.provenance === "production" && !contracts_1.SUPPORTED_AGENT_TARGETS.every((target) => receiptByTarget.has(target))) {
+      throw new Error("Production release is missing a supported target");
+    }
+    const manifest = {
+      schemaVersion: contracts_1.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
+      releaseVersion: input.releaseVersion,
+      minimumCliVersion: input.minimumCliVersion,
+      layoutVersion: 1,
+      protocols: {
+        agentBackend: 1,
+        agentControl: 1,
+        localBridge: 1,
+        trayControl: 1
+      },
+      environmentCatalog: {
+        schemaVersion: catalog.schemaVersion,
+        sha256: (0, contracts_1.sha256)(input.catalogBytes)
+      },
+      provenance: {
+        kind: input.provenance,
+        signed: input.provenance === "production"
+      },
+      artifacts: contracts_1.SUPPORTED_AGENT_TARGETS.flatMap((target) => {
+        const receipt = receiptByTarget.get(target);
+        return receipt ? [receipt.artifact] : [];
+      })
+    };
+    return (0, contracts_1.validateReleaseManifest)(manifest, {
+      requireProductionMatrix: input.provenance === "production"
+    });
+  }
+  function createChannelPointer(input) {
+    if (input.manifest.provenance.kind !== "production") {
+      throw new Error("A channel cannot point to a pull-request manifest");
+    }
+    const url = new URL(input.manifestUrl);
+    if (url.protocol !== "https:" || !url.pathname.includes(`/${input.manifest.releaseVersion}/`)) {
+      throw new Error("Channel target must be an immutable HTTPS manifest URL");
+    }
+    return {
+      schemaVersion: 1,
+      channel: input.channel,
+      releaseVersion: input.manifest.releaseVersion,
+      manifestUrl: url.href,
+      manifestSha256: (0, contracts_1.sha256)((0, contracts_1.canonicalJson)(input.manifest))
+    };
+  }
+  async function verifyProductionReleaseSet(input) {
+    const manifest = (0, contracts_1.validateReleaseManifest)(JSON.parse(await (0, promises_1.readFile)(input.manifestPath, "utf8")), { requireProductionMatrix: true });
+    if (manifest.provenance.kind !== "production") {
+      throw new Error("Production verification requires a production manifest");
+    }
+    (0, contracts_1.verifyManifestSignature)(manifest, (await (0, promises_1.readFile)(input.manifestSignaturePath, "utf8")).trim(), input.publicKeyPem);
+    (0, contracts_1.assertCatalogBinding)(manifest, await (0, promises_1.readFile)(input.catalogPath));
+    for (const artifact of manifest.artifacts) {
+      const archivePath = (0, node_path_1.join)(input.archivesDir, (0, node_path_1.basename)(new URL(artifact.archiveUrl).pathname));
+      const archiveBytes = await (0, promises_1.readFile)(archivePath);
+      (0, contracts_1.assertArchiveBinding)(artifact, archiveBytes);
+      (0, contracts_1.verifyReleaseBlobSignature)(archiveBytes, (await (0, promises_1.readFile)(`${archivePath}.sig`, "utf8")).trim(), input.publicKeyPem);
+    }
+    return manifest;
+  }
+  function validateReceipt(input) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new Error("Artifact receipt must be an object");
+    }
+    const receipt = input;
+    if (receipt.schemaVersion !== 1 || typeof receipt.releaseVersion !== "string" || receipt.provenance !== "production" && receipt.provenance !== "pull-request-validation" || !receipt.artifact || !receipt.validation || typeof receipt.validation.cleanHostSmoke !== "boolean" || typeof receipt.validation.platformSigned !== "boolean" || typeof receipt.validation.notarizationStapled !== "boolean") {
+      throw new Error("Artifact receipt contract is invalid");
+    }
+    const validationManifest = (0, contracts_1.validateReleaseManifest)({
+      schemaVersion: 1,
+      releaseVersion: receipt.releaseVersion,
+      minimumCliVersion: "0.0.0",
+      layoutVersion: 1,
+      protocols: {
+        agentBackend: 1,
+        agentControl: 1,
+        localBridge: 1,
+        trayControl: 1
+      },
+      environmentCatalog: {
+        schemaVersion: contracts_1.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION,
+        sha256: "0".repeat(64)
+      },
+      provenance: {
+        kind: receipt.provenance,
+        signed: receipt.provenance === "production"
+      },
+      artifacts: [receipt.artifact]
+    }, { requireProductionMatrix: false });
+    return {
+      schemaVersion: 1,
+      releaseVersion: receipt.releaseVersion,
+      provenance: receipt.provenance,
+      artifact: validationManifest.artifacts[0],
+      validation: receipt.validation
+    };
+  }
+  async function listFiles(root, directory = root) {
+    const output = [];
+    for (const entry of await (0, promises_1.readdir)(directory, { withFileTypes: true })) {
+      const path = (0, node_path_1.join)(directory, entry.name);
+      if (entry.isDirectory()) {
+        output.push(...await listFiles(root, path));
+      } else if (entry.isFile()) {
+        output.push(path.slice(root.length + 1).replaceAll("\\", "/"));
+      }
+    }
+    return output;
+  }
+  function requireImmutableBaseUrl(value, version) {
+    const url = new URL(value.endsWith("/") ? value : `${value}/`);
+    if (url.protocol !== "https:" || !url.pathname.includes(`/${version}/`) || url.search || url.hash) {
+      throw new Error("Artifact base URL must be immutable, versioned, and HTTPS");
+    }
+    return url;
+  }
+});
+
+// ../../packages/agent-release/dist/smoke.js
+var require_smoke = __commonJS((exports) => {
+  Object.defineProperty(exports, "__esModule", { value: true });
+  exports.smokeExtractedAgentBundle = smokeExtractedAgentBundle;
+  var node_child_process_1 = __require("node:child_process");
+  var promises_1 = __require("node:fs/promises");
+  var node_net_1 = __require("node:net");
+  var node_path_1 = __require("node:path");
+  var contracts_1 = require_contracts();
+  var layout_1 = require_layout();
+  async function smokeExtractedAgentBundle(input) {
+    const timeoutMs = input.timeoutMs ?? 20000;
+    const layout = (0, layout_1.validateBundleLayout)(JSON.parse(await (0, promises_1.readFile)((0, node_path_1.join)(input.bundleRoot, "layout.json"), "utf8")));
+    (0, layout_1.validateBundleInventory)(layout.target, await listBundleFiles(input.bundleRoot));
+    const catalogPath = (0, node_path_1.join)(input.bundleRoot, ...layout.entryPoints.environmentCatalog.split("/"));
+    const catalog = (0, contracts_1.validateEnvironmentCatalog)(JSON.parse(await (0, promises_1.readFile)(catalogPath, "utf8")));
+    const nodePath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...layout.entryPoints.node.split("/")));
+    const agentPath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...layout.entryPoints.agent.split("/")));
+    const instancePath = (0, node_path_1.join)(input.userDataDir, "runtime", "instance.json");
+    await (0, promises_1.rm)(instancePath, { force: true });
+    const stderr = [];
+    const child = (0, node_child_process_1.spawn)(nodePath, [agentPath, "--user-data-dir", input.userDataDir], {
+      cwd: input.bundleRoot,
+      env: {
+        ...process.env,
+        ...input.environment,
+        CTHUTOOL_AGENT_DISABLED: "1",
+        CTHUTOOL_AGENT_ENVIRONMENTS_PATH: catalogPath,
+        CTHUTOOL_AGENT_VERSION: layout.releaseVersion,
+        NODE_ENV: "production",
+        PATH: ""
+      },
+      stdio: ["ignore", "ignore", "pipe"]
+    });
+    child.stderr?.on("data", (chunk) => {
+      if (Buffer.concat(stderr).byteLength < 64 * 1024) {
+        stderr.push(chunk);
+      }
+    });
+    try {
+      const record = await waitForInstance(instancePath, child, timeoutMs, stderr);
+      if (await (0, promises_1.realpath)(record.executablePath) !== nodePath || await (0, promises_1.realpath)(record.entryPoint) !== agentPath || record.pid !== child.pid) {
+        throw new Error("Agent smoke process did not use the bundled entry points");
+      }
+      const healthResult = requireSuccess(await requestControl(record, "health"), "health");
+      if (healthResult.applicationVersion !== layout.releaseVersion || typeof healthResult.bridge?.endpoint !== "string") {
+        throw new Error("Agent health did not report the release version and bridge");
+      }
+      const environments = requireSuccess(await requestControl(record, "environment.list"), "environment.list");
+      const environmentId = catalog.profiles[0]?.environmentId;
+      if (!environmentId || !environments.environments?.some((item) => item.id === environmentId)) {
+        throw new Error("Agent smoke did not load the release environment catalog");
+      }
+      requireSuccess(await requestControl(record, "environment.switch", environmentId), "environment.switch");
+      const launch = requireSuccess(await requestControl(record, "bridge.launch"), "bridge.launch");
+      if (launch.endpoint !== healthResult.bridge.endpoint || launch.environmentId !== environmentId || typeof launch.launchUrl !== "string") {
+        throw new Error("Agent bridge launch metadata is inconsistent");
+      }
+      const bootstrapResponse = await fetch(`${launch.endpoint}/v1/bootstrap`, {
+        headers: { origin: catalog.profiles[0].webOrigin },
+        signal: AbortSignal.timeout(Math.min(timeoutMs, 5000))
+      });
+      if (!bootstrapResponse.ok) {
+        throw new Error(`Agent bridge readiness returned ${bootstrapResponse.status}`);
+      }
+      await requestControl(record, "shutdown");
+      await waitForExit(child, timeoutMs);
+      await waitForRemoval(instancePath, timeoutMs);
+      return {
+        applicationVersion: layout.releaseVersion,
+        bridgeEndpoint: launch.endpoint,
+        bundledNodePath: nodePath,
+        environmentId
+      };
+    } catch (error) {
+      await terminateExactChild(child);
+      const detail = Buffer.concat(stderr).toString("utf8").trim();
+      throw new Error(`${error instanceof Error ? error.message : "Agent bundle smoke failed"}${detail ? `
+Agent stderr:
+${detail}` : ""}`, { cause: error });
+    }
+  }
+  async function listBundleFiles(root, directory = root) {
+    const output = [];
+    for (const entry of await (0, promises_1.readdir)(directory, { withFileTypes: true })) {
+      const path = (0, node_path_1.join)(directory, entry.name);
+      if (entry.isDirectory()) {
+        output.push(...await listBundleFiles(root, path));
+      } else if (entry.isFile()) {
+        output.push(path.slice(root.length + 1).replaceAll("\\", "/"));
+      }
+    }
+    return output;
+  }
+  async function waitForInstance(path, child, timeoutMs, stderr) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null) {
+        throw new Error(`Agent exited before readiness with code ${child.exitCode}: ${Buffer.concat(stderr).toString("utf8")}`);
+      }
+      try {
+        const value = JSON.parse(await (0, promises_1.readFile)(path, "utf8"));
+        if (typeof value.protocolVersion === "number" && typeof value.pid === "number" && typeof value.nonce === "string" && typeof value.controlEndpoint === "string" && typeof value.executablePath === "string" && typeof value.entryPoint === "string") {
+          return value;
+        }
+      } catch {}
+      await delay(50);
+    }
+    throw new Error("Timed out waiting for Agent readiness record");
+  }
+  async function requestControl(record, operation, environmentId) {
+    return new Promise((resolvePromise, rejectPromise) => {
+      const socket = (0, node_net_1.createConnection)(record.controlEndpoint);
+      const timer = setTimeout(() => {
+        socket.destroy();
+        rejectPromise(new Error(`Agent ${operation} request timed out`));
+      }, 5000);
+      let payload = "";
+      socket.setEncoding("utf8");
+      socket.once("connect", () => {
+        socket.write(`${JSON.stringify({
+          instanceNonce: record.nonce,
+          operation,
+          protocolVersion: record.protocolVersion,
+          ...environmentId ? { environmentId } : {}
+        })}
+`);
+      });
+      socket.on("data", (chunk) => {
+        payload += chunk;
+        const newline = payload.indexOf(`
+`);
+        if (newline >= 0) {
+          clearTimeout(timer);
+          socket.end();
+          try {
+            resolvePromise(JSON.parse(payload.slice(0, newline)));
+          } catch (error) {
+            rejectPromise(error);
+          }
+        }
+      });
+      socket.once("error", (error) => {
+        clearTimeout(timer);
+        rejectPromise(error);
+      });
+    });
+  }
+  function requireSuccess(value, operation) {
+    if (!value || typeof value !== "object" || value.ok !== true || !("result" in value)) {
+      throw new Error(`Agent ${operation} control request failed`);
+    }
+    return value.result;
+  }
+  async function waitForExit(child, timeoutMs) {
+    if (child.exitCode !== null) {
+      return;
+    }
+    await Promise.race([
+      new Promise((resolvePromise, rejectPromise) => {
+        child.once("exit", (code, signal) => {
+          code === 0 ? resolvePromise() : rejectPromise(new Error(`Agent exited with code ${code ?? "none"} signal ${signal ?? "none"}`));
+        });
+      }),
+      delay(timeoutMs).then(() => {
+        throw new Error("Timed out waiting for coordinated Agent shutdown");
+      })
+    ]);
+  }
+  async function waitForRemoval(path, timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        await (0, promises_1.readFile)(path);
+      } catch (error) {
+        if (error.code === "ENOENT") {
+          return;
+        }
+        throw error;
+      }
+      await delay(50);
+    }
+    throw new Error("Agent shutdown left a stale instance record");
+  }
+  async function terminateExactChild(child) {
+    if (child.exitCode !== null || child.pid === undefined) {
+      return;
+    }
+    child.kill("SIGTERM");
+    await Promise.race([
+      new Promise((resolvePromise) => child.once("exit", () => resolvePromise())),
+      delay(2000)
+    ]);
+    if (child.exitCode === null) {
+      child.kill("SIGKILL");
+    }
+  }
+  function delay(milliseconds) {
+    return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
+  }
+});
+
+// ../../packages/agent-release/dist/index.js
+var require_dist2 = __commonJS((exports) => {
+  var __createBinding = exports && exports.__createBinding || (Object.create ? function(o3, m3, k4, k22) {
+    if (k22 === undefined)
+      k22 = k4;
+    var desc = Object.getOwnPropertyDescriptor(m3, k4);
+    if (!desc || ("get" in desc ? !m3.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() {
+        return m3[k4];
+      } };
+    }
+    Object.defineProperty(o3, k22, desc);
+  } : function(o3, m3, k4, k22) {
+    if (k22 === undefined)
+      k22 = k4;
+    o3[k22] = m3[k4];
+  });
+  var __exportStar = exports && exports.__exportStar || function(m3, exports2) {
+    for (var p in m3)
+      if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports2, p))
+        __createBinding(exports2, m3, p);
+  };
+  Object.defineProperty(exports, "__esModule", { value: true });
+  __exportStar(require_activation(), exports);
+  __exportStar(require_assembly(), exports);
+  __exportStar(require_contracts(), exports);
+  __exportStar(require_layout(), exports);
+  __exportStar(require_node_runtime(), exports);
+  __exportStar(require_publication(), exports);
+  __exportStar(require_smoke(), exports);
 });
 
 // ../../node_modules/.pnpm/consola@3.4.2/node_modules/consola/dist/core.mjs
@@ -2389,8 +6675,8 @@ function getCommandHelpAppendixProvider(command) {
   return helpAppendixByCommand.get(command);
 }
 
-// src/command/codex.command.ts
-import { emitKeypressEvents as emitKeypressEvents2 } from "node:readline";
+// src/command/agent.command.ts
+import { readFile as readFile7, stat as stat6 } from "node:fs/promises";
 
 // ../../node_modules/.pnpm/@clack+core@0.3.5/node_modules/@clack/core/dist/index.mjs
 var import_sisteransi = __toESM(require_src(), 1);
@@ -3028,65 +7314,626 @@ var _4 = () => {
   } };
 };
 
-// src/command/codex.command.ts
-var import_picocolors3 = __toESM(require_picocolors(), 1);
+// src/domain/agent-lifecycle.ts
+var AGENT_CLI_RESPONSE_SCHEMA_VERSION = 1;
 
-// src/domain/codex-plugin-install-manager.ts
-import { readFile as readFile2 } from "node:fs/promises";
-import { basename, join as join2, resolve as resolve3 } from "node:path";
+// src/infra/agent-lifecycle-service.ts
+var import_agent_data_migration = __toESM(require_dist(), 1);
+var import_agent_release3 = __toESM(require_dist2(), 1);
+import { readFile as readFile6, rm as rm3, stat as stat5 } from "node:fs/promises";
+import { join as join7 } from "node:path";
 
-// src/infra/codex-config-paths.ts
+// src/domain/self-update-manager.ts
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-function createCodexConfigPaths(options = {}) {
-  const repoRoot = resolve(options.repoRoot ?? getDefaultRepoRoot());
-  const homeRoot = resolve(options.homeRoot ?? homedir());
-  const localCodexRoot = resolve(options.codexHome ?? join(homeRoot, ".codex"));
-  const localOpenCodeRoot = resolve(options.openCodeHome ?? join(homeRoot, ".config", "opencode"));
-  const openCodeConfigPath = resolve(options.openCodeConfig ?? getDefaultOpenCodeConfigPath(localOpenCodeRoot));
-  return {
-    repoRoot,
-    repoCodexRoot: resolve(repoRoot, "codex"),
-    homeRoot,
-    localCodexRoot,
-    localOpenCodeRoot,
-    openCodeConfigPath,
-    marketplacePath: resolve(options.marketplace ?? join(homeRoot, ".agents", "plugins", "marketplace.json")),
-    pluginsRoot: resolve(options.pluginsRoot ?? join(repoRoot, "codex", "plugins")),
-    cacheRoot: resolve(options.cacheRoot ?? join(homeRoot, ".codex", "plugins", "cache", "personal"))
-  };
-}
-function getDefaultOpenCodeConfigPath(openCodeRoot) {
-  const jsoncPath = join(openCodeRoot, "opencode.jsonc");
-  return existsSync(jsoncPath) ? jsoncPath : join(openCodeRoot, "opencode.json");
-}
-function assertPathInside(parent, child) {
-  const parentPath = resolve(parent);
-  const childPath = resolve(child);
-  const childRelative = relative(parentPath, childPath);
-  if (childRelative.startsWith("..") || isAbsolute(childRelative)) {
-    throw new Error(`Refusing to write outside ${parentPath}: ${childPath}`);
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+var defaultSelfUpdateRepo = "https://github.com/mickmetalholic/CthuTool.git";
+var defaultSelfUpdateRef = "main";
+var committedCliBundlePath = "apps/cli/dist/index.js";
+var maxChangeHighlights = 5;
+var maxSubjectLength = 120;
+var maxDetailLines = 8;
+var maxDetailLineLength = 240;
+
+class SelfUpdateError extends Error {
+  phase;
+  summary;
+  causeText;
+  hint;
+  result;
+  constructor(options) {
+    const summary = redactSelfUpdateText(options.summary);
+    const causeText = options.cause ? redactSelfUpdateText(options.cause) : undefined;
+    const hint = redactSelfUpdateText(options.hint);
+    const cause = causeText ? `
+Cause: ${causeText}` : "";
+    super(`${summary}${cause}
+Next: ${hint}`);
+    this.name = "SelfUpdateError";
+    this.phase = options.phase;
+    this.summary = summary;
+    this.causeText = causeText;
+    this.hint = hint;
+    this.result = options.result ? redactCommandResult(options.result) : undefined;
   }
 }
-function getDefaultRepoRoot() {
-  const start = resolve(process.cwd());
-  let current = start;
+function getDefaultSelfUpdateInstallDir(home = homedir()) {
+  return join(home, ".cthutool", "source", "CthuTool");
+}
+function createSelfUpdateDeps(onEvent) {
+  return {
+    exists: existsSync,
+    mkdir: async (path) => {
+      await mkdir(path, { recursive: true });
+    },
+    run: runCommand2,
+    env: process.env,
+    home: homedir,
+    runtimeRoot: findRepoRootFromModule,
+    onEvent
+  };
+}
+function getCliVersion() {
+  return readPackageVersion(findRepoRootFromModule());
+}
+async function resolveSelfUpdateSource(options, deps) {
+  const runtimeRoot = deps.runtimeRoot();
+  const managedRoot = getDefaultSelfUpdateInstallDir(deps.home());
+  const envInstallDir = nonEmpty(deps.env.CHC_INSTALL_DIR);
+  const explicitInstallDir = options.installDir !== undefined || envInstallDir !== undefined;
+  const installDir = options.installDir ?? envInstallDir ?? runtimeRoot;
+  const mode = resolve(runtimeRoot) === resolve(managedRoot) ? "remote" : "local";
+  const gitRoot = join(installDir, ".git");
+  const canInspectCheckout = deps.exists(gitRoot);
+  const repoOverride = options.repo ?? nonEmpty(deps.env.CHC_REPO_URL) ?? nonEmpty(deps.env.CHC_REPO);
+  const refOverride = options.ref ?? nonEmpty(deps.env.CHC_REF);
+  const installedRepo = canInspectCheckout && repoOverride === undefined ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
+    cwd: installDir
+  }) : undefined;
+  const installedRef = canInspectCheckout && refOverride === undefined ? await readInstalledRef(deps, installDir) : undefined;
+  return {
+    repo: repoOverride ?? installedRepo ?? defaultSelfUpdateRepo,
+    ref: refOverride ?? installedRef ?? defaultSelfUpdateRef,
+    installDir,
+    runtimeRoot,
+    managedRoot,
+    mode,
+    explicitInstallDir
+  };
+}
+async function readInstalledRef(deps, installDir) {
+  const branch = await runOptional(deps, "git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: installDir });
+  if (branch)
+    return branch;
+  const tags = await runOptional(deps, "git", ["tag", "--points-at", "HEAD", "--sort=refname"], { cwd: installDir });
+  const exactTag = tags?.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).sort((left, right) => left.localeCompare(right))[0];
+  if (exactTag)
+    return exactTag;
+  return runOptional(deps, "git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+    cwd: installDir
+  });
+}
+function nonEmpty(value) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+function emit(deps, event) {
+  deps.onEvent?.(event);
+}
+async function runPhase(deps, phase, action) {
+  emit(deps, { type: "phase_started", phase });
+  try {
+    const value = await action();
+    emit(deps, { type: "phase_completed", phase });
+    return value;
+  } catch (error) {
+    const failure = toPhaseError(error, phase);
+    emit(deps, {
+      type: "failure",
+      phase: failure.phase,
+      summary: failure.summary,
+      cause: failure.causeText,
+      hint: failure.hint
+    });
+    throw failure;
+  }
+}
+function phaseHint(phase) {
+  switch (phase) {
+    case "preflight":
+      return "Check the selected directory and local Git state, then retry.";
+    case "check_remote":
+      return "Check the repository URL, ref, network access, and Git credentials.";
+    case "clone":
+      return "Check repository access and permissions for the managed source directory.";
+    case "fetch":
+      return "Check network access and the configured origin, then retry.";
+    case "checkout":
+      return "Inspect the checkout state and selected ref before retrying.";
+    case "verify_bundle":
+      return `Select a ref containing ${committedCliBundlePath}.`;
+    case "install_global":
+      return "Check npm global-install permissions, then retry the update.";
+  }
+}
+function toPhaseError(error, phase) {
+  if (error instanceof SelfUpdateError) {
+    return error;
+  }
+  return new SelfUpdateError({
+    phase,
+    summary: `Update failed during ${formatPhase(phase)}.`,
+    cause: boundedText(redactSelfUpdateText(error instanceof Error ? error.message : String(error))),
+    hint: phaseHint(phase)
+  });
+}
+function commandFailure(phase, result) {
+  return new SelfUpdateError({
+    phase,
+    summary: `Update failed during ${formatPhase(phase)}.`,
+    cause: boundedCommandOutput(result) || `Command exited with code ${result.code}.`,
+    hint: phaseHint(phase),
+    result
+  });
+}
+async function execute(deps, phase, command, args, options = {}) {
+  let result;
+  try {
+    result = await deps.run(command, args, options);
+  } catch (error) {
+    throw new SelfUpdateError({
+      phase,
+      summary: `Unable to start ${command} during ${formatPhase(phase)}.`,
+      cause: boundedText(error instanceof Error ? error.message : String(error)),
+      hint: phaseHint(phase)
+    });
+  }
+  emit(deps, {
+    type: "command",
+    phase,
+    command,
+    args: redactArgs(args),
+    cwd: options.cwd,
+    code: result.code,
+    stdout: boundedText(redactSelfUpdateText(result.stdout)),
+    stderr: boundedText(redactSelfUpdateText(result.stderr))
+  });
+  if (result.code !== 0 && options.allowFailure !== true) {
+    throw commandFailure(phase, result);
+  }
+  return result;
+}
+async function requiredOutput(deps, phase, args, cwd) {
+  const result = await execute(deps, phase, "git", args, { cwd });
+  const value = result.stdout.trim();
+  if (value.length === 0) {
+    throw new SelfUpdateError({
+      phase,
+      summary: `Git returned no identity during ${formatPhase(phase)}.`,
+      hint: phaseHint(phase)
+    });
+  }
+  return value;
+}
+async function readIdentity(deps, phase, cwd, fallbackRef, revision = "HEAD") {
+  const commit = await requiredOutput(deps, phase, ["rev-parse", "--verify", `${revision}^{commit}`], cwd);
+  const refResult = revision === "HEAD" ? await execute(deps, phase, "git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd, allowFailure: true }) : undefined;
+  return {
+    ref: refResult?.code === 0 ? refResult.stdout.trim() || fallbackRef : fallbackRef,
+    commit,
+    shortCommit: commit.slice(0, 7)
+  };
+}
+function finishPlan(deps, plan) {
+  emit(deps, { type: "plan", plan });
+  return plan;
+}
+async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
+  const resolved = await resolveSelfUpdateSource(options, deps);
+  const publicResolved = {
+    repo: redactSelfUpdateText(resolved.repo),
+    ref: resolved.ref,
+    installDir: resolved.installDir
+  };
+  const phases = [];
+  const gitRoot = join(resolved.installDir, ".git");
+  if (resolved.mode === "local" && !resolved.explicitInstallDir) {
+    phases.push("preflight");
+    return finishPlan(deps, {
+      status: "blocked",
+      ...publicResolved,
+      block: {
+        kind: "local_linked_source",
+        message: `The running chc command is linked to the local checkout at ${resolved.runtimeRoot}.`,
+        hint: "Update that checkout and rebuild apps/cli/dist/index.js, or run CHC_INSTALL_MODE=remote scripts/install-chc.sh to switch back to managed mode."
+      },
+      phases
+    });
+  }
+  const initial = await runPhase(deps, "preflight", async () => {
+    if (!deps.exists(gitRoot)) {
+      return;
+    }
+    const status = await execute(deps, "preflight", "git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: resolved.installDir });
+    if (status.stdout.trim().length > 0) {
+      return "dirty";
+    }
+    return readIdentity(deps, "preflight", resolved.installDir, resolved.ref);
+  });
+  phases.push("preflight");
+  if (initial === undefined) {
+    return finishPlan(deps, {
+      status: "install_required",
+      ...publicResolved,
+      phases
+    });
+  }
+  if (initial === "dirty") {
+    return finishPlan(deps, {
+      status: "blocked",
+      ...publicResolved,
+      block: {
+        kind: "dirty_checkout",
+        message: "The selected checkout has uncommitted or untracked changes.",
+        hint: "Commit, stash, or remove the local changes, then retry."
+      },
+      phases
+    });
+  }
+  const remote = await runPhase(deps, "check_remote", async () => {
+    await execute(deps, "check_remote", "git", ["fetch", "--no-tags", resolved.repo, resolved.ref], { cwd: resolved.installDir });
+    const target = await readIdentity(deps, "check_remote", resolved.installDir, resolved.ref, "FETCH_HEAD");
+    const branch = await execute(deps, "check_remote", "git", ["ls-remote", "--exit-code", "--heads", resolved.repo, resolved.ref], { cwd: resolved.installDir, allowFailure: true });
+    return {
+      target,
+      isBranch: branch.code === 0 && branch.stdout.trim().length > 0
+    };
+  });
+  phases.push("check_remote");
+  const targetBundle = await execute(deps, "check_remote", "git", ["cat-file", "-e", `${remote.target.commit}:${committedCliBundlePath}`], { cwd: resolved.installDir, allowFailure: true });
+  if (targetBundle.code !== 0) {
+    return finishPlan(deps, {
+      status: "blocked",
+      ...publicResolved,
+      before: initial,
+      target: remote.target,
+      block: {
+        kind: "missing_target_bundle",
+        message: `The selected target does not contain ${committedCliBundlePath}.`,
+        hint: `Select a ref containing ${committedCliBundlePath}.`
+      },
+      phases
+    });
+  }
+  if (initial.commit === remote.target.commit) {
+    return finishPlan(deps, {
+      status: "up_to_date",
+      ...publicResolved,
+      before: initial,
+      target: remote.target,
+      targetKind: remote.isBranch ? "branch" : "detached",
+      relinkRequired: resolve(resolved.installDir) !== resolve(resolved.runtimeRoot),
+      phases
+    });
+  }
+  if (remote.isBranch) {
+    const ancestor = await execute(deps, "check_remote", "git", ["merge-base", "--is-ancestor", initial.commit, remote.target.commit], { cwd: resolved.installDir, allowFailure: true });
+    if (ancestor.code === 1) {
+      return finishPlan(deps, {
+        status: "blocked",
+        ...publicResolved,
+        before: initial,
+        target: remote.target,
+        targetKind: "branch",
+        block: {
+          kind: "diverged_branch",
+          message: "The selected checkout cannot fast-forward to the remote branch.",
+          hint: "Reconcile the local branch manually, then retry."
+        },
+        phases
+      });
+    }
+    if (ancestor.code !== 0) {
+      throw commandFailure("check_remote", ancestor);
+    }
+  }
+  const changes = await loadChangeSummary(deps, resolved.installDir, initial.commit, remote.target.commit);
+  return finishPlan(deps, {
+    status: "update_available",
+    ...publicResolved,
+    before: initial,
+    target: remote.target,
+    targetKind: remote.isBranch ? "branch" : "detached",
+    changes,
+    phases
+  });
+}
+async function loadChangeSummary(deps, cwd, before, target) {
+  const countResult = await execute(deps, "check_remote", "git", ["rev-list", "--count", `${before}..${target}`], { cwd, allowFailure: true });
+  const parsedCount = Number.parseInt(countResult.stdout.trim(), 10);
+  const count = countResult.code === 0 && Number.isFinite(parsedCount) ? parsedCount : 0;
+  const logResult = await execute(deps, "check_remote", "git", [
+    "log",
+    `--max-count=${maxChangeHighlights}`,
+    "--format=%h%x09%s",
+    `${before}..${target}`
+  ], { cwd, allowFailure: true });
+  const highlights = logResult.code === 0 ? logResult.stdout.split(/\r?\n/).filter(Boolean).slice(0, maxChangeHighlights).map((line) => {
+    const [commit = "", ...subject] = line.split("\t");
+    return {
+      commit: commit.slice(0, 12),
+      subject: boundedLine(subject.join("\t"), maxSubjectLength)
+    };
+  }) : [];
+  return {
+    count: Math.max(count, highlights.length),
+    highlights,
+    omitted: Math.max(0, count - highlights.length)
+  };
+}
+function blockedError(plan) {
+  return new SelfUpdateError({
+    phase: "preflight",
+    summary: `Update blocked: ${plan.block?.message ?? "The selected checkout is not safe to update."}`,
+    hint: plan.block?.hint ?? phaseHint("preflight")
+  });
+}
+function assertSelfUpdatePlanReady(plan) {
+  if (plan.status === "blocked") {
+    throw blockedError(plan);
+  }
+}
+async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
+  const resolved = await resolveSelfUpdateSource(options, deps);
+  const plan = await planSelfUpdate(options, deps);
+  assertSelfUpdatePlanReady(plan);
+  if (plan.status === "up_to_date") {
+    if (plan.relinkRequired) {
+      await runPhase(deps, "install_global", async () => {
+        await execute(deps, "install_global", "npm", [
+          "install",
+          "-g",
+          "--ignore-scripts",
+          plan.installDir
+        ]);
+      });
+      return {
+        status: "installed",
+        repo: plan.repo,
+        ref: plan.ref,
+        installDir: plan.installDir,
+        before: plan.before,
+        target: plan.target,
+        after: plan.before,
+        phases: [...plan.phases, "install_global"],
+        steps: ["install-global"]
+      };
+    }
+    return {
+      status: "up_to_date",
+      repo: plan.repo,
+      ref: plan.ref,
+      installDir: plan.installDir,
+      before: plan.before,
+      target: plan.target,
+      after: plan.before,
+      phases: plan.phases,
+      steps: []
+    };
+  }
+  const phases = [...plan.phases];
+  const steps = [];
+  const isInstall = plan.status === "install_required";
+  if (isInstall) {
+    await runPhase(deps, "clone", async () => {
+      await deps.mkdir(dirname(plan.installDir));
+      await execute(deps, "clone", "git", [
+        "clone",
+        resolved.repo,
+        plan.installDir
+      ]);
+    });
+    phases.push("clone");
+    steps.push("clone");
+  } else {
+    await runPhase(deps, "preflight", async () => {
+      const status = await execute(deps, "preflight", "git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: plan.installDir });
+      if (status.stdout.trim().length > 0) {
+        throw new SelfUpdateError({
+          phase: "preflight",
+          summary: "Update blocked: the checkout changed after preflight.",
+          hint: "Preserve the new local changes, then retry."
+        });
+      }
+    });
+  }
+  if (!isInstall) {
+    await runPhase(deps, "fetch", async () => {
+      await execute(deps, "fetch", "git", ["remote", "set-url", "origin", resolved.repo], { cwd: plan.installDir });
+      await execute(deps, "fetch", "git", ["fetch", "--tags", "origin"], {
+        cwd: plan.installDir
+      });
+    });
+    phases.push("fetch");
+    steps.push("fetch");
+  }
+  await runPhase(deps, "checkout", async () => {
+    if (!isInstall && plan.target) {
+      if (plan.targetKind === "branch") {
+        await execute(deps, "checkout", "git", ["checkout", plan.ref], {
+          cwd: plan.installDir
+        });
+        steps.push("checkout");
+        await execute(deps, "checkout", "git", ["merge", "--ff-only", plan.target.commit], { cwd: plan.installDir });
+        steps.push("pull");
+      } else {
+        await execute(deps, "checkout", "git", ["checkout", "--detach", plan.target.commit], { cwd: plan.installDir });
+        steps.push("checkout");
+      }
+      return;
+    }
+    await execute(deps, "checkout", "git", ["checkout", plan.ref], {
+      cwd: plan.installDir
+    });
+    steps.push("checkout");
+    const remoteBranch = await execute(deps, "checkout", "git", ["rev-parse", "--verify", `origin/${plan.ref}`], { cwd: plan.installDir, allowFailure: true });
+    if (remoteBranch.code === 0) {
+      await execute(deps, "checkout", "git", ["pull", "--ff-only", "origin", plan.ref], { cwd: plan.installDir });
+      steps.push("pull");
+    }
+  });
+  phases.push("checkout");
+  await runPhase(deps, "verify_bundle", async () => {
+    verifyCommittedBundle(deps, plan.installDir);
+  });
+  phases.push("verify_bundle");
+  steps.push("verify-bundle");
+  await runPhase(deps, "install_global", async () => {
+    await execute(deps, "install_global", "npm", [
+      "install",
+      "-g",
+      "--ignore-scripts",
+      plan.installDir
+    ]);
+  });
+  phases.push("install_global");
+  steps.push("install-global");
+  const after = await readIdentity(deps, "checkout", plan.installDir, plan.ref);
+  return {
+    status: isInstall ? "installed" : "updated",
+    repo: plan.repo,
+    ref: plan.ref,
+    installDir: plan.installDir,
+    before: plan.before,
+    target: plan.target ?? after,
+    after,
+    changes: plan.changes,
+    phases,
+    steps
+  };
+}
+async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDeps()) {
+  const resolved = await resolveSelfUpdateSource(options, deps);
+  const bundlePath = join(resolved.installDir, committedCliBundlePath);
+  const gitRoot = join(resolved.installDir, ".git");
+  const repo = deps.exists(gitRoot) ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
+    cwd: resolved.installDir
+  }) ?? resolved.repo : resolved.repo;
+  const ref = deps.exists(gitRoot) ? await readInstalledRef(deps, resolved.installDir) ?? resolved.ref : resolved.ref;
+  const commit = deps.exists(gitRoot) ? await runOptional(deps, "git", ["rev-parse", "--short", "HEAD"], {
+    cwd: resolved.installDir
+  }) : undefined;
+  return {
+    version: getCliVersion(),
+    mode: resolve(resolved.installDir) === resolve(resolved.managedRoot) ? "remote" : "local",
+    installDir: resolved.installDir,
+    repo,
+    ref,
+    commit,
+    bundlePath,
+    bundlePresent: deps.exists(bundlePath)
+  };
+}
+async function runOptional(deps, command, args, options) {
+  const result = await deps.run(command, args, {
+    ...options,
+    allowFailure: true
+  });
+  if (result.code !== 0) {
+    return;
+  }
+  const value = result.stdout.trim();
+  return value.length > 0 ? value : undefined;
+}
+function verifyCommittedBundle(deps, installDir) {
+  const bundlePath = join(installDir, committedCliBundlePath);
+  if (!deps.exists(bundlePath)) {
+    throw new SelfUpdateError({
+      phase: "verify_bundle",
+      summary: "The selected ref does not contain the committed CLI bundle.",
+      cause: `Missing ${bundlePath}.`,
+      hint: phaseHint("verify_bundle")
+    });
+  }
+}
+function formatPhase(phase) {
+  return phase.replaceAll("_", " ");
+}
+function boundedLine(value, maxLength) {
+  const normalized = value.replaceAll(/\s+/g, " ").trim();
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`;
+}
+function boundedText(value) {
+  const lines = value.split(/\r?\n/).map((line) => boundedLine(line, maxDetailLineLength)).filter(Boolean).slice(0, maxDetailLines);
+  return lines.length > 0 ? lines.join(`
+`) : undefined;
+}
+function boundedCommandOutput(result) {
+  return boundedText(redactSelfUpdateText(`${result.stderr}
+${result.stdout}`));
+}
+function redactArgs(args) {
+  return args.map(redactSelfUpdateText);
+}
+function redactSelfUpdateText(value) {
+  return value.replace(/:\/\/[^/\s]+@/g, "://***@");
+}
+function redactCommandResult(result) {
+  return {
+    ...result,
+    args: redactArgs(result.args),
+    stdout: redactSelfUpdateText(result.stdout),
+    stderr: redactSelfUpdateText(result.stderr)
+  };
+}
+function runCommand2(command, args, options = {}) {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command, [...args], {
+      cwd: options.cwd,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout2 = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout2 += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      reject(error);
+    });
+    child.on("close", (code) => {
+      resolvePromise({
+        command,
+        args,
+        cwd: options.cwd,
+        code: code ?? 1,
+        stdout: stdout2,
+        stderr
+      });
+    });
+  });
+}
+function findRepoRootFromModule() {
+  let current = dirname(fileURLToPath(import.meta.url));
   while (true) {
-    if (isWorkspaceRoot(current)) {
+    if (isCthuToolRoot(current)) {
       return current;
     }
     const parent = dirname(current);
     if (parent === current) {
-      return start;
+      throw new Error("Unable to locate CthuTool package root.");
     }
     current = parent;
   }
 }
-function isWorkspaceRoot(path) {
-  if (existsSync(join(path, "pnpm-workspace.yaml"))) {
-    return true;
-  }
+function isCthuToolRoot(path) {
   try {
     const pkg = JSON.parse(readFileSync(join(path, "package.json"), "utf8"));
     return pkg.name === "cthutool";
@@ -3094,14 +7941,2275 @@ function isWorkspaceRoot(path) {
     return false;
   }
 }
+function readPackageVersion(root) {
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  if (typeof pkg.version !== "string" || pkg.version.trim().length === 0) {
+    throw new Error(`Package version is missing: ${join(root, "package.json")}`);
+  }
+  return pkg.version;
+}
+
+// src/infra/agent-control.ts
+import { readFile, stat } from "node:fs/promises";
+import { createConnection } from "node:net";
+import { join as join2 } from "node:path";
+async function readAgentInstance(userDataDir) {
+  const path = join2(userDataDir, "runtime", "instance.json");
+  let value;
+  try {
+    value = JSON.parse(await readFile(path, "utf8"));
+    if (process.platform !== "win32" && ((await stat(path)).mode & 63) !== 0)
+      throw new Error("Agent instance record is not user-private");
+  } catch (error) {
+    if (error.code === "ENOENT")
+      return;
+    throw error;
+  }
+  if (!isAgentInstance(value))
+    throw new Error("Agent instance record is invalid");
+  return value;
+}
+async function requestAgentHealth(record, timeoutMs) {
+  const result = await requestAgent(record, "health", undefined, timeoutMs);
+  if (!result || typeof result !== "object" || typeof result.applicationVersion !== "string")
+    throw new Error("Agent health response is invalid");
+  return result;
+}
+async function requestAgent(record, operation, environmentId, timeoutMs = 2000) {
+  return new Promise((resolve2, reject) => {
+    const socket = createConnection(record.controlEndpoint);
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error("Agent control request timed out"));
+    }, timeoutMs);
+    let payload = "";
+    let settled = false;
+    const finish = (task) => {
+      if (settled)
+        return;
+      settled = true;
+      clearTimeout(timer);
+      task();
+    };
+    socket.setEncoding("utf8");
+    socket.once("connect", () => socket.write(`${JSON.stringify({ protocolVersion: record.protocolVersion, instanceNonce: record.nonce, operation, ...environmentId ? { environmentId } : {} })}
+`));
+    socket.on("data", (chunk) => {
+      payload += chunk;
+      if (Buffer.byteLength(payload) > 64 * 1024) {
+        socket.destroy();
+        finish(() => reject(new Error("Agent control response is too large")));
+        return;
+      }
+      const newline = payload.indexOf(`
+`);
+      if (newline < 0)
+        return;
+      finish(() => {
+        try {
+          const response = JSON.parse(payload.slice(0, newline));
+          if (!response.ok)
+            throw new Error(response.error?.message ?? response.error?.code ?? "Agent rejected control request");
+          resolve2(response.result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      socket.end();
+    });
+    socket.once("error", (error) => finish(() => reject(error)));
+  });
+}
+function isAgentInstance(value) {
+  const item = value;
+  return Boolean(item && item.protocolVersion === 1 && Number.isSafeInteger(item.pid) && (item.pid ?? 0) > 0 && typeof item.nonce === "string" && item.nonce.length >= 16 && typeof item.controlEndpoint === "string" && typeof item.executablePath === "string" && typeof item.entryPoint === "string" && typeof item.startedAt === "string");
+}
+
+// src/infra/agent-paths.ts
+var import_agent_release = __toESM(require_dist2(), 1);
+import { spawn as spawn2 } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import {
+  chmod,
+  mkdir as mkdir2,
+  readdir,
+  readFile as readFile3,
+  rename,
+  stat as stat3,
+  writeFile
+} from "node:fs/promises";
+import { homedir as homedir3 } from "node:os";
+import { dirname as dirname2, join as join4 } from "node:path";
+
+// src/infra/agent-tray-control.ts
+import { readFile as readFile2, stat as stat2 } from "node:fs/promises";
+import { createConnection as createConnection2 } from "node:net";
+import { homedir as homedir2 } from "node:os";
+import { join as join3 } from "node:path";
+var TRAY_CONTROL_PROTOCOL_VERSION = 1;
+function resolveAgentUserDataDir(input) {
+  if (input?.trim()) {
+    return input;
+  }
+  if (process.env.CTHUTOOL_AGENT_DATA_DIR?.trim()) {
+    return process.env.CTHUTOOL_AGENT_DATA_DIR;
+  }
+  if (process.platform === "darwin") {
+    return join3(homedir2(), "Library", "Application Support", "CthuTool", "agent");
+  }
+  if (process.platform === "win32") {
+    return join3(process.env.APPDATA ?? join3(homedir2(), "AppData", "Roaming"), "CthuTool", "agent");
+  }
+  return join3(process.env.XDG_STATE_HOME ?? join3(homedir2(), ".local", "state"), "cthutool", "agent");
+}
+function resolveTrayInstancePath(userDataDir) {
+  return join3(userDataDir, "runtime", "tray-instance.json");
+}
+async function readTrayInstanceRecord(instancePath) {
+  let input;
+  try {
+    input = JSON.parse(await readFile2(instancePath, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  if (!isRecord(input)) {
+    throw new Error("Tray instance record is invalid");
+  }
+  return input;
+}
+async function requestTrayShutdown(input) {
+  const response = await requestTrayControl({
+    endpoint: input.record.controlEndpoint,
+    nonce: input.record.nonce,
+    operation: "shutdown",
+    timeoutMs: input.timeoutMs
+  });
+  if (!response.ok) {
+    throw new Error(response.error?.message ?? response.error?.code ?? "Tray rejected shutdown");
+  }
+}
+async function requestTrayHealth(input) {
+  const response = await requestTrayControl({
+    endpoint: input.record.controlEndpoint,
+    nonce: input.record.nonce,
+    operation: "health",
+    timeoutMs: input.timeoutMs
+  });
+  if (!response.ok || !isTraySnapshot(response.result)) {
+    throw new Error(response.error?.message ?? response.error?.code ?? "Tray health is invalid");
+  }
+  return response.result;
+}
+async function requestTrayOpen(input) {
+  await requestAccepted(input, "open");
+}
+async function requestTrayEnvironmentSwitch(input) {
+  const response = await requestTrayControl({
+    endpoint: input.record.controlEndpoint,
+    nonce: input.record.nonce,
+    operation: "environment.switch",
+    environmentId: input.environmentId,
+    timeoutMs: input.timeoutMs
+  });
+  if (!response.ok) {
+    throw new Error(response.error?.message ?? response.error?.code ?? "Tray rejected environment switch");
+  }
+}
+async function waitForTrayExit(input) {
+  const deadline = Date.now() + (input.timeoutMs ?? 1e4);
+  while (Date.now() < deadline) {
+    const current = await readTrayInstanceRecord(input.instancePath);
+    if (!current || !sameInstance(current, input.record)) {
+      return;
+    }
+    await new Promise((resolve2) => setTimeout(resolve2, input.pollMs ?? 50));
+  }
+  throw new Error("Timed out waiting for tray-owned Agent shutdown");
+}
+async function stopTrayOwnedAgent(input) {
+  const instancePath = resolveTrayInstancePath(resolveAgentUserDataDir(input.userDataDir));
+  const record = await readTrayInstanceRecord(instancePath);
+  if (!record) {
+    return "already-stopped";
+  }
+  await assertPrivateRecord(instancePath);
+  await requestTrayShutdown({ record, timeoutMs: input.timeoutMs });
+  await waitForTrayExit({
+    instancePath,
+    record,
+    timeoutMs: input.timeoutMs
+  });
+  return "stopped";
+}
+async function requestTrayControl(input) {
+  return new Promise((resolve2, reject) => {
+    const socket = createConnection2(input.endpoint);
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error("Tray control request timed out"));
+    }, input.timeoutMs ?? 2000);
+    let payload = "";
+    let settled = false;
+    const finish = (action) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      action();
+    };
+    socket.setEncoding("utf8");
+    socket.once("connect", () => {
+      socket.write(`${JSON.stringify({
+        protocolVersion: TRAY_CONTROL_PROTOCOL_VERSION,
+        instanceNonce: input.nonce,
+        operation: input.operation,
+        ...input.environmentId === undefined ? {} : { environmentId: input.environmentId }
+      })}
+`);
+    });
+    socket.on("data", (chunk) => {
+      payload += chunk;
+      if (Buffer.byteLength(payload) > 64 * 1024) {
+        finish(() => reject(new Error("Tray control response is too large")));
+        socket.destroy();
+        return;
+      }
+      const newline = payload.indexOf(`
+`);
+      if (newline === -1) {
+        return;
+      }
+      finish(() => {
+        try {
+          const response = JSON.parse(payload.slice(0, newline));
+          if (typeof response.ok !== "boolean" || response.protocolVersion !== TRAY_CONTROL_PROTOCOL_VERSION) {
+            throw new Error("Tray control response is invalid");
+          }
+          resolve2(response);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      socket.end();
+    });
+    socket.once("error", (error) => finish(() => reject(error)));
+  });
+}
+async function requestAccepted(input, operation) {
+  const response = await requestTrayControl({
+    endpoint: input.record.controlEndpoint,
+    nonce: input.record.nonce,
+    operation,
+    timeoutMs: input.timeoutMs
+  });
+  if (!response.ok) {
+    throw new Error(response.error?.message ?? response.error?.code ?? `Tray rejected ${operation}`);
+  }
+}
+async function assertPrivateRecord(instancePath) {
+  if (process.platform === "win32") {
+    return;
+  }
+  const metadata = await stat2(instancePath);
+  if ((metadata.mode & 63) !== 0) {
+    throw new Error("Tray instance record is not user-private");
+  }
+}
+function sameInstance(left, right) {
+  return left.pid === right.pid && left.nonce === right.nonce && left.executablePath === right.executablePath && left.processStartedAt === right.processStartedAt;
+}
+function isRecord(value) {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value;
+  return record.protocolVersion === TRAY_CONTROL_PROTOCOL_VERSION && typeof record.pid === "number" && Number.isSafeInteger(record.pid) && record.pid > 0 && typeof record.nonce === "string" && record.nonce.length >= 16 && typeof record.controlEndpoint === "string" && record.controlEndpoint.length > 0 && typeof record.executablePath === "string" && record.executablePath.length > 0 && typeof record.processStartedAt === "number" && record.processStartedAt > 0;
+}
+function isTraySnapshot(value) {
+  return Boolean(value && typeof value === "object" && typeof value.state === "string" && Array.isArray(value.environments));
+}
+
+// src/infra/agent-paths.ts
+function resolveAgentPaths(input = {}) {
+  const userDataDir = resolveAgentUserDataDir(input.userDataDir);
+  let installRoot = input.installRoot ?? process.env.CTHUTOOL_AGENT_INSTALL_DIR;
+  if (!installRoot) {
+    if (process.platform === "darwin") {
+      installRoot = join4(homedir3(), "Library", "Application Support", "CthuTool", "agent-install");
+    } else if (process.platform === "win32") {
+      installRoot = join4(process.env.LOCALAPPDATA ?? join4(homedir3(), "AppData", "Local"), "CthuTool", "Agent");
+    } else {
+      installRoot = join4(process.env.XDG_DATA_HOME ?? join4(homedir3(), ".local", "share"), "cthutool", "agent");
+    }
+  }
+  return {
+    userDataDir,
+    installRoot,
+    runtimeDir: join4(userDataDir, "runtime"),
+    logsDir: join4(userDataDir, "logs")
+  };
+}
+async function readInstalledBundle(paths) {
+  const pointer = await import_agent_release.readActiveVersion(paths.installRoot);
+  if (!pointer)
+    throw new Error("CthuTool Agent is not installed");
+  const root = join4(paths.installRoot, "versions", pointer.version);
+  const layout = import_agent_release.validateBundleLayout(JSON.parse(await readFile3(join4(root, "layout.json"), "utf8")));
+  const catalog = import_agent_release.validateEnvironmentCatalog(JSON.parse(await readFile3(join4(root, ...layout.entryPoints.environmentCatalog.split("/")), "utf8")));
+  return { pointer, root, layout, catalog };
+}
+async function assertInstalledBundleInventory(bundle) {
+  import_agent_release.validateBundleInventory(bundle.layout.target, await listRelativeFiles(bundle.root));
+}
+async function readEnvironmentSelection(paths) {
+  try {
+    const value = JSON.parse(await readFile3(join4(paths.userDataDir, "environment.json"), "utf8"));
+    return typeof value.activeEnvironmentId === "string" ? value.activeEnvironmentId : undefined;
+  } catch (error) {
+    if (error.code === "ENOENT")
+      return;
+    throw error;
+  }
+}
+async function writeEnvironmentSelection(paths, environmentId) {
+  await atomicPrivateWrite(join4(paths.userDataDir, "environment.json"), `${JSON.stringify({ activeEnvironmentId: environmentId }, null, 2)}
+`);
+}
+function environmentRoot(paths, environment) {
+  return join4(paths.userDataDir, "environments", environment.namespace);
+}
+async function secretConfigured(paths, environment) {
+  try {
+    const metadata = await stat3(join4(environmentRoot(paths, environment), "agent-secret"));
+    return metadata.isFile() && metadata.size >= 33;
+  } catch (error) {
+    if (error.code === "ENOENT")
+      return false;
+    throw error;
+  }
+}
+async function writeEnvironmentSecret(paths, environment, secret) {
+  const normalized = secret.trim();
+  if (normalized.length < 32 || normalized.length > 512 || normalized.includes("\x00")) {
+    throw new Error("Agent secret must contain between 32 and 512 characters");
+  }
+  await atomicPrivateWrite(join4(environmentRoot(paths, environment), "agent-secret"), `${normalized}
+`);
+}
+async function atomicPrivateWrite(path, value) {
+  await mkdir2(dirname2(path), { mode: 448, recursive: true });
+  const temporary = `${path}.tmp-${randomUUID()}`;
+  await writeFile(temporary, value, { mode: 384 });
+  if (process.platform !== "win32")
+    await chmod(temporary, 384);
+  else
+    await protectWindowsFile(temporary);
+  await rename(temporary, path);
+}
+async function protectWindowsFile(path) {
+  const username = process.env.USERNAME;
+  if (!username) {
+    throw new Error("Cannot resolve the Windows user for protected Agent storage");
+  }
+  const identity = process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${username}` : username;
+  const exitCode = await new Promise((resolvePromise) => {
+    const child = spawn2("icacls.exe", [path, "/inheritance:r", "/grant:r", `${identity}:F`], { stdio: "ignore", windowsHide: true });
+    child.once("error", () => resolvePromise(null));
+    child.once("exit", resolvePromise);
+  });
+  if (exitCode !== 0) {
+    throw new Error("Unable to protect Agent secret storage with a user-only ACL");
+  }
+}
+async function listRelativeFiles(root, directory = root) {
+  const output = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join4(directory, entry.name);
+    if (entry.isDirectory()) {
+      output.push(...await listRelativeFiles(root, path));
+    } else if (entry.isFile()) {
+      output.push(path.slice(root.length + 1).replaceAll("\\", "/"));
+    }
+  }
+  return output;
+}
+
+// src/infra/agent-platform.ts
+import { spawn as spawn3 } from "node:child_process";
+import {
+  chmod as chmod2,
+  mkdir as mkdir3,
+  readFile as readFile4,
+  realpath,
+  rm,
+  writeFile as writeFile2
+} from "node:fs/promises";
+import { homedir as homedir4 } from "node:os";
+import { dirname as dirname3, join as join5 } from "node:path";
+async function startInstalledAgent(paths, timeoutMs = 20000) {
+  const bundle = await readInstalledBundle(paths);
+  const executable = join5(bundle.root, ...bundle.layout.entryPoints.tray.split("/"));
+  const instancePath = resolveTrayInstancePath(paths.userDataDir);
+  const current = await readTrayInstanceRecord(instancePath);
+  if (current) {
+    let healthy = false;
+    try {
+      await requestTrayHealth({ record: current, timeoutMs: 500 });
+      healthy = true;
+    } catch {}
+    if (healthy) {
+      await assertExactRuntime(paths, bundle, executable, current.executablePath);
+      return "already-running";
+    }
+  }
+  if (process.platform !== "win32")
+    await chmod2(executable, 493);
+  const child = spawn3(executable, ["--user-data-dir", paths.userDataDir], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+    env: { ...process.env, CTHUTOOL_AGENT_DATA_DIR: paths.userDataDir }
+  });
+  child.unref();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const record = await readTrayInstanceRecord(instancePath).catch(() => {
+      return;
+    });
+    if (record) {
+      try {
+        await requestTrayHealth({ record, timeoutMs: 500 });
+        await assertExactRuntime(paths, bundle, executable, record.executablePath);
+        const agent = await readAgentInstance(paths.userDataDir);
+        if (!agent)
+          throw new Error("Agent instance record is not ready");
+        const health = await requestAgentHealth(agent, 1000);
+        const expectedNode = join5(bundle.root, ...bundle.layout.entryPoints.node.split("/"));
+        const expectedAgent = join5(bundle.root, ...bundle.layout.entryPoints.agent.split("/"));
+        if (await realpath(agent.executablePath) !== await realpath(expectedNode) || await realpath(agent.entryPoint) !== await realpath(expectedAgent) || health.applicationVersion !== bundle.pointer.version) {
+          throw new Error("Agent process identity does not match the active bundle");
+        }
+        return "started";
+      } catch {}
+    }
+    await delay(100);
+  }
+  throw new Error("Timed out waiting for the tray-owned Agent to become ready");
+}
+async function assertExactRuntime(paths, bundle, expectedTray, actualTray) {
+  if (await realpath(actualTray) !== await realpath(expectedTray)) {
+    throw new Error("Running tray identity does not match the active bundle");
+  }
+  const agent = await readAgentInstance(paths.userDataDir);
+  if (!agent)
+    throw new Error("Running tray has no exact Agent instance");
+  const health = await requestAgentHealth(agent, 1000);
+  const expectedNode = join5(bundle.root, ...bundle.layout.entryPoints.node.split("/"));
+  const expectedAgent = join5(bundle.root, ...bundle.layout.entryPoints.agent.split("/"));
+  if (await realpath(agent.executablePath) !== await realpath(expectedNode) || await realpath(agent.entryPoint) !== await realpath(expectedAgent) || health.applicationVersion !== bundle.pointer.version) {
+    throw new Error("Running Agent identity does not match the active bundle");
+  }
+}
+async function getAutostartStatus(_paths, options = {}) {
+  const platform2 = options.platform ?? process.platform;
+  if (platform2 === "darwin") {
+    try {
+      await readFile4(options.launchAgentPath ?? resolveLaunchAgentPath());
+      return { enabled: true, supported: true };
+    } catch (error) {
+      if (error.code === "ENOENT")
+        return { enabled: false, supported: true };
+      throw error;
+    }
+  }
+  if (platform2 === "win32") {
+    const result = await (options.runProcess ?? runProcess)("reg.exe", [
+      "query",
+      "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "/v",
+      "CthuToolAgent"
+    ]);
+    return { enabled: result === 0, supported: true };
+  }
+  return { enabled: false, supported: false };
+}
+async function setAutostart(paths, enabled, options = {}) {
+  const platform2 = options.platform ?? process.platform;
+  if (platform2 === "darwin") {
+    const plist = options.launchAgentPath ?? resolveLaunchAgentPath();
+    if (!enabled)
+      await rm(plist, { force: true });
+    else {
+      const executable = await resolveTrayExecutable(paths);
+      await mkdir3(dirname3(plist), { mode: 448, recursive: true });
+      await writeFile2(plist, createLaunchAgentPlist(executable, paths.userDataDir), { mode: 384 });
+    }
+    return { enabled, supported: true };
+  }
+  if (platform2 === "win32") {
+    const registry = [
+      "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+    ];
+    const executable = enabled ? await resolveTrayExecutable(paths) : "";
+    const args = enabled ? [
+      "add",
+      ...registry,
+      "/v",
+      "CthuToolAgent",
+      "/t",
+      "REG_SZ",
+      "/d",
+      `"${executable}" --user-data-dir "${paths.userDataDir}"`,
+      "/f"
+    ] : ["delete", ...registry, "/v", "CthuToolAgent", "/f"];
+    const code = await (options.runProcess ?? runProcess)("reg.exe", args);
+    if (code !== 0 && enabled)
+      throw new Error("Unable to update Windows Agent autostart");
+    return { enabled, supported: true };
+  }
+  return { enabled: false, supported: false };
+}
+async function resolveTrayExecutable(paths) {
+  const bundle = await readInstalledBundle(paths);
+  return join5(bundle.root, ...bundle.layout.entryPoints.tray.split("/"));
+}
+function resolveLaunchAgentPath() {
+  return join5(homedir4(), "Library", "LaunchAgents", "dev.cthutool.agent.plist");
+}
+function createLaunchAgentPlist(executable, userDataDir) {
+  const escapeXml = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>Label</key><string>dev.cthutool.agent</string><key>ProgramArguments</key><array><string>${escapeXml(executable)}</string><string>--user-data-dir</string><string>${escapeXml(userDataDir)}</string></array><key>RunAtLoad</key><true/></dict></plist>
+`;
+}
+async function runProcess(command, args) {
+  return new Promise((resolve2) => {
+    const child = spawn3(command, args, { stdio: "ignore", windowsHide: true });
+    child.once("error", () => resolve2(null));
+    child.once("exit", (code) => resolve2(code));
+  });
+}
+function delay(ms) {
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
+}
+
+// src/infra/agent-release-installer.ts
+var import_agent_release2 = __toESM(require_dist2(), 1);
+import {
+  chmod as chmod3,
+  mkdir as mkdir4,
+  readdir as readdir2,
+  readFile as readFile5,
+  rm as rm2,
+  stat as stat4,
+  writeFile as writeFile3
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join as join6, resolve as resolve2, sep as sep2 } from "node:path";
+
+// ../../node_modules/.pnpm/fflate@0.8.2/node_modules/fflate/esm/index.mjs
+import { createRequire as createRequire2 } from "module";
+var require2 = createRequire2("/");
+var Worker;
+try {
+  Worker = require2("worker_threads").Worker;
+} catch (e3) {}
+var u8 = Uint8Array;
+var u16 = Uint16Array;
+var i32 = Int32Array;
+var fleb = new u8([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 0, 0, 0]);
+var fdeb = new u8([0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 0, 0]);
+var clim = new u8([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]);
+var freb = function(eb, start) {
+  var b4 = new u16(31);
+  for (var i2 = 0;i2 < 31; ++i2) {
+    b4[i2] = start += 1 << eb[i2 - 1];
+  }
+  var r4 = new i32(b4[30]);
+  for (var i2 = 1;i2 < 30; ++i2) {
+    for (var j3 = b4[i2];j3 < b4[i2 + 1]; ++j3) {
+      r4[j3] = j3 - b4[i2] << 5 | i2;
+    }
+  }
+  return { b: b4, r: r4 };
+};
+var _a = freb(fleb, 2);
+var fl = _a.b;
+var revfl = _a.r;
+fl[28] = 258, revfl[258] = 28;
+var _b = freb(fdeb, 0);
+var fd = _b.b;
+var revfd = _b.r;
+var rev = new u16(32768);
+for (i2 = 0;i2 < 32768; ++i2) {
+  x3 = (i2 & 43690) >> 1 | (i2 & 21845) << 1;
+  x3 = (x3 & 52428) >> 2 | (x3 & 13107) << 2;
+  x3 = (x3 & 61680) >> 4 | (x3 & 3855) << 4;
+  rev[i2] = ((x3 & 65280) >> 8 | (x3 & 255) << 8) >> 1;
+}
+var x3;
+var i2;
+var hMap = function(cd, mb, r4) {
+  var s2 = cd.length;
+  var i3 = 0;
+  var l3 = new u16(mb);
+  for (;i3 < s2; ++i3) {
+    if (cd[i3])
+      ++l3[cd[i3] - 1];
+  }
+  var le3 = new u16(mb);
+  for (i3 = 1;i3 < mb; ++i3) {
+    le3[i3] = le3[i3 - 1] + l3[i3 - 1] << 1;
+  }
+  var co;
+  if (r4) {
+    co = new u16(1 << mb);
+    var rvb = 15 - mb;
+    for (i3 = 0;i3 < s2; ++i3) {
+      if (cd[i3]) {
+        var sv = i3 << 4 | cd[i3];
+        var r_1 = mb - cd[i3];
+        var v3 = le3[cd[i3] - 1]++ << r_1;
+        for (var m3 = v3 | (1 << r_1) - 1;v3 <= m3; ++v3) {
+          co[rev[v3] >> rvb] = sv;
+        }
+      }
+    }
+  } else {
+    co = new u16(s2);
+    for (i3 = 0;i3 < s2; ++i3) {
+      if (cd[i3]) {
+        co[i3] = rev[le3[cd[i3] - 1]++] >> 15 - cd[i3];
+      }
+    }
+  }
+  return co;
+};
+var flt = new u8(288);
+for (i2 = 0;i2 < 144; ++i2)
+  flt[i2] = 8;
+var i2;
+for (i2 = 144;i2 < 256; ++i2)
+  flt[i2] = 9;
+var i2;
+for (i2 = 256;i2 < 280; ++i2)
+  flt[i2] = 7;
+var i2;
+for (i2 = 280;i2 < 288; ++i2)
+  flt[i2] = 8;
+var i2;
+var fdt = new u8(32);
+for (i2 = 0;i2 < 32; ++i2)
+  fdt[i2] = 5;
+var i2;
+var flrm = /* @__PURE__ */ hMap(flt, 9, 1);
+var fdrm = /* @__PURE__ */ hMap(fdt, 5, 1);
+var max = function(a4) {
+  var m3 = a4[0];
+  for (var i3 = 1;i3 < a4.length; ++i3) {
+    if (a4[i3] > m3)
+      m3 = a4[i3];
+  }
+  return m3;
+};
+var bits = function(d3, p, m3) {
+  var o3 = p / 8 | 0;
+  return (d3[o3] | d3[o3 + 1] << 8) >> (p & 7) & m3;
+};
+var bits16 = function(d3, p) {
+  var o3 = p / 8 | 0;
+  return (d3[o3] | d3[o3 + 1] << 8 | d3[o3 + 2] << 16) >> (p & 7);
+};
+var shft = function(p) {
+  return (p + 7) / 8 | 0;
+};
+var slc = function(v3, s2, e3) {
+  if (s2 == null || s2 < 0)
+    s2 = 0;
+  if (e3 == null || e3 > v3.length)
+    e3 = v3.length;
+  return new u8(v3.subarray(s2, e3));
+};
+var ec = [
+  "unexpected EOF",
+  "invalid block type",
+  "invalid length/literal",
+  "invalid distance",
+  "stream finished",
+  "no stream handler",
+  ,
+  "no callback",
+  "invalid UTF-8 data",
+  "extra field too long",
+  "date not in range 1980-2099",
+  "filename too long",
+  "stream finishing",
+  "invalid zip data"
+];
+var err = function(ind, msg, nt) {
+  var e3 = new Error(msg || ec[ind]);
+  e3.code = ind;
+  if (Error.captureStackTrace)
+    Error.captureStackTrace(e3, err);
+  if (!nt)
+    throw e3;
+  return e3;
+};
+var inflt = function(dat, st, buf, dict) {
+  var sl = dat.length, dl = dict ? dict.length : 0;
+  if (!sl || st.f && !st.l)
+    return buf || new u8(0);
+  var noBuf = !buf;
+  var resize = noBuf || st.i != 2;
+  var noSt = st.i;
+  if (noBuf)
+    buf = new u8(sl * 3);
+  var cbuf = function(l4) {
+    var bl = buf.length;
+    if (l4 > bl) {
+      var nbuf = new u8(Math.max(bl * 2, l4));
+      nbuf.set(buf);
+      buf = nbuf;
+    }
+  };
+  var final = st.f || 0, pos = st.p || 0, bt = st.b || 0, lm = st.l, dm = st.d, lbt = st.m, dbt = st.n;
+  var tbts = sl * 8;
+  do {
+    if (!lm) {
+      final = bits(dat, pos, 1);
+      var type = bits(dat, pos + 1, 3);
+      pos += 3;
+      if (!type) {
+        var s2 = shft(pos) + 4, l3 = dat[s2 - 4] | dat[s2 - 3] << 8, t2 = s2 + l3;
+        if (t2 > sl) {
+          if (noSt)
+            err(0);
+          break;
+        }
+        if (resize)
+          cbuf(bt + l3);
+        buf.set(dat.subarray(s2, t2), bt);
+        st.b = bt += l3, st.p = pos = t2 * 8, st.f = final;
+        continue;
+      } else if (type == 1)
+        lm = flrm, dm = fdrm, lbt = 9, dbt = 5;
+      else if (type == 2) {
+        var hLit = bits(dat, pos, 31) + 257, hcLen = bits(dat, pos + 10, 15) + 4;
+        var tl = hLit + bits(dat, pos + 5, 31) + 1;
+        pos += 14;
+        var ldt = new u8(tl);
+        var clt = new u8(19);
+        for (var i3 = 0;i3 < hcLen; ++i3) {
+          clt[clim[i3]] = bits(dat, pos + i3 * 3, 7);
+        }
+        pos += hcLen * 3;
+        var clb = max(clt), clbmsk = (1 << clb) - 1;
+        var clm = hMap(clt, clb, 1);
+        for (var i3 = 0;i3 < tl; ) {
+          var r4 = clm[bits(dat, pos, clbmsk)];
+          pos += r4 & 15;
+          var s2 = r4 >> 4;
+          if (s2 < 16) {
+            ldt[i3++] = s2;
+          } else {
+            var c4 = 0, n2 = 0;
+            if (s2 == 16)
+              n2 = 3 + bits(dat, pos, 3), pos += 2, c4 = ldt[i3 - 1];
+            else if (s2 == 17)
+              n2 = 3 + bits(dat, pos, 7), pos += 3;
+            else if (s2 == 18)
+              n2 = 11 + bits(dat, pos, 127), pos += 7;
+            while (n2--)
+              ldt[i3++] = c4;
+          }
+        }
+        var lt = ldt.subarray(0, hLit), dt = ldt.subarray(hLit);
+        lbt = max(lt);
+        dbt = max(dt);
+        lm = hMap(lt, lbt, 1);
+        dm = hMap(dt, dbt, 1);
+      } else
+        err(1);
+      if (pos > tbts) {
+        if (noSt)
+          err(0);
+        break;
+      }
+    }
+    if (resize)
+      cbuf(bt + 131072);
+    var lms = (1 << lbt) - 1, dms = (1 << dbt) - 1;
+    var lpos = pos;
+    for (;; lpos = pos) {
+      var c4 = lm[bits16(dat, pos) & lms], sym = c4 >> 4;
+      pos += c4 & 15;
+      if (pos > tbts) {
+        if (noSt)
+          err(0);
+        break;
+      }
+      if (!c4)
+        err(2);
+      if (sym < 256)
+        buf[bt++] = sym;
+      else if (sym == 256) {
+        lpos = pos, lm = null;
+        break;
+      } else {
+        var add = sym - 254;
+        if (sym > 264) {
+          var i3 = sym - 257, b4 = fleb[i3];
+          add = bits(dat, pos, (1 << b4) - 1) + fl[i3];
+          pos += b4;
+        }
+        var d3 = dm[bits16(dat, pos) & dms], dsym = d3 >> 4;
+        if (!d3)
+          err(3);
+        pos += d3 & 15;
+        var dt = fd[dsym];
+        if (dsym > 3) {
+          var b4 = fdeb[dsym];
+          dt += bits16(dat, pos) & (1 << b4) - 1, pos += b4;
+        }
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+        if (resize)
+          cbuf(bt + 131072);
+        var end = bt + add;
+        if (bt < dt) {
+          var shift = dl - dt, dend = Math.min(dt, end);
+          if (shift + bt < 0)
+            err(3);
+          for (;bt < dend; ++bt)
+            buf[bt] = dict[shift + bt];
+        }
+        for (;bt < end; ++bt)
+          buf[bt] = buf[bt - dt];
+      }
+    }
+    st.l = lm, st.p = lpos, st.b = bt, st.f = final;
+    if (lm)
+      final = 1, st.m = lbt, st.d = dm, st.n = dbt;
+  } while (!final);
+  return bt != buf.length && noBuf ? slc(buf, 0, bt) : buf.subarray(0, bt);
+};
+var et = /* @__PURE__ */ new u8(0);
+var b22 = function(d3, b4) {
+  return d3[b4] | d3[b4 + 1] << 8;
+};
+var b4 = function(d3, b5) {
+  return (d3[b5] | d3[b5 + 1] << 8 | d3[b5 + 2] << 16 | d3[b5 + 3] << 24) >>> 0;
+};
+var b8 = function(d3, b5) {
+  return b4(d3, b5) + b4(d3, b5 + 4) * 4294967296;
+};
+function inflateSync(data, opts) {
+  return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
+}
+var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder;
+var tds = 0;
+try {
+  td.decode(et, { stream: true });
+  tds = 1;
+} catch (e3) {}
+var dutf8 = function(d3) {
+  for (var r4 = "", i3 = 0;; ) {
+    var c4 = d3[i3++];
+    var eb = (c4 > 127) + (c4 > 223) + (c4 > 239);
+    if (i3 + eb > d3.length)
+      return { s: r4, r: slc(d3, i3 - 1) };
+    if (!eb)
+      r4 += String.fromCharCode(c4);
+    else if (eb == 3) {
+      c4 = ((c4 & 15) << 18 | (d3[i3++] & 63) << 12 | (d3[i3++] & 63) << 6 | d3[i3++] & 63) - 65536, r4 += String.fromCharCode(55296 | c4 >> 10, 56320 | c4 & 1023);
+    } else if (eb & 1)
+      r4 += String.fromCharCode((c4 & 31) << 6 | d3[i3++] & 63);
+    else
+      r4 += String.fromCharCode((c4 & 15) << 12 | (d3[i3++] & 63) << 6 | d3[i3++] & 63);
+  }
+};
+function strFromU8(dat, latin1) {
+  if (latin1) {
+    var r4 = "";
+    for (var i3 = 0;i3 < dat.length; i3 += 16384)
+      r4 += String.fromCharCode.apply(null, dat.subarray(i3, i3 + 16384));
+    return r4;
+  } else if (td) {
+    return td.decode(dat);
+  } else {
+    var _a2 = dutf8(dat), s2 = _a2.s, r4 = _a2.r;
+    if (r4.length)
+      err(8);
+    return s2;
+  }
+}
+var slzh = function(d3, b5) {
+  return b5 + 30 + b22(d3, b5 + 26) + b22(d3, b5 + 28);
+};
+var zh = function(d3, b5, z3) {
+  var fnl = b22(d3, b5 + 28), fn = strFromU8(d3.subarray(b5 + 46, b5 + 46 + fnl), !(b22(d3, b5 + 8) & 2048)), es = b5 + 46 + fnl, bs = b4(d3, b5 + 20);
+  var _a2 = z3 && bs == 4294967295 ? z64e(d3, es) : [bs, b4(d3, b5 + 24), b4(d3, b5 + 42)], sc = _a2[0], su = _a2[1], off = _a2[2];
+  return [b22(d3, b5 + 10), sc, su, fn, es + b22(d3, b5 + 30) + b22(d3, b5 + 32), off];
+};
+var z64e = function(d3, b5) {
+  for (;b22(d3, b5) != 1; b5 += 4 + b22(d3, b5 + 2))
+    ;
+  return [b8(d3, b5 + 12), b8(d3, b5 + 4), b8(d3, b5 + 20)];
+};
+function unzipSync(data, opts) {
+  var files = {};
+  var e3 = data.length - 22;
+  for (;b4(data, e3) != 101010256; --e3) {
+    if (!e3 || data.length - e3 > 65558)
+      err(13);
+  }
+  var c4 = b22(data, e3 + 8);
+  if (!c4)
+    return {};
+  var o3 = b4(data, e3 + 16);
+  var z3 = o3 == 4294967295 || c4 == 65535;
+  if (z3) {
+    var ze = b4(data, e3 - 12);
+    z3 = b4(data, ze) == 101075792;
+    if (z3) {
+      c4 = b4(data, ze + 32);
+      o3 = b4(data, ze + 48);
+    }
+  }
+  var fltr = opts && opts.filter;
+  for (var i3 = 0;i3 < c4; ++i3) {
+    var _a2 = zh(data, o3, z3), c_2 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b5 = slzh(data, off);
+    o3 = no;
+    if (!fltr || fltr({
+      name: fn,
+      size: sc,
+      originalSize: su,
+      compression: c_2
+    })) {
+      if (!c_2)
+        files[fn] = slc(data, b5, b5 + sc);
+      else if (c_2 == 8)
+        files[fn] = inflateSync(data.subarray(b5, b5 + sc), { out: new u8(su) });
+      else
+        err(14, "unknown compression type " + c_2);
+    }
+  }
+  return files;
+}
+
+// src/infra/agent-release-installer.ts
+var REPOSITORY_RELEASES = "https://github.com/mickmetalholic/CthuTool/releases/download";
+var MAX_METADATA_BYTES = 2 * 1024 * 1024;
+var MAX_ARCHIVE_BYTES = 750 * 1024 * 1024;
+var MAX_EXTRACTED_BYTES = 2 * 1024 * 1024 * 1024;
+async function installAgentRelease(input) {
+  const fetchBytes = input.dependencies.fetchBytes ?? fetchHttpsBytes;
+  const key = input.dependencies.publicKeyPem ?? "";
+  if (!key?.trim())
+    throw new Error("Agent release verification is unavailable because the CLI has no pinned public key");
+  const target = import_agent_release2.releaseTargetFromPlatform(input.dependencies.platform ?? process.platform, input.dependencies.architecture ?? process.arch);
+  if (!target)
+    throw new Error("CthuTool Agent supports macOS arm64/x64 and Windows x64 only");
+  const manifest = input.version ? await fetchVerifiedManifest(`${REPOSITORY_RELEASES}/agent-v${assertVersion(input.version)}/manifest.json`, key, fetchBytes) : await resolveChannel(input.channel ?? "stable", key, fetchBytes);
+  import_agent_release2.assertCliCompatibility(manifest, input.dependencies.cliVersion);
+  assertProtocolCompatibility(manifest);
+  const artifact = import_agent_release2.selectReleaseArtifact(manifest, target);
+  const catalogUrl = new URL("environments.json", manifestUrlFor(manifest, artifact)).href;
+  const [catalogBytes, archiveBytes, archiveSignatureBytes] = await Promise.all([
+    fetchBytes(catalogUrl, MAX_METADATA_BYTES),
+    fetchBytes(artifact.archiveUrl, Math.min(MAX_ARCHIVE_BYTES, artifact.archiveSize + 1)),
+    fetchBytes(artifact.archiveSignatureUrl, MAX_METADATA_BYTES)
+  ]);
+  import_agent_release2.assertCatalogBinding(manifest, catalogBytes);
+  import_agent_release2.assertArchiveBinding(artifact, archiveBytes);
+  import_agent_release2.verifyReleaseBlobSignature(archiveBytes, Buffer.from(archiveSignatureBytes).toString("utf8").trim(), key);
+  const temporaryRoot = join6(tmpdir(), `cthutool-agent-install-${crypto.randomUUID()}`);
+  const extractedRoot = join6(temporaryRoot, "bundle");
+  const previous = await import_agent_release2.readActiveVersion(input.paths.installRoot);
+  const versionRoot = join6(input.paths.installRoot, "versions", manifest.releaseVersion);
+  const versionExisted = await pathExists(versionRoot);
+  try {
+    await extractVerifiedArchive(archiveBytes, extractedRoot, target);
+    const layout = import_agent_release2.validateBundleLayout(JSON.parse(await readFile5(join6(extractedRoot, "layout.json"), "utf8")));
+    if (layout.releaseVersion !== manifest.releaseVersion || layout.target !== target)
+      throw new Error("Agent archive layout does not match the signed manifest");
+    const embeddedCatalog = await readFile5(join6(extractedRoot, ...layout.entryPoints.environmentCatalog.split("/")));
+    if (import_agent_release2.sha256(embeddedCatalog) !== import_agent_release2.sha256(catalogBytes))
+      throw new Error("Embedded Agent catalog does not match the signed catalog");
+    if (versionExisted) {
+      await assertDirectoriesMatch(extractedRoot, versionRoot);
+    }
+    await import_agent_release2.stageVersion({
+      installRoot: input.paths.installRoot,
+      extractedRoot,
+      target,
+      version: manifest.releaseVersion
+    });
+    await import_agent_release2.activateVersion({
+      installRoot: input.paths.installRoot,
+      version: manifest.releaseVersion,
+      smokeCheck: async (root) => {
+        await (input.dependencies.smoke ?? import_agent_release2.smokeExtractedAgentBundle)({
+          bundleRoot: root,
+          userDataDir: join6(temporaryRoot, "smoke-data")
+        });
+      }
+    });
+    return {
+      version: manifest.releaseVersion,
+      previousVersion: previous?.version,
+      changed: previous?.version !== manifest.releaseVersion
+    };
+  } catch (error) {
+    if (!versionExisted) {
+      await rm2(versionRoot, { force: true, recursive: true });
+    }
+    throw error;
+  } finally {
+    await rm2(temporaryRoot, { force: true, recursive: true });
+  }
+}
+async function resolveChannel(channel, key, fetchBytes) {
+  const pointerUrl = `${REPOSITORY_RELEASES}/agent-${channel}/channel-${channel}.json`;
+  const [bytes, signature] = await Promise.all([
+    fetchBytes(pointerUrl, MAX_METADATA_BYTES),
+    fetchBytes(`${pointerUrl}.sig`, MAX_METADATA_BYTES)
+  ]);
+  import_agent_release2.verifyReleaseBlobSignature(bytes, Buffer.from(signature).toString("utf8").trim(), key);
+  const pointer = import_agent_release2.validateChannelPointer(JSON.parse(Buffer.from(bytes).toString("utf8")));
+  const manifestBytes = await fetchBytes(pointer.manifestUrl, MAX_METADATA_BYTES);
+  if (import_agent_release2.sha256(manifestBytes) !== pointer.manifestSha256)
+    throw new Error("Channel manifest digest mismatch");
+  return fetchVerifiedManifest(pointer.manifestUrl, key, fetchBytes, manifestBytes);
+}
+async function fetchVerifiedManifest(url, key, fetchBytes, supplied) {
+  const [bytes, signature] = await Promise.all([
+    supplied ?? fetchBytes(url, MAX_METADATA_BYTES),
+    fetchBytes(`${url}.sig`, MAX_METADATA_BYTES)
+  ]);
+  const manifest = import_agent_release2.validateReleaseManifest(JSON.parse(Buffer.from(bytes).toString("utf8")), { requireProductionMatrix: true });
+  if (manifest.provenance.kind !== "production" || !manifest.provenance.signed || import_agent_release2.canonicalJson(manifest) !== Buffer.from(bytes).toString("utf8"))
+    throw new Error("Agent release manifest is not canonical production metadata");
+  import_agent_release2.verifyManifestSignature(manifest, Buffer.from(signature).toString("utf8").trim(), key);
+  return manifest;
+}
+async function fetchHttpsBytes(url, maximumBytes) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:")
+    throw new Error("Agent release downloads require HTTPS");
+  const response = await fetch(parsed, {
+    redirect: "follow",
+    signal: AbortSignal.timeout(60000)
+  });
+  if (new URL(response.url).protocol !== "https:") {
+    throw new Error("Agent release redirect must remain on HTTPS");
+  }
+  if (!response.ok)
+    throw new Error(`Agent release download failed with HTTP ${response.status}`);
+  const declared = Number(response.headers.get("content-length") ?? 0);
+  if (declared > maximumBytes)
+    throw new Error("Agent release download exceeds the size limit");
+  if (!response.body)
+    return new Uint8Array;
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (true) {
+    const item = await reader.read();
+    if (item.done)
+      break;
+    received += item.value.byteLength;
+    if (received > maximumBytes) {
+      await reader.cancel();
+      throw new Error("Agent release download exceeds the size limit");
+    }
+    chunks.push(item.value);
+  }
+  return Buffer.concat(chunks, received);
+}
+async function extractVerifiedArchive(bytes, destination, target) {
+  let declaredExtractedBytes = 0;
+  const archive = unzipSync(bytes, {
+    filter: (file) => {
+      declaredExtractedBytes += file.originalSize;
+      if (declaredExtractedBytes > MAX_EXTRACTED_BYTES) {
+        throw new Error("Agent archive exceeds the extracted size limit");
+      }
+      return true;
+    }
+  });
+  const paths = Object.keys(archive).filter((path) => !path.endsWith("/"));
+  import_agent_release2.validateBundleInventory(target, paths);
+  let extractedBytes = 0;
+  await mkdir4(destination, { mode: 448, recursive: true });
+  for (const rawPath of paths) {
+    const fileBytes = archive[rawPath];
+    if (!fileBytes)
+      throw new Error(`Agent archive entry is unreadable: ${rawPath}`);
+    extractedBytes += fileBytes.byteLength;
+    if (extractedBytes > MAX_EXTRACTED_BYTES)
+      throw new Error("Agent archive exceeds the extracted size limit");
+    const path = resolve2(destination, rawPath.replaceAll("\\", "/"));
+    if (path !== destination && !path.startsWith(`${destination}${sep2}`))
+      throw new Error(`Unsafe Agent archive path: ${rawPath}`);
+    await mkdir4(join6(path, ".."), { mode: 448, recursive: true });
+    await writeFile3(path, fileBytes, {
+      mode: executableArchivePath(rawPath) ? 493 : 420,
+      flag: "wx"
+    });
+    if (process.platform !== "win32" && executableArchivePath(rawPath))
+      await chmod3(path, 493);
+  }
+}
+async function assertDirectoriesMatch(expectedRoot, actualRoot) {
+  const [expected, actual] = await Promise.all([
+    directoryFingerprint(expectedRoot),
+    directoryFingerprint(actualRoot)
+  ]);
+  if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+    throw new Error("Installed Agent version content differs from the verified release archive");
+  }
+}
+async function directoryFingerprint(root, directory = root) {
+  const output = [];
+  for (const entry of await readdir2(directory, { withFileTypes: true })) {
+    const path = join6(directory, entry.name);
+    if (entry.isDirectory()) {
+      output.push(...await directoryFingerprint(root, path));
+    } else if (entry.isFile()) {
+      const relative = path.slice(root.length + 1).replaceAll("\\", "/");
+      output.push(`${relative}:${import_agent_release2.sha256(await readFile5(path))}`);
+    } else {
+      throw new Error(`Agent version contains unsupported entry: ${entry.name}`);
+    }
+  }
+  return output.sort();
+}
+async function pathExists(path) {
+  try {
+    await stat4(path);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT")
+      return false;
+    throw error;
+  }
+}
+function executableArchivePath(path) {
+  return path === "runtime/node/bin/node" || path.endsWith("/cthutool-agent-tray") || path.endsWith(".exe");
+}
+function assertProtocolCompatibility(manifest) {
+  if (Object.values(manifest.protocols).some((version) => version !== 1))
+    throw new Error("Agent release protocol versions are incompatible with this CLI");
+}
+function assertVersion(version) {
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))
+    throw new Error("Agent release version is invalid");
+  return version;
+}
+function manifestUrlFor(_manifest, artifact) {
+  return new URL(".", artifact.archiveUrl);
+}
+
+// src/infra/agent-lifecycle-service.ts
+class FileSystemAgentLifecycleService {
+  paths;
+  legacyDesktopRoot;
+  release;
+  platform;
+  constructor(options = {}) {
+    this.paths = options.paths ?? resolveAgentPaths();
+    this.legacyDesktopRoot = options.legacyDesktopRoot ?? import_agent_data_migration.resolveLegacyDesktopDataRoot();
+    this.release = { ...options.release };
+    this.platform = {
+      getAutostartStatus: options.platform?.getAutostartStatus ?? getAutostartStatus,
+      setAutostart: options.platform?.setAutostart ?? setAutostart,
+      startInstalledAgent: options.platform?.startInstalledAgent ?? startInstalledAgent
+    };
+  }
+  async install(input = {}) {
+    if (await this.isRunning()) {
+      throw new Error("Stop the running Agent before install, or use chc agent update for coordinated replacement");
+    }
+    return installAgentRelease({
+      paths: this.paths,
+      dependencies: {
+        ...this.release,
+        cliVersion: this.release.cliVersion ?? getCliVersion()
+      },
+      ...input
+    });
+  }
+  async update(input = {}) {
+    const wasRunning = await this.isRunning();
+    const current = await this.installedVersion();
+    const autostart = await this.platform.getAutostartStatus(this.paths);
+    if (wasRunning)
+      await this.stop();
+    const result = await this.install(input);
+    if (autostart.enabled) {
+      await this.platform.setAutostart(this.paths, true);
+    }
+    if (!wasRunning || !result.changed) {
+      if (wasRunning)
+        await this.start();
+      return result;
+    }
+    try {
+      await this.start();
+      return result;
+    } catch (error) {
+      await stopTrayOwnedAgent({ userDataDir: this.paths.userDataDir }).catch(() => {
+        return;
+      });
+      await import_agent_release3.rollbackActiveVersion({
+        installRoot: this.paths.installRoot,
+        smokeCheck: async (root) => {
+          const smokeData = join7(this.paths.installRoot, ".rollback-smoke");
+          try {
+            await (this.release.smoke ?? import_agent_release3.smokeExtractedAgentBundle)({
+              bundleRoot: root,
+              userDataDir: smokeData
+            });
+          } finally {
+            await rm3(smokeData, { force: true, recursive: true });
+          }
+        }
+      });
+      if (autostart.enabled) {
+        await this.platform.setAutostart(this.paths, true);
+      }
+      await this.start();
+      throw new Error(`Agent update to ${result.version} failed readiness and rolled back to ${current ?? "the previous version"}`, { cause: error });
+    }
+  }
+  start() {
+    return this.platform.startInstalledAgent(this.paths);
+  }
+  stop() {
+    return stopTrayOwnedAgent({ userDataDir: this.paths.userDataDir });
+  }
+  async restart() {
+    await this.stop();
+    await this.start();
+    return "restarted";
+  }
+  async status() {
+    const version = await this.installedVersion();
+    const environments = version ? await this.listEnvironments() : [];
+    const selected = environments.find((environment) => environment.active);
+    const autostart = await this.platform.getAutostartStatus(this.paths);
+    let trayState = "stopped";
+    let trayPid;
+    let backend = { status: "offline" };
+    let browser = {
+      ready: false,
+      status: "unavailable"
+    };
+    const tray = await readTrayInstanceRecord(resolveTrayInstancePath(this.paths.userDataDir)).catch(() => {
+      return;
+    });
+    if (tray) {
+      trayPid = tray.pid;
+      try {
+        trayState = (await requestTrayHealth({ record: tray, timeoutMs: 500 })).state;
+      } catch {
+        trayState = "unreachable";
+      }
+    }
+    const agent = await readAgentInstance(this.paths.userDataDir).catch(() => {
+      return;
+    });
+    if (agent) {
+      try {
+        const health = await requestAgentHealth(agent, 750);
+        backend = {
+          status: health.backend.status,
+          ...health.backend.lastError ? { lastError: health.backend.lastError } : {}
+        };
+        browser = {
+          ready: health.browser.ready,
+          status: health.browser.status
+        };
+      } catch {}
+    }
+    return {
+      installed: Boolean(version),
+      ...version ? { version } : {},
+      tray: { state: trayState, ...trayPid ? { pid: trayPid } : {} },
+      ...selected ? { environment: selected } : {},
+      backend,
+      browser,
+      autostart
+    };
+  }
+  async settings() {
+    await this.start();
+    const record = await this.requireTray();
+    await requestTrayOpen({ record });
+    return "opened";
+  }
+  async logs(input = {}) {
+    const count = Math.max(1, Math.min(input.lines ?? 200, 1e4));
+    try {
+      const raw = await readFile6(join7(this.paths.logsDir, "agent.log"), "utf8");
+      return raw.split(/\r?\n/).filter(Boolean).slice(-count);
+    } catch (error) {
+      if (error.code === "ENOENT")
+        return [];
+      throw error;
+    }
+  }
+  async listEnvironments() {
+    const { catalog } = await readInstalledBundle(this.paths);
+    const selected = await readEnvironmentSelection(this.paths) ?? catalog.profiles[0]?.environmentId;
+    return Promise.all(catalog.profiles.map(async (environment) => ({
+      id: environment.environmentId,
+      label: environment.label,
+      active: environment.environmentId === selected,
+      webOrigin: environment.webOrigin,
+      backendHttpUrl: environment.backendHttpUrl,
+      secretConfigured: await secretConfigured(this.paths, environment)
+    })));
+  }
+  async getEnvironment(id) {
+    const environments = await this.listEnvironments();
+    const environment = id ? environments.find((candidate) => candidate.id === id) : environments.find((candidate) => candidate.active);
+    if (!environment)
+      throw new Error(id ? `Unknown Agent environment "${id}"` : "No Agent environment is selected");
+    return environment;
+  }
+  async setEnvironment(id) {
+    const { catalog } = await readInstalledBundle(this.paths);
+    const environment = catalog.profiles.find((candidate) => candidate.environmentId === id);
+    if (!environment)
+      throw new Error(`Unknown Agent environment "${id}"`);
+    const previous = await readEnvironmentSelection(this.paths) ?? catalog.profiles[0]?.environmentId;
+    const tray = await readTrayInstanceRecord(resolveTrayInstancePath(this.paths.userDataDir)).catch(() => {
+      return;
+    });
+    if (tray)
+      await requestTrayEnvironmentSwitch({ record: tray, environmentId: id });
+    else
+      await writeEnvironmentSelection(this.paths, id);
+    return { id, changed: previous !== id };
+  }
+  async setEnvironmentSecret(id, secret) {
+    const { catalog } = await readInstalledBundle(this.paths);
+    const environment = catalog.profiles.find((candidate) => candidate.environmentId === id);
+    if (!environment)
+      throw new Error(`Unknown Agent environment "${id}"`);
+    await writeEnvironmentSecret(this.paths, environment, secret);
+    const tray = await readTrayInstanceRecord(resolveTrayInstancePath(this.paths.userDataDir)).catch(() => {
+      return;
+    });
+    if (tray) {
+      await requestTrayEnvironmentSwitch({ record: tray, environmentId: id });
+    }
+    return { id, configured: true };
+  }
+  async autostart(action) {
+    if (action === "status")
+      return this.platform.getAutostartStatus(this.paths);
+    return this.platform.setAutostart(this.paths, action === "enable");
+  }
+  async doctor() {
+    const checks = [];
+    let installed;
+    let profileLockPath = join7(this.paths.userDataDir, "browser-profiles", ".cthutool-agent.lock");
+    try {
+      installed = await readInstalledBundle(this.paths);
+      await assertInstalledBundleInventory(installed);
+      checks.push({
+        id: "install",
+        status: "pass",
+        message: `Signed bundle layout and catalog loaded for ${installed.pointer.version}`
+      });
+    } catch (error) {
+      checks.push({
+        id: "install",
+        status: "fail",
+        message: error instanceof Error ? error.message : "Agent installation is invalid"
+      });
+    }
+    if (installed) {
+      const environment = await this.getEnvironment().catch(() => {
+        return;
+      });
+      checks.push({
+        id: "environment",
+        status: environment ? "pass" : "fail",
+        message: environment ? `${environment.label}; secret ${environment.secretConfigured ? "configured" : "missing"}` : "No valid active environment"
+      });
+      if (environment) {
+        const profile = installed.catalog.profiles.find((candidate) => candidate.environmentId === environment.id);
+        if (profile) {
+          profileLockPath = join7(this.paths.userDataDir, "environments", profile.namespace, "browser-profiles", ".cthutool-agent.lock");
+        }
+        checks.push({
+          id: "web-origin",
+          status: environment.webOrigin.startsWith("https://") ? "pass" : "fail",
+          message: environment.webOrigin
+        });
+        checks.push({
+          id: "backend",
+          status: environment.backendHttpUrl.startsWith("https://") ? "pass" : "fail",
+          message: environment.backendHttpUrl
+        });
+      }
+      const migration = await import_agent_data_migration.inspectLegacyDesktopMigration({
+        agentRootDir: this.paths.userDataDir,
+        legacyRootDir: this.legacyDesktopRoot,
+        environments: installed.catalog.profiles,
+        explicitEnvironmentId: await readEnvironmentSelection(this.paths)
+      }).catch((error) => ({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Legacy Desktop migration inspection failed",
+        retryCommand: "chc agent doctor"
+      }));
+      checks.push({
+        id: "legacy-migration",
+        status: migration.status === "failed" || migration.status === "selection-required" ? "fail" : migration.status === "locked" || migration.status === "ready" ? "warn" : "pass",
+        message: `${migration.message}${migration.retryCommand ? ` Next: ${migration.retryCommand}` : ""}`
+      });
+    }
+    const status = await this.status();
+    checks.push({
+      id: "autostart",
+      status: status.autostart.supported ? "pass" : "warn",
+      message: status.autostart.supported ? status.autostart.enabled ? "Enabled" : "Disabled" : "Unsupported platform"
+    });
+    checks.push({
+      id: "local-control",
+      status: status.tray.state === "unreachable" ? "fail" : status.tray.state === "stopped" ? "warn" : "pass",
+      message: status.tray.state
+    });
+    checks.push({
+      id: "browser",
+      status: status.browser.ready ? "pass" : "warn",
+      message: status.browser.status
+    });
+    checks.push({
+      id: "profile-locks",
+      status: await exists(profileLockPath) ? "warn" : "pass",
+      message: "Profile lock ownership checked"
+    });
+    checks.push({
+      id: "logs",
+      status: await exists(join7(this.paths.logsDir, "agent.log")) ? "pass" : "warn",
+      message: join7(this.paths.logsDir, "agent.log")
+    });
+    return checks;
+  }
+  async uninstall(input = {}) {
+    if (input.purge && !input.confirmed)
+      throw new Error("Purging Agent data requires explicit confirmation");
+    await this.stop();
+    const autostart = await this.platform.getAutostartStatus(this.paths);
+    if (autostart.enabled)
+      await this.platform.setAutostart(this.paths, false);
+    const installed = await exists(this.paths.installRoot);
+    await rm3(this.paths.installRoot, { force: true, recursive: true });
+    if (input.purge)
+      await rm3(this.paths.userDataDir, { force: true, recursive: true });
+    return {
+      removed: installed,
+      purged: input.purge === true,
+      ...input.purge ? {} : { preservedDataDir: this.paths.userDataDir }
+    };
+  }
+  async installedVersion() {
+    try {
+      return (await readInstalledBundle(this.paths)).pointer.version;
+    } catch (error) {
+      if (error instanceof Error && error.message === "CthuTool Agent is not installed")
+        return;
+      throw error;
+    }
+  }
+  async isRunning() {
+    const record = await readTrayInstanceRecord(resolveTrayInstancePath(this.paths.userDataDir)).catch(() => {
+      return;
+    });
+    if (!record)
+      return false;
+    try {
+      await requestTrayHealth({ record, timeoutMs: 500 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  async requireTray() {
+    const record = await readTrayInstanceRecord(resolveTrayInstancePath(this.paths.userDataDir));
+    if (!record)
+      throw new Error("Agent tray is not running");
+    return record;
+  }
+}
+async function exists(path) {
+  try {
+    await stat5(path);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT")
+      return false;
+    throw error;
+  }
+}
+
+// src/runtime/cli-context.ts
+var cliContractArgs = {
+  json: {
+    type: "boolean",
+    description: "Print one machine-readable JSON value to stdout"
+  },
+  noInteractive: {
+    type: "boolean",
+    alias: "no-interactive",
+    description: "Disable prompts even when stdin is a TTY"
+  },
+  quiet: {
+    type: "boolean",
+    description: "Suppress non-essential human status output"
+  }
+};
+function createCliContext(args, deps = {
+  isTty: () => process.stdin.isTTY === true
+}) {
+  const isTty = deps.isTty();
+  return {
+    isTty,
+    interactive: isTty && args.noInteractive !== true,
+    json: args.json === true,
+    quiet: args.quiet === true
+  };
+}
+
+// src/runtime/cli-error.ts
+class CliCommandError extends Error {
+  code;
+  exitCode;
+  constructor(code, message, exitCode = 1) {
+    super(message);
+    this.name = "CliCommandError";
+    this.code = code;
+    this.exitCode = exitCode;
+  }
+}
+function createCliError(code, message, exitCode = 1) {
+  return new CliCommandError(code, message, exitCode);
+}
+function isCliCommandError(value) {
+  return value instanceof CliCommandError;
+}
+
+// src/runtime/observability.ts
+import { basename, dirname as dirname4, sep as sep3 } from "node:path";
+var CLI_DIAGNOSTICS_ENV = "CHC_CLI_DIAGNOSTICS";
+var REDACTED = "[redacted]";
+var MAX_STRING_LENGTH = 160;
+var MAX_OBJECT_KEYS = 16;
+function isCliDiagnosticsEnabled(env2 = process.env) {
+  const raw = env2[CLI_DIAGNOSTICS_ENV];
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+function createCliDiagnostics(context, output, base = {}, deps = {}) {
+  const now = deps.now ?? (() => new Date);
+  const isEnabled = deps.isEnabled ?? (() => isCliDiagnosticsEnabled());
+  const diagnostics = {
+    isEnabled,
+    child: (childBase) => createCliDiagnostics(context, output, { ...base, ...childBase }, { isEnabled, now }),
+    emit: (input) => {
+      if (!isEnabled() || isSuppressed(context, input.level)) {
+        return;
+      }
+      const event = {
+        source: "cthutool.cli",
+        timestamp: now().toISOString(),
+        ...base,
+        ...input,
+        message: input.message === undefined ? undefined : sanitizeDiagnosticMessage(input.message),
+        details: input.details ? sanitizeDiagnosticDetails(input.details) : undefined
+      };
+      output.stderr.write(`${JSON.stringify(dropUndefined(event))}
+`);
+    }
+  };
+  return diagnostics;
+}
+function createCliCommandDiagnostics(context, output, base, deps = {}) {
+  const nowMs = deps.nowMs ?? (() => Date.now());
+  const startedAt = nowMs();
+  const diagnostics = createCliDiagnostics(context, output, base, deps);
+  diagnostics.emit({
+    level: "debug",
+    event: "cli.command_started",
+    phase: "start",
+    details: modeDetails(context)
+  });
+  return {
+    complete: (input = {}) => {
+      diagnostics.emit({
+        level: "info",
+        event: "cli.command_completed",
+        phase: "complete",
+        durationMs: Math.max(0, nowMs() - startedAt),
+        exitCode: input.exitCode ?? 0,
+        details: { ...modeDetails(context), ...input.details }
+      });
+    },
+    fail: (error, input = {}) => {
+      diagnostics.emit({
+        level: "error",
+        event: "cli.command_failed",
+        phase: "failure",
+        durationMs: Math.max(0, nowMs() - startedAt),
+        exitCode: error.exitCode,
+        errorCode: error.code,
+        message: error.message,
+        details: { ...modeDetails(context), ...input.details }
+      });
+    }
+  };
+}
+function summarizeScriptArgs(args) {
+  const keys = Object.keys(args).sort();
+  return {
+    argumentCount: keys.length,
+    argumentKeys: keys
+  };
+}
+function sanitizeDiagnosticDetails(details) {
+  return sanitizeObject(details, 0);
+}
+function modeDetails(context) {
+  return {
+    interactive: context.interactive,
+    isTty: context.isTty,
+    json: context.json,
+    quiet: context.quiet
+  };
+}
+function isSuppressed(context, level) {
+  return context.quiet && (level === "debug" || level === "info");
+}
+function sanitizeObject(value, depth) {
+  const entries = Object.entries(value).slice(0, MAX_OBJECT_KEYS);
+  return Object.fromEntries(entries.map(([key, item]) => [key, sanitizeValue(key, item, depth)]));
+}
+function sanitizeValue(key, value, depth) {
+  if (isSensitiveKey(key)) {
+    return REDACTED;
+  }
+  if (typeof value === "string") {
+    return isPathKey(key) ? summarizePath(value) : truncate(redactUrlUserinfo(value));
+  }
+  if (typeof value === "number" || typeof value === "boolean" || value === null || value === undefined) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (value.length <= 8 && value.every((item) => ["string", "number", "boolean"].includes(typeof item))) {
+      return value.map((item, index) => sanitizeValue(`${key}.${index}`, item, depth + 1));
+    }
+    return {
+      itemCount: value.length,
+      items: value.slice(0, 8).map((item, index) => sanitizeValue(`${key}.${index}`, item, depth + 1))
+    };
+  }
+  if (typeof value === "object") {
+    if (depth >= 2) {
+      return "[object]";
+    }
+    return sanitizeObject(value, depth + 1);
+  }
+  return String(value);
+}
+function isSensitiveKey(key) {
+  return /token|secret|password|passwd|cookie|authorization|credential|storage.?state/i.test(key);
+}
+function isPathKey(key) {
+  return /path|dir|directory|root|file/i.test(key);
+}
+function summarizePath(value) {
+  const normalized = value.replaceAll("\\", sep3);
+  const name = basename(normalized);
+  const parent = basename(dirname4(normalized));
+  return parent && parent !== "." ? `${parent}${sep3}${name}` : name;
+}
+function truncate(value) {
+  if (value.length <= MAX_STRING_LENGTH) {
+    return value;
+  }
+  return `${value.slice(0, MAX_STRING_LENGTH - 3)}...`;
+}
+function sanitizeDiagnosticMessage(value) {
+  return truncate(redactUrlUserinfo(value).replace(/(token|secret|password|passwd|cookie|authorization|credential)=([^&\s]+)/gi, "$1=[redacted]"));
+}
+function redactUrlUserinfo(value) {
+  return value.replace(/:\/\/[^/\s]+@/g, "://***@");
+}
+function dropUndefined(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+
+// src/runtime/output.ts
+var processOutput = {
+  stdout: process.stdout,
+  stderr: process.stderr
+};
+function writeJsonValue(output, value) {
+  output.stdout.write(`${JSON.stringify(value)}
+`);
+}
+function writeCommandError(context, output, error) {
+  if (context.json) {
+    writeJsonValue(output, {
+      ok: false,
+      error: {
+        code: error.code,
+        message: error.message
+      }
+    });
+    return;
+  }
+  output.stderr.write(`${error.message}
+`);
+}
+function writeWarning(output, message) {
+  output.stderr.write(`${message}
+`);
+}
+function writeHumanStatus(context, output, message = "") {
+  if (context.json || context.quiet) {
+    return;
+  }
+  output.stdout.write(`${message}
+`);
+}
+
+// src/runtime/command-diagnostics.ts
+async function runObservedCliCommand(args, base, run, deps = {}) {
+  const context = createCliContext(args, deps.isTty ? { isTty: deps.isTty } : undefined);
+  const diagnostics = deps.diagnostics ?? createCliCommandDiagnostics(context, processOutput, base);
+  let finalized = false;
+  const scope = {
+    context,
+    complete: (input = {}) => {
+      diagnostics.complete({
+        ...input,
+        exitCode: input.exitCode ?? numericProcessExitCode()
+      });
+      finalized = true;
+    },
+    fail: (error, input = {}) => {
+      diagnostics.fail(error, input);
+      finalized = true;
+    }
+  };
+  try {
+    await run(scope);
+    if (!finalized) {
+      scope.complete();
+    }
+  } catch (error) {
+    if (!finalized) {
+      scope.fail(toDiagnosticCliError(error));
+    }
+    throw error;
+  }
+}
+function numericProcessExitCode() {
+  return typeof process.exitCode === "number" ? process.exitCode : 0;
+}
+function toDiagnosticCliError(error) {
+  if (isCliCommandError(error)) {
+    return error;
+  }
+  return createCliError("invalid_option", error instanceof Error ? error.message : "command failed unexpectedly");
+}
+
+// src/command/agent.command.ts
+var lifecycleArgs = { ...cliContractArgs };
+function createAgentCommand(service) {
+  const install = defineCommand({
+    meta: {
+      name: "install",
+      description: "Install a verified local Agent release."
+    },
+    args: {
+      ...lifecycleArgs,
+      channel: {
+        type: "string",
+        description: "Release channel: stable or beta",
+        default: "stable"
+      },
+      version: {
+        type: "string",
+        description: "Install an immutable release version"
+      }
+    },
+    run: ({ args }) => execute2(args, "install", () => service.install({
+      channel: parseChannel(args.channel),
+      version: stringValue(args.version)
+    }), installationMessage)
+  });
+  const update = defineCommand({
+    meta: {
+      name: "update",
+      description: "Update only the local Agent and roll back on failed readiness."
+    },
+    args: {
+      ...lifecycleArgs,
+      channel: {
+        type: "string",
+        description: "Release channel: stable or beta",
+        default: "stable"
+      }
+    },
+    run: ({ args }) => execute2(args, "update", () => service.update({ channel: parseChannel(args.channel) }), installationMessage)
+  });
+  const start = simpleCommand("start", "Start the tray-owned local Agent.", service.start.bind(service));
+  const stop = simpleCommand("stop", "Stop the tray and its local Agent.", service.stop.bind(service));
+  const restart = simpleCommand("restart", "Restart the tray-owned local Agent.", service.restart.bind(service));
+  const status = defineCommand({
+    meta: {
+      name: "status",
+      description: "Show install, tray, environment, backend, browser, and autostart status."
+    },
+    args: lifecycleArgs,
+    run: ({ args }) => execute2(args, "status", () => service.status(), (result) => {
+      const value = result;
+      return value.installed ? `CthuTool Agent ${value.version}: tray ${value.tray.state}; environment ${value.environment?.id ?? "none"}; backend ${value.backend.status}; browser ${value.browser.status}; autostart ${value.autostart.enabled ? "enabled" : "disabled"}.` : "CthuTool Agent is not installed.";
+    })
+  });
+  const settings = simpleCommand("settings", "Start the Agent if needed and open a fresh deployed-Web settings session.", service.settings.bind(service));
+  const logs = defineCommand({
+    meta: {
+      name: "logs",
+      description: "Read or follow the redacted Agent-owned log."
+    },
+    args: {
+      ...lifecycleArgs,
+      lines: {
+        type: "string",
+        description: "Number of recent lines",
+        default: "200"
+      },
+      follow: {
+        type: "boolean",
+        alias: "f",
+        description: "Follow new redacted log lines"
+      }
+    },
+    async run({ args }) {
+      const lines = parseLineCount(args.lines);
+      if (args.follow === true && args.json === true)
+        throw createCliError("invalid_option", "--json cannot be combined with --follow");
+      await execute2(args, "logs", () => service.logs({ lines }), (result) => result.join(`
+`));
+      if (args.follow === true)
+        await followLogs(service, lines);
+    }
+  });
+  const doctor = defineCommand({
+    meta: {
+      name: "doctor",
+      description: "Run integrity, local-control, environment, browser, and log diagnostics."
+    },
+    args: lifecycleArgs,
+    run: ({ args }) => execute2(args, "doctor", () => service.doctor(), (result) => result.map((check) => `${check.status.toUpperCase()} ${check.id}: ${check.message}`).join(`
+`))
+  });
+  const uninstall = defineCommand({
+    meta: {
+      name: "uninstall",
+      description: "Remove Agent binaries and autostart; preserve data unless --purge is confirmed."
+    },
+    args: {
+      ...lifecycleArgs,
+      purge: {
+        type: "boolean",
+        description: "Also remove environment selection, secrets, profiles, and logs"
+      },
+      yes: {
+        type: "boolean",
+        alias: "y",
+        description: "Confirm destructive purge in non-interactive use"
+      }
+    },
+    async run({ args }) {
+      await runWithContext(args, "uninstall", async (context) => {
+        let confirmed = args.yes === true;
+        if (args.purge === true && !confirmed && context.interactive) {
+          const answer = await ce2({
+            message: "Permanently delete Agent secrets, profiles, selection, and logs?",
+            initialValue: false
+          });
+          confirmed = !lD2(answer) && answer === true;
+        }
+        if (args.purge === true && !confirmed)
+          throw createCliError("agent_purge_confirmation_required", "Purging Agent data requires --yes or interactive confirmation");
+        return service.uninstall({ purge: args.purge === true, confirmed });
+      }, (result) => {
+        const value = result;
+        return value.purged ? "CthuTool Agent binaries and mutable data removed." : `CthuTool Agent binaries removed. Mutable data preserved at ${value.preservedDataDir}.`;
+      });
+    }
+  });
+  const envList = defineCommand({
+    meta: { name: "list", description: "List verified release environments." },
+    args: lifecycleArgs,
+    run: ({ args }) => execute2(args, "env list", () => service.listEnvironments(), environmentListMessage)
+  });
+  const envGet = defineCommand({
+    meta: {
+      name: "get",
+      description: "Show the active or named environment without secrets."
+    },
+    args: {
+      ...lifecycleArgs,
+      id: {
+        type: "positional",
+        required: false,
+        description: "Environment id"
+      }
+    },
+    run: ({ args }) => execute2(args, "env get", () => service.getEnvironment(stringValue(args.id)), environmentMessage)
+  });
+  const envSet = defineCommand({
+    meta: {
+      name: "set",
+      description: "Select a verified environment for the running or stopped Agent."
+    },
+    args: {
+      ...lifecycleArgs,
+      id: { type: "positional", required: true, description: "Environment id" }
+    },
+    run: ({ args }) => execute2(args, "env set", () => service.setEnvironment(requiredString(args.id, "environment id")), (result) => `Active Agent environment: ${result.id}.`)
+  });
+  const envSetSecret = defineCommand({
+    meta: {
+      name: "set-secret",
+      description: "Store an Agent secret from stdin or a protected file."
+    },
+    args: {
+      ...lifecycleArgs,
+      id: { type: "positional", required: true, description: "Environment id" },
+      "secret-stdin": {
+        type: "boolean",
+        description: "Read the secret from stdin"
+      },
+      "secret-file": {
+        type: "string",
+        description: "Read the secret from a user-private file"
+      }
+    },
+    async run({ args }) {
+      await execute2(args, "env set-secret", async () => {
+        const secret = await readSecretInput({
+          stdin: args["secret-stdin"] === true,
+          file: stringValue(args["secret-file"])
+        });
+        return service.setEnvironmentSecret(requiredString(args.id, "environment id"), secret);
+      }, (result) => `Agent secret stored for ${result.id}.`);
+    }
+  });
+  const envRegistrations = [
+    registration("list", envList),
+    registration("get", envGet),
+    registration("set", envSet),
+    registration("set-secret", envSetSecret)
+  ];
+  const environment = registerCommandGroup(defineCommand({
+    meta: {
+      name: "env",
+      description: "Manage verified Agent environments and environment-scoped secrets."
+    },
+    subCommands: buildRegisteredSubCommands(envRegistrations)
+  }), envRegistrations);
+  const autostartCommands = ["enable", "disable", "status"].map((action) => ({
+    action,
+    command: defineCommand({
+      meta: {
+        name: action,
+        description: `${action[0]?.toUpperCase()}${action.slice(1)} per-user Agent autostart.`
+      },
+      args: lifecycleArgs,
+      run: ({ args }) => execute2(args, `autostart ${action}`, () => service.autostart(action), (result) => {
+        const value = result;
+        return value.supported ? `Agent autostart is ${value.enabled ? "enabled" : "disabled"}.` : "Agent autostart is unsupported on this platform.";
+      })
+    })
+  }));
+  const autostartRegistrations = autostartCommands.map(({ action, command }) => registration(action, command));
+  const autostart = registerCommandGroup(defineCommand({
+    meta: {
+      name: "autostart",
+      description: "Manage per-user tray autostart."
+    },
+    subCommands: buildRegisteredSubCommands(autostartRegistrations)
+  }), autostartRegistrations);
+  const registrations = [
+    registration("install", install),
+    registration("update", update),
+    registration("start", start),
+    registration("stop", stop),
+    registration("restart", restart),
+    registration("status", status),
+    registration("settings", settings),
+    registration("logs", logs),
+    registration("env", environment, "help"),
+    registration("autostart", autostart, "help"),
+    registration("doctor", doctor),
+    registration("uninstall", uninstall)
+  ];
+  return {
+    command: registerCommandGroup(defineCommand({
+      meta: {
+        name: "agent",
+        description: "Install and control the local CthuTool Agent."
+      },
+      subCommands: buildRegisteredSubCommands(registrations)
+    }), registrations),
+    registrations
+  };
+}
+var defaultAgentCommand = createAgentCommand(new FileSystemAgentLifecycleService);
+var agentCommand = defaultAgentCommand.command;
+var agentCommandRegistrations = defaultAgentCommand.registrations;
+function simpleCommand(name, description, operation) {
+  return defineCommand({
+    meta: { name, description },
+    args: lifecycleArgs,
+    run: ({ args }) => execute2(args, name, operation, (result) => `CthuTool Agent ${String(result).replaceAll("-", " ")}.`)
+  });
+}
+function registration(name, command, bareBehavior = "run") {
+  return { name, command, visibility: "public", bareBehavior };
+}
+async function execute2(args, path, operation, human) {
+  await runWithContext(args, path, () => operation(), human);
+}
+async function runWithContext(args, path, operation, human) {
+  await runObservedCliCommand(args, { command: "agent", subcommand: path }, async ({ context, fail }) => {
+    try {
+      const result = await operation(context);
+      if (context.json)
+        writeJsonValue(processOutput, {
+          schemaVersion: AGENT_CLI_RESPONSE_SCHEMA_VERSION,
+          ok: true,
+          command: `agent ${path}`,
+          result
+        });
+      else
+        writeHumanStatus(context, processOutput, human(result));
+      process.exitCode = 0;
+    } catch (error) {
+      const cliError = error instanceof Error && "code" in error && "exitCode" in error ? error : createCliError(classifyAgentError(error), safeErrorMessage(error));
+      fail(cliError);
+      if (context.json) {
+        writeJsonValue(processOutput, {
+          schemaVersion: AGENT_CLI_RESPONSE_SCHEMA_VERSION,
+          ok: false,
+          command: `agent ${path}`,
+          error: { code: cliError.code, message: cliError.message }
+        });
+      } else {
+        writeCommandError(context, processOutput, cliError);
+      }
+      process.exitCode = cliError.exitCode;
+      throw cliError;
+    }
+  });
+}
+function classifyAgentError(error) {
+  const message = safeErrorMessage(error).toLowerCase();
+  if (message.includes("not installed"))
+    return "agent_not_installed";
+  if (message.includes("pinned public key") || message.includes("signature") || message.includes("untrusted"))
+    return "agent_release_untrusted";
+  if (message.includes("digest") || message.includes("archive") || message.includes("catalog") || message.includes("layout") || message.includes("canonical"))
+    return "agent_integrity_failed";
+  if (message.includes("supports macos") || message.includes("incompatible") || message.includes("requires chc"))
+    return "agent_incompatible";
+  if (message.includes("unknown agent environment") || message.includes("no agent environment"))
+    return "agent_environment_invalid";
+  if (message.includes("secret"))
+    return "agent_secret_input_invalid";
+  if (message.includes("timed out waiting") && message.includes("ready"))
+    return "agent_start_failed";
+  if (message.includes("purging agent data"))
+    return "agent_purge_confirmation_required";
+  return "agent_control_failed";
+}
+function safeErrorMessage(error) {
+  return error instanceof Error ? error.message : "Unable to complete Agent command";
+}
+function parseChannel(value) {
+  if (value === undefined || value === "stable")
+    return "stable";
+  if (value === "beta")
+    return "beta";
+  throw createCliError("invalid_option", "Agent release channel must be stable or beta");
+}
+function parseLineCount(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1e4)
+    throw createCliError("invalid_option", "--lines must be an integer from 1 to 10000");
+  return parsed;
+}
+function stringValue(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+function requiredString(value, label) {
+  const result = stringValue(value);
+  if (!result)
+    throw createCliError("missing_required_argument", `Missing required ${label}`);
+  return result;
+}
+async function readSecretInput(input) {
+  if (Number(input.stdin) + Number(Boolean(input.file)) !== 1)
+    throw createCliError("agent_secret_input_invalid", "Choose exactly one of --secret-stdin or --secret-file");
+  if (input.file) {
+    const metadata = await stat6(input.file);
+    if (!metadata.isFile())
+      throw createCliError("agent_secret_input_invalid", "Secret input must be a regular file");
+    if (process.platform !== "win32" && (metadata.mode & 63) !== 0)
+      throw createCliError("agent_secret_input_invalid", "Secret file must not be accessible by group or other users");
+    return readFile7(input.file, "utf8");
+  }
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    if (Buffer.concat(chunks).byteLength > 1024)
+      throw createCliError("agent_secret_input_invalid", "Secret input is too large");
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+function environmentListMessage(result) {
+  return result.map((environment) => `${environment.active ? "*" : " "} ${environment.id}	${environment.label}	secret:${environment.secretConfigured ? "configured" : "missing"}`).join(`
+`);
+}
+function environmentMessage(result) {
+  const environment = result;
+  return `${environment.active ? "Active " : ""}${environment.id} (${environment.label})
+Web: ${environment.webOrigin}
+Backend: ${environment.backendHttpUrl}
+Secret: ${environment.secretConfigured ? "configured" : "missing"}`;
+}
+function installationMessage(result) {
+  const value = result;
+  return `CthuTool Agent ${value.version} ${value.changed ? "activated" : "already installed"}.`;
+}
+async function followLogs(service, initialLines) {
+  let seen = (await service.logs({ lines: 1e4 })).length;
+  let stopped = false;
+  const stop = () => {
+    stopped = true;
+  };
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+  try {
+    while (!stopped) {
+      await new Promise((resolve3) => setTimeout(resolve3, 500));
+      const lines = await service.logs({ lines: 1e4 });
+      if (lines.length < seen)
+        seen = 0;
+      for (const line of lines.slice(seen))
+        processOutput.stdout.write(`${line}
+`);
+      seen = lines.length;
+    }
+  } finally {
+    process.off("SIGINT", stop);
+    process.off("SIGTERM", stop);
+  }
+}
+
+// src/command/codex.command.ts
+import { emitKeypressEvents as emitKeypressEvents2 } from "node:readline";
+var import_picocolors3 = __toESM(require_picocolors(), 1);
+
+// src/domain/codex-plugin-install-manager.ts
+import { readFile as readFile9 } from "node:fs/promises";
+import { basename as basename2, join as join9, resolve as resolve5 } from "node:path";
+
+// src/infra/codex-config-paths.ts
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
+import { homedir as homedir5 } from "node:os";
+import { dirname as dirname5, isAbsolute, join as join8, relative, resolve as resolve3 } from "node:path";
+function createCodexConfigPaths(options = {}) {
+  const repoRoot = resolve3(options.repoRoot ?? getDefaultRepoRoot());
+  const homeRoot = resolve3(options.homeRoot ?? homedir5());
+  const localCodexRoot = resolve3(options.codexHome ?? join8(homeRoot, ".codex"));
+  const localOpenCodeRoot = resolve3(options.openCodeHome ?? join8(homeRoot, ".config", "opencode"));
+  const openCodeConfigPath = resolve3(options.openCodeConfig ?? getDefaultOpenCodeConfigPath(localOpenCodeRoot));
+  return {
+    repoRoot,
+    repoCodexRoot: resolve3(repoRoot, "codex"),
+    homeRoot,
+    localCodexRoot,
+    localOpenCodeRoot,
+    openCodeConfigPath,
+    marketplacePath: resolve3(options.marketplace ?? join8(homeRoot, ".agents", "plugins", "marketplace.json")),
+    pluginsRoot: resolve3(options.pluginsRoot ?? join8(repoRoot, "codex", "plugins")),
+    cacheRoot: resolve3(options.cacheRoot ?? join8(homeRoot, ".codex", "plugins", "cache", "personal"))
+  };
+}
+function getDefaultOpenCodeConfigPath(openCodeRoot) {
+  const jsoncPath = join8(openCodeRoot, "opencode.jsonc");
+  return existsSync2(jsoncPath) ? jsoncPath : join8(openCodeRoot, "opencode.json");
+}
+function assertPathInside(parent, child) {
+  const parentPath = resolve3(parent);
+  const childPath = resolve3(child);
+  const childRelative = relative(parentPath, childPath);
+  if (childRelative.startsWith("..") || isAbsolute(childRelative)) {
+    throw new Error(`Refusing to write outside ${parentPath}: ${childPath}`);
+  }
+}
+function getDefaultRepoRoot() {
+  const start = resolve3(process.cwd());
+  let current = start;
+  while (true) {
+    if (isWorkspaceRoot(current)) {
+      return current;
+    }
+    const parent = dirname5(current);
+    if (parent === current) {
+      return start;
+    }
+    current = parent;
+  }
+}
+function isWorkspaceRoot(path) {
+  if (existsSync2(join8(path, "pnpm-workspace.yaml"))) {
+    return true;
+  }
+  try {
+    const pkg = JSON.parse(readFileSync2(join8(path, "package.json"), "utf8"));
+    return pkg.name === "cthutool";
+  } catch {
+    return false;
+  }
+}
 
 // src/domain/codex-plugin-manager.ts
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname as dirname2, isAbsolute as isAbsolute2, relative as relative2, resolve as resolve2 } from "node:path";
+import { cp, mkdir as mkdir5, readdir as readdir3, readFile as readFile8, rm as rm4, writeFile as writeFile4 } from "node:fs/promises";
+import { dirname as dirname6, isAbsolute as isAbsolute2, relative as relative2, resolve as resolve4 } from "node:path";
 async function discoverCodexPlugins(pluginsRoot) {
   let entries;
   try {
-    entries = await readdir(pluginsRoot, { withFileTypes: true });
+    entries = await readdir3(pluginsRoot, { withFileTypes: true });
   } catch {
     return [];
   }
@@ -3110,7 +10218,7 @@ async function discoverCodexPlugins(pluginsRoot) {
     if (!entry.isDirectory()) {
       continue;
     }
-    const root = resolve2(pluginsRoot, entry.name);
+    const root = resolve4(pluginsRoot, entry.name);
     const manifest = await readPluginManifest(root);
     if (!manifest?.name) {
       continue;
@@ -3122,11 +10230,11 @@ async function discoverCodexPlugins(pluginsRoot) {
       marketplacePath: ""
     });
   }
-  return plugins.sort((a4, b4) => a4.name.localeCompare(b4.name));
+  return plugins.sort((a4, b5) => a4.name.localeCompare(b5.name));
 }
 async function readMarketplace(marketplacePath) {
   try {
-    const raw = await readFile(marketplacePath, "utf8");
+    const raw = await readFile8(marketplacePath, "utf8");
     const parsed = JSON.parse(raw);
     return {
       name: typeof parsed.name === "string" ? parsed.name : "personal",
@@ -3164,22 +10272,22 @@ async function installCodexPlugins(options) {
       results.push({ name: plugin.name, action: "installed" });
     }
   }
-  await mkdir(dirname2(options.marketplacePath), { recursive: true });
-  await writeFile(options.marketplacePath, `${JSON.stringify(marketplace, null, 2)}
+  await mkdir5(dirname6(options.marketplacePath), { recursive: true });
+  await writeFile4(options.marketplacePath, `${JSON.stringify(marketplace, null, 2)}
 `, "utf8");
   await enableCodexPlugins(options.configPath, results.map((result) => `${result.name}@personal`));
   return results;
 }
 async function syncCodexPluginCache(options) {
   const version = options.bumpPatch ? await bumpPluginPatchVersion(options.plugin.root) : await readPluginVersion(options.plugin.root);
-  const cacheRoot = resolve2(options.cacheRoot);
-  const pluginCacheRoot = resolve2(cacheRoot, options.plugin.name);
-  const versionCacheRoot = resolve2(pluginCacheRoot, version);
+  const cacheRoot = resolve4(options.cacheRoot);
+  const pluginCacheRoot = resolve4(cacheRoot, options.plugin.name);
+  const versionCacheRoot = resolve4(pluginCacheRoot, version);
   assertPathInside2(cacheRoot, pluginCacheRoot);
   assertPathInside2(pluginCacheRoot, versionCacheRoot);
-  await mkdir(cacheRoot, { recursive: true });
-  await rm(pluginCacheRoot, { recursive: true, force: true });
-  await mkdir(pluginCacheRoot, { recursive: true });
+  await mkdir5(cacheRoot, { recursive: true });
+  await rm4(pluginCacheRoot, { recursive: true, force: true });
+  await mkdir5(pluginCacheRoot, { recursive: true });
   await cp(options.plugin.root, versionCacheRoot, {
     recursive: true,
     force: true
@@ -3207,8 +10315,8 @@ function createMarketplaceEntry(plugin) {
   };
 }
 function toHomeRelativeMarketplacePath(pluginRoot, homeRoot) {
-  const absolutePluginRoot = resolve2(pluginRoot);
-  const absoluteHomeRoot = resolve2(homeRoot);
+  const absolutePluginRoot = resolve4(pluginRoot);
+  const absoluteHomeRoot = resolve4(homeRoot);
   const homeRelative = relative2(absoluteHomeRoot, absolutePluginRoot);
   if (!homeRelative.startsWith("..") && !isAbsolute2(homeRelative)) {
     return `./${homeRelative.replaceAll("\\", "/")}`;
@@ -3216,14 +10324,14 @@ function toHomeRelativeMarketplacePath(pluginRoot, homeRoot) {
   return absolutePluginRoot.replaceAll("\\", "/");
 }
 async function bumpPluginPatchVersion(pluginRoot) {
-  const manifestPath = resolve2(pluginRoot, ".codex-plugin", "plugin.json");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const manifestPath = resolve4(pluginRoot, ".codex-plugin", "plugin.json");
+  const manifest = JSON.parse(await readFile8(manifestPath, "utf8"));
   const nextVersion = incrementPatchVersion(typeof manifest.version === "string" ? manifest.version : "0.0.0");
   manifest.version = nextVersion;
   await writeJsonFile(manifestPath, manifest);
-  const packageJsonPath = resolve2(pluginRoot, "package.json");
+  const packageJsonPath = resolve4(pluginRoot, "package.json");
   try {
-    const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
+    const packageJson = JSON.parse(await readFile8(packageJsonPath, "utf8"));
     packageJson.version = nextVersion;
     await writeJsonFile(packageJsonPath, packageJson);
   } catch {}
@@ -3240,7 +10348,7 @@ function incrementPatchVersion(version) {
   return `${major}.${minor}.${patch}`;
 }
 async function readPluginVersion(pluginRoot) {
-  const raw = await readFile(resolve2(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
+  const raw = await readFile8(resolve4(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
   const parsed = JSON.parse(raw);
   if (typeof parsed.version !== "string" || parsed.version.trim() === "") {
     throw new Error(`Plugin manifest is missing a version: ${pluginRoot}`);
@@ -3248,7 +10356,7 @@ async function readPluginVersion(pluginRoot) {
   return parsed.version;
 }
 async function writeJsonFile(path, value) {
-  await writeFile(path, `${JSON.stringify(value, null, 2)}
+  await writeFile4(path, `${JSON.stringify(value, null, 2)}
 `, "utf8");
 }
 async function enableCodexPlugins(configPath, pluginIds) {
@@ -3257,7 +10365,7 @@ async function enableCodexPlugins(configPath, pluginIds) {
   }
   let raw;
   try {
-    raw = await readFile(configPath, "utf8");
+    raw = await readFile8(configPath, "utf8");
   } catch {
     raw = "";
   }
@@ -3268,8 +10376,8 @@ async function enableCodexPlugins(configPath, pluginIds) {
   for (const pluginId of pluginIds) {
     lines = upsertEnabledPluginSection(lines, pluginId);
   }
-  await mkdir(dirname2(configPath), { recursive: true });
-  await writeFile(configPath, `${lines.join(`
+  await mkdir5(dirname6(configPath), { recursive: true });
+  await writeFile4(configPath, `${lines.join(`
 `)}
 `, "utf8");
 }
@@ -3304,21 +10412,21 @@ function escapeTomlString(value) {
   return value.replaceAll("\\", "\\\\").replaceAll('"', "\\\"");
 }
 async function normalizePluginHookCommands(runtimePluginRoot, sourcePluginRoot) {
-  const hooksPath = resolve2(runtimePluginRoot, "hooks", "hooks.json");
+  const hooksPath = resolve4(runtimePluginRoot, "hooks", "hooks.json");
   let raw;
   try {
-    raw = await readFile(hooksPath, "utf8");
+    raw = await readFile8(hooksPath, "utf8");
   } catch {
     return;
   }
-  const normalizedRoot = resolve2(sourcePluginRoot).replaceAll("\\", "/");
-  await writeFile(hooksPath, raw.replaceAll("<PLUGIN_ROOT>", normalizedRoot), "utf8");
+  const normalizedRoot = resolve4(sourcePluginRoot).replaceAll("\\", "/");
+  await writeFile4(hooksPath, raw.replaceAll("<PLUGIN_ROOT>", normalizedRoot), "utf8");
 }
 async function normalizePluginMcpServers(runtimePluginRoot) {
-  const mcpPath = resolve2(runtimePluginRoot, ".mcp.json");
+  const mcpPath = resolve4(runtimePluginRoot, ".mcp.json");
   let raw;
   try {
-    raw = await readFile(mcpPath, "utf8");
+    raw = await readFile8(mcpPath, "utf8");
   } catch {
     return;
   }
@@ -3326,7 +10434,7 @@ async function normalizePluginMcpServers(runtimePluginRoot) {
   if (!parsed.mcpServers || typeof parsed.mcpServers !== "object") {
     return;
   }
-  const normalizedRoot = resolve2(runtimePluginRoot).replaceAll("\\", "/");
+  const normalizedRoot = resolve4(runtimePluginRoot).replaceAll("\\", "/");
   let changed = false;
   for (const [name, server] of Object.entries(parsed.mcpServers)) {
     if (!server || typeof server !== "object" || Array.isArray(server)) {
@@ -3347,8 +10455,8 @@ async function normalizePluginMcpServers(runtimePluginRoot) {
   }
 }
 function assertPathInside2(parent, child) {
-  const parentPath = resolve2(parent);
-  const childPath = resolve2(child);
+  const parentPath = resolve4(parent);
+  const childPath = resolve4(child);
   const childRelative = relative2(parentPath, childPath);
   if (childRelative.startsWith("..") || isAbsolute2(childRelative)) {
     throw new Error(`Refusing to write outside ${parentPath}: ${childPath}`);
@@ -3356,7 +10464,7 @@ function assertPathInside2(parent, child) {
 }
 async function readPluginManifest(pluginRoot) {
   try {
-    const raw = await readFile(resolve2(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
+    const raw = await readFile8(resolve4(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
     const parsed = JSON.parse(raw);
     if (typeof parsed.name !== "string" || parsed.name.trim().length === 0) {
       return;
@@ -3377,7 +10485,7 @@ async function installRepositoryCodexPlugins(paths) {
   const selectedNames = plugins.map((plugin) => plugin.name);
   const installedPlugins = await installCodexPlugins({
     homeRoot: paths.homeRoot,
-    configPath: join2(paths.localCodexRoot, "config.toml"),
+    configPath: join9(paths.localCodexRoot, "config.toml"),
     marketplacePath: paths.marketplacePath,
     plugins,
     selectedNames
@@ -3393,7 +10501,7 @@ async function discoverEnabledRepositoryCodexPlugins(paths) {
   const configuredNames = new Set(configured.map((plugin) => plugin.name));
   return Promise.all([
     ...configured.map(async (entry) => {
-      const root = resolve3(paths.repoRoot, entry.path);
+      const root = resolve5(paths.repoRoot, entry.path);
       assertPathInside(paths.repoCodexRoot, root);
       return {
         name: entry.name,
@@ -3406,10 +10514,10 @@ async function discoverEnabledRepositoryCodexPlugins(paths) {
   ]);
 }
 async function readPluginManifest2(repoCodexRoot) {
-  const path = join2(repoCodexRoot, "plugins.manifest.json");
+  const path = join9(repoCodexRoot, "plugins.manifest.json");
   try {
-    const value = JSON.parse(await readFile2(path, "utf8"));
-    if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.plugins)) {
+    const value = JSON.parse(await readFile9(path, "utf8"));
+    if (!isRecord2(value) || value.version !== 1 || !Array.isArray(value.plugins)) {
       throw new Error("expected version 1 and a plugins array");
     }
     return {
@@ -3426,7 +10534,7 @@ async function readPluginManifest2(repoCodexRoot) {
   }
 }
 function validatePluginManifestEntry(value, index) {
-  if (!isRecord(value) || typeof value.name !== "string" || typeof value.source !== "string" || typeof value.path !== "string" || typeof value.enabled !== "boolean") {
+  if (!isRecord2(value) || typeof value.name !== "string" || typeof value.source !== "string" || typeof value.path !== "string" || typeof value.enabled !== "boolean") {
     throw new Error(`Invalid Codex plugin manifest entry at index ${index}.`);
   }
   return {
@@ -3438,13 +10546,13 @@ function validatePluginManifestEntry(value, index) {
 }
 async function readPluginDisplayName(root) {
   try {
-    const value = JSON.parse(await readFile2(join2(root, ".codex-plugin", "plugin.json"), "utf8"));
-    return typeof value.interface?.displayName === "string" ? value.interface.displayName : basename(root);
+    const value = JSON.parse(await readFile9(join9(root, ".codex-plugin", "plugin.json"), "utf8"));
+    return typeof value.interface?.displayName === "string" ? value.interface.displayName : basename2(root);
   } catch {
-    return basename(root);
+    return basename2(root);
   }
 }
-function isRecord(value) {
+function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isMissingFileError(error) {
@@ -3453,8 +10561,8 @@ function isMissingFileError(error) {
 
 // src/domain/codex-skills-backend.ts
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile as readFile3 } from "node:fs/promises";
-import { join as join3 } from "node:path";
+import { readFile as readFile10 } from "node:fs/promises";
+import { join as join10 } from "node:path";
 import { promisify } from "node:util";
 var execFile = promisify(execFileCallback);
 var pinnedSkillsCliVersion = "1.5.19";
@@ -3561,7 +10669,7 @@ function parseInstalledSkills(value) {
     throw new SkillsBackendError("contract_mismatch", "Unsupported skills CLI list output: expected an array.");
   }
   return parsed.map((entry, index) => {
-    if (!isRecord2(entry) || typeof entry.name !== "string" || typeof entry.path !== "string") {
+    if (!isRecord3(entry) || typeof entry.name !== "string" || typeof entry.path !== "string") {
       throw new SkillsBackendError("contract_mismatch", `Unsupported skills CLI list entry at index ${index}.`);
     }
     return {
@@ -3601,11 +10709,11 @@ async function runSkillsProcess(args, env2) {
 }
 async function readSkillLock(homeRoot) {
   try {
-    const parsed = JSON.parse(await readFile3(join3(homeRoot, ".agents", ".skill-lock.json"), "utf8"));
-    if (!isRecord2(parsed) || parsed.version !== 3 || !isRecord2(parsed.skills)) {
+    const parsed = JSON.parse(await readFile10(join10(homeRoot, ".agents", ".skill-lock.json"), "utf8"));
+    if (!isRecord3(parsed) || parsed.version !== 3 || !isRecord3(parsed.skills)) {
       throw new Error("expected lock version 3 with a skills object");
     }
-    return new Map(Object.entries(parsed.skills).filter((entry) => isRecord2(entry[1])));
+    return new Map(Object.entries(parsed.skills).filter((entry) => isRecord3(entry[1])));
   } catch (error) {
     if (isMissingFileError2(error)) {
       return new Map;
@@ -3694,14 +10802,14 @@ async function fetchGitHubTree(repository, ref, fetchRemoteTree, env2) {
     throw new SkillsBackendError("network_failed", `GitHub update check failed for ${repository}@${ref}: HTTP ${response.status}.`);
   }
   const value = await response.json();
-  if (!isRecord2(value) || !Array.isArray(value.tree)) {
+  if (!isRecord3(value) || !Array.isArray(value.tree)) {
     throw new SkillsBackendError("contract_mismatch", `Unsupported GitHub tree response for ${repository}@${ref}.`);
   }
   if (value.truncated === true) {
     throw new SkillsBackendError("contract_mismatch", `GitHub tree response was truncated for ${repository}@${ref}; update state is unknown.`);
   }
   return value.tree.map((entry, index) => {
-    if (!isRecord2(entry) || typeof entry.path !== "string" || entry.type !== "blob" && entry.type !== "tree" || typeof entry.sha !== "string") {
+    if (!isRecord3(entry) || typeof entry.path !== "string" || entry.type !== "blob" && entry.type !== "tree" || typeof entry.sha !== "string") {
       throw new SkillsBackendError("contract_mismatch", `Unsupported GitHub tree entry at index ${index}.`);
     }
     return { path: entry.path, type: entry.type, sha: entry.sha };
@@ -3722,7 +10830,7 @@ function stripTerminalSequences(value) {
   const bell = String.fromCharCode(7);
   return value.replace(new RegExp(`${escapeCharacter}\\[[0-9;?]*[ -/]*[@-~]`, "gu"), "").replace(new RegExp(`${escapeCharacter}\\][^${bell}]*(?:${bell}|${escapeCharacter}\\\\)`, "gu"), "").replace(/\r[^\n]*/gu, "");
 }
-function isRecord2(value) {
+function isRecord3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isMissingFileError2(error) {
@@ -3730,12 +10838,12 @@ function isMissingFileError2(error) {
 }
 
 // src/domain/codex-skills-manager.ts
-import { mkdir as mkdir3, rename as rename2, rm as rm3 } from "node:fs/promises";
-import { dirname as dirname4, join as join5 } from "node:path";
+import { mkdir as mkdir7, rename as rename3, rm as rm6 } from "node:fs/promises";
+import { dirname as dirname8, join as join12 } from "node:path";
 
 // src/domain/codex-skills-manifest.ts
-import { mkdir as mkdir2, readFile as readFile4, rename, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
-import { dirname as dirname3, join as join4, resolve as resolve4 } from "node:path";
+import { mkdir as mkdir6, readFile as readFile11, rename as rename2, rm as rm5, writeFile as writeFile5 } from "node:fs/promises";
+import { dirname as dirname7, join as join11, resolve as resolve6 } from "node:path";
 var emptyCodexSkillsManifest = () => ({
   version: 2,
   skills: []
@@ -3744,7 +10852,7 @@ async function readCodexSkillsManifest(repoCodexRoot) {
   const path = getManifestPath(repoCodexRoot);
   let value;
   try {
-    value = JSON.parse(await readFile4(path, "utf8"));
+    value = JSON.parse(await readFile11(path, "utf8"));
   } catch (error) {
     if (isMissingFileError3(error)) {
       return { manifest: emptyCodexSkillsManifest(), legacyEntries: [] };
@@ -3753,8 +10861,8 @@ async function readCodexSkillsManifest(repoCodexRoot) {
       cause: error
     });
   }
-  if (isRecord3(value) && value.version === 1) {
-    const legacyEntries = Array.isArray(value.skills) ? value.skills.map((entry) => isRecord3(entry) && typeof entry.name === "string" ? entry.name : undefined).filter((name) => name !== undefined).sort() : [];
+  if (isRecord4(value) && value.version === 1) {
+    const legacyEntries = Array.isArray(value.skills) ? value.skills.map((entry) => isRecord4(entry) && typeof entry.name === "string" ? entry.name : undefined).filter((name) => name !== undefined).sort() : [];
     return { manifest: emptyCodexSkillsManifest(), legacyEntries };
   }
   return {
@@ -3763,7 +10871,7 @@ async function readCodexSkillsManifest(repoCodexRoot) {
   };
 }
 function validateCodexSkillsManifest(value) {
-  if (!isRecord3(value) || value.version !== 2 || !Array.isArray(value.skills)) {
+  if (!isRecord4(value) || value.version !== 2 || !Array.isArray(value.skills)) {
     throw new Error("Codex skills manifest must have version 2 and a skills array.");
   }
   const names = new Set;
@@ -3783,16 +10891,16 @@ function validateCodexSkillsManifest(value) {
 async function writeCodexSkillsManifest(repoCodexRoot, manifest) {
   const validated = validateCodexSkillsManifest(manifest);
   const path = getManifestPath(repoCodexRoot);
-  const temporaryPath = join4(dirname3(path), `.skills.manifest.${process.pid}.${Date.now()}.tmp`);
+  const temporaryPath = join11(dirname7(path), `.skills.manifest.${process.pid}.${Date.now()}.tmp`);
   assertPathInside(repoCodexRoot, path);
   assertPathInside(repoCodexRoot, temporaryPath);
-  await mkdir2(dirname3(path), { recursive: true });
+  await mkdir6(dirname7(path), { recursive: true });
   try {
-    await writeFile2(temporaryPath, `${JSON.stringify(validated, null, 2)}
+    await writeFile5(temporaryPath, `${JSON.stringify(validated, null, 2)}
 `, "utf8");
-    await rename(temporaryPath, path);
+    await rename2(temporaryPath, path);
   } finally {
-    await rm2(temporaryPath, { force: true });
+    await rm5(temporaryPath, { force: true });
   }
 }
 function upsertManagedSkill(manifest, skill) {
@@ -3811,12 +10919,12 @@ function removeManagedSkill(manifest, name) {
   };
 }
 function getManifestPath(repoCodexRoot) {
-  const path = resolve4(repoCodexRoot, "skills.manifest.json");
+  const path = resolve6(repoCodexRoot, "skills.manifest.json");
   assertPathInside(repoCodexRoot, path);
   return path;
 }
 function validateManagedSkill(value, index) {
-  if (!isRecord3(value)) {
+  if (!isRecord4(value)) {
     throw new Error(`Codex skill entry ${index} must be an object.`);
   }
   const name = readNonEmptyString(value.name, `skills[${index}].name`);
@@ -3834,7 +10942,7 @@ function validateManagedSkill(value, index) {
   if (selector.includes("\\") || selector.split("/").includes("..")) {
     throw new Error(`Invalid skill selector for ${name}: ${selector}`);
   }
-  if (!isRecord3(value.tracking)) {
+  if (!isRecord4(value.tracking)) {
     throw new Error(`Codex skill ${name} must declare tracking.`);
   }
   if (value.tracking.type !== "branch" && value.tracking.type !== "pin") {
@@ -3859,7 +10967,7 @@ function readNonEmptyString(value, label) {
   }
   return value.trim();
 }
-function isRecord3(value) {
+function isRecord4(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isMissingFileError3(error) {
@@ -4023,287 +11131,17 @@ async function replaceSkillWithRollback(item, backend) {
   if (!skill || !installedPath) {
     throw new Error(`Missing replacement metadata for ${item.name}.`);
   }
-  const backupPath = join5(dirname4(installedPath), `.${item.name}.cthutool-backup-${process.pid}-${Date.now()}`);
-  await mkdir3(dirname4(backupPath), { recursive: true });
-  await rename2(installedPath, backupPath);
+  const backupPath = join12(dirname8(installedPath), `.${item.name}.cthutool-backup-${process.pid}-${Date.now()}`);
+  await mkdir7(dirname8(backupPath), { recursive: true });
+  await rename3(installedPath, backupPath);
   try {
     await backend.install(skill);
-    await rm3(backupPath, { recursive: true, force: true });
+    await rm6(backupPath, { recursive: true, force: true });
   } catch (error) {
-    await rm3(installedPath, { recursive: true, force: true });
-    await rename2(backupPath, installedPath);
+    await rm6(installedPath, { recursive: true, force: true });
+    await rename3(backupPath, installedPath);
     throw error;
   }
-}
-
-// src/runtime/cli-context.ts
-var cliContractArgs = {
-  json: {
-    type: "boolean",
-    description: "Print one machine-readable JSON value to stdout"
-  },
-  noInteractive: {
-    type: "boolean",
-    description: "Disable prompts even when stdin is a TTY"
-  },
-  quiet: {
-    type: "boolean",
-    description: "Suppress non-essential human status output"
-  }
-};
-function createCliContext(args, deps = {
-  isTty: () => process.stdin.isTTY === true
-}) {
-  const isTty = deps.isTty();
-  return {
-    isTty,
-    interactive: isTty && args.noInteractive !== true,
-    json: args.json === true,
-    quiet: args.quiet === true
-  };
-}
-
-// src/runtime/cli-error.ts
-class CliCommandError extends Error {
-  code;
-  exitCode;
-  constructor(code, message, exitCode = 1) {
-    super(message);
-    this.name = "CliCommandError";
-    this.code = code;
-    this.exitCode = exitCode;
-  }
-}
-function createCliError(code, message, exitCode = 1) {
-  return new CliCommandError(code, message, exitCode);
-}
-function isCliCommandError(value) {
-  return value instanceof CliCommandError;
-}
-
-// src/runtime/observability.ts
-import { basename as basename2, dirname as dirname5, sep as sep2 } from "node:path";
-var CLI_DIAGNOSTICS_ENV = "CHC_CLI_DIAGNOSTICS";
-var REDACTED = "[redacted]";
-var MAX_STRING_LENGTH = 160;
-var MAX_OBJECT_KEYS = 16;
-function isCliDiagnosticsEnabled(env2 = process.env) {
-  const raw = env2[CLI_DIAGNOSTICS_ENV];
-  return raw === "1" || raw === "true" || raw === "yes";
-}
-function createCliDiagnostics(context, output, base = {}, deps = {}) {
-  const now = deps.now ?? (() => new Date);
-  const isEnabled = deps.isEnabled ?? (() => isCliDiagnosticsEnabled());
-  const diagnostics = {
-    isEnabled,
-    child: (childBase) => createCliDiagnostics(context, output, { ...base, ...childBase }, { isEnabled, now }),
-    emit: (input) => {
-      if (!isEnabled() || isSuppressed(context, input.level)) {
-        return;
-      }
-      const event = {
-        source: "cthutool.cli",
-        timestamp: now().toISOString(),
-        ...base,
-        ...input,
-        message: input.message === undefined ? undefined : sanitizeDiagnosticMessage(input.message),
-        details: input.details ? sanitizeDiagnosticDetails(input.details) : undefined
-      };
-      output.stderr.write(`${JSON.stringify(dropUndefined(event))}
-`);
-    }
-  };
-  return diagnostics;
-}
-function createCliCommandDiagnostics(context, output, base, deps = {}) {
-  const nowMs = deps.nowMs ?? (() => Date.now());
-  const startedAt = nowMs();
-  const diagnostics = createCliDiagnostics(context, output, base, deps);
-  diagnostics.emit({
-    level: "debug",
-    event: "cli.command_started",
-    phase: "start",
-    details: modeDetails(context)
-  });
-  return {
-    complete: (input = {}) => {
-      diagnostics.emit({
-        level: "info",
-        event: "cli.command_completed",
-        phase: "complete",
-        durationMs: Math.max(0, nowMs() - startedAt),
-        exitCode: input.exitCode ?? 0,
-        details: { ...modeDetails(context), ...input.details }
-      });
-    },
-    fail: (error, input = {}) => {
-      diagnostics.emit({
-        level: "error",
-        event: "cli.command_failed",
-        phase: "failure",
-        durationMs: Math.max(0, nowMs() - startedAt),
-        exitCode: error.exitCode,
-        errorCode: error.code,
-        message: error.message,
-        details: { ...modeDetails(context), ...input.details }
-      });
-    }
-  };
-}
-function summarizeScriptArgs(args) {
-  const keys = Object.keys(args).sort();
-  return {
-    argumentCount: keys.length,
-    argumentKeys: keys
-  };
-}
-function sanitizeDiagnosticDetails(details) {
-  return sanitizeObject(details, 0);
-}
-function modeDetails(context) {
-  return {
-    interactive: context.interactive,
-    isTty: context.isTty,
-    json: context.json,
-    quiet: context.quiet
-  };
-}
-function isSuppressed(context, level) {
-  return context.quiet && (level === "debug" || level === "info");
-}
-function sanitizeObject(value, depth) {
-  const entries = Object.entries(value).slice(0, MAX_OBJECT_KEYS);
-  return Object.fromEntries(entries.map(([key, item]) => [key, sanitizeValue(key, item, depth)]));
-}
-function sanitizeValue(key, value, depth) {
-  if (isSensitiveKey(key)) {
-    return REDACTED;
-  }
-  if (typeof value === "string") {
-    return isPathKey(key) ? summarizePath(value) : truncate(redactUrlUserinfo(value));
-  }
-  if (typeof value === "number" || typeof value === "boolean" || value === null || value === undefined) {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    if (value.length <= 8 && value.every((item) => ["string", "number", "boolean"].includes(typeof item))) {
-      return value.map((item, index) => sanitizeValue(`${key}.${index}`, item, depth + 1));
-    }
-    return {
-      itemCount: value.length,
-      items: value.slice(0, 8).map((item, index) => sanitizeValue(`${key}.${index}`, item, depth + 1))
-    };
-  }
-  if (typeof value === "object") {
-    if (depth >= 2) {
-      return "[object]";
-    }
-    return sanitizeObject(value, depth + 1);
-  }
-  return String(value);
-}
-function isSensitiveKey(key) {
-  return /token|secret|password|passwd|cookie|authorization|credential|storage.?state/i.test(key);
-}
-function isPathKey(key) {
-  return /path|dir|directory|root|file/i.test(key);
-}
-function summarizePath(value) {
-  const normalized = value.replaceAll("\\", sep2);
-  const name = basename2(normalized);
-  const parent = basename2(dirname5(normalized));
-  return parent && parent !== "." ? `${parent}${sep2}${name}` : name;
-}
-function truncate(value) {
-  if (value.length <= MAX_STRING_LENGTH) {
-    return value;
-  }
-  return `${value.slice(0, MAX_STRING_LENGTH - 3)}...`;
-}
-function sanitizeDiagnosticMessage(value) {
-  return truncate(redactUrlUserinfo(value).replace(/(token|secret|password|passwd|cookie|authorization|credential)=([^&\s]+)/gi, "$1=[redacted]"));
-}
-function redactUrlUserinfo(value) {
-  return value.replace(/:\/\/[^/\s]+@/g, "://***@");
-}
-function dropUndefined(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
-}
-
-// src/runtime/output.ts
-var processOutput = {
-  stdout: process.stdout,
-  stderr: process.stderr
-};
-function writeJsonValue(output, value) {
-  output.stdout.write(`${JSON.stringify(value)}
-`);
-}
-function writeCommandError(context, output, error) {
-  if (context.json) {
-    writeJsonValue(output, {
-      ok: false,
-      error: {
-        code: error.code,
-        message: error.message
-      }
-    });
-    return;
-  }
-  output.stderr.write(`${error.message}
-`);
-}
-function writeWarning(output, message) {
-  output.stderr.write(`${message}
-`);
-}
-function writeHumanStatus(context, output, message = "") {
-  if (context.json || context.quiet) {
-    return;
-  }
-  output.stdout.write(`${message}
-`);
-}
-
-// src/runtime/command-diagnostics.ts
-async function runObservedCliCommand(args, base, run, deps = {}) {
-  const context = createCliContext(args, deps.isTty ? { isTty: deps.isTty } : undefined);
-  const diagnostics = deps.diagnostics ?? createCliCommandDiagnostics(context, processOutput, base);
-  let finalized = false;
-  const scope = {
-    context,
-    complete: (input = {}) => {
-      diagnostics.complete({
-        ...input,
-        exitCode: input.exitCode ?? numericProcessExitCode()
-      });
-      finalized = true;
-    },
-    fail: (error, input = {}) => {
-      diagnostics.fail(error, input);
-      finalized = true;
-    }
-  };
-  try {
-    await run(scope);
-    if (!finalized) {
-      scope.complete();
-    }
-  } catch (error) {
-    if (!finalized) {
-      scope.fail(toDiagnosticCliError(error));
-    }
-    throw error;
-  }
-}
-function numericProcessExitCode() {
-  return typeof process.exitCode === "number" ? process.exitCode : 0;
-}
-function toDiagnosticCliError(error) {
-  if (isCliCommandError(error)) {
-    return error;
-  }
-  return createCliError("invalid_option", error instanceof Error ? error.message : "command failed unexpectedly");
 }
 
 // src/command/codex.command.ts
@@ -4634,7 +11472,7 @@ async function promptManagedActionTable(rows) {
 `);
     renderedLines = lines.length;
   }
-  return await new Promise((resolve5) => {
+  return await new Promise((resolve7) => {
     const wasRaw = input.isRaw;
     const finish = (cancelled) => {
       input.off("keypress", onKeypress);
@@ -4644,10 +11482,10 @@ async function promptManagedActionTable(rows) {
       }
       process.stdout.write(`${control}[?25h`);
       if (cancelled) {
-        resolve5(undefined);
+        resolve7(undefined);
         return;
       }
-      resolve5(rows.flatMap((row, index) => {
+      resolve7(rows.flatMap((row, index) => {
         const action = row.availableActions[indexes[index] ?? 0] ?? "none";
         return action === "none" ? [] : [{ name: row.name, action }];
       }));
@@ -4753,9 +11591,9 @@ var codexCommand = defineCommand({
 
 // src/command/completion.command.ts
 import { execFile as execFile2 } from "node:child_process";
-import { mkdir as mkdir4, readFile as readFile5, writeFile as writeFile3 } from "node:fs/promises";
-import { homedir as homedir2, platform as platform2 } from "node:os";
-import { dirname as dirname6, join as join6 } from "node:path";
+import { mkdir as mkdir8, readFile as readFile12, writeFile as writeFile6 } from "node:fs/promises";
+import { homedir as homedir6, platform as platform2 } from "node:os";
+import { dirname as dirname9, join as join13 } from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // src/domain/completion-candidates.ts
@@ -4777,7 +11615,7 @@ async function getSubCommands(command) {
     name,
     await resolveValue2(value)
   ]));
-  const publicNames = new Set(getCommandRegistrations(command)?.filter((registration) => registration.visibility === "public").map((registration) => registration.name));
+  const publicNames = new Set(getCommandRegistrations(command)?.filter((registration2) => registration2.visibility === "public").map((registration2) => registration2.name));
   return Object.fromEntries(publicNames.size === 0 ? entries : entries.filter(([name]) => publicNames.has(name)));
 }
 async function getArgs(command) {
@@ -4818,7 +11656,7 @@ async function traverseCommand(rootCommand, completedWords) {
   return { command, path };
 }
 function filterByPrefix(candidates, prefix) {
-  return [...new Set(candidates)].filter((candidate) => candidate.startsWith(prefix)).sort((a4, b4) => a4.localeCompare(b4));
+  return [...new Set(candidates)].filter((candidate) => candidate.startsWith(prefix)).sort((a4, b5) => a4.localeCompare(b5));
 }
 async function getFlagCandidates(command, completedWords, prefix) {
   const args = await getArgs(command);
@@ -4921,7 +11759,7 @@ function removeLegacyZshCompletionLine(content) {
 }
 async function readTextIfExists(path) {
   try {
-    return await readFile5(path, "utf8");
+    return await readFile12(path, "utf8");
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       return "";
@@ -4949,9 +11787,9 @@ async function resolvePowerShellProfilePath() {
     } catch {}
   }
   if (platform2() === "win32") {
-    return join6(process.env.USERPROFILE || homedir2(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
+    return join13(process.env.USERPROFILE || homedir6(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
   }
-  return join6(homedir2(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
+  return join13(homedir6(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
 }
 function resolveZshProfilePath() {
   const override = process.env[zshProfileEnv]?.trim();
@@ -4959,7 +11797,7 @@ function resolveZshProfilePath() {
     return override;
   }
   const zdotdir = process.env.ZDOTDIR?.trim();
-  return join6(zdotdir || homedir2(), ".zshrc");
+  return join13(zdotdir || homedir6(), ".zshrc");
 }
 async function handlePowerShellProfileAction(action) {
   const profilePath = await resolvePowerShellProfilePath();
@@ -4978,7 +11816,7 @@ async function handlePowerShellProfileAction(action) {
   if (action === "disable") {
     const cleaned2 = removeManagedCompletionBlock(content);
     if (cleaned2.removed) {
-      await writeFile3(profilePath, cleaned2.content);
+      await writeFile6(profilePath, cleaned2.content);
     }
     process.stdout.write(`PowerShell completion disabled: ${profilePath}
 `);
@@ -4990,8 +11828,8 @@ async function handlePowerShellProfileAction(action) {
   const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
 `) ? migratedContent : `${migratedContent}
 `;
-  await mkdir4(dirname6(profilePath), { recursive: true });
-  await writeFile3(profilePath, `${prefix}${powershellCompletionBlock}
+  await mkdir8(dirname9(profilePath), { recursive: true });
+  await writeFile6(profilePath, `${prefix}${powershellCompletionBlock}
 `);
   process.stdout.write(`PowerShell completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
 `);
@@ -5017,7 +11855,7 @@ async function handleZshProfileAction(action) {
   if (action === "disable") {
     const cleaned2 = removeManagedCompletionBlock(content);
     if (cleaned2.removed) {
-      await writeFile3(profilePath, cleaned2.content);
+      await writeFile6(profilePath, cleaned2.content);
     }
     process.stdout.write(`zsh completion disabled: ${profilePath}
 `);
@@ -5029,8 +11867,8 @@ async function handleZshProfileAction(action) {
   const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
 `) ? migratedContent : `${migratedContent}
 `;
-  await mkdir4(dirname6(profilePath), { recursive: true });
-  await writeFile3(profilePath, `${prefix}${zshCompletionBlock}
+  await mkdir8(dirname9(profilePath), { recursive: true });
+  await writeFile6(profilePath, `${prefix}${zshCompletionBlock}
 `);
   process.stdout.write(`zsh completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
 `);
@@ -5147,8 +11985,8 @@ function createInternalCompleteCommand(resolveRootCommand) {
 var import_picocolors4 = __toESM(require_picocolors(), 1);
 
 // src/domain/opencode-config-manager.ts
-import { mkdir as mkdir5, readFile as readFile6, rename as rename3, rm as rm4, writeFile as writeFile4 } from "node:fs/promises";
-import { dirname as dirname7, isAbsolute as isAbsolute3, resolve as resolve5 } from "node:path";
+import { mkdir as mkdir9, readFile as readFile13, rename as rename4, rm as rm7, writeFile as writeFile7 } from "node:fs/promises";
+import { dirname as dirname10, isAbsolute as isAbsolute3, resolve as resolve7 } from "node:path";
 async function syncOpenCodeSkillPaths(input) {
   const plugins = [];
   const paths = [];
@@ -5213,7 +12051,7 @@ async function syncOpenCodeMcpServers(input) {
 async function readOpenCodeConfig(configPath) {
   let raw;
   try {
-    raw = await readFile6(configPath, "utf8");
+    raw = await readFile13(configPath, "utf8");
   } catch (error) {
     if (isMissingFileError4(error)) {
       return {};
@@ -5222,7 +12060,7 @@ async function readOpenCodeConfig(configPath) {
   }
   try {
     const value = JSON.parse(parseJsonc(raw));
-    if (!isRecord4(value)) {
+    if (!isRecord5(value)) {
       throw new Error("expected a JSON object");
     }
     return value;
@@ -5233,15 +12071,15 @@ async function readOpenCodeConfig(configPath) {
   }
 }
 async function writeOpenCodeConfig(configPath, config) {
-  const path = resolve5(configPath);
+  const path = resolve7(configPath);
   const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`;
-  await mkdir5(dirname7(path), { recursive: true });
+  await mkdir9(dirname10(path), { recursive: true });
   try {
-    await writeFile4(temporaryPath, `${JSON.stringify(config, null, 2)}
+    await writeFile7(temporaryPath, `${JSON.stringify(config, null, 2)}
 `, "utf8");
-    await rename3(temporaryPath, path);
+    await rename4(temporaryPath, path);
   } finally {
-    await rm4(temporaryPath, { force: true });
+    await rm7(temporaryPath, { force: true });
   }
 }
 async function readPluginSkillPaths(plugin) {
@@ -5249,16 +12087,16 @@ async function readPluginSkillPaths(plugin) {
   const declared = manifest.skills;
   const candidates = typeof declared === "string" ? [declared] : Array.isArray(declared) ? declared.filter((value) => typeof value === "string") : [];
   return candidates.map((candidate) => {
-    const path = resolve5(plugin.root, candidate);
+    const path = resolve7(plugin.root, candidate);
     assertPathInside(plugin.root, path);
     return path;
   });
 }
 async function readPluginMcpServers(plugin) {
-  const path = resolve5(plugin.root, ".mcp.json");
+  const path = resolve7(plugin.root, ".mcp.json");
   let parsed;
   try {
-    parsed = JSON.parse(await readFile6(path, "utf8"));
+    parsed = JSON.parse(await readFile13(path, "utf8"));
   } catch (error) {
     if (isMissingFileError4(error)) {
       return {};
@@ -5267,7 +12105,7 @@ async function readPluginMcpServers(plugin) {
       cause: error
     });
   }
-  if (!isRecord4(parsed) || parsed.mcpServers === undefined) {
+  if (!isRecord5(parsed) || parsed.mcpServers === undefined) {
     return {};
   }
   const sourceServers = readRecord(parsed.mcpServers, "mcpServers");
@@ -5281,7 +12119,7 @@ function renderOpenCodeMcpServer(plugin, name, source) {
     return {
       type: "remote",
       url: source.url,
-      ...isRecord4(source.headers) ? { headers: source.headers } : {},
+      ...isRecord5(source.headers) ? { headers: source.headers } : {},
       enabled: source.enabled !== false
     };
   }
@@ -5339,13 +12177,13 @@ function resolveMcpCwd(plugin, value) {
     throw new Error(`Invalid MCP cwd for ${plugin.name}.`);
   }
   const replaced = value.replaceAll("<PLUGIN_ROOT>", plugin.root);
-  return isAbsolute3(replaced) ? resolve5(replaced) : resolve5(plugin.root, replaced);
+  return isAbsolute3(replaced) ? resolve7(replaced) : resolve7(plugin.root, replaced);
 }
 async function readPluginJson(plugin) {
-  const path = resolve5(plugin.root, ".codex-plugin", "plugin.json");
+  const path = resolve7(plugin.root, ".codex-plugin", "plugin.json");
   try {
-    const value = JSON.parse(await readFile6(path, "utf8"));
-    if (!isRecord4(value)) {
+    const value = JSON.parse(await readFile13(path, "utf8"));
+    if (!isRecord5(value)) {
       throw new Error("expected a JSON object");
     }
     return value;
@@ -5360,7 +12198,7 @@ function readOptionalRecord(value, label) {
   return readRecord(value, label);
 }
 function readRecord(value, label) {
-  if (!isRecord4(value)) {
+  if (!isRecord5(value)) {
     throw new Error(`${label} must be an object.`);
   }
   return value;
@@ -5480,7 +12318,7 @@ function stripTrailingCommas(value) {
   }
   return output;
 }
-function isRecord4(value) {
+function isRecord5(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isMissingFileError4(error) {
@@ -5621,11 +12459,11 @@ var createNeverThrowError = (message, result, config = defaultErrorConfig) => {
 };
 function __awaiter(thisArg, _arguments, P5, generator) {
   function adopt(value) {
-    return value instanceof P5 ? value : new P5(function(resolve6) {
-      resolve6(value);
+    return value instanceof P5 ? value : new P5(function(resolve8) {
+      resolve8(value);
     });
   }
-  return new (P5 || (P5 = Promise))(function(resolve6, reject) {
+  return new (P5 || (P5 = Promise))(function(resolve8, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -5641,21 +12479,21 @@ function __awaiter(thisArg, _arguments, P5, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve6(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 }
 function __values(o3) {
-  var s2 = typeof Symbol === "function" && Symbol.iterator, m3 = s2 && o3[s2], i2 = 0;
+  var s2 = typeof Symbol === "function" && Symbol.iterator, m3 = s2 && o3[s2], i3 = 0;
   if (m3)
     return m3.call(o3);
   if (o3 && typeof o3.length === "number")
     return {
       next: function() {
-        if (o3 && i2 >= o3.length)
+        if (o3 && i3 >= o3.length)
           o3 = undefined;
-        return { value: o3 && o3[i2++], done: !o3 };
+        return { value: o3 && o3[i3++], done: !o3 };
       }
     };
   throw new TypeError(s2 ? "Object is not iterable." : "Symbol.iterator is not defined.");
@@ -5666,10 +12504,10 @@ function __await(v3) {
 function __asyncGenerator(thisArg, _arguments, generator) {
   if (!Symbol.asyncIterator)
     throw new TypeError("Symbol.asyncIterator is not defined.");
-  var g4 = generator.apply(thisArg, _arguments || []), i2, q3 = [];
-  return i2 = Object.create((typeof AsyncIterator === "function" ? AsyncIterator : Object).prototype), verb("next"), verb("throw"), verb("return", awaitReturn), i2[Symbol.asyncIterator] = function() {
+  var g4 = generator.apply(thisArg, _arguments || []), i3, q3 = [];
+  return i3 = Object.create((typeof AsyncIterator === "function" ? AsyncIterator : Object).prototype), verb("next"), verb("throw"), verb("return", awaitReturn), i3[Symbol.asyncIterator] = function() {
     return this;
-  }, i2;
+  }, i3;
   function awaitReturn(f4) {
     return function(v3) {
       return Promise.resolve(v3).then(f4, reject);
@@ -5677,13 +12515,13 @@ function __asyncGenerator(thisArg, _arguments, generator) {
   }
   function verb(n2, f4) {
     if (g4[n2]) {
-      i2[n2] = function(v3) {
-        return new Promise(function(a4, b4) {
-          q3.push([n2, v3, a4, b4]) > 1 || resume(n2, v3);
+      i3[n2] = function(v3) {
+        return new Promise(function(a4, b5) {
+          q3.push([n2, v3, a4, b5]) > 1 || resume(n2, v3);
         });
       };
       if (f4)
-        i2[n2] = f4(i2[n2]);
+        i3[n2] = f4(i3[n2]);
     }
   }
   function resume(n2, v3) {
@@ -5708,14 +12546,14 @@ function __asyncGenerator(thisArg, _arguments, generator) {
   }
 }
 function __asyncDelegator(o3) {
-  var i2, p;
-  return i2 = {}, verb("next"), verb("throw", function(e3) {
+  var i3, p;
+  return i3 = {}, verb("next"), verb("throw", function(e3) {
     throw e3;
-  }), verb("return"), i2[Symbol.iterator] = function() {
+  }), verb("return"), i3[Symbol.iterator] = function() {
     return this;
-  }, i2;
+  }, i3;
   function verb(n2, f4) {
-    i2[n2] = o3[n2] ? function(v3) {
+    i3[n2] = o3[n2] ? function(v3) {
       return (p = !p) ? { value: __await(o3[n2](v3)), done: false } : f4 ? f4(v3) : v3;
     } : f4;
   }
@@ -5723,20 +12561,20 @@ function __asyncDelegator(o3) {
 function __asyncValues(o3) {
   if (!Symbol.asyncIterator)
     throw new TypeError("Symbol.asyncIterator is not defined.");
-  var m3 = o3[Symbol.asyncIterator], i2;
-  return m3 ? m3.call(o3) : (o3 = typeof __values === "function" ? __values(o3) : o3[Symbol.iterator](), i2 = {}, verb("next"), verb("throw"), verb("return"), i2[Symbol.asyncIterator] = function() {
+  var m3 = o3[Symbol.asyncIterator], i3;
+  return m3 ? m3.call(o3) : (o3 = typeof __values === "function" ? __values(o3) : o3[Symbol.iterator](), i3 = {}, verb("next"), verb("throw"), verb("return"), i3[Symbol.asyncIterator] = function() {
     return this;
-  }, i2);
+  }, i3);
   function verb(n2) {
-    i2[n2] = o3[n2] && function(v3) {
-      return new Promise(function(resolve6, reject) {
-        v3 = o3[n2](v3), settle(resolve6, reject, v3.done, v3.value);
+    i3[n2] = o3[n2] && function(v3) {
+      return new Promise(function(resolve8, reject) {
+        v3 = o3[n2](v3), settle(resolve8, reject, v3.done, v3.value);
       });
     };
   }
-  function settle(resolve6, reject, d3, v3) {
+  function settle(resolve8, reject, d3, v3) {
     Promise.resolve(v3).then(function(v4) {
-      resolve6({ value: v4, done: d3 });
+      resolve8({ value: v4, done: d3 });
     }, reject);
   }
 }
@@ -5851,7 +12689,7 @@ class ResultAsync {
     return this._promise.then(successCallback, failureCallback);
   }
   [Symbol.asyncIterator]() {
-    return __asyncGenerator(this, arguments, function* _a() {
+    return __asyncGenerator(this, arguments, function* _a2() {
       const result = yield __await(this._promise);
       if (result.isErr()) {
         yield yield __await(errAsync(result.error));
@@ -5860,8 +12698,8 @@ class ResultAsync {
     });
   }
 }
-function errAsync(err) {
-  return new ResultAsync(Promise.resolve(new Err(err)));
+function errAsync(err2) {
+  return new ResultAsync(Promise.resolve(new Err(err2)));
 }
 var fromPromise = ResultAsync.fromPromise;
 var fromSafePromise = ResultAsync.fromSafePromise;
@@ -5870,7 +12708,7 @@ var combineResultList = (resultList) => {
   let acc = ok([]);
   for (const result of resultList) {
     if (result.isErr()) {
-      acc = err(result.error);
+      acc = err2(result.error);
       break;
     } else {
       acc.map((list) => list.push(result.value));
@@ -5885,7 +12723,7 @@ var combineResultListWithAllErrors = (resultList) => {
     if (result.isErr() && acc.isErr()) {
       acc.error.push(result.error);
     } else if (result.isErr() && acc.isOk()) {
-      acc = err([result.error]);
+      acc = err2([result.error]);
     } else if (result.isOk() && acc.isOk()) {
       acc.value.push(result.value);
     }
@@ -5901,7 +12739,7 @@ var $Result = undefined;
         const result = fn(...args);
         return ok(result);
       } catch (e3) {
-        return err(errorFn ? errorFn(e3) : e3);
+        return err2(errorFn ? errorFn(e3) : e3);
       }
     };
   }
@@ -5918,8 +12756,8 @@ var $Result = undefined;
 function ok(value) {
   return new Ok(value);
 }
-function err(err2) {
-  return new Err(err2);
+function err2(err3) {
+  return new Err(err3);
 }
 class Ok {
   constructor(value) {
@@ -5998,25 +12836,25 @@ class Err {
     return !this.isOk();
   }
   map(_f) {
-    return err(this.error);
+    return err2(this.error);
   }
   mapErr(f4) {
-    return err(f4(this.error));
+    return err2(f4(this.error));
   }
   andThrough(_f) {
-    return err(this.error);
+    return err2(this.error);
   }
   andTee(_f) {
-    return err(this.error);
+    return err2(this.error);
   }
   orTee(f4) {
     try {
       f4(this.error);
     } catch (e3) {}
-    return err(this.error);
+    return err2(this.error);
   }
   andThen(_f) {
-    return err(this.error);
+    return err2(this.error);
   }
   orElse(f4) {
     return f4(this.error);
@@ -6033,13 +12871,13 @@ class Err {
   unwrapOr(v3) {
     return v3;
   }
-  match(_ok, err2) {
-    return err2(this.error);
+  match(_ok, err3) {
+    return err3(this.error);
   }
   safeUnwrap() {
     const error = this.error;
     return function* () {
-      yield err(error);
+      yield err2(error);
       throw new Error("Do not use this generator out of `safeTry`");
     }();
   }
@@ -6057,7 +12895,7 @@ class Err {
 }
 var fromThrowable = $Result.fromThrowable;
 var $ResultAsync = ResultAsync;
-var $err = err;
+var $err = err2;
 var $errAsync = errAsync;
 var $ok = ok;
 
@@ -6065,7 +12903,7 @@ var $ok = ok;
 var ENTRY_FILE = "index.ts";
 var PACKAGED_ENTRY_FILE = "index.js";
 var ENTRY_FILES = [PACKAGED_ENTRY_FILE, ENTRY_FILE];
-var listSelectable = (catalog) => [...catalog.packages].sort((a4, b4) => a4.id.localeCompare(b4.id)).map((p) => ({
+var listSelectable = (catalog) => [...catalog.packages].sort((a4, b5) => a4.id.localeCompare(b5.id)).map((p) => ({
   id: p.id,
   title: p.manifest.title,
   description: p.manifest.description
@@ -6083,10 +12921,10 @@ var resolvePackage = (catalog, id) => {
 };
 
 // src/flow/run-bundled-script.ts
-import { join as join7 } from "node:path";
+import { join as join14 } from "node:path";
 import { pathToFileURL } from "node:url";
 function runBundledScript(pkg, args, context) {
-  const entryPath = join7(pkg.rootPath, pkg.entryRelative);
+  const entryPath = join14(pkg.rootPath, pkg.entryRelative);
   const href = pathToFileURL(entryPath).href;
   const startedAt = Date.now();
   const diagnostics = context.diagnostics?.child({ scriptId: pkg.id });
@@ -6166,22 +13004,22 @@ function runBundledScript(pkg, args, context) {
 var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
-import { existsSync as existsSync2 } from "node:fs";
-import { dirname as dirname8, join as join8 } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync as existsSync3 } from "node:fs";
+import { dirname as dirname11, join as join15 } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 function getBundledScriptsRoot() {
-  const moduleDir = dirname8(fileURLToPath(import.meta.url));
+  const moduleDir = dirname11(fileURLToPath2(import.meta.url));
   const candidates = [
-    join8(moduleDir, "scripts"),
-    join8(moduleDir, "../scripts"),
-    join8(moduleDir, "../src/scripts")
+    join15(moduleDir, "scripts"),
+    join15(moduleDir, "../scripts"),
+    join15(moduleDir, "../src/scripts")
   ];
-  return candidates.find((candidate) => existsSync2(candidate)) ?? candidates[0];
+  return candidates.find((candidate) => existsSync3(candidate)) ?? candidates[0];
 }
 
 // src/infra/discover-scripts.ts
-import { readdir as readdir2, readFile as readFile7, stat } from "node:fs/promises";
-import { join as join9 } from "node:path";
+import { readdir as readdir4, readFile as readFile14, stat as stat7 } from "node:fs/promises";
+import { join as join16 } from "node:path";
 
 // src/domain/script-id.ts
 var KEBAB_CASE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -6505,7 +13343,7 @@ var scriptManifestSchema = object({
 var parseScriptManifest = (raw) => {
   const result = safeParse(scriptManifestSchema, raw);
   if (!result.success) {
-    const message = result.issues.map((i2) => i2.message).join("; ");
+    const message = result.issues.map((i3) => i3.message).join("; ");
     return $err({ message });
   }
   return $ok(result.output);
@@ -6528,25 +13366,25 @@ async function scanScriptsRoot(scriptsRoot) {
   const seenIds = new Set;
   let entries;
   try {
-    entries = await readdir2(scriptsRoot, { withFileTypes: true });
+    entries = await readdir4(scriptsRoot, { withFileTypes: true });
   } catch (e3) {
     const msg = e3 instanceof Error ? e3.message : String(e3);
     throw new Error(`cannot read bundled scripts directory (${scriptsRoot}): ${msg}`);
   }
-  const names = entries.filter((e3) => e3.isDirectory()).map((e3) => e3.name).sort((a4, b4) => a4.localeCompare(b4));
+  const names = entries.filter((e3) => e3.isDirectory()).map((e3) => e3.name).sort((a4, b5) => a4.localeCompare(b5));
   for (const name of names) {
-    const dirPath = join9(scriptsRoot, name);
+    const dirPath = join16(scriptsRoot, name);
     const dirIdResult = validateScriptId(name);
     if (dirIdResult.isErr()) {
       pushWarning(warnings, dirPath, `skip non-kebab-case script folder: ${dirIdResult.error.message}`);
       continue;
     }
-    const manifestPath = join9(dirPath, MANIFEST_FILE);
+    const manifestPath = join16(dirPath, MANIFEST_FILE);
     let entryRelative;
     let entryStat;
     for (const candidate of ENTRY_FILES) {
       try {
-        const candidateStat = await stat(join9(dirPath, candidate));
+        const candidateStat = await stat7(join16(dirPath, candidate));
         if (candidateStat.isFile()) {
           entryRelative = candidate;
           entryStat = candidateStat;
@@ -6556,7 +13394,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let manifestStat;
     try {
-      manifestStat = await stat(manifestPath);
+      manifestStat = await stat7(manifestPath);
     } catch {
       pushWarning(warnings, dirPath, `missing ${MANIFEST_FILE} or ${ENTRY_FILES.join("/")} under script package`);
       continue;
@@ -6567,7 +13405,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let rawJson;
     try {
-      rawJson = await readFile7(manifestPath, "utf8");
+      rawJson = await readFile14(manifestPath, "utf8");
     } catch (e3) {
       const msg = e3 instanceof Error ? e3.message : String(e3);
       pushWarning(warnings, manifestPath, `cannot read manifest: ${msg}`);
@@ -6938,632 +13776,6 @@ var scriptsCommand = createScriptsCommand();
 // src/command/self-update.command.ts
 var import_picocolors8 = __toESM(require_picocolors(), 1);
 
-// src/domain/self-update-manager.ts
-import { spawn } from "node:child_process";
-import { existsSync as existsSync3, readFileSync as readFileSync2 } from "node:fs";
-import { mkdir as mkdir6 } from "node:fs/promises";
-import { homedir as homedir3 } from "node:os";
-import { dirname as dirname9, join as join10, resolve as resolve6 } from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
-var defaultSelfUpdateRepo = "https://github.com/mickmetalholic/CthuTool.git";
-var defaultSelfUpdateRef = "main";
-var committedCliBundlePath = "apps/cli/dist/index.js";
-var maxChangeHighlights = 5;
-var maxSubjectLength = 120;
-var maxDetailLines = 8;
-var maxDetailLineLength = 240;
-
-class SelfUpdateError extends Error {
-  phase;
-  summary;
-  causeText;
-  hint;
-  result;
-  constructor(options) {
-    const summary = redactSelfUpdateText(options.summary);
-    const causeText = options.cause ? redactSelfUpdateText(options.cause) : undefined;
-    const hint = redactSelfUpdateText(options.hint);
-    const cause = causeText ? `
-Cause: ${causeText}` : "";
-    super(`${summary}${cause}
-Next: ${hint}`);
-    this.name = "SelfUpdateError";
-    this.phase = options.phase;
-    this.summary = summary;
-    this.causeText = causeText;
-    this.hint = hint;
-    this.result = options.result ? redactCommandResult(options.result) : undefined;
-  }
-}
-function getDefaultSelfUpdateInstallDir(home = homedir3()) {
-  return join10(home, ".cthutool", "source", "CthuTool");
-}
-function createSelfUpdateDeps(onEvent) {
-  return {
-    exists: existsSync3,
-    mkdir: async (path) => {
-      await mkdir6(path, { recursive: true });
-    },
-    run: runCommand2,
-    env: process.env,
-    home: homedir3,
-    runtimeRoot: findRepoRootFromModule,
-    onEvent
-  };
-}
-function getCliVersion() {
-  return readPackageVersion(findRepoRootFromModule());
-}
-async function resolveSelfUpdateSource(options, deps) {
-  const runtimeRoot = deps.runtimeRoot();
-  const managedRoot = getDefaultSelfUpdateInstallDir(deps.home());
-  const envInstallDir = nonEmpty(deps.env.CHC_INSTALL_DIR);
-  const explicitInstallDir = options.installDir !== undefined || envInstallDir !== undefined;
-  const installDir = options.installDir ?? envInstallDir ?? runtimeRoot;
-  const mode = resolve6(runtimeRoot) === resolve6(managedRoot) ? "remote" : "local";
-  const gitRoot = join10(installDir, ".git");
-  const canInspectCheckout = deps.exists(gitRoot);
-  const repoOverride = options.repo ?? nonEmpty(deps.env.CHC_REPO_URL) ?? nonEmpty(deps.env.CHC_REPO);
-  const refOverride = options.ref ?? nonEmpty(deps.env.CHC_REF);
-  const installedRepo = canInspectCheckout && repoOverride === undefined ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
-    cwd: installDir
-  }) : undefined;
-  const installedRef = canInspectCheckout && refOverride === undefined ? await readInstalledRef(deps, installDir) : undefined;
-  return {
-    repo: repoOverride ?? installedRepo ?? defaultSelfUpdateRepo,
-    ref: refOverride ?? installedRef ?? defaultSelfUpdateRef,
-    installDir,
-    runtimeRoot,
-    managedRoot,
-    mode,
-    explicitInstallDir
-  };
-}
-async function readInstalledRef(deps, installDir) {
-  const branch = await runOptional(deps, "git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: installDir });
-  if (branch)
-    return branch;
-  const tags = await runOptional(deps, "git", ["tag", "--points-at", "HEAD", "--sort=refname"], { cwd: installDir });
-  const exactTag = tags?.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).sort((left, right) => left.localeCompare(right))[0];
-  if (exactTag)
-    return exactTag;
-  return runOptional(deps, "git", ["rev-parse", "--verify", "HEAD^{commit}"], {
-    cwd: installDir
-  });
-}
-function nonEmpty(value) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
-function emit(deps, event) {
-  deps.onEvent?.(event);
-}
-async function runPhase(deps, phase, action) {
-  emit(deps, { type: "phase_started", phase });
-  try {
-    const value = await action();
-    emit(deps, { type: "phase_completed", phase });
-    return value;
-  } catch (error) {
-    const failure = toPhaseError(error, phase);
-    emit(deps, {
-      type: "failure",
-      phase: failure.phase,
-      summary: failure.summary,
-      cause: failure.causeText,
-      hint: failure.hint
-    });
-    throw failure;
-  }
-}
-function phaseHint(phase) {
-  switch (phase) {
-    case "preflight":
-      return "Check the selected directory and local Git state, then retry.";
-    case "check_remote":
-      return "Check the repository URL, ref, network access, and Git credentials.";
-    case "clone":
-      return "Check repository access and permissions for the managed source directory.";
-    case "fetch":
-      return "Check network access and the configured origin, then retry.";
-    case "checkout":
-      return "Inspect the checkout state and selected ref before retrying.";
-    case "verify_bundle":
-      return `Select a ref containing ${committedCliBundlePath}.`;
-    case "install_global":
-      return "Check npm global-install permissions, then retry the update.";
-  }
-}
-function toPhaseError(error, phase) {
-  if (error instanceof SelfUpdateError) {
-    return error;
-  }
-  return new SelfUpdateError({
-    phase,
-    summary: `Update failed during ${formatPhase(phase)}.`,
-    cause: boundedText(redactSelfUpdateText(error instanceof Error ? error.message : String(error))),
-    hint: phaseHint(phase)
-  });
-}
-function commandFailure(phase, result) {
-  return new SelfUpdateError({
-    phase,
-    summary: `Update failed during ${formatPhase(phase)}.`,
-    cause: boundedCommandOutput(result) || `Command exited with code ${result.code}.`,
-    hint: phaseHint(phase),
-    result
-  });
-}
-async function execute(deps, phase, command, args, options = {}) {
-  let result;
-  try {
-    result = await deps.run(command, args, options);
-  } catch (error) {
-    throw new SelfUpdateError({
-      phase,
-      summary: `Unable to start ${command} during ${formatPhase(phase)}.`,
-      cause: boundedText(error instanceof Error ? error.message : String(error)),
-      hint: phaseHint(phase)
-    });
-  }
-  emit(deps, {
-    type: "command",
-    phase,
-    command,
-    args: redactArgs(args),
-    cwd: options.cwd,
-    code: result.code,
-    stdout: boundedText(redactSelfUpdateText(result.stdout)),
-    stderr: boundedText(redactSelfUpdateText(result.stderr))
-  });
-  if (result.code !== 0 && options.allowFailure !== true) {
-    throw commandFailure(phase, result);
-  }
-  return result;
-}
-async function requiredOutput(deps, phase, args, cwd) {
-  const result = await execute(deps, phase, "git", args, { cwd });
-  const value = result.stdout.trim();
-  if (value.length === 0) {
-    throw new SelfUpdateError({
-      phase,
-      summary: `Git returned no identity during ${formatPhase(phase)}.`,
-      hint: phaseHint(phase)
-    });
-  }
-  return value;
-}
-async function readIdentity(deps, phase, cwd, fallbackRef, revision = "HEAD") {
-  const commit = await requiredOutput(deps, phase, ["rev-parse", "--verify", `${revision}^{commit}`], cwd);
-  const refResult = revision === "HEAD" ? await execute(deps, phase, "git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd, allowFailure: true }) : undefined;
-  return {
-    ref: refResult?.code === 0 ? refResult.stdout.trim() || fallbackRef : fallbackRef,
-    commit,
-    shortCommit: commit.slice(0, 7)
-  };
-}
-function finishPlan(deps, plan) {
-  emit(deps, { type: "plan", plan });
-  return plan;
-}
-async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
-  const resolved = await resolveSelfUpdateSource(options, deps);
-  const publicResolved = {
-    repo: redactSelfUpdateText(resolved.repo),
-    ref: resolved.ref,
-    installDir: resolved.installDir
-  };
-  const phases = [];
-  const gitRoot = join10(resolved.installDir, ".git");
-  if (resolved.mode === "local" && !resolved.explicitInstallDir) {
-    phases.push("preflight");
-    return finishPlan(deps, {
-      status: "blocked",
-      ...publicResolved,
-      block: {
-        kind: "local_linked_source",
-        message: `The running chc command is linked to the local checkout at ${resolved.runtimeRoot}.`,
-        hint: "Update that checkout and rebuild apps/cli/dist/index.js, or run CHC_INSTALL_MODE=remote scripts/install-chc.sh to switch back to managed mode."
-      },
-      phases
-    });
-  }
-  const initial = await runPhase(deps, "preflight", async () => {
-    if (!deps.exists(gitRoot)) {
-      return;
-    }
-    const status = await execute(deps, "preflight", "git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: resolved.installDir });
-    if (status.stdout.trim().length > 0) {
-      return "dirty";
-    }
-    return readIdentity(deps, "preflight", resolved.installDir, resolved.ref);
-  });
-  phases.push("preflight");
-  if (initial === undefined) {
-    return finishPlan(deps, {
-      status: "install_required",
-      ...publicResolved,
-      phases
-    });
-  }
-  if (initial === "dirty") {
-    return finishPlan(deps, {
-      status: "blocked",
-      ...publicResolved,
-      block: {
-        kind: "dirty_checkout",
-        message: "The selected checkout has uncommitted or untracked changes.",
-        hint: "Commit, stash, or remove the local changes, then retry."
-      },
-      phases
-    });
-  }
-  const remote = await runPhase(deps, "check_remote", async () => {
-    await execute(deps, "check_remote", "git", ["fetch", "--no-tags", resolved.repo, resolved.ref], { cwd: resolved.installDir });
-    const target = await readIdentity(deps, "check_remote", resolved.installDir, resolved.ref, "FETCH_HEAD");
-    const branch = await execute(deps, "check_remote", "git", ["ls-remote", "--exit-code", "--heads", resolved.repo, resolved.ref], { cwd: resolved.installDir, allowFailure: true });
-    return {
-      target,
-      isBranch: branch.code === 0 && branch.stdout.trim().length > 0
-    };
-  });
-  phases.push("check_remote");
-  const targetBundle = await execute(deps, "check_remote", "git", ["cat-file", "-e", `${remote.target.commit}:${committedCliBundlePath}`], { cwd: resolved.installDir, allowFailure: true });
-  if (targetBundle.code !== 0) {
-    return finishPlan(deps, {
-      status: "blocked",
-      ...publicResolved,
-      before: initial,
-      target: remote.target,
-      block: {
-        kind: "missing_target_bundle",
-        message: `The selected target does not contain ${committedCliBundlePath}.`,
-        hint: `Select a ref containing ${committedCliBundlePath}.`
-      },
-      phases
-    });
-  }
-  if (initial.commit === remote.target.commit) {
-    return finishPlan(deps, {
-      status: "up_to_date",
-      ...publicResolved,
-      before: initial,
-      target: remote.target,
-      targetKind: remote.isBranch ? "branch" : "detached",
-      relinkRequired: resolve6(resolved.installDir) !== resolve6(resolved.runtimeRoot),
-      phases
-    });
-  }
-  if (remote.isBranch) {
-    const ancestor = await execute(deps, "check_remote", "git", ["merge-base", "--is-ancestor", initial.commit, remote.target.commit], { cwd: resolved.installDir, allowFailure: true });
-    if (ancestor.code === 1) {
-      return finishPlan(deps, {
-        status: "blocked",
-        ...publicResolved,
-        before: initial,
-        target: remote.target,
-        targetKind: "branch",
-        block: {
-          kind: "diverged_branch",
-          message: "The selected checkout cannot fast-forward to the remote branch.",
-          hint: "Reconcile the local branch manually, then retry."
-        },
-        phases
-      });
-    }
-    if (ancestor.code !== 0) {
-      throw commandFailure("check_remote", ancestor);
-    }
-  }
-  const changes = await loadChangeSummary(deps, resolved.installDir, initial.commit, remote.target.commit);
-  return finishPlan(deps, {
-    status: "update_available",
-    ...publicResolved,
-    before: initial,
-    target: remote.target,
-    targetKind: remote.isBranch ? "branch" : "detached",
-    changes,
-    phases
-  });
-}
-async function loadChangeSummary(deps, cwd, before, target) {
-  const countResult = await execute(deps, "check_remote", "git", ["rev-list", "--count", `${before}..${target}`], { cwd, allowFailure: true });
-  const parsedCount = Number.parseInt(countResult.stdout.trim(), 10);
-  const count = countResult.code === 0 && Number.isFinite(parsedCount) ? parsedCount : 0;
-  const logResult = await execute(deps, "check_remote", "git", [
-    "log",
-    `--max-count=${maxChangeHighlights}`,
-    "--format=%h%x09%s",
-    `${before}..${target}`
-  ], { cwd, allowFailure: true });
-  const highlights = logResult.code === 0 ? logResult.stdout.split(/\r?\n/).filter(Boolean).slice(0, maxChangeHighlights).map((line) => {
-    const [commit = "", ...subject] = line.split("\t");
-    return {
-      commit: commit.slice(0, 12),
-      subject: boundedLine(subject.join("\t"), maxSubjectLength)
-    };
-  }) : [];
-  return {
-    count: Math.max(count, highlights.length),
-    highlights,
-    omitted: Math.max(0, count - highlights.length)
-  };
-}
-function blockedError(plan) {
-  return new SelfUpdateError({
-    phase: "preflight",
-    summary: `Update blocked: ${plan.block?.message ?? "The selected checkout is not safe to update."}`,
-    hint: plan.block?.hint ?? phaseHint("preflight")
-  });
-}
-function assertSelfUpdatePlanReady(plan) {
-  if (plan.status === "blocked") {
-    throw blockedError(plan);
-  }
-}
-async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
-  const resolved = await resolveSelfUpdateSource(options, deps);
-  const plan = await planSelfUpdate(options, deps);
-  assertSelfUpdatePlanReady(plan);
-  if (plan.status === "up_to_date") {
-    if (plan.relinkRequired) {
-      await runPhase(deps, "install_global", async () => {
-        await execute(deps, "install_global", "npm", [
-          "install",
-          "-g",
-          "--ignore-scripts",
-          plan.installDir
-        ]);
-      });
-      return {
-        status: "installed",
-        repo: plan.repo,
-        ref: plan.ref,
-        installDir: plan.installDir,
-        before: plan.before,
-        target: plan.target,
-        after: plan.before,
-        phases: [...plan.phases, "install_global"],
-        steps: ["install-global"]
-      };
-    }
-    return {
-      status: "up_to_date",
-      repo: plan.repo,
-      ref: plan.ref,
-      installDir: plan.installDir,
-      before: plan.before,
-      target: plan.target,
-      after: plan.before,
-      phases: plan.phases,
-      steps: []
-    };
-  }
-  const phases = [...plan.phases];
-  const steps = [];
-  const isInstall = plan.status === "install_required";
-  if (isInstall) {
-    await runPhase(deps, "clone", async () => {
-      await deps.mkdir(dirname9(plan.installDir));
-      await execute(deps, "clone", "git", [
-        "clone",
-        resolved.repo,
-        plan.installDir
-      ]);
-    });
-    phases.push("clone");
-    steps.push("clone");
-  } else {
-    await runPhase(deps, "preflight", async () => {
-      const status = await execute(deps, "preflight", "git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: plan.installDir });
-      if (status.stdout.trim().length > 0) {
-        throw new SelfUpdateError({
-          phase: "preflight",
-          summary: "Update blocked: the checkout changed after preflight.",
-          hint: "Preserve the new local changes, then retry."
-        });
-      }
-    });
-  }
-  if (!isInstall) {
-    await runPhase(deps, "fetch", async () => {
-      await execute(deps, "fetch", "git", ["remote", "set-url", "origin", resolved.repo], { cwd: plan.installDir });
-      await execute(deps, "fetch", "git", ["fetch", "--tags", "origin"], {
-        cwd: plan.installDir
-      });
-    });
-    phases.push("fetch");
-    steps.push("fetch");
-  }
-  await runPhase(deps, "checkout", async () => {
-    if (!isInstall && plan.target) {
-      if (plan.targetKind === "branch") {
-        await execute(deps, "checkout", "git", ["checkout", plan.ref], {
-          cwd: plan.installDir
-        });
-        steps.push("checkout");
-        await execute(deps, "checkout", "git", ["merge", "--ff-only", plan.target.commit], { cwd: plan.installDir });
-        steps.push("pull");
-      } else {
-        await execute(deps, "checkout", "git", ["checkout", "--detach", plan.target.commit], { cwd: plan.installDir });
-        steps.push("checkout");
-      }
-      return;
-    }
-    await execute(deps, "checkout", "git", ["checkout", plan.ref], {
-      cwd: plan.installDir
-    });
-    steps.push("checkout");
-    const remoteBranch = await execute(deps, "checkout", "git", ["rev-parse", "--verify", `origin/${plan.ref}`], { cwd: plan.installDir, allowFailure: true });
-    if (remoteBranch.code === 0) {
-      await execute(deps, "checkout", "git", ["pull", "--ff-only", "origin", plan.ref], { cwd: plan.installDir });
-      steps.push("pull");
-    }
-  });
-  phases.push("checkout");
-  await runPhase(deps, "verify_bundle", async () => {
-    verifyCommittedBundle(deps, plan.installDir);
-  });
-  phases.push("verify_bundle");
-  steps.push("verify-bundle");
-  await runPhase(deps, "install_global", async () => {
-    await execute(deps, "install_global", "npm", [
-      "install",
-      "-g",
-      "--ignore-scripts",
-      plan.installDir
-    ]);
-  });
-  phases.push("install_global");
-  steps.push("install-global");
-  const after = await readIdentity(deps, "checkout", plan.installDir, plan.ref);
-  return {
-    status: isInstall ? "installed" : "updated",
-    repo: plan.repo,
-    ref: plan.ref,
-    installDir: plan.installDir,
-    before: plan.before,
-    target: plan.target ?? after,
-    after,
-    changes: plan.changes,
-    phases,
-    steps
-  };
-}
-async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDeps()) {
-  const resolved = await resolveSelfUpdateSource(options, deps);
-  const bundlePath = join10(resolved.installDir, committedCliBundlePath);
-  const gitRoot = join10(resolved.installDir, ".git");
-  const repo = deps.exists(gitRoot) ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
-    cwd: resolved.installDir
-  }) ?? resolved.repo : resolved.repo;
-  const ref = deps.exists(gitRoot) ? await readInstalledRef(deps, resolved.installDir) ?? resolved.ref : resolved.ref;
-  const commit = deps.exists(gitRoot) ? await runOptional(deps, "git", ["rev-parse", "--short", "HEAD"], {
-    cwd: resolved.installDir
-  }) : undefined;
-  return {
-    version: getCliVersion(),
-    mode: resolve6(resolved.installDir) === resolve6(resolved.managedRoot) ? "remote" : "local",
-    installDir: resolved.installDir,
-    repo,
-    ref,
-    commit,
-    bundlePath,
-    bundlePresent: deps.exists(bundlePath)
-  };
-}
-async function runOptional(deps, command, args, options) {
-  const result = await deps.run(command, args, {
-    ...options,
-    allowFailure: true
-  });
-  if (result.code !== 0) {
-    return;
-  }
-  const value = result.stdout.trim();
-  return value.length > 0 ? value : undefined;
-}
-function verifyCommittedBundle(deps, installDir) {
-  const bundlePath = join10(installDir, committedCliBundlePath);
-  if (!deps.exists(bundlePath)) {
-    throw new SelfUpdateError({
-      phase: "verify_bundle",
-      summary: "The selected ref does not contain the committed CLI bundle.",
-      cause: `Missing ${bundlePath}.`,
-      hint: phaseHint("verify_bundle")
-    });
-  }
-}
-function formatPhase(phase) {
-  return phase.replaceAll("_", " ");
-}
-function boundedLine(value, maxLength) {
-  const normalized = value.replaceAll(/\s+/g, " ").trim();
-  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`;
-}
-function boundedText(value) {
-  const lines = value.split(/\r?\n/).map((line) => boundedLine(line, maxDetailLineLength)).filter(Boolean).slice(0, maxDetailLines);
-  return lines.length > 0 ? lines.join(`
-`) : undefined;
-}
-function boundedCommandOutput(result) {
-  return boundedText(redactSelfUpdateText(`${result.stderr}
-${result.stdout}`));
-}
-function redactArgs(args) {
-  return args.map(redactSelfUpdateText);
-}
-function redactSelfUpdateText(value) {
-  return value.replace(/:\/\/[^/\s]+@/g, "://***@");
-}
-function redactCommandResult(result) {
-  return {
-    ...result,
-    args: redactArgs(result.args),
-    stdout: redactSelfUpdateText(result.stdout),
-    stderr: redactSelfUpdateText(result.stderr)
-  };
-}
-function runCommand2(command, args, options = {}) {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, [...args], {
-      cwd: options.cwd,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    let stdout2 = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout2 += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.on("error", (error) => {
-      reject(error);
-    });
-    child.on("close", (code) => {
-      resolvePromise({
-        command,
-        args,
-        cwd: options.cwd,
-        code: code ?? 1,
-        stdout: stdout2,
-        stderr
-      });
-    });
-  });
-}
-function findRepoRootFromModule() {
-  let current = dirname9(fileURLToPath2(import.meta.url));
-  while (true) {
-    if (isCthuToolRoot(current)) {
-      return current;
-    }
-    const parent = dirname9(current);
-    if (parent === current) {
-      throw new Error("Unable to locate CthuTool package root.");
-    }
-    current = parent;
-  }
-}
-function isCthuToolRoot(path) {
-  try {
-    const pkg = JSON.parse(readFileSync2(join10(path, "package.json"), "utf8"));
-    return pkg.name === "cthutool";
-  } catch {
-    return false;
-  }
-}
-function readPackageVersion(root) {
-  const pkg = JSON.parse(readFileSync2(join10(root, "package.json"), "utf8"));
-  if (typeof pkg.version !== "string" || pkg.version.trim().length === 0) {
-    throw new Error(`Package version is missing: ${join10(root, "package.json")}`);
-  }
-  return pkg.version;
-}
-
 // src/command/self-update-output.ts
 var import_picocolors7 = __toESM(require_picocolors(), 1);
 var defaultDeps2 = {
@@ -7905,6 +14117,12 @@ var updateCommand = createUpdateCommand();
 var rootCommand;
 var rootCommandRegistrations = [
   {
+    name: "agent",
+    command: agentCommand,
+    visibility: "public",
+    bareBehavior: "help"
+  },
+  {
     name: "codex",
     command: codexCommand,
     visibility: "public",
@@ -8015,7 +14233,7 @@ function normalizeCommandRows(value, hiddenCommands) {
 `);
 }
 async function showNativeUsage(command, parent) {
-  const hiddenCommands = new Set(getCommandRegistrations(command)?.filter((registration) => registration.visibility !== "public").map((registration) => registration.name) ?? []);
+  const hiddenCommands = new Set(getCommandRegistrations(command)?.filter((registration2) => registration2.visibility !== "public").map((registration2) => registration2.name) ?? []);
   const appendix = await getCommandHelpAppendixProvider(command)?.();
   const rendered = formatUsageForStdout(await renderUsage(command, parent), hiddenCommands);
   process.stdout.write(`${rendered}${appendix ? `
@@ -8031,8 +14249,8 @@ async function resolveBareTopLevelHelpCommand(rawArgs) {
   if (!name || name.startsWith("-") || name === "__complete") {
     return;
   }
-  const registration = getCommandRegistration(rootCommand, name);
-  return registration?.bareBehavior === "help" ? registration.command : undefined;
+  const registration2 = getCommandRegistration(rootCommand, name);
+  return registration2?.bareBehavior === "help" ? registration2.command : undefined;
 }
 var rawArgs = normalizeRegisteredArgs(rootCommand, process.argv.slice(2));
 var bareTopLevelHelpCommand = await resolveBareTopLevelHelpCommand(rawArgs);

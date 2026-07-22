@@ -34,17 +34,17 @@ The `apps/web` app SHALL use a minimal Next.js TypeScript scaffold suitable for 
 
 ### Requirement: Styling Baseline
 
-The `apps/web` app SHALL include a Tailwind CSS and shadcn/ui-compatible styling baseline without depending on desktop renderer styles.
+The `apps/web` app SHALL own its Tailwind CSS and shadcn/ui-compatible styling baseline independently of local Agent release content.
 
 #### Scenario: Tailwind baseline exists
 
 - **WHEN** the web app configuration is inspected
 - **THEN** Tailwind-compatible global styling is available to the Next.js app
 
-#### Scenario: Desktop styles are not reused directly
+#### Scenario: Web styling is independently owned
 
-- **WHEN** the web app imports are inspected
-- **THEN** it does not import CSS or renderer internals from `apps/desktop`
+- **WHEN** the Web app imports and release inputs are inspected
+- **THEN** its styles are owned by `apps/web` and are not loaded from a local Agent bundle or a retired local renderer package
 
 ### Requirement: Shared Page Readiness
 

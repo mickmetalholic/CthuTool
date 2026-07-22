@@ -1,6 +1,6 @@
 # CthuTool Web
 
-`apps/web` is the browser-hosted scaffold for the future CthuTool management console.
+`apps/web` is the independently deployed CthuTool management console.
 This README is the package-local development reference. For user-facing module
 and architecture docs, see `apps/docs/src/content/docs/modules/web-console.md`.
 
@@ -12,7 +12,8 @@ Run the development server from the repository root:
 pnpm --filter @cthutool/web dev
 ```
 
-The scaffold intentionally contains only placeholder-safe content. Real management console pages should arrive through later shared UI/runtime work so `apps/desktop` and `apps/web` can reuse product pages.
+Local machine controls use the authenticated loopback Agent bridge. The Web
+application is deployed independently and is never bundled into the Agent.
 
 ## Checks
 
@@ -25,5 +26,5 @@ pnpm --filter @cthutool/web build
 ## Boundaries
 
 - Keep Next.js routing, metadata, and host bootstrap code in `apps/web`.
-- Do not import Electron renderer internals or desktop-only styles from `apps/desktop`.
-- Do not add real product workflows in this scaffold-only change.
+- Keep local capability behind the versioned Agent bridge client boundary.
+- Keep Web deployment and Agent release lifecycles independent.

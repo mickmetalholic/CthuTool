@@ -5,22 +5,28 @@ import type {
 
 export type AgentConnectionState = {
   readonly connectionId: string;
+  readonly environmentId?: string;
   readonly agentId?: string;
+};
+
+export type AgentRegistryStatus = PublicAgentStatus & {
+  readonly connectionId: string;
 };
 
 export type RegisterAgentInput = {
   readonly connectionId: string;
+  readonly authenticatedEnvironmentId?: string;
   readonly hello: AgentHelloPayload;
   readonly now?: Date;
 };
 
 export type RegisterAgentResult = {
-  readonly status: PublicAgentStatus;
+  readonly status: AgentRegistryStatus;
   readonly replacedConnectionId?: string;
 };
 
 export type HeartbeatResult =
-  | { readonly ok: true; readonly status: PublicAgentStatus }
+  | { readonly ok: true; readonly status: AgentRegistryStatus }
   | {
       readonly ok: false;
       readonly reason: 'agent_not_found' | 'connection_not_authoritative';
@@ -33,4 +39,5 @@ export type AgentRegistryEvent =
   | 'agent_heartbeat'
   | 'agent_disconnected'
   | 'agent_stale'
-  | 'invalid_payload';
+  | 'invalid_payload'
+  | 'authentication_failed';

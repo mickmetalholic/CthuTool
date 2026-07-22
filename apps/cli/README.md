@@ -145,6 +145,42 @@ either completion adapter. Bare `chc completion` prints the registered
 `powershell`, `zsh`, `enable`, `disable`, and `status` child commands without
 changing a shell profile.
 
+## Local Agent Lifecycle
+
+`chc agent` installs and controls the tray-owned local Agent. This is separate
+from `chc update`: the latter updates this CLI checkout, while
+`chc agent update` verifies and activates an Agent runtime release.
+
+```bash
+chc agent install
+chc agent env list
+chc agent env set production
+printf '%s\n' "$AGENT_SECRET" | chc agent env set-secret production --secret-stdin
+chc agent autostart enable
+chc agent start
+chc agent settings
+chc agent status --json
+chc agent logs --follow
+chc agent stop
+```
+
+`settings` starts the tray when necessary and asks it to create a fresh,
+one-time local bridge launch before opening the deployed Web `/agent` page.
+The CLI never prints or stores the launch ticket. `env set-secret` deliberately
+has no plaintext secret argument; it accepts exactly one of `--secret-stdin`
+or `--secret-file`. On Unix, a secret file must have no group/other access.
+
+Installation and updates are fail-closed. Production Agent bundles, the
+environment catalog, and stable/beta channel pointers are signature- and
+digest-verified. A release build must embed the Ed25519 public key through
+`AGENT_RELEASE_PUBLIC_KEY_PEM` while building the committed CLI bundle. Without
+that pinned key, `agent install` and `agent update` fail before downloading.
+
+Default `chc agent uninstall` stops the tray, removes managed autostart and
+binaries, and preserves environment selection, secrets, browser profiles, and
+logs. `--purge` removes those categories too and requires an interactive
+confirmation or `--yes` for non-interactive use.
+
 ## Bundled Scripts
 
 Use the discoverable catalog and canonical `run` operation:

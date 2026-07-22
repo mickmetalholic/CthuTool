@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty';
+import { agentCommand } from './agent.command';
 import { codexCommand } from './codex.command';
 import {
   type AnyCommandDef,
@@ -21,6 +22,12 @@ import {
 let rootCommand: AnyCommandDef;
 
 const rootCommandRegistrations: readonly CliCommandRegistration[] = [
+  {
+    name: 'agent',
+    command: agentCommand,
+    visibility: 'public',
+    bareBehavior: 'help',
+  },
   {
     name: 'codex',
     command: codexCommand,

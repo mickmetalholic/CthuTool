@@ -1,0 +1,366 @@
+name: Agent Release
+
+on:
+  pull_request:
+    paths:
+      - ".github/actions/build-agent-bundle/**"
+      - ".github/workflows/agent-release.yml"
+      - "apps/agent/**"
+      - "apps/agent-tray/**"
+      - "apps/cli/**"
+      - "packages/agent-bridge-protocol/**"
+      - "packages/agent-protocol/**"
+      - "packages/agent-release/**"
+      - "packages/agent-runtime/**"
+      - "packages/browser-runtime-protocol/**"
+      - "release/agent/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "rust-toolchain.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.json"
+      - "turbo.json"
+  push:
+    tags:
+      - "agent-v*"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Publish a release or roll a channel back
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - rollback
+      release_version:
+        description: Semver for a manual release
+        required: false
+        type: string
+      rollback_version:
+        description: Existing signed version for rollback
+        required: false
+        type: string
+      channel:
+        description: Mutable channel pointer to update
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: targets
+        name: Load supported release matrix
+        shell: bash
+        run: |
+          node -e "const fs=require('node:fs'); const value=JSON.parse(fs.readFileSync('release/agent/supported-targets.json')); if (value.schemaVersion !== 1 || value.targets.length !== 3) throw new Error('Supported target matrix is invalid'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'matrix=' + JSON.stringify({include:value.targets}) + '\n');"
+
+  release-context:
+    if: github.event_name == 'push' || inputs.operation == 'release'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      channel: ${{ steps.release.outputs.channel }}
+      base-url: ${{ steps.release.outputs.base-url }}
+    steps:
+      - id: release
+        name: Resolve immutable release identity
+        shell: bash
+        env:
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          INPUT_VERSION: ${{ inputs.release_version }}
+          REF_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          node -e "const fs=require('node:fs'); const input=process.env.INPUT_VERSION; const ref=process.env.REF_NAME; const version=input || ref.replace(/^agent-v/, ''); if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error('Agent release version must be semver'); const channel=process.env.INPUT_CHANNEL || 'stable'; fs.appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + version + '\nchannel=' + channel + '\nbase-url=https://github.com/' + process.env.REPOSITORY + '/releases/download/agent-v' + version + '/\n');"
+
+  build-pr:
+    if: github.event_name == 'pull_request'
+    needs: matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build-agent-bundle
+        with:
+          target: ${{ matrix.target }}
+          rust-target: ${{ matrix.rustTarget }}
+          release-version: 0.0.0-pr.${{ github.event.pull_request.number }}.${{ github.run_attempt }}
+          provenance: pull-request-validation
+          pull-request-marker: ${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          immutable-base-url: https://pr-validation.invalid/${{ github.run_id }}/0.0.0-pr.${{ github.event.pull_request.number }}.${{ github.run_attempt }}/
+      - name: Upload marked validation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-pr-${{ matrix.target }}
+          path: |
+            .release/out/*.zip
+            .release/out/*.sha256
+            .release/out/receipt-*.json
+          if-no-files-found: error
+          retention-days: 7
+
+  aggregate-pr:
+    if: github.event_name == 'pull_request'
+    needs:
+      - build-pr
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.1"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @cthutool/agent-release build
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-pr-*
+          path: .release/downloads
+          merge-multiple: true
+      - name: Validate aggregate PR manifest
+        shell: bash
+        run: |
+          RECEIPTS="$(find .release/downloads -name 'receipt-*.json' -print | sort | paste -sd, -)"
+          node packages/agent-release/dist/cli.js manifest \
+            --version "0.0.0-pr.${{ github.event.pull_request.number }}.${{ github.run_attempt }}" \
+            --minimum-cli-version 0.0.0 \
+            --catalog packages/agent-release/fixtures/catalog.valid.json \
+            --receipts "$RECEIPTS" \
+            --provenance pull-request-validation \
+            --output .release/downloads/manifest-unsigned-pr.json
+          node packages/agent-release/dist/cli.js validate-manifest \
+            --input .release/downloads/manifest-unsigned-pr.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-pr-aggregate
+          path: .release/downloads/manifest-unsigned-pr.json
+          retention-days: 7
+
+  build-production:
+    if: github.event_name == 'push' || inputs.operation == 'release'
+    needs:
+      - matrix
+      - release-context
+    environment: agent-production
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build-agent-bundle
+        with:
+          target: ${{ matrix.target }}
+          rust-target: ${{ matrix.rustTarget }}
+          release-version: ${{ needs.release-context.outputs.version }}
+          provenance: production
+          immutable-base-url: ${{ needs.release-context.outputs.base-url }}
+          catalog-json: ${{ secrets.AGENT_ENVIRONMENT_CATALOG_JSON }}
+          macos-certificate-p12-base64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          macos-certificate-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          macos-signing-identity: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          macos-notary-key-id: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          macos-notary-issuer-id: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          macos-notary-key-p8: ${{ secrets.MACOS_NOTARY_KEY_P8 }}
+          windows-certificate-pfx-base64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+          windows-certificate-password: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          release-private-key-pem: ${{ secrets.AGENT_RELEASE_PRIVATE_KEY_PEM }}
+      - name: Upload verified production candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-production-${{ matrix.target }}
+          path: |
+            .release/out/*.zip
+            .release/out/*.zip.sig
+            .release/out/*.sha256
+            .release/out/receipt-*.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-production:
+    if: github.event_name == 'push' || inputs.operation == 'release'
+    needs:
+      - build-production
+      - release-context
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: agent-production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.1"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @cthutool/agent-release build
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-production-*
+          path: .release/downloads
+          merge-multiple: true
+      - name: Restore and validate protected catalog
+        shell: bash
+        env:
+          AGENT_ENVIRONMENT_CATALOG_JSON: ${{ secrets.AGENT_ENVIRONMENT_CATALOG_JSON }}
+        run: |
+          mkdir -p .release/publication
+          node -e "const fs=require('node:fs'); const value=process.env.AGENT_ENVIRONMENT_CATALOG_JSON; if (!value) throw new Error('Protected production catalog is missing'); fs.writeFileSync('.release/publication/environments.json', value.endsWith('\n') ? value : value + '\n', {mode: 0o600});"
+          node packages/agent-release/dist/cli.js validate-catalog --input .release/publication/environments.json
+      - name: Aggregate, sign, and verify complete production set
+        shell: bash
+        env:
+          AGENT_RELEASE_PRIVATE_KEY_PEM: ${{ secrets.AGENT_RELEASE_PRIVATE_KEY_PEM }}
+          AGENT_RELEASE_PUBLIC_KEY_PEM: ${{ secrets.AGENT_RELEASE_PUBLIC_KEY_PEM }}
+        run: |
+          : "${AGENT_RELEASE_PRIVATE_KEY_PEM:?missing protected release private key}"
+          : "${AGENT_RELEASE_PUBLIC_KEY_PEM:?missing pinned release public key}"
+          RECEIPTS="$(find .release/downloads -name 'receipt-*.json' -print | sort | paste -sd, -)"
+          node packages/agent-release/dist/cli.js manifest \
+            --version "${{ needs.release-context.outputs.version }}" \
+            --minimum-cli-version 0.0.0 \
+            --catalog .release/publication/environments.json \
+            --receipts "$RECEIPTS" \
+            --provenance production \
+            --output .release/publication/manifest.json
+          node packages/agent-release/dist/cli.js sign-manifest \
+            --input .release/publication/manifest.json \
+            --output .release/publication/manifest.json.sig
+          node packages/agent-release/dist/cli.js verify-production-set \
+            --manifest .release/publication/manifest.json \
+            --manifest-signature .release/publication/manifest.json.sig \
+            --catalog .release/publication/environments.json \
+            --archives-dir .release/downloads
+          node packages/agent-release/dist/cli.js channel-pointer \
+            --channel "${{ needs.release-context.outputs.channel }}" \
+            --manifest .release/publication/manifest.json \
+            --manifest-url "${{ needs.release-context.outputs.base-url }}manifest.json" \
+            --output ".release/publication/channel-${{ needs.release-context.outputs.channel }}.json"
+          node packages/agent-release/dist/cli.js sign-blob \
+            --input ".release/publication/channel-${{ needs.release-context.outputs.channel }}.json" \
+            --output ".release/publication/channel-${{ needs.release-context.outputs.channel }}.json.sig"
+      - name: Publish immutable version and controlled channel pointer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ needs.release-context.outputs.channel }}
+          VERSION: ${{ needs.release-context.outputs.version }}
+        run: |
+          RELEASE_TAG="agent-v$VERSION"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Immutable Agent release $RELEASE_TAG already exists" >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" \
+            .release/downloads/*.zip \
+            .release/downloads/*.zip.sig \
+            .release/downloads/*.sha256 \
+            .release/publication/environments.json \
+            .release/publication/manifest.json \
+            .release/publication/manifest.json.sig \
+            --title "CthuTool Agent $VERSION" \
+            --notes "Signed native Agent release $VERSION"
+          CHANNEL_TAG="agent-$CHANNEL"
+          if ! gh release view "$CHANNEL_TAG" >/dev/null 2>&1; then
+            gh release create "$CHANNEL_TAG" --prerelease --title "CthuTool Agent $CHANNEL channel" --notes "Mutable signed channel pointer."
+          fi
+          gh release upload "$CHANNEL_TAG" \
+            ".release/publication/channel-$CHANNEL.json" \
+            ".release/publication/channel-$CHANNEL.json.sig" \
+            --clobber
+
+  rollback-channel:
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'rollback'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: agent-production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.1"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @cthutool/agent-release build
+      - name: Download and verify prior immutable release
+        shell: bash
+        env:
+          AGENT_RELEASE_PUBLIC_KEY_PEM: ${{ secrets.AGENT_RELEASE_PUBLIC_KEY_PEM }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.rollback_version }}
+        run: |
+          : "${AGENT_RELEASE_PUBLIC_KEY_PEM:?missing pinned release public key}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "rollback_version must be an existing semantic version" >&2
+            exit 1
+          fi
+          mkdir -p .release/rollback
+          gh release download "agent-v$VERSION" \
+            --dir .release/rollback \
+            --pattern "manifest.json" \
+            --pattern "manifest.json.sig" \
+            --pattern "environments.json" \
+            --pattern "*.zip" \
+            --pattern "*.zip.sig"
+          node packages/agent-release/dist/cli.js verify-production-set \
+            --manifest .release/rollback/manifest.json \
+            --manifest-signature .release/rollback/manifest.json.sig \
+            --catalog .release/rollback/environments.json \
+            --archives-dir .release/rollback
+      - name: Move channel pointer only after signed rollback verification
+        shell: bash
+        env:
+          AGENT_RELEASE_PRIVATE_KEY_PEM: ${{ secrets.AGENT_RELEASE_PRIVATE_KEY_PEM }}
+          CHANNEL: ${{ inputs.channel }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ inputs.rollback_version }}
+        run: |
+          : "${AGENT_RELEASE_PRIVATE_KEY_PEM:?missing protected release private key}"
+          node packages/agent-release/dist/cli.js channel-pointer \
+            --channel "$CHANNEL" \
+            --manifest .release/rollback/manifest.json \
+            --manifest-url "https://github.com/$REPOSITORY/releases/download/agent-v$VERSION/manifest.json" \
+            --output ".release/rollback/channel-$CHANNEL.json"
+          node packages/agent-release/dist/cli.js sign-blob \
+            --input ".release/rollback/channel-$CHANNEL.json" \
+            --output ".release/rollback/channel-$CHANNEL.json.sig"
+          gh release upload "agent-$CHANNEL" \
+            ".release/rollback/channel-$CHANNEL.json" \
+            ".release/rollback/channel-$CHANNEL.json.sig" \
+            --clobber

@@ -73,6 +73,6 @@ Use your cluster's existing ingress, reverse proxy, load balancer, or port-forwa
 
 Backend browser site policy is still owned by backend configuration. If `BROWSER_SITES_CONFIG_FILE` is introduced into the cluster deployment, mount it through Kubernetes-managed configuration rather than baking private runtime files into the image.
 
-The file stores site policy only. Do not store cookies, localStorage, Playwright storage-state bundles, browser user data directories, or desktop profile paths in it.
+The file stores site policy only. Do not store cookies, localStorage, Playwright storage-state bundles, browser user data directories, or local profile paths in it.
 
 See [Browser Auth](/modules/browser-auth/) for the ownership model.

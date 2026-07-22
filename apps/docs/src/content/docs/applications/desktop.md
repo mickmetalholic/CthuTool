@@ -1,18 +1,15 @@
 ---
-title: Desktop
-description: Documentation route for CthuDesktop and agent console work.
+title: Local Agent
+description: Documentation route for the tray-owned local Agent.
 ---
 
-The desktop application lives in `apps/desktop`. User-facing install docs now live in [Desktop App](/client/desktop/), module docs live in [Desktop](/modules/desktop/), and architecture notes live in [Desktop Runtime](/architecture/desktop-runtime/).
+The supported local companion is the UI-free Agent installed through `chc`.
+User instructions live in [Local Agent](/client/desktop/), capability details
+in [Local Agent](/modules/desktop/), and process boundaries in
+[Local Agent Runtime](/architecture/desktop-runtime/).
 
-Primary sources:
+New client functionality belongs in the Agent, tray, CLI, or independently
+deployed Web application. The installed component has no settings window or
+embedded application UI.
 
-- `docs/desktop-agent-console.md`
-- `apps/desktop/package.json`
-
-Related OpenSpec areas:
-
-- `openspec/specs/apps-desktop-agent-console/`
-- `openspec/specs/apps-desktop-browser-host/`
-- `openspec/specs/apps-desktop-packaging-ci/`
-- `openspec/specs/apps-desktop-product-shell/`
+Migration source: `docs/agent-migration.md`.

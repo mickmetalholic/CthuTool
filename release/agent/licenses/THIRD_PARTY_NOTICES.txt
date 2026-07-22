@@ -1,0 +1,6 @@
+CthuTool Agent release bundles contain third-party Rust crates and Node.js packages.
+
+The assembly workflow includes the Node.js LICENSE from the pinned upstream runtime.
+Rust and npm dependency license metadata is validated in CI from Cargo.lock and
+pnpm-lock.yaml. A production archive must retain this notice and all license files
+provided by its bundled dependencies.

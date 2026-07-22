@@ -72,7 +72,7 @@ describe("precommit CLI dist refresh", () => {
     const calls: CommandCall[] = [];
 
     const result = module.runPrecommitCliDistRefresh({
-      stagedPaths: ["README.md", "packages/ui/src/cn.ts"],
+      stagedPaths: ["README.md", "packages/config/src/index.ts"],
       commandRunner: recordingCommandRunner(calls),
       logger: silentLogger,
     });

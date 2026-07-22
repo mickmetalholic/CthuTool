@@ -33,6 +33,7 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 - [apps-cli-codex-config](apps-cli-codex-config/spec.md): reproducible Codex configuration maintenance and repository-managed Codex state.
 - [apps-cli-codex-plugin-management](apps-cli-codex-plugin-management/spec.md): repository-owned Codex plugin discovery, install, cache sync, and language-coach hook behavior.
 - [apps-cli-opencode-shared-assets](apps-cli-opencode-shared-assets/spec.md): repository-owned plugin skill and MCP synchronization into OpenCode configuration.
+- [apps-cli-codex-skill-management](apps-cli-codex-skill-management/spec.md): interactive manifest-managed third-party Codex skill discovery, review, installation, update, and removal.
 - [apps-cli-distribution-ci](apps-cli-distribution-ci/spec.md): CLI distribution CI behavior.
 - [apps-cli-observability](apps-cli-observability/spec.md): CLI command diagnostics, JSON-safe observability, stderr behavior, and redaction.
 - [apps-cli-self-installation](apps-cli-self-installation/spec.md): GitHub-based personal installation, lifecycle status, and update behavior.
@@ -40,12 +41,6 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 
 ## Desktop
 
-- [apps-desktop-agent-console](apps-desktop-agent-console/spec.md): desktop agent connection configuration, identity, and status presentation.
-- [apps-desktop-browser-host](apps-desktop-browser-host/spec.md): desktop-owned browser runtime, profile, login, verification, and controlled command handling.
-- [apps-desktop-douban-movie-info](apps-desktop-douban-movie-info/spec.md): desktop UI for Douban movie lookup by subject id or URL.
-- [apps-desktop-observability](apps-desktop-observability/spec.md): desktop observability and safe diagnostic semantics.
-- [apps-desktop-packaging-ci](apps-desktop-packaging-ci/spec.md): desktop icon assets, packaging configuration, and artifact workflow behavior.
-- [apps-desktop-product-shell](apps-desktop-product-shell/spec.md): CthuDesktop product shell, navigation, visual system, window behavior, and settings surfaces.
 
 ## Web And Docs
 
@@ -58,12 +53,10 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 ## Packages
 
 - [packages-agent-protocol](packages-agent-protocol/spec.md): shared agent protocol envelopes, command messages, compatibility behavior, and protocol observability metadata.
-- [packages-app-shell-runtime](packages-app-shell-runtime/spec.md): host-neutral app shell runtime contracts, shared page composition, and frontend observability semantics.
 - [packages-browser-runtime-protocol](packages-browser-runtime-protocol/spec.md): typed browser runtime method names, payload schemas, JSON-RPC helpers, and operation challenges.
 - [packages-browser-client-sdk](packages-browser-client-sdk/spec.md): TypeScript SDK for the backend public browser API.
 - [packages-config-browser-sites](packages-config-browser-sites/spec.md): versioned browser sites JSON schema, loading, merge behavior, and sensitive-data exclusion.
 - [packages-config-observability](packages-config-observability/spec.md): shared observability configuration schema, defaults, validation, environment naming, and redaction.
-- [packages-ui-shared-components](packages-ui-shared-components/spec.md): shared React UI primitives, semantic tokens, and accessible interaction patterns.
 
 ## Codex Plugins
 

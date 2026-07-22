@@ -27,7 +27,8 @@ function rootWorkspacePackageJsonPaths(): string[] {
   return ["apps", "packages"].flatMap((area) =>
     readdirSync(join(root, area), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .map((entry) => join(root, area, entry.name, "package.json")),
+      .map((entry) => join(root, area, entry.name, "package.json"))
+      .filter((manifestPath) => existsSync(manifestPath)),
   );
 }
 

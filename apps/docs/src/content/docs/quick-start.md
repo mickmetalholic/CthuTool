@@ -73,15 +73,24 @@ chc update --check
 chc update
 ```
 
-## 5. Connect Desktop Clients
+## 5. Install the Local Agent
 
-CthuDesktop runs on client computers, not in the cluster. Point the desktop app at the backend URL exposed from your homelab cluster, such as `http://homelab.local:3000`.
-
-For development builds from a checkout:
+The tray-owned Agent runs on client computers, not in the cluster. Install a
+signed release, select one catalog environment, and configure its static Agent
+secret:
 
 ```bash
-pnpm --filter @cthutool/desktop dev
+chc agent install
+chc agent env list
+chc agent env set production
+printf '%s\n' "$AGENT_SECRET" | chc agent env set-secret production --secret-stdin
+chc agent autostart enable
+chc agent start
+chc agent settings
 ```
+
+`settings` opens the deployed Web application; the Agent does not serve or
+embed a local UI.
 
 ## 6. Choose a Module
 

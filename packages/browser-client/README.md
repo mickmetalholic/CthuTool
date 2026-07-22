@@ -4,7 +4,7 @@ TypeScript SDK for third-party applications that use CthuTool's backend public
 browser session API.
 
 The SDK provides a small Playwright-like page interface, but it does not connect
-to Playwright, CthuDesktop agents, CDP, or a browser process directly. All
+to Playwright, local Agents, CDP, or a browser process directly. All
 browser work is sent to the configured CthuTool backend as controlled session
 and action requests.
 
@@ -147,7 +147,7 @@ browser session.
   execution.
 - Does not expose route interception, browser context storage, downloads,
   uploads, or Playwright Test assertions.
-- Does not connect to CthuDesktop agents, CDP, or browser WebSocket endpoints.
+- Does not connect to local Agents, CDP, or browser WebSocket endpoints.
 - Does not expose cookies, localStorage, Playwright storage-state contents,
   desktop profile paths, or raw browser handles.
 - Assumes a trusted backend deployment until backend API authentication is
