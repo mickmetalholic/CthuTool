@@ -73,7 +73,7 @@ chc completion disable zsh
 source <(chc completion zsh)
 ```
 
-The installer enables zsh completion automatically when zsh is the user's login shell.
+The Bash installer enables zsh completion automatically when zsh is the user's login shell. The PowerShell installer enables PowerShell completion automatically.
 
 ## Bundled Scripts
 

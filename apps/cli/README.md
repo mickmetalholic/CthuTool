@@ -12,19 +12,24 @@ Codex config documentation lives in the docs site:
 ## Installation Contract
 
 Target machines only need `git`, Node.js 24.x, and `npm` for the GitHub
-installer and update flow. They do not need `pnpm` or `bun` because the runtime
-bundle is committed at `apps/cli/dist/index.js`.
+installer and update flow. Windows installation additionally uses Windows
+PowerShell 5.1 or PowerShell 7. Targets do not need `pnpm` or `bun` because the
+runtime bundle is committed at `apps/cli/dist/index.js`.
 
-For personal installation from the public GitHub repository, run the installer
-directly:
+For personal installation from the public GitHub repository, run the native
+installer for the target shell.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash
 ```
 
-The public raw installer runs in remote mode. It keeps a source checkout at
-`~/.cthutool/source/CthuTool`, verifies the committed CLI bundle, and installs
-the root package globally so `chc` is on `PATH`.
+```powershell
+irm https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.ps1 | iex
+```
+
+Public raw installer execution runs in remote mode. It keeps a source checkout
+at `~/.cthutool/source/CthuTool`, verifies the committed CLI bundle, and
+installs the root package globally so `chc` is on `PATH`.
 
 Run the repository installer from a checkout to install global `chc` from that
 checkout:
@@ -33,9 +38,12 @@ checkout:
 scripts/install-chc.sh
 ```
 
+```powershell
+.\scripts\install-chc.ps1
+```
+
 Local file execution runs in local mode by default. It uses the repository that
-contains `scripts/install-chc.sh` instead of cloning or updating the managed
-checkout.
+contains the installer instead of cloning or updating the managed checkout.
 
 Override defaults with environment variables:
 
@@ -46,10 +54,17 @@ CHC_INSTALL_MODE=remote CHC_REF=v0.1.0 scripts/install-chc.sh
 CHC_INSTALL_MODE=remote CHC_INSTALL_DIR="$HOME/dev/CthuTool" scripts/install-chc.sh
 ```
 
+```powershell
+$env:CHC_INSTALL_MODE = "remote"
+$env:CHC_REF = "v0.1.0"
+.\scripts\install-chc.ps1
+Remove-Item Env:CHC_INSTALL_MODE, Env:CHC_REF
+```
+
 `CHC_INSTALL_MODE` accepts `auto`, `local`, or `remote`. In `auto` mode, which
-is the default, raw stdin execution selects `remote` and local file execution
-selects `local`. `CHC_REPO_URL`, `CHC_REPO`, `CHC_REF`, and `CHC_INSTALL_DIR`
-apply to `remote` mode.
+is the default, raw/expression execution selects `remote` and local file
+execution selects `local`. `CHC_REPO_URL`, `CHC_REPO`, `CHC_REF`, and
+`CHC_INSTALL_DIR` apply to `remote` mode.
 
 Update an installed CLI in place:
 
@@ -79,8 +94,8 @@ already current.
 For `mode: local`, default update and check commands stop with development
 guidance and do not touch either the linked checkout or the default managed
 checkout. Update the linked repository with its normal Git workflow and refresh
-the committed bundle with `pnpm --filter @cthutool/cli dev`. Run
-`CHC_INSTALL_MODE=remote scripts/install-chc.sh` to switch back to managed mode.
+the committed bundle with `pnpm --filter @cthutool/cli dev`. Run either
+installer with `CHC_INSTALL_MODE=remote` to switch back to managed mode.
 `--install-dir`, `--repo`, and `--ref` (or their environment equivalents) remain
 advanced explicit source overrides; a successful update relinks global `chc` to
 the selected install directory.
@@ -104,8 +119,9 @@ CLI does not install a periodic or shell-startup background checker.
 ## Shell Completion
 
 The installer enables persistent zsh completion automatically when the user's
-login shell is zsh. Skip automatic setup with
-`CHC_INSTALL_COMPLETION=none scripts/install-chc.sh`.
+login shell is zsh. The PowerShell installer enables persistent PowerShell
+completion automatically. Skip automatic setup by setting
+`CHC_INSTALL_COMPLETION=none` before running either installer.
 
 Manage completion explicitly when needed:
 
@@ -194,6 +210,11 @@ scripts/install-chc.sh
 pnpm --filter @cthutool/cli dev
 ```
 
+```powershell
+.\scripts\install-chc.ps1
+pnpm --filter @cthutool/cli dev
+```
+
 Then run commands through the global executable:
 
 ```bash
@@ -209,6 +230,12 @@ To restore the global command to the managed checkout after local development:
 
 ```bash
 CHC_INSTALL_MODE=remote scripts/install-chc.sh
+```
+
+```powershell
+$env:CHC_INSTALL_MODE = "remote"
+.\scripts\install-chc.ps1
+Remove-Item Env:CHC_INSTALL_MODE
 ```
 
 For release changes to CLI source, refresh and commit the runtime bundle in the

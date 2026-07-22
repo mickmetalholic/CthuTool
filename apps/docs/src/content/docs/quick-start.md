@@ -59,6 +59,13 @@ curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/script
 chc --help
 ```
 
+On Windows from PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.ps1 | iex
+chc --help
+```
+
 Update later with:
 
 ```bash
