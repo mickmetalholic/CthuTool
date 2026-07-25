@@ -1,5 +1,5 @@
 import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import type {
   ConversionOptions,
   SourceComicFile,
@@ -9,13 +9,23 @@ import { detectSourceType } from '../../domain/strategy';
 
 const scanRecursively = async (
   root: string,
+  excludedRoot?: string,
 ): Promise<ReadonlyArray<string>> => {
   const entries = await readdir(root, { withFileTypes: true });
   const nested = await Promise.all(
     entries.map(async (entry) => {
       const next = join(root, entry.name);
       if (entry.isDirectory()) {
-        return scanRecursively(next);
+        if (excludedRoot) {
+          const relation = relative(excludedRoot, resolve(next));
+          if (
+            relation === '' ||
+            (!relation.startsWith('..') && !isAbsolute(relation))
+          ) {
+            return [];
+          }
+        }
+        return scanRecursively(next, excludedRoot);
       }
       return [next];
     }),
@@ -27,7 +37,12 @@ export const scanTargetFiles = async (
   options: ConversionOptions,
 ): Promise<ReadonlyArray<SourceComicFile>> => {
   const outputRoot = options.output ?? join(options.input, '.output');
-  const allFiles = await scanRecursively(options.input);
+  const allFiles = await scanRecursively(
+    options.input,
+    resolve(outputRoot) === resolve(options.input)
+      ? undefined
+      : resolve(outputRoot),
+  );
   return allFiles
     .map((sourcePath) => ({
       sourcePath,

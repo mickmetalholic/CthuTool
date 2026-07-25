@@ -24,10 +24,16 @@ export const buildConversionSummary = (
   const failures: FailureRecord[] = results
     .filter((x) => !x.ok && x.failure !== undefined)
     .map((x) => x.failure as FailureRecord);
-  const successCount = results.length - failures.length;
+  const skippedCount = results.filter((x) => x.status === 'skipped').length;
+  const convertedCount = results.filter(
+    (x) => x.ok && x.status !== 'skipped',
+  ).length;
+  const successCount = convertedCount + skippedCount;
   return {
     totalFiles,
     successCount,
+    convertedCount,
+    skippedCount,
     failureCount: failures.length,
     failures,
     outputRoot,
@@ -64,6 +70,8 @@ export const runConversionJob = async (
       return {
         totalFiles: 0,
         successCount: 0,
+        convertedCount: 0,
+        skippedCount: 0,
         failureCount: 0,
         failures: [],
         outputRoot,
@@ -71,9 +79,11 @@ export const runConversionJob = async (
       };
     }
 
-    const dep = await checkPopplerImpl();
-    if (dep.isErr()) {
-      throw new Error(dep.error.message);
+    if (files.some((file) => file.sourceType === 'pdf')) {
+      const dep = await checkPopplerImpl();
+      if (dep.isErr()) {
+        throw new Error(dep.error.message);
+      }
     }
 
     logger.info(`Discovered ${files.length} target files.`);
@@ -88,6 +98,8 @@ export const runConversionJob = async (
     logger.summary({
       totalFiles: summary.totalFiles,
       successCount: summary.successCount,
+      convertedCount: summary.convertedCount,
+      skippedCount: summary.skippedCount,
       failureCount: summary.failureCount,
       failures: summary.failures.map((f) => ({
         sourcePath: f.sourcePath,

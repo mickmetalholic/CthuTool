@@ -1,5 +1,6 @@
 import type {
   ConversionOptions,
+  ConversionWorkspace,
   FailureRecord,
   PageAsset,
   SourceComicFile,
@@ -14,6 +15,7 @@ export type ConvertProgress = {
 
 export type ConvertContext = {
   readonly options: ConversionOptions;
+  readonly workspace: ConversionWorkspace;
   readonly onProgress?: (file: SourceComicFile, value: ConvertProgress) => void;
 };
 
