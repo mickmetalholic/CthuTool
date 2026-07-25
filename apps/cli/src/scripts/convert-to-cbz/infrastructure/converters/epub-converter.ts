@@ -1,227 +1,305 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
+import { posix } from 'node:path';
+import { XMLParser } from 'fast-xml-parser';
 import { strFromU8, unzipSync } from 'fflate';
+import type { ImageFormat } from '../../domain/conversion-types';
 import type { Converter, ConvertResult } from '../../domain/converter';
 import { conversionFailure } from '../../domain/errors';
 import { toArchiveName } from '../../domain/path-mapping';
-import { createEpubRendererPool } from '../renderers/epub-renderer-pool';
 
-const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
-
-const normalizePath = (value: string): string => value.replaceAll('\\', '/');
-
-const dirnameOf = (value: string): string => {
-  const normalized = normalizePath(value);
-  const index = normalized.lastIndexOf('/');
-  return index < 0 ? '' : normalized.slice(0, index);
+type XmlElement = {
+  readonly name: string;
+  readonly attributes: Readonly<Record<string, string>>;
 };
 
-const resolveRelativePath = (baseDir: string, rel: string): string => {
-  const merged = `${baseDir}/${rel}`.replaceAll('//', '/');
-  const segments = merged.split('/');
-  const resolved = segments.reduce<string[]>((acc, segment) => {
-    if (segment === '' || segment === '.') return acc;
-    if (segment === '..') return acc.slice(0, -1);
-    return acc.concat(segment);
-  }, []);
-  return resolved.join('/');
-};
+const xmlParser = new XMLParser({
+  allowBooleanAttributes: true,
+  attributeNamePrefix: '',
+  ignoreAttributes: false,
+  parseAttributeValue: false,
+  parseTagValue: false,
+  preserveOrder: true,
+  trimValues: false,
+});
 
-const parseContainerOpfPath = (
-  files: Readonly<Record<string, Uint8Array>>,
-): string | undefined => {
-  const containerXml = files['META-INF/container.xml'];
-  if (!containerXml) return undefined;
-  const xml = strFromU8(containerXml);
-  const match = xml.match(/full-path\s*=\s*["']([^"']+)["']/i);
-  return match?.[1] ? normalizePath(match[1]) : undefined;
-};
+const localName = (value: string): string =>
+  value.toLowerCase().split(':').at(-1) ?? value.toLowerCase();
 
-const parseManifest = (opfXml: string): Readonly<Record<string, string>> => {
-  const itemRegex = /<item\b[^>]*>/gi;
-  const idRegex = /\bid\s*=\s*["']([^"']+)["']/i;
-  const hrefRegex = /\bhref\s*=\s*["']([^"']+)["']/i;
-  const entries = [...opfXml.matchAll(itemRegex)]
-    .map((match) => match[0])
-    .map((itemTag) => {
-      const id = itemTag.match(idRegex)?.[1];
-      const href = itemTag.match(hrefRegex)?.[1];
-      if (!id || !href) return undefined;
-      return [id, normalizePath(href)] as const;
-    })
-    .filter((x): x is readonly [string, string] => x !== undefined);
-  return Object.fromEntries(entries);
-};
-
-const parseSpineItemRefs = (opfXml: string): ReadonlyArray<string> =>
-  [...opfXml.matchAll(/<itemref\b[^>]*>/gi)]
-    .map((match) => match[0])
-    .map(
-      (itemRefTag) => itemRefTag.match(/\bidref\s*=\s*["']([^"']+)["']/i)?.[1],
-    )
-    .filter((x): x is string => Boolean(x));
-
-const parseImageRefs = (html: string): ReadonlyArray<string> => {
-  const refs = [
-    ...html.matchAll(/<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi),
-  ]
-    .map((match) => normalizePath(match[1]))
-    .filter((src) => src.length > 0);
-  const unique = refs.reduce<string[]>((acc, value) => {
-    if (acc.includes(value)) return acc;
-    return acc.concat(value);
-  }, []);
-  return unique;
-};
-
-const inferImageFormat = (
-  path: string,
-  fallback: 'png' | 'jpg' | 'webp',
-): 'png' | 'jpg' | 'webp' => {
-  const ext = path.split('.').at(-1)?.toLowerCase();
-  if (ext === 'png') return 'png';
-  if (ext === 'webp') return 'webp';
-  if (ext === 'jpg' || ext === 'jpeg') return 'jpg';
-  return fallback;
-};
-
-const collectImageEntries = (
-  files: Readonly<Record<string, Uint8Array>>,
-  rootOpfPath: string,
-): ReadonlyArray<readonly [string, Uint8Array]> => {
-  const opfContent = files[rootOpfPath];
-  if (!opfContent) return [];
-  const opfXml = strFromU8(opfContent);
-  const manifest = parseManifest(opfXml);
-  const spineIds = parseSpineItemRefs(opfXml);
-  const opfDir = dirnameOf(rootOpfPath);
-  const chapterPaths = spineIds
-    .map((id) => manifest[id])
-    .filter((x): x is string => Boolean(x))
-    .map((href) => resolveRelativePath(opfDir, href));
-  const orderedImagePaths = chapterPaths.flatMap((chapterPath) => {
-    const chapterContent = files[chapterPath];
-    if (!chapterContent) return [];
-    const chapterHtml = strFromU8(chapterContent);
-    return parseImageRefs(chapterHtml).map((imgRef) =>
-      resolveRelativePath(dirnameOf(chapterPath), imgRef),
-    );
-  });
-  const deduped = orderedImagePaths.reduce<string[]>((acc, value) => {
-    if (acc.includes(value)) return acc;
-    return acc.concat(value);
-  }, []);
-  return deduped
-    .map((path) => [path, files[path]] as const)
-    .filter((entry): entry is readonly [string, Uint8Array] => {
-      const [path, content] = entry;
-      if (!content) return false;
-      const ext = path.split('.').at(-1)?.toLowerCase();
-      return ext !== undefined && IMAGE_EXTENSIONS.has(ext);
-    });
-};
-
-const tryExtractAll = async (
-  epubPath: string,
-  root: string,
-  onProgress?: (current: number, total: number) => void,
-): Promise<
-  ReadonlyArray<{
-    readonly tempPath: string;
-    readonly sourcePath: string;
-  }>
-> => {
-  const bytes = await Bun.file(epubPath).arrayBuffer();
-  const files = unzipSync(new Uint8Array(bytes));
-  const rootOpfPath = parseContainerOpfPath(files);
-  if (!rootOpfPath) return [];
-  const imageEntries = collectImageEntries(files, rootOpfPath);
-  const total = imageEntries.length;
-  const pages: Array<{ tempPath: string; sourcePath: string }> = [];
-  for (const [idx, [imagePath, content]] of imageEntries.entries()) {
-    const outputPath = join(root, `raw-${String(idx + 1).padStart(5, '0')}`);
-    await writeFile(outputPath, content);
-    pages.push({ tempPath: outputPath, sourcePath: imagePath });
-    onProgress?.(idx + 1, total);
+const collectElements = (
+  value: unknown,
+  acceptedNames: ReadonlySet<string>,
+  output: XmlElement[] = [],
+): ReadonlyArray<XmlElement> => {
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      collectElements(child, acceptedNames, output);
+    }
+    return output;
   }
-  return pages;
+  if (!value || typeof value !== 'object') return output;
+
+  const node = value as Record<string, unknown>;
+  const attributes = Object.fromEntries(
+    Object.entries(
+      node[':@'] && typeof node[':@'] === 'object'
+        ? (node[':@'] as Record<string, unknown>)
+        : {},
+    )
+      .filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string',
+      )
+      .map(([name, attrValue]) => [name.toLowerCase(), attrValue]),
+  );
+
+  for (const [name, child] of Object.entries(node)) {
+    if (name === ':@') continue;
+    const normalizedName = localName(name);
+    if (acceptedNames.has(normalizedName)) {
+      output.push({ name: normalizedName, attributes });
+    }
+    collectElements(child, acceptedNames, output);
+  }
+  return output;
+};
+
+const parseElements = (
+  xml: string,
+  acceptedNames: ReadonlyArray<string>,
+): ReadonlyArray<XmlElement> =>
+  collectElements(
+    xmlParser.parse(xml),
+    new Set(acceptedNames.map((name) => name.toLowerCase())),
+  );
+
+const getAttribute = (
+  element: XmlElement,
+  acceptedNames: ReadonlyArray<string>,
+): string | undefined => {
+  for (const acceptedName of acceptedNames) {
+    const exact = element.attributes[acceptedName.toLowerCase()];
+    if (exact !== undefined) return exact;
+  }
+  const acceptedLocalNames = new Set(acceptedNames.map(localName));
+  return Object.entries(element.attributes).find(([name]) =>
+    acceptedLocalNames.has(localName(name)),
+  )?.[1];
+};
+
+const normalizeArchivePath = (value: string): string =>
+  value.replaceAll('\\', '/').replace(/^\/+/, '');
+
+const decodeArchiveReference = (value: string): string | undefined => {
+  const withoutFragment = value.split(/[?#]/, 1)[0]?.trim() ?? '';
+  if (withoutFragment.length === 0) return undefined;
+  try {
+    return decodeURIComponent(withoutFragment);
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveArchiveReference = (
+  baseDir: string,
+  reference: string,
+): string | undefined => {
+  const decoded = decodeArchiveReference(reference);
+  if (
+    !decoded ||
+    decoded.startsWith('/') ||
+    decoded.startsWith('\\') ||
+    /^[a-z][a-z0-9+.-]*:/i.test(decoded)
+  ) {
+    return undefined;
+  }
+  const resolved = posix.normalize(
+    posix.join(normalizeArchivePath(baseDir), normalizeArchivePath(decoded)),
+  );
+  if (
+    resolved === '..' ||
+    resolved.startsWith('../') ||
+    posix.isAbsolute(resolved)
+  ) {
+    return undefined;
+  }
+  return normalizeArchivePath(resolved);
+};
+
+const indexArchiveEntries = (
+  files: Readonly<Record<string, Uint8Array>>,
+): ReadonlyMap<string, Uint8Array> => {
+  const entries = new Map<string, Uint8Array>();
+  for (const [name, content] of Object.entries(files)) {
+    const normalized = normalizeArchivePath(name);
+    entries.set(normalized, content);
+    const decoded = decodeArchiveReference(normalized);
+    if (decoded) entries.set(normalizeArchivePath(decoded), content);
+  }
+  return entries;
+};
+
+const detectImageFormat = (content: Uint8Array): ImageFormat | undefined => {
+  if (
+    content.length >= 3 &&
+    content[0] === 0xff &&
+    content[1] === 0xd8 &&
+    content[2] === 0xff
+  ) {
+    return 'jpg';
+  }
+  if (
+    content.length >= 8 &&
+    content[0] === 0x89 &&
+    content[1] === 0x50 &&
+    content[2] === 0x4e &&
+    content[3] === 0x47 &&
+    content[4] === 0x0d &&
+    content[5] === 0x0a &&
+    content[6] === 0x1a &&
+    content[7] === 0x0a
+  ) {
+    return 'png';
+  }
+  if (
+    content.length >= 12 &&
+    strFromU8(content.subarray(0, 4)) === 'RIFF' &&
+    strFromU8(content.subarray(8, 12)) === 'WEBP'
+  ) {
+    return 'webp';
+  }
+  return undefined;
+};
+
+const findPackagePath = (
+  entries: ReadonlyMap<string, Uint8Array>,
+): string | undefined => {
+  const container = entries.get('META-INF/container.xml');
+  if (!container) return undefined;
+  const rootfile = parseElements(strFromU8(container), ['rootfile'])[0];
+  const fullPath = rootfile ? getAttribute(rootfile, ['full-path']) : undefined;
+  return fullPath ? resolveArchiveReference('', fullPath) : undefined;
+};
+
+const collectOrderedImageEntries = (
+  entries: ReadonlyMap<string, Uint8Array>,
+  packagePath: string,
+): ReadonlyArray<{
+  readonly content: Uint8Array;
+  readonly format: ImageFormat;
+  readonly sourcePath: string;
+}> => {
+  const packageContent = entries.get(packagePath);
+  if (!packageContent) return [];
+
+  const opfXml = strFromU8(packageContent);
+  const packageDir = posix.dirname(packagePath);
+  const manifest = new Map(
+    parseElements(opfXml, ['item'])
+      .map((element) => {
+        const id = getAttribute(element, ['id']);
+        const href = getAttribute(element, ['href']);
+        return id && href ? ([id, href] as const) : undefined;
+      })
+      .filter(
+        (entry): entry is readonly [string, string] => entry !== undefined,
+      ),
+  );
+  const spineIds = parseElements(opfXml, ['itemref'])
+    .map((element) => getAttribute(element, ['idref']))
+    .filter((value): value is string => value !== undefined);
+
+  return spineIds.flatMap((id) => {
+    const documentHref = manifest.get(id);
+    const documentPath = documentHref
+      ? resolveArchiveReference(packageDir, documentHref)
+      : undefined;
+    const documentContent = documentPath
+      ? entries.get(documentPath)
+      : undefined;
+    if (!documentPath || !documentContent) return [];
+
+    return parseElements(strFromU8(documentContent), ['img', 'image'])
+      .map((element) =>
+        element.name === 'img'
+          ? getAttribute(element, ['src'])
+          : getAttribute(element, ['href', 'xlink:href']),
+      )
+      .map((reference) =>
+        reference
+          ? resolveArchiveReference(posix.dirname(documentPath), reference)
+          : undefined,
+      )
+      .filter((path): path is string => path !== undefined)
+      .map((sourcePath) => {
+        const content = entries.get(sourcePath);
+        const format = content ? detectImageFormat(content) : undefined;
+        return content && format ? { content, format, sourcePath } : undefined;
+      })
+      .filter(
+        (
+          entry,
+        ): entry is {
+          readonly content: Uint8Array;
+          readonly format: ImageFormat;
+          readonly sourcePath: string;
+        } => entry !== undefined,
+      );
+  });
 };
 
 export const epubConverter: Converter = {
   sourceType: 'epub',
   async convert(file, ctx): Promise<ConvertResult> {
-    const root = await mkdtemp(join(tmpdir(), 'cthu-epub-pages-'));
-    const fallbackExt = ctx.options.imageFormat;
-    const extracted = await tryExtractAll(
-      file.sourcePath,
-      root,
-      (current, total) =>
-        ctx.onProgress?.(file, {
-          current,
-          total,
-          message: 'extract',
-        }),
-    );
-    if (extracted.length > 0) {
-      return {
-        ok: true,
-        pages: extracted.map(({ tempPath, sourcePath }, idx) => {
-          const imageExt = inferImageFormat(sourcePath, fallbackExt);
-          return {
-            index: idx + 1,
-            tempPath,
-            archiveName: toArchiveName(idx + 1, imageExt),
-            format: imageExt,
-            quality: ctx.options.imageQuality,
-          };
-        }),
-      };
-    }
-
-    // Use fallback renderer only when extraction path cannot provide ordered page assets.
-    const renderer = createEpubRendererPool(ctx.options.epubRenderConcurrency);
     try {
-      const chapters = [file.sourcePath];
-      const total = chapters.length;
-      const pages: Array<{
-        index: number;
-        tempPath: string;
-        archiveName: string;
-        format: 'png' | 'jpg' | 'webp';
-        quality: number;
-      }> = [];
+      const bytes = await readFile(file.sourcePath);
+      const entries = indexArchiveEntries(unzipSync(bytes));
+      const packagePath = findPackagePath(entries);
+      const imageEntries = packagePath
+        ? collectOrderedImageEntries(entries, packagePath)
+        : [];
 
-      for (const [idx, chapterPath] of chapters.entries()) {
-        const pagePath = join(root, toArchiveName(idx + 1, fallbackExt));
-        const content = await renderer.renderChapter(chapterPath, idx + 1);
-        await writeFile(pagePath, content, 'utf8');
+      if (imageEntries.length === 0) {
+        return {
+          ok: false,
+          failure: conversionFailure(
+            file.sourcePath,
+            'convert',
+            'EPUB contains no valid ordered JPEG, PNG, or WebP page images',
+          ),
+        };
+      }
+
+      const pages = [];
+      for (const [offset, entry] of imageEntries.entries()) {
+        const index = offset + 1;
+        const tempPath = posix.join(
+          ctx.workspace.rootPath.replaceAll('\\', '/'),
+          `epub-${String(index).padStart(5, '0')}.${entry.format}`,
+        );
+        await writeFile(tempPath, entry.content);
         pages.push({
-          index: idx + 1,
-          tempPath: pagePath,
-          archiveName: toArchiveName(idx + 1, fallbackExt),
-          format: fallbackExt,
+          archiveName: toArchiveName(index, entry.format),
+          format: entry.format,
+          index,
           quality: ctx.options.imageQuality,
+          tempPath,
         });
         ctx.onProgress?.(file, {
-          current: idx + 1,
-          total,
-          message: 'render-fallback',
+          current: index,
+          message: 'extract',
+          total: imageEntries.length,
         });
       }
 
       return { ok: true, pages };
-    } catch (e) {
+    } catch (error) {
       return {
         ok: false,
         failure: conversionFailure(
           file.sourcePath,
           'convert',
-          e instanceof Error ? e.message : String(e),
+          error instanceof Error ? error.message : String(error),
         ),
       };
-    } finally {
-      await renderer.dispose();
     }
   },
 };

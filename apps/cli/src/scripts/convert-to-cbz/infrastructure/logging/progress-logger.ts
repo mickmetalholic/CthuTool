@@ -31,6 +31,8 @@ export type ProgressLogger = {
 export type ConversionSummaryLike = {
   readonly totalFiles: number;
   readonly successCount: number;
+  readonly convertedCount?: number;
+  readonly skippedCount?: number;
   readonly failureCount: number;
   readonly failures: ReadonlyArray<{
     readonly sourcePath: string;
@@ -131,9 +133,13 @@ export const formatEnglishSummary = (
   input: ConversionSummaryLike,
 ): string[] => {
   const durationSec = Math.max(0, Math.round(input.durationMs / 1000));
+  const convertedCount = input.convertedCount ?? input.successCount;
+  const skippedCount = input.skippedCount ?? 0;
   const stats = [
     `${c.cyan('🌐 Total Files')}   ${c.bold(String(input.totalFiles))}`,
     `${c.green('✅ Success')}      ${c.bold(String(input.successCount))}`,
+    `${c.green('📦 Converted')}    ${c.bold(String(convertedCount))}`,
+    `${c.yellow('⏭ Skipped')}      ${c.bold(String(skippedCount))}`,
     `${input.failureCount > 0 ? c.red('❌ Failed') : c.green('❌ Failed')}       ${c.bold(String(input.failureCount))}`,
     `${c.blue('📂 Output')}       ${c.bold(input.outputRoot)}`,
     `${c.yellow('⏱ Time')}         ${c.bold(`${durationSec}s`)}`,
