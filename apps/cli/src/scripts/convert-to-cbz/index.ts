@@ -13,6 +13,7 @@ import type { ProgressLogger } from './infrastructure/logging/progress-logger';
 type CliArgs = {
   readonly input?: string;
   readonly output?: string;
+  readonly overwrite?: boolean;
   readonly format?: 'png' | 'jpg' | 'webp';
   readonly quality?: number;
   readonly dpi?: number;
@@ -81,6 +82,8 @@ const createDiagnosticsProgressLogger = (
     summary: (summary) =>
       emit('info', 'summary', 'conversion summary', {
         failureCount: summary.failureCount,
+        convertedCount: summary.convertedCount,
+        skippedCount: summary.skippedCount,
         outputRoot: summary.outputRoot,
         successCount: summary.successCount,
         totalFiles: summary.totalFiles,
@@ -94,6 +97,8 @@ const createDiagnosticsProgressLogger = (
 const renderCompletionCard = (input: {
   totalFiles: number;
   successCount: number;
+  convertedCount: number;
+  skippedCount: number;
   failureCount: number;
   outputRoot: string;
   durationMs: number;
@@ -104,6 +109,8 @@ const renderCompletionCard = (input: {
     `${c.green('│')} ${c.dim('────────────────────────────────────────')}`,
     `${c.green('│')} ${c.cyan('📚 Total Files')}  ${c.bold(String(input.totalFiles))}`,
     `${c.green('│')} ${c.green('✅ Success')}      ${c.bold(String(input.successCount))}`,
+    `${c.green('│')} ${c.green('📦 Converted')}    ${c.bold(String(input.convertedCount))}`,
+    `${c.green('│')} ${c.yellow('⏭ Skipped')}      ${c.bold(String(input.skippedCount))}`,
     `${c.green('│')} ${input.failureCount > 0 ? c.red('❌ Failure') : c.green('❌ Failure')}      ${c.bold(String(input.failureCount))}`,
     `${c.green('│')} ${c.blue('📂 Output')}       ${c.bold(input.outputRoot)}`,
     `${c.green('│')} ${c.yellow('⏱ Duration')}    ${c.bold(`${durationSec}s`)}`,

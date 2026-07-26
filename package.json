@@ -7,7 +7,7 @@
   },
   "files": [
     "apps/cli/bin/chc.mjs",
-    "apps/cli/dist/index.js",
+    "apps/cli/dist",
     "apps/cli/package.json",
     "apps/cli/README.md"
   ],
@@ -17,7 +17,7 @@
     "test": "vitest run && turbo run test",
     "test:cov": "vitest run --coverage && turbo run test:cov",
     "typecheck": "turbo run typecheck",
-    "check:cli-dist": "scripts/check-cli-dist.sh",
+    "check:cli-dist": "node scripts/check-cli-dist.mjs",
     "lint": "turbo run lint",
     "lint:fix": "biome check --write .",
     "precommit:cli-dist": "node scripts/precommit-refresh-cli-dist.mjs",

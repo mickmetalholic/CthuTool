@@ -2,12 +2,14 @@ import { err, ok, type Result } from 'neverthrow';
 import type { ScriptManifest } from './script-manifest-schema';
 
 export const ENTRY_FILE = 'index.ts' as const;
+export const PACKAGED_ENTRY_FILE = 'index.js' as const;
+export const ENTRY_FILES = [PACKAGED_ENTRY_FILE, ENTRY_FILE] as const;
 
 export type ScriptPackage = {
   readonly id: string;
   readonly rootPath: string;
   readonly manifest: ScriptManifest;
-  readonly entryRelative: typeof ENTRY_FILE;
+  readonly entryRelative: (typeof ENTRY_FILES)[number];
 };
 
 export type ScriptCatalog = {

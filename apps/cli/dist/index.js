@@ -5482,6 +5482,8 @@ var $ok = ok;
 
 // src/domain/script-catalog.ts
 var ENTRY_FILE = "index.ts";
+var PACKAGED_ENTRY_FILE = "index.js";
+var ENTRY_FILES = [PACKAGED_ENTRY_FILE, ENTRY_FILE];
 var listSelectable = (catalog) => [...catalog.packages].sort((a4, b4) => a4.id.localeCompare(b4.id)).map((p) => ({
   id: p.id,
   title: p.manifest.title,
@@ -5589,6 +5591,7 @@ import { fileURLToPath } from "node:url";
 function getBundledScriptsRoot() {
   const moduleDir = dirname6(fileURLToPath(import.meta.url));
   const candidates = [
+    join5(moduleDir, "scripts"),
     join5(moduleDir, "../scripts"),
     join5(moduleDir, "../src/scripts")
   ];
@@ -5958,20 +5961,27 @@ async function scanScriptsRoot(scriptsRoot) {
       continue;
     }
     const manifestPath = join6(dirPath, MANIFEST_FILE);
-    const entryPath = join6(dirPath, ENTRY_FILE);
-    let manifestStat;
+    let entryRelative;
     let entryStat;
+    for (const candidate of ENTRY_FILES) {
+      try {
+        const candidateStat = await stat2(join6(dirPath, candidate));
+        if (candidateStat.isFile()) {
+          entryRelative = candidate;
+          entryStat = candidateStat;
+          break;
+        }
+      } catch {}
+    }
+    let manifestStat;
     try {
-      [manifestStat, entryStat] = await Promise.all([
-        stat2(manifestPath),
-        stat2(entryPath)
-      ]);
+      manifestStat = await stat2(manifestPath);
     } catch {
-      pushWarning(warnings, dirPath, `missing ${MANIFEST_FILE} or ${ENTRY_FILE} under script package`);
+      pushWarning(warnings, dirPath, `missing ${MANIFEST_FILE} or ${ENTRY_FILES.join("/")} under script package`);
       continue;
     }
-    if (!manifestStat.isFile() || !entryStat.isFile()) {
-      pushWarning(warnings, dirPath, `${MANIFEST_FILE} and ${ENTRY_FILE} must be files`);
+    if (!manifestStat.isFile() || !entryRelative || !entryStat?.isFile()) {
+      pushWarning(warnings, dirPath, `${MANIFEST_FILE} and one of ${ENTRY_FILES.join("/")} must be files`);
       continue;
     }
     let rawJson;
@@ -6013,7 +6023,7 @@ async function scanScriptsRoot(scriptsRoot) {
       id: manifest.id,
       rootPath: dirPath,
       manifest,
-      entryRelative: ENTRY_FILE
+      entryRelative
     });
   }
   return { packages, warnings };

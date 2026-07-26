@@ -51,19 +51,21 @@ describe('global bin', () => {
       chc: 'apps/cli/bin/chc.mjs',
     });
     expect(cliPackage.bin).toBeUndefined();
-    expect(rootPackage.files).toContain('apps/cli/dist/index.js');
+    expect(rootPackage.files).toContain('apps/cli/dist');
     expect(cliPackage.files).toBeUndefined();
     expect(rootPackage.scripts.prepare).toBe('husky');
     expect(rootPackage.scripts.prepack).toBe(
       'pnpm --filter @cthutool/cli build',
     );
     expect(rootPackage.scripts['check:cli-dist']).toBe(
-      'scripts/check-cli-dist.sh',
+      'node scripts/check-cli-dist.mjs',
     );
     expect(rootPackage.scripts.start).toBeUndefined();
     expect(cliPackage.scripts.prepare).toBeUndefined();
     expect(cliPackage.scripts.prepack).toBeUndefined();
-    expect(cliPackage.scripts.build).toBe('../../scripts/build-cli-dist.sh');
+    expect(cliPackage.scripts.build).toBe(
+      'node ../../scripts/build-cli-dist.mjs',
+    );
     expect(cliPackage.scripts.dev).toBe(
       'bun build src/index.ts --outdir dist --target node --watch',
     );
@@ -71,9 +73,11 @@ describe('global bin', () => {
     expect(
       await readFile(join(cliRoot, 'bin', 'chc.mjs'), 'utf8'),
     ).not.toContain('bun');
-    expect((await stat(join(cliRoot, 'bin', 'chc.mjs'))).mode & 0o111).not.toBe(
-      0,
-    );
+    if (process.platform !== 'win32') {
+      expect(
+        (await stat(join(cliRoot, 'bin', 'chc.mjs'))).mode & 0o111,
+      ).not.toBe(0);
+    }
   });
 
   test('bin shim forwards arguments to the CLI', async () => {

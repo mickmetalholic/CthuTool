@@ -3,7 +3,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ResultAsync } from 'neverthrow';
 import {
-  ENTRY_FILE,
+  ENTRY_FILES,
   type ScriptCatalog,
   type ScriptPackage,
 } from '../domain/script-catalog';
@@ -24,7 +24,8 @@ const pushWarning = (
 };
 
 /**
- * Scans `scriptsRoot` for subfolders with valid `script.json` and `index.ts`.
+ * Scans `scriptsRoot` for subfolders with valid `script.json` and a packaged
+ * `index.js` or source `index.ts` entry.
  * Invalid packages are skipped; warnings collect actionable reasons.
  *
  * @param scriptsRoot Absolute path to bundled scripts root (e.g. `.../src/scripts`)
@@ -70,29 +71,38 @@ async function scanScriptsRoot(scriptsRoot: string): Promise<ScriptCatalog> {
     }
 
     const manifestPath = join(dirPath, MANIFEST_FILE);
-    const entryPath = join(dirPath, ENTRY_FILE);
+    let entryRelative: (typeof ENTRY_FILES)[number] | undefined;
+    let entryStat: Stats | undefined;
+    for (const candidate of ENTRY_FILES) {
+      try {
+        const candidateStat = await stat(join(dirPath, candidate));
+        if (candidateStat.isFile()) {
+          entryRelative = candidate;
+          entryStat = candidateStat;
+          break;
+        }
+      } catch {
+        // Try the next supported entry filename.
+      }
+    }
 
     let manifestStat: Stats;
-    let entryStat: Stats;
     try {
-      [manifestStat, entryStat] = await Promise.all([
-        stat(manifestPath),
-        stat(entryPath),
-      ]);
+      manifestStat = await stat(manifestPath);
     } catch {
       pushWarning(
         warnings,
         dirPath,
-        `missing ${MANIFEST_FILE} or ${ENTRY_FILE} under script package`,
+        `missing ${MANIFEST_FILE} or ${ENTRY_FILES.join('/')} under script package`,
       );
       continue;
     }
 
-    if (!manifestStat.isFile() || !entryStat.isFile()) {
+    if (!manifestStat.isFile() || !entryRelative || !entryStat?.isFile()) {
       pushWarning(
         warnings,
         dirPath,
-        `${MANIFEST_FILE} and ${ENTRY_FILE} must be files`,
+        `${MANIFEST_FILE} and one of ${ENTRY_FILES.join('/')} must be files`,
       );
       continue;
     }
@@ -158,7 +168,7 @@ async function scanScriptsRoot(scriptsRoot: string): Promise<ScriptCatalog> {
       id: manifest.id,
       rootPath: dirPath,
       manifest,
-      entryRelative: ENTRY_FILE,
+      entryRelative,
     });
   }
 

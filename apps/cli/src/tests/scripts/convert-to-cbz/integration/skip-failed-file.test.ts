@@ -8,10 +8,12 @@ import { conversionFailure } from '../../../../scripts/convert-to-cbz/domain/err
 import { toArchiveName } from '../../../../scripts/convert-to-cbz/domain/path-mapping';
 import { scanTargetFiles } from '../../../../scripts/convert-to-cbz/infrastructure/scanners/file-scanner';
 
+const JPG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+
 describe('skip-failed-file', () => {
   test('continues converting other files when one fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cthu-skip-fail-'));
-    await writeFile(join(root, 'ok.pdf'), '');
+    await writeFile(join(root, 'ok.pdf'), JPG_BYTES);
     await writeFile(join(root, 'bad.epub'), '');
     const options = {
       input: root,

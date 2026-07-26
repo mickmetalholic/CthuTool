@@ -150,6 +150,40 @@ chc scripts convert-to-cbz --input ./samples
 chc scripts --script convert-to-cbz --input ./samples
 ```
 
+### Convert PDF and EPUB to CBZ
+
+`convert-to-cbz` recursively finds `.pdf` and `.epub` files, preserves their
+relative directories, and writes `.cbz` files under `<input>/.output` unless
+`--output` selects another root:
+
+```bash
+chc scripts run convert-to-cbz --input ./comics
+chc scripts run convert-to-cbz --input ./comics --output ./converted --json
+chc scripts run convert-to-cbz --input ./comics --overwrite
+```
+
+Existing targets are skipped by default. `--overwrite` opts into validated
+replacement: the command writes a sibling partial archive, checks its page
+entries and image signatures, and replaces the target only after validation.
+Summaries distinguish `convertedCount`, `skippedCount`, and `failureCount`
+while retaining `totalFiles` and `successCount`.
+
+Fixed-layout EPUB pages are copied in OPF spine order from XHTML `img` and SVG
+`image` references (`href` and `xlink:href`). JPEG, PNG, and WebP bytes are
+preserved; text-only or malformed EPUBs fail instead of producing placeholder
+pages.
+
+PDF conversion requires Poppler commands `pdfinfo`, `pdfimages`, and
+`pdftoppm`. Full-page JPEG scans are extracted without re-rendering, lossless
+single-image pages are emitted as PNG, and composed or uncertain pages are
+rendered at the requested `--dpi` and `--format`. Poppler can be installed with
+`winget install oschwartz10612.Poppler` on Windows, `brew install poppler` on
+macOS, or the distribution's `poppler-utils` package on Linux.
+
+MOBI files, PDFs nested in ZIP/RAR archives, loose image directories,
+deduplication, metadata lookup, and library-specific naming are preprocessing
+or organization concerns outside this command.
+
 ## Local Development
 
 For local development, install the checkout once and keep the built CLI

@@ -7,11 +7,13 @@ import type { Converter } from '../../../../scripts/convert-to-cbz/domain/conver
 import { toArchiveName } from '../../../../scripts/convert-to-cbz/domain/path-mapping';
 import { scanTargetFiles } from '../../../../scripts/convert-to-cbz/infrastructure/scanners/file-scanner';
 
+const JPG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+
 describe('batch-convert-success', () => {
   test('converts mixed files', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cthu-batch-'));
-    await writeFile(join(root, 'book1.pdf'), '');
-    await writeFile(join(root, 'book2.epub'), '');
+    await writeFile(join(root, 'book1.pdf'), JPG_BYTES);
+    await writeFile(join(root, 'book2.epub'), JPG_BYTES);
     const options = {
       input: root,
       imageFormat: 'jpg' as const,
