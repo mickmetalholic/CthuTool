@@ -44,20 +44,30 @@ pnpm run build
 ## Personal CLI Install
 
 Target machines only need `git`, Node.js 24.x, and `npm` to install or update
-the global `chc` CLI. The installer uses the committed
-`apps/cli/dist/index.js` bundle and does not run `pnpm` or `bun` on the target
+the global `chc` CLI. Windows installation additionally uses Windows
+PowerShell 5.1 or PowerShell 7. The installers use the committed
+`apps/cli/dist/index.js` bundle and do not run `pnpm` or `bun` on the target
 machine.
+
+On macOS or Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.sh | bash
 chc --help
 ```
 
-When the user's login shell is zsh, the installer also enables persistent `chc`
-completion in the user's zsh profile. Set `CHC_INSTALL_COMPLETION=none` to skip
-this step.
+On Windows from PowerShell:
 
-The public raw installer runs in remote mode. It clones or updates
+```powershell
+irm https://raw.githubusercontent.com/mickmetalholic/CthuTool/main/scripts/install-chc.ps1 | iex
+chc --help
+```
+
+The Bash installer enables persistent zsh completion when the login shell is
+zsh. The PowerShell installer enables persistent PowerShell completion. Set
+`CHC_INSTALL_COMPLETION=none` to skip profile changes.
+
+Public raw installer execution runs in remote mode. It clones or updates
 `https://github.com/mickmetalholic/CthuTool.git` into
 `~/.cthutool/source/CthuTool`, verifies the committed CLI bundle, and runs
 `npm install -g --ignore-scripts` for the root package that exposes `chc`.
@@ -70,14 +80,26 @@ pnpm --filter @cthutool/cli dev
 chc --help
 ```
 
+```powershell
+.\scripts\install-chc.ps1
+pnpm --filter @cthutool/cli dev
+chc --help
+```
+
 Local script execution runs in local mode by default. It installs global `chc`
-from the repository containing `scripts/install-chc.sh`, so the command follows
-that checkout while the `dev` script rebuilds `apps/cli/dist/index.js`.
+from the repository containing the installer, so the command follows that
+checkout while the `dev` script rebuilds `apps/cli/dist/index.js`.
 
 To restore global `chc` to the managed checkout after local development:
 
 ```bash
 CHC_INSTALL_MODE=remote scripts/install-chc.sh
+```
+
+```powershell
+$env:CHC_INSTALL_MODE = "remote"
+.\scripts\install-chc.ps1
+Remove-Item Env:CHC_INSTALL_MODE
 ```
 
 Use environment variables to install a different source or version:
@@ -89,10 +111,19 @@ CHC_INSTALL_MODE=remote CHC_REPO_URL=https://github.com/mickmetalholic/CthuTool.
 CHC_INSTALL_COMPLETION=none scripts/install-chc.sh
 ```
 
+```powershell
+$env:CHC_INSTALL_MODE = "remote"
+$env:CHC_REF = "v0.1.0"
+.\scripts\install-chc.ps1
+Remove-Item Env:CHC_INSTALL_MODE, Env:CHC_REF
+```
+
 `CHC_INSTALL_MODE` accepts `auto`, `local`, or `remote`. In `auto` mode, which
-is the default, raw stdin execution selects `remote` and local file execution
-selects `local`. Repository, ref, and install-dir overrides apply to `remote`
-mode. `CHC_INSTALL_COMPLETION` accepts `auto`, `zsh`, or `none`.
+is the default, raw stdin/expression execution selects `remote` and local file
+execution selects `local`. Repository, ref, and install-dir overrides apply to
+`remote` mode. The Bash installer accepts `auto`, `zsh`, or `none` for
+`CHC_INSTALL_COMPLETION`. The PowerShell installer also accepts `powershell`
+and selects it when set to `auto`.
 
 After the first install, update from the CLI:
 
@@ -116,7 +147,7 @@ When `chc status` reports `mode: local`, the command follows that development
 checkout and default update/check commands do not mutate it or the separate
 managed checkout. Update the repository with the normal Git workflow and
 refresh `apps/cli/dist/index.js` with `pnpm --filter @cthutool/cli dev`. Use
-`CHC_INSTALL_MODE=remote scripts/install-chc.sh` to switch the global command
+either installer with `CHC_INSTALL_MODE=remote` to switch the global command
 back to managed mode. Advanced callers can explicitly select another source
 with `--install-dir`, `--repo`, and `--ref`; a successful apply relinks the
 global command to that directory. Dirty, diverged, or invalid-bundle targets are

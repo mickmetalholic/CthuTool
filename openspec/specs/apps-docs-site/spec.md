@@ -88,7 +88,7 @@ The docs site SHALL document how users install, inspect, safely update, switch, 
 
 #### Scenario: Reader installs CLI tooling
 - **WHEN** a reader opens CLI installation documentation
-- **THEN** the documentation explains target-machine prerequisites, public raw installer usage, committed bundle runtime behavior, remote install mode, local checkout install mode, automatic zsh completion behavior, and supported override environment variables
+- **THEN** the documentation explains target-machine prerequisites, public Bash and PowerShell installer usage, committed bundle runtime behavior, remote install mode, local checkout install mode, automatic zsh and PowerShell completion behavior, and supported override environment variables
 
 #### Scenario: Reader checks the installed CLI version
 - **WHEN** a reader needs only the installed CLI version
@@ -219,7 +219,7 @@ The docs site SHALL document CLI installer mode selection and its relationship t
 
 #### Scenario: Reader compares remote and local mode
 - **WHEN** a reader reviews CLI installation docs
-- **THEN** the documentation explains that raw/stdin installer usage selects remote mode and checkout script execution selects local mode by default
+- **THEN** the documentation explains that raw stdin/expression installer usage selects remote mode and checkout script execution selects local mode by default
 - **AND** explains that `chc status` derives mode from the checkout providing the running module
 - **AND** explains that default automatic update is available only for the default managed source
 - **AND** documents `CHC_INSTALL_MODE=remote` as the way to restore the global command to the managed checkout after local development
