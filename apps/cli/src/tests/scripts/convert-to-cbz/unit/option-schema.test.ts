@@ -25,4 +25,15 @@ describe('option-schema', () => {
     });
     expect(parsed.isErr()).toBe(true);
   });
+
+  test('defaults to safe conflict handling and accepts explicit overwrite', () => {
+    const safe = parseConversionOptions({ input: '/tmp/in' });
+    const overwrite = parseConversionOptions({
+      input: '/tmp/in',
+      overwrite: true,
+    });
+
+    expect(safe.isOk() && safe.value.overwrite).toBe(false);
+    expect(overwrite.isOk() && overwrite.value.overwrite).toBe(true);
+  });
 });

@@ -52,6 +52,25 @@ describe('discoverScripts', () => {
     expect(root.replaceAll('\\', '/')).toContain('/apps/cli/src/scripts');
   });
 
+  test('prefers a packaged JavaScript entry when both runtime and source entries exist', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cthutool-packaged-script-'));
+    await writePackage(root, 'packaged-script', {
+      id: 'packaged-script',
+      title: 'Packaged',
+    });
+    await writeFile(
+      join(root, 'packaged-script', 'index.js'),
+      'export default () => {}',
+      'utf8',
+    );
+
+    const result = await discoverScripts(root);
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value.packages[0]?.entryRelative).toBe('index.js');
+  });
+
   test('returns a bounded discovery error when the scripts root is unavailable', async () => {
     const root = join(
       tmpdir(),
