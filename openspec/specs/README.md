@@ -71,6 +71,7 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 - [codex-plugins-cthu-codex-japanese-sentence-skill](codex-plugins-cthu-codex-japanese-sentence-skill/spec.md): Japanese sentence Anki note skill.
 - [codex-plugins-cthu-codex-japanese-vocabulary-skill](codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md): Japanese vocabulary Anki note skill.
 - [codex-plugins-cthu-codex-language-coach](codex-plugins-cthu-codex-language-coach/spec.md): prompt-time English prose coaching hook behavior.
+- [codex-plugins-cthu-codex-notion-album-skill](codex-plugins-cthu-codex-notion-album-skill/spec.md): guarded personal Notion Album matching, metadata completion, source reconciliation, and verified writes.
 
 ## GitOps
 

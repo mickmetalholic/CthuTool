@@ -1,0 +1,9 @@
+{
+  "id": 302,
+  "type": "master",
+  "title": "Paranoid",
+  "year": 1970,
+  "artists": [{ "name": "Black Sabbath" }],
+  "genres": ["Rock", "Heavy Metal"],
+  "styles": ["Heavy Metal", "Doom Metal"]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "title": "Paranoid",
+  "primary-type": "Album",
+  "first-release-date": "1970-09-18",
+  "artist-credit": [
+    {
+      "name": "Black Sabbath",
+      "artist": {
+        "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "name": "Black Sabbath"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "type": "discogs",
+      "url": {
+        "resource": "https://www.discogs.com/master/302-Paranoid"
+      }
+    }
+  ]
+}
