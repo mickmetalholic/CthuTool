@@ -289,7 +289,7 @@ describe('global bin', () => {
       } else if (args[0] === 'codex') {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(
-          '\n  skills   Interactively manage manifest-tracked GitHub skills.',
+          '\n  skills   Reconcile manifest-tracked and eligible local GitHub skills.',
         );
         expect(plain).toContain(
           '\n  install  Install repository-owned Codex plugins locally.',

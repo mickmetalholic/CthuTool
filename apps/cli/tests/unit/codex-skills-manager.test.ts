@@ -45,6 +45,7 @@ function fakeBackend(overrides: Partial<SkillsBackend> = {}): SkillsBackend {
   return {
     listInstalled: async () => [],
     discover: async () => [],
+    validate: async () => {},
     checkUpdates: async () => new Set(),
     install: async () => {},
     update: async () => {},
@@ -141,6 +142,26 @@ describe('pinned skills backend contract', () => {
             skillPath: 'skills/grill-me/SKILL.md',
             skillFolderHash: 'old-tree-sha',
           },
+          'unsupported-github': {
+            sourceType: 'github',
+            source: 'owner/skills',
+            ref: 'main',
+            skillPath: 'unexpected/location/SKILL.md',
+            skillFolderHash: 'tree-sha',
+          },
+          'no-ref': {
+            sourceType: 'github',
+            sourceUrl: 'https://github.com/owner/skills.git',
+            skillPath: 'skills/no-ref/SKILL.md',
+            skillFolderHash: 'tree-sha',
+          },
+          'well-known': {
+            sourceType: 'well-known',
+            source: 'example.com',
+            sourceUrl:
+              'https://example.com/.well-known/skills/example/SKILL.md',
+            skillFolderHash: 'tree-sha',
+          },
         },
       }),
     );
@@ -150,8 +171,20 @@ describe('pinned skills backend contract', () => {
       localCodexRoot: join(homeRoot, '.codex'),
       run: async (args) => {
         calls.push([...args]);
+        if (args[0] === 'add') {
+          return {
+            stdout: 'Found 1 skills\n│    grill-me\n',
+            stderr: '',
+          };
+        }
         return {
-          stdout: '[{"name":"grill-me","path":"/tmp/grill-me"}]',
+          stdout: JSON.stringify([
+            { name: 'grill-me', path: '/tmp/grill-me' },
+            { name: 'unsupported-github', path: '/tmp/unsupported-github' },
+            { name: 'no-ref', path: '/tmp/no-ref' },
+            { name: 'well-known', path: '/tmp/well-known' },
+            { name: 'manual', path: '/tmp/manual' },
+          ]),
           stderr: '',
         };
       },
@@ -171,12 +204,101 @@ describe('pinned skills backend contract', () => {
         path: '/tmp/grill-me',
         managed: true,
         repository: 'mattpocock/skills',
+        localGitHubCandidate: {
+          repository: 'mattpocock/skills',
+          selector: 'grill-me',
+          skillPath: 'skills/grill-me/SKILL.md',
+          ref: 'main',
+        },
+      },
+      {
+        name: 'unsupported-github',
+        path: '/tmp/unsupported-github',
+        managed: true,
+        repository: 'owner/skills',
+        localGitHubCandidate: undefined,
+      },
+      {
+        name: 'no-ref',
+        path: '/tmp/no-ref',
+        managed: true,
+        repository: 'owner/skills',
+        localGitHubCandidate: {
+          repository: 'owner/skills',
+          selector: 'no-ref',
+          skillPath: 'skills/no-ref/SKILL.md',
+        },
+      },
+      {
+        name: 'well-known',
+        path: '/tmp/well-known',
+        managed: false,
+        repository: undefined,
+        localGitHubCandidate: undefined,
+      },
+      {
+        name: 'manual',
+        path: '/tmp/manual',
+        managed: false,
+        repository: undefined,
+        localGitHubCandidate: undefined,
       },
     ]);
     expect([...(await backend.checkUpdates([trackedSkill]))]).toEqual([
       'grill-me',
     ]);
-    expect(calls).toEqual([['list', '--global', '--agent', 'codex', '--json']]);
+    await backend.validate({
+      ...trackedSkill,
+      tracking: { type: 'pin', ref: 'v1.2.3' },
+    });
+    expect(calls).toEqual([
+      ['list', '--global', '--agent', 'codex', '--json'],
+      ['add', 'mattpocock/skills#v1.2.3', '--list'],
+    ]);
+  });
+
+  test('rejects a tracking source whose selected skill is absent', async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), 'chc-skills-home-'));
+    const backend = createNpxSkillsBackend({
+      homeRoot,
+      localCodexRoot: join(homeRoot, '.codex'),
+      run: async () => ({ stdout: 'Found 0 skills\n', stderr: '' }),
+    });
+
+    await expect(backend.validate(trackedSkill)).rejects.toThrow(
+      'was not found',
+    );
+  });
+
+  test('skips the list subprocess when no lock entry can be tracked', async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), 'chc-skills-home-'));
+    await mkdir(join(homeRoot, '.agents'), { recursive: true });
+    await writeFile(
+      join(homeRoot, '.agents', '.skill-lock.json'),
+      JSON.stringify({
+        version: 3,
+        skills: {
+          'well-known': {
+            sourceType: 'well-known',
+            source: 'example.com',
+            sourceUrl:
+              'https://example.com/.well-known/skills/example/SKILL.md',
+          },
+        },
+      }),
+    );
+    let ran = false;
+    const backend = createNpxSkillsBackend({
+      homeRoot,
+      localCodexRoot: join(homeRoot, '.codex'),
+      run: async () => {
+        ran = true;
+        return { stdout: '[]', stderr: '' };
+      },
+    });
+
+    expect(await backend.listInstalled({ trackableOnly: true })).toEqual([]);
+    expect(ran).toBe(false);
   });
 });
 
@@ -215,6 +337,24 @@ describe('Codex managed skill inventory and execution', () => {
             path: '/local/personal-only',
             managed: false,
           },
+          {
+            name: 'local-github',
+            path: '/managed/local-github',
+            managed: true,
+            repository: 'owner/skills',
+            localGitHubCandidate: {
+              repository: 'owner/skills',
+              selector: 'local-github',
+              skillPath: 'skills/local-github/SKILL.md',
+              ref: 'develop',
+            },
+          },
+          {
+            name: 'unsupported-github',
+            path: '/managed/unsupported-github',
+            managed: true,
+            repository: 'owner/skills',
+          },
         ],
         checkUpdates: async () => new Set(['grill-me']),
       }),
@@ -225,9 +365,43 @@ describe('Codex managed skill inventory and execution', () => {
       { name: 'disabled', state: 'disabled' },
       { name: 'grill-me', state: 'update_available' },
       { name: 'legacy', state: 'legacy' },
+      { name: 'local-github', state: 'local_only' },
       { name: 'missing', state: 'missing' },
     ]);
     expect(rows.some((row) => row.name === 'personal-only')).toBe(false);
+    expect(rows.some((row) => row.name === 'unsupported-github')).toBe(false);
+    expect(
+      rows.find((row) => row.name === 'local-github')?.availableActions,
+    ).toEqual(['none', 'track']);
+  });
+
+  test('tracks desired state without invoking a backend lifecycle mutation', async () => {
+    const repoCodexRoot = await mkdtemp(join(tmpdir(), 'chc-skills-track-'));
+    const calls: string[] = [];
+    const result = await executeSkillPlan({
+      repoCodexRoot,
+      manifest: manifest([]),
+      items: [
+        { action: 'track', name: trackedSkill.name, skill: trackedSkill },
+      ],
+      backend: fakeBackend({
+        install: async () => {
+          calls.push('install');
+        },
+        update: async () => {
+          calls.push('update');
+        },
+        remove: async () => {
+          calls.push('remove');
+        },
+      }),
+    });
+
+    expect(calls).toEqual([]);
+    expect(result.completed.map((item) => item.action)).toEqual(['track']);
+    expect(
+      (await readCodexSkillsManifest(repoCodexRoot)).manifest.skills,
+    ).toEqual([trackedSkill]);
   });
 
   test('commits successful outcomes and reports partial failures', async () => {
@@ -368,6 +542,129 @@ describe('Codex skills interaction', () => {
     });
 
     expect(installed).toBe(false);
+    await expect(
+      stat(join(repoRoot, 'codex', 'skills.manifest.json')),
+    ).rejects.toThrow();
+  });
+
+  test('tracks an eligible local skill after explicit metadata review', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'chc-skills-track-command-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'chc-skills-home-'));
+    const calls: string[] = [];
+    let suggestedRef: string | undefined;
+    const backend = fakeBackend({
+      listInstalled: async () => [
+        {
+          name: 'grill-me',
+          path: '/managed/grill-me',
+          managed: true,
+          repository: 'mattpocock/skills',
+          localGitHubCandidate: {
+            repository: 'mattpocock/skills',
+            selector: 'grill-me',
+            skillPath: 'skills/grill-me/SKILL.md',
+            ref: 'main',
+          },
+        },
+      ],
+      validate: async (skill) => {
+        calls.push(`validate:${skill.tracking.ref}`);
+      },
+      install: async () => {
+        calls.push('install');
+      },
+      update: async () => {
+        calls.push('update');
+      },
+      remove: async () => {
+        calls.push('remove');
+      },
+    });
+    const interaction = addInteraction({
+      chooseMode: async () => 'manage',
+      chooseManagedActions: async () => [{ name: 'grill-me', action: 'track' }],
+      chooseTrackingType: async () => 'pin',
+      requestTrackingRef: async (_type, initialValue) => {
+        suggestedRef = initialValue;
+        return 'v1.2.3';
+      },
+    });
+
+    await runSkills({ repoRoot, home: homeRoot }, interactiveScope(), {
+      createBackend: () => backend,
+      interaction,
+    });
+
+    expect(suggestedRef).toBe('main');
+    expect(calls).toEqual(['validate:v1.2.3']);
+    expect(
+      (await readCodexSkillsManifest(join(repoRoot, 'codex'))).manifest.skills,
+    ).toEqual([
+      {
+        ...trackedSkill,
+        tracking: { type: 'pin', ref: 'v1.2.3' },
+      },
+    ]);
+  });
+
+  test('does not open the action table for an empty reconciliation inventory', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'chc-skills-empty-command-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'chc-skills-home-'));
+    let actionTableOpened = false;
+
+    await runSkills({ repoRoot, home: homeRoot }, interactiveScope(), {
+      createBackend: () => fakeBackend(),
+      interaction: addInteraction({
+        chooseMode: async () => 'manage',
+        chooseManagedActions: async () => {
+          actionTableOpened = true;
+          return [];
+        },
+      }),
+    });
+
+    expect(actionTableOpened).toBe(false);
+    await expect(
+      stat(join(repoRoot, 'codex', 'skills.manifest.json')),
+    ).rejects.toThrow();
+  });
+
+  test('cancelling Track metadata collection leaves local and manifest state unchanged', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'chc-skills-track-cancel-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'chc-skills-home-'));
+    let validated = false;
+    const backend = fakeBackend({
+      listInstalled: async () => [
+        {
+          name: 'grill-me',
+          path: '/managed/grill-me',
+          managed: true,
+          repository: 'mattpocock/skills',
+          localGitHubCandidate: {
+            repository: 'mattpocock/skills',
+            selector: 'grill-me',
+            skillPath: 'skills/grill-me/SKILL.md',
+            ref: 'main',
+          },
+        },
+      ],
+      validate: async () => {
+        validated = true;
+      },
+    });
+
+    await runSkills({ repoRoot, home: homeRoot }, interactiveScope(), {
+      createBackend: () => backend,
+      interaction: addInteraction({
+        chooseMode: async () => 'manage',
+        chooseManagedActions: async () => [
+          { name: 'grill-me', action: 'track' },
+        ],
+        chooseTrackingType: async () => undefined,
+      }),
+    });
+
+    expect(validated).toBe(false);
     await expect(
       stat(join(repoRoot, 'codex', 'skills.manifest.json')),
     ).rejects.toThrow();

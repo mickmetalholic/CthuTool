@@ -1,14 +1,28 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  runSkills,
+  type SkillsInteraction,
+} from '../../src/command/codex.command';
+import type { SkillsBackend } from '../../src/domain/codex-skills-backend';
+import type { ObservedCliCommandScope } from '../../src/runtime/command-diagnostics';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
-async function runCli(args: string[]) {
+async function runCli(args: string[], env: NodeJS.ProcessEnv = {}) {
   const proc = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
     cwd: cliRoot,
+    env: { ...process.env, ...env },
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'ignore',
@@ -18,6 +32,29 @@ async function runCli(args: string[]) {
     err: await new Response(proc.stderr).text(),
     code: await proc.exited,
   };
+}
+
+async function createFakeNpx(
+  root: string,
+  installed: readonly { readonly name: string; readonly path: string }[],
+): Promise<string> {
+  const binRoot = join(root, 'bin');
+  const scriptPath = join(binRoot, 'fake-npx.mjs');
+  const script = `const args = process.argv.slice(2);\nif (args.includes('list')) {\n  process.stdout.write(${JSON.stringify(JSON.stringify(installed))});\n} else {\n  process.stderr.write('unexpected fake npx args: ' + args.join(' '));\n  process.exitCode = 1;\n}\n`;
+  await mkdir(binRoot, { recursive: true });
+  await writeFile(scriptPath, script, 'utf8');
+  if (process.platform === 'win32') {
+    await writeFile(
+      join(binRoot, 'npx.cmd'),
+      `@"${process.execPath}" "${scriptPath}" %*\r\n`,
+      'utf8',
+    );
+  } else {
+    const executable = join(binRoot, 'npx');
+    await writeFile(executable, `#!/usr/bin/env node\n${script}`, 'utf8');
+    await chmod(executable, 0o755);
+  }
+  return binRoot;
 }
 
 async function writeJson(path: string, value: unknown) {
@@ -87,20 +124,24 @@ describe('codex command boundary', () => {
       version: 2,
       skills: [],
     });
+    const binRoot = await createFakeNpx(homeRoot, []);
 
     const before = await readFile(
       join(repoRoot, 'codex', 'skills.manifest.json'),
       'utf8',
     );
-    const result = await runCli([
-      'codex',
-      'skills',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-      '--json',
-    ]);
+    const result = await runCli(
+      [
+        'codex',
+        'skills',
+        '--repo-root',
+        repoRoot,
+        '--home',
+        homeRoot,
+        '--json',
+      ],
+      { PATH: `${binRoot}${delimiter}${process.env.PATH ?? ''}` },
+    );
 
     expect(result.code).toBe(0);
     expect(result.err).toBe('');
@@ -114,7 +155,145 @@ describe('codex command boundary', () => {
     ).toBe(before);
   });
 
-  test('reports legacy names without migrating or querying local skills', async () => {
+  test('lists only provenance-backed local GitHub skills in read-only JSON', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const manifestPath = join(repoRoot, 'codex', 'skills.manifest.json');
+    await writeJson(manifestPath, { version: 2, skills: [] });
+    await writeJson(join(homeRoot, '.agents', '.skill-lock.json'), {
+      version: 3,
+      skills: {
+        'grill-me': {
+          sourceType: 'github',
+          source: 'mattpocock/skills',
+          ref: 'main',
+          skillPath: 'skills/grill-me/SKILL.md',
+          skillFolderHash: 'tree-sha',
+        },
+        'well-known': {
+          sourceType: 'well-known',
+          source: 'example.com',
+          sourceUrl: 'https://example.com/.well-known/skills/example/SKILL.md',
+          skillFolderHash: 'tree-sha',
+        },
+      },
+    });
+    const binRoot = await createFakeNpx(homeRoot, [
+      { name: 'grill-me', path: join(homeRoot, '.codex/skills/grill-me') },
+      { name: 'well-known', path: join(homeRoot, '.codex/skills/well-known') },
+      { name: 'manual', path: join(homeRoot, '.codex/skills/manual') },
+    ]);
+    const before = await readFile(manifestPath, 'utf8');
+
+    const result = await runCli(
+      [
+        'codex',
+        'skills',
+        '--repo-root',
+        repoRoot,
+        '--home',
+        homeRoot,
+        '--json',
+      ],
+      { PATH: `${binRoot}${delimiter}${process.env.PATH ?? ''}` },
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.err).toBe('');
+    expect(JSON.parse(result.out).result.skills).toEqual([
+      {
+        name: 'grill-me',
+        source: 'mattpocock/skills:grill-me@main',
+        state: 'local_only',
+        installedPath: join(homeRoot, '.codex/skills/grill-me'),
+        installedManaged: true,
+        availableActions: ['none', 'track'],
+        localGitHubCandidate: {
+          repository: 'mattpocock/skills',
+          selector: 'grill-me',
+          skillPath: 'skills/grill-me/SKILL.md',
+          ref: 'main',
+        },
+      },
+    ]);
+    expect(await readFile(manifestPath, 'utf8')).toBe(before);
+  });
+
+  test('tracks a reviewed local-only skill without a lifecycle mutation', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const lifecycleCalls: string[] = [];
+    const backend: SkillsBackend = {
+      listInstalled: async () => [
+        {
+          name: 'grill-me',
+          path: join(homeRoot, '.codex/skills/grill-me'),
+          managed: true,
+          repository: 'mattpocock/skills',
+          localGitHubCandidate: {
+            repository: 'mattpocock/skills',
+            selector: 'grill-me',
+            skillPath: 'skills/grill-me/SKILL.md',
+            ref: 'main',
+          },
+        },
+      ],
+      discover: async () => [],
+      validate: async () => {},
+      checkUpdates: async () => new Set(),
+      install: async () => {
+        lifecycleCalls.push('install');
+      },
+      update: async () => {
+        lifecycleCalls.push('update');
+      },
+      remove: async () => {
+        lifecycleCalls.push('remove');
+      },
+    };
+    const interaction: SkillsInteraction = {
+      chooseMode: async () => 'manage',
+      chooseManagedActions: async () => [{ name: 'grill-me', action: 'track' }],
+      requestRepository: async () => undefined,
+      chooseDiscoveredNames: async () => undefined,
+      chooseTrackingType: async () => 'branch',
+      requestTrackingRef: async () => 'main',
+      confirmPlan: async () => true,
+    };
+    const scope: ObservedCliCommandScope = {
+      context: {
+        isTty: true,
+        interactive: true,
+        json: false,
+        quiet: true,
+      },
+      complete() {},
+      fail() {},
+    };
+
+    await runSkills({ repoRoot, home: homeRoot }, scope, {
+      createBackend: () => backend,
+      interaction,
+    });
+
+    expect(lifecycleCalls).toEqual([]);
+    expect(
+      JSON.parse(
+        await readFile(join(repoRoot, 'codex', 'skills.manifest.json'), 'utf8'),
+      ).skills,
+    ).toEqual([
+      {
+        name: 'grill-me',
+        source: 'github',
+        repository: 'mattpocock/skills',
+        selector: 'grill-me',
+        tracking: { type: 'branch', ref: 'main' },
+        enabled: true,
+      },
+    ]);
+  });
+
+  test('reports legacy names without migrating local skills', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
     await writeJson(join(repoRoot, 'codex', 'skills.manifest.json'), {
@@ -123,16 +302,20 @@ describe('codex command boundary', () => {
         { name: 'old-skill', source: 'external', path: 'skill:old-skill' },
       ],
     });
+    const binRoot = await createFakeNpx(homeRoot, []);
 
-    const result = await runCli([
-      'codex',
-      'skills',
-      '--repo-root',
-      repoRoot,
-      '--home',
-      homeRoot,
-      '--json',
-    ]);
+    const result = await runCli(
+      [
+        'codex',
+        'skills',
+        '--repo-root',
+        repoRoot,
+        '--home',
+        homeRoot,
+        '--json',
+      ],
+      { PATH: `${binRoot}${delimiter}${process.env.PATH ?? ''}` },
+    );
     const parsed = JSON.parse(result.out);
     expect(result.code).toBe(0);
     expect(parsed.result.legacyEntries).toEqual(['old-skill']);
