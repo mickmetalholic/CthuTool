@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Manage Movies"
+  short_description: "Search and add movies in Notion."
+  default_prompt: "Use $notion-manage-movies to find movies in my Notion Movie Library or propose a reviewed new entry from a fuzzy title."
+policy:
+  allow_implicit_invocation: true
