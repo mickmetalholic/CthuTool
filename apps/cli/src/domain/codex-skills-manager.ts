@@ -1,6 +1,10 @@
 import { mkdir, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { InstalledSkill, SkillsBackend } from './codex-skills-backend';
+import type {
+  InstalledSkill,
+  LocalGitHubSkillCandidate,
+  SkillsBackend,
+} from './codex-skills-backend';
 import {
   type CodexSkillsManifest,
   type ManagedCodexSkill,
@@ -14,6 +18,7 @@ export type ManagedSkillState =
   | 'installed'
   | 'update_available'
   | 'unmanaged_collision'
+  | 'local_only'
   | 'disabled'
   | 'legacy';
 
@@ -24,6 +29,7 @@ export type ManagedSkillAction =
   | 'update'
   | 'enable'
   | 'remove'
+  | 'track'
   | 'add';
 
 export type ManagedSkillInventoryRow = {
@@ -34,6 +40,7 @@ export type ManagedSkillInventoryRow = {
   readonly installedManaged?: boolean;
   readonly availableActions: ManagedSkillAction[];
   readonly skill?: ManagedCodexSkill;
+  readonly localGitHubCandidate?: LocalGitHubSkillCandidate;
 };
 
 export type SkillPlanItem = {
@@ -58,15 +65,9 @@ export async function buildManagedSkillInventory(input: {
   readonly legacyEntries: readonly string[];
   readonly backend: SkillsBackend;
 }): Promise<ManagedSkillInventoryRow[]> {
-  if (input.manifest.skills.length === 0) {
-    return input.legacyEntries.map((name) => ({
-      name,
-      source: 'legacy manifest entry',
-      state: 'legacy' as const,
-      availableActions: ['none'] as ManagedSkillAction[],
-    }));
-  }
-  const installed = await input.backend.listInstalled();
+  const installed = await input.backend.listInstalled({
+    trackableOnly: input.manifest.skills.length === 0,
+  });
   const installedByName = new Map(
     installed.map((skill) => [skill.name, skill]),
   );
@@ -84,6 +85,25 @@ export async function buildManagedSkillInventory(input: {
   const rows = input.manifest.skills.map((skill) =>
     classifyManagedSkill(skill, installedByName.get(skill.name), updates),
   );
+  const reservedNames = new Set([
+    ...input.manifest.skills.map((skill) => skill.name),
+    ...input.legacyEntries,
+  ]);
+  for (const local of installed) {
+    if (reservedNames.has(local.name) || !local.localGitHubCandidate) {
+      continue;
+    }
+    const candidate = local.localGitHubCandidate;
+    rows.push({
+      name: local.name,
+      source: `${candidate.repository}:${candidate.selector}@${candidate.ref ?? '(choose ref)'}`,
+      state: 'local_only',
+      installedPath: local.path,
+      installedManaged: true,
+      availableActions: ['none', 'track'],
+      localGitHubCandidate: candidate,
+    });
+  }
   for (const name of input.legacyEntries) {
     rows.push({
       name,
@@ -171,7 +191,12 @@ export async function executeSkillPlan(input: {
       continue;
     }
     try {
-      if (item.action === 'install' || item.action === 'add') {
+      if (item.action === 'track') {
+        if (!item.skill) {
+          throw new Error(`Missing tracking metadata for ${item.name}.`);
+        }
+        manifest = upsertManagedSkill(manifest, item.skill);
+      } else if (item.action === 'install' || item.action === 'add') {
         if (!item.skill) {
           throw new Error(`Missing install metadata for ${item.name}.`);
         }

@@ -12,6 +12,7 @@ import { installRepositoryCodexPlugins } from '../domain/codex-plugin-install-ma
 import {
   createNpxSkillsBackend,
   type DiscoveredSkill,
+  type LocalGitHubSkillCandidate,
   type SkillsBackend,
 } from '../domain/codex-skills-backend';
 import {
@@ -93,9 +94,12 @@ export type SkillsInteraction = {
   readonly chooseDiscoveredNames: (
     skills: readonly DiscoveredSkill[],
   ) => Promise<readonly string[] | undefined>;
-  readonly chooseTrackingType: () => Promise<'branch' | 'pin' | undefined>;
+  readonly chooseTrackingType: (
+    candidate?: LocalGitHubSkillCandidate,
+  ) => Promise<'branch' | 'pin' | undefined>;
   readonly requestTrackingRef: (
     type: 'branch' | 'pin',
+    initialValue?: string,
   ) => Promise<string | undefined>;
   readonly confirmPlan: (
     plan: readonly SkillPlanItem[],
@@ -195,12 +199,29 @@ export async function runSkills(
   if (!mode) {
     return;
   }
+  if (mode === 'manage' && inventory.length === 0) {
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      pc.dim('No tracked or trackable GitHub skills were found.'),
+    );
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      pc.dim('Choose Add skills from GitHub to install and track one.'),
+    );
+    return;
+  }
 
   const plan =
     mode === 'add'
       ? await createAddPlan(manifestResult.manifest, backend, interaction)
-      : await createManagePlan(inventory, interaction);
-  if (!plan || plan.length === 0) {
+      : await createManagePlan(inventory, backend, interaction);
+  if (!plan) {
+    writeHumanStatus(scope.context, processOutput, pc.dim('Cancelled.'));
+    return;
+  }
+  if (plan.length === 0) {
     writeHumanStatus(
       scope.context,
       processOutput,
@@ -248,7 +269,7 @@ function writeInventory(
   writeHumanStatus(
     scope.context,
     processOutput,
-    pc.bold('Managed Codex skills'),
+    pc.bold('Codex skills reconciliation'),
   );
   if (inventory.length === 0) {
     writeHumanStatus(scope.context, processOutput, pc.dim('(none)'));
@@ -265,6 +286,7 @@ function writeInventory(
 
 async function createManagePlan(
   inventory: readonly ManagedSkillInventoryRow[],
+  backend: SkillsBackend,
   interaction: SkillsInteraction,
 ): Promise<SkillPlanItem[] | undefined> {
   const actionable = inventory.filter((row) =>
@@ -284,13 +306,47 @@ async function createManagePlan(
     if (!row) {
       continue;
     }
-    plan.push({
-      action: choice.action,
-      name: row.name,
-      skill: row.skill,
-      installedPath: row.installedPath,
-      installedManaged: row.installedManaged,
-    });
+    if (choice.action === 'track') {
+      const candidate = row.localGitHubCandidate;
+      if (!candidate) {
+        throw new Error(`Missing local GitHub provenance for ${row.name}.`);
+      }
+      const trackingType = await interaction.chooseTrackingType(candidate);
+      if (!trackingType) {
+        return undefined;
+      }
+      const ref = await interaction.requestTrackingRef(
+        trackingType,
+        candidate.ref,
+      );
+      if (!ref) {
+        return undefined;
+      }
+      const skill: ManagedCodexSkill = {
+        name: row.name,
+        source: 'github',
+        repository: candidate.repository,
+        selector: candidate.selector,
+        tracking: { type: trackingType, ref: ref.trim() },
+        enabled: true,
+      };
+      await backend.validate(skill);
+      plan.push({
+        action: 'track',
+        name: row.name,
+        skill,
+        installedPath: row.installedPath,
+        installedManaged: true,
+      });
+    } else {
+      plan.push({
+        action: choice.action,
+        name: row.name,
+        skill: row.skill,
+        installedPath: row.installedPath,
+        installedManaged: row.installedManaged,
+      });
+    }
   }
   return plan;
 }
@@ -363,7 +419,7 @@ const defaultSkillsInteraction: SkillsInteraction = {
     const answer = await select<'manage' | 'add'>({
       message: 'Codex skills',
       options: [
-        { value: 'manage', label: 'Manage tracked skills' },
+        { value: 'manage', label: 'Manage tracked and local skills' },
         { value: 'add', label: 'Add skills from GitHub' },
       ],
     });
@@ -404,10 +460,10 @@ const defaultSkillsInteraction: SkillsInteraction = {
     });
     return isCancel(answer) ? undefined : answer;
   },
-  async requestTrackingRef(type) {
+  async requestTrackingRef(type, initialValue) {
     const answer = await promptText({
       message: type === 'branch' ? 'Branch' : 'Commit or tag',
-      initialValue: type === 'branch' ? 'main' : undefined,
+      initialValue: initialValue ?? (type === 'branch' ? 'main' : undefined),
       validate: (value) =>
         value.trim().length > 0 ? undefined : 'A ref is required.',
     });
@@ -442,7 +498,7 @@ async function promptManagedActionTable(
 
   function render(): void {
     const lines = [
-      pc.bold('Choose managed skill actions'),
+      pc.bold('Choose skill actions'),
       pc.dim('↑/↓ move · Space cycles valid actions · Enter reviews plan'),
       ...rows.map((row, index) => {
         const action = row.availableActions[indexes[index] ?? 0] ?? 'none';
@@ -528,6 +584,9 @@ function writePlan(
 }
 
 function describePlanEffect(item: SkillPlanItem): string {
+  if (item.action === 'track' && item.skill) {
+    return `(manifest only; ${item.skill.repository}:${item.skill.selector}@${item.skill.tracking.ref} ${item.skill.tracking.type}; keep local installation unchanged)`;
+  }
   if (item.action === 'add' || item.action === 'install') {
     return '(install locally; add/retain manifest entry)';
   }
@@ -557,7 +616,8 @@ export const codexCommand = defineCommand({
     skills: defineCommand({
       meta: {
         name: 'skills',
-        description: 'Interactively manage manifest-tracked GitHub skills.',
+        description:
+          'Reconcile manifest-tracked and eligible local GitHub skills.',
       },
       args: commonArgs,
       async run({ args }) {

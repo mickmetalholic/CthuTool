@@ -3468,23 +3468,38 @@ function createNpxSkillsBackend(options) {
     USERPROFILE: options.homeRoot
   };
   return {
-    async listInstalled() {
+    async listInstalled(listOptions) {
+      const lockEntries = await readSkillLock(options.homeRoot);
+      if (listOptions?.trackableOnly && ![...lockEntries].some(([name, lock]) => {
+        const repository = readGitHubRepository(lock);
+        return repository !== undefined && readLocalGitHubCandidate(name, lock, repository) !== undefined;
+      })) {
+        return [];
+      }
       const result = await run(["list", "--global", "--agent", "codex", "--json"], env2);
       const installed = parseInstalledSkills(result.stdout);
-      const lockEntries = await readSkillLock(options.homeRoot);
       return installed.map((skill) => {
         const lock = lockEntries.get(skill.name);
         const repository = lock ? readGitHubRepository(lock) : undefined;
+        const localGitHubCandidate = lock && repository ? readLocalGitHubCandidate(skill.name, lock, repository) : undefined;
         return {
           ...skill,
           managed: repository !== undefined,
-          repository
+          repository,
+          localGitHubCandidate
         };
       });
     },
     async discover(repository) {
       const result = await run(["add", repository, "--list"], env2);
       return parseDiscoveredSkills(result.stdout);
+    },
+    async validate(skill) {
+      const result = await run(["add", resolveSkillSource(skill), "--list"], env2);
+      const discovered = parseDiscoveredSkills(result.stdout);
+      if (!discovered.some((candidate) => candidate.name === skill.selector || candidate.name === skill.name)) {
+        throw new SkillsBackendError("contract_mismatch", `Skill ${skill.selector} was not found in ${skill.repository}@${skill.tracking.ref}.`);
+      }
     },
     async checkUpdates(skills) {
       if (skills.length === 0) {
@@ -3599,6 +3614,27 @@ function readGitHubRepository(lock) {
   }
   const match = lock.sourceUrl.match(/^https:\/\/github\.com\/([^/]+\/[^/#]+?)(?:\.git)?(?:[/#]|$)/u);
   return match?.[1];
+}
+function readLocalGitHubCandidate(name, lock, repository) {
+  if (typeof lock.skillPath !== "string") {
+    return;
+  }
+  const skillPath = lock.skillPath.trim().replaceAll("\\", "/");
+  const segments = skillPath.split("/");
+  if (skillPath.length === 0 || skillPath.startsWith("/") || segments.includes("..") || segments.at(-1)?.toLowerCase() !== "skill.md") {
+    return;
+  }
+  const directoryName = segments.at(-2);
+  if (directoryName !== name) {
+    return;
+  }
+  const ref = typeof lock.ref === "string" && lock.ref.trim().length > 0 ? lock.ref.trim() : undefined;
+  return {
+    repository,
+    selector: name,
+    skillPath,
+    ...ref ? { ref } : {}
+  };
 }
 function resolveSkillSource(skill) {
   return `${skill.repository}#${encodeURIComponent(skill.tracking.ref)}`;
@@ -3821,15 +3857,9 @@ function isMissingFileError3(error) {
 
 // src/domain/codex-skills-manager.ts
 async function buildManagedSkillInventory(input) {
-  if (input.manifest.skills.length === 0) {
-    return input.legacyEntries.map((name) => ({
-      name,
-      source: "legacy manifest entry",
-      state: "legacy",
-      availableActions: ["none"]
-    }));
-  }
-  const installed = await input.backend.listInstalled();
+  const installed = await input.backend.listInstalled({
+    trackableOnly: input.manifest.skills.length === 0
+  });
   const installedByName = new Map(installed.map((skill) => [skill.name, skill]));
   const trackedSkills = input.manifest.skills.filter((skill) => {
     const local = installedByName.get(skill.name);
@@ -3837,6 +3867,25 @@ async function buildManagedSkillInventory(input) {
   });
   const updates = await input.backend.checkUpdates(trackedSkills);
   const rows = input.manifest.skills.map((skill) => classifyManagedSkill(skill, installedByName.get(skill.name), updates));
+  const reservedNames = new Set([
+    ...input.manifest.skills.map((skill) => skill.name),
+    ...input.legacyEntries
+  ]);
+  for (const local of installed) {
+    if (reservedNames.has(local.name) || !local.localGitHubCandidate) {
+      continue;
+    }
+    const candidate = local.localGitHubCandidate;
+    rows.push({
+      name: local.name,
+      source: `${candidate.repository}:${candidate.selector}@${candidate.ref ?? "(choose ref)"}`,
+      state: "local_only",
+      installedPath: local.path,
+      installedManaged: true,
+      availableActions: ["none", "track"],
+      localGitHubCandidate: candidate
+    });
+  }
   for (const name of input.legacyEntries) {
     rows.push({
       name,
@@ -3910,7 +3959,12 @@ async function executeSkillPlan(input) {
       continue;
     }
     try {
-      if (item.action === "install" || item.action === "add") {
+      if (item.action === "track") {
+        if (!item.skill) {
+          throw new Error(`Missing tracking metadata for ${item.name}.`);
+        }
+        manifest = upsertManagedSkill(manifest, item.skill);
+      } else if (item.action === "install" || item.action === "add") {
         if (!item.skill) {
           throw new Error(`Missing install metadata for ${item.name}.`);
         }
@@ -4326,8 +4380,17 @@ async function runSkills(args, scope, dependencies = {}) {
   if (!mode) {
     return;
   }
-  const plan = mode === "add" ? await createAddPlan(manifestResult.manifest, backend, interaction) : await createManagePlan(inventory, interaction);
-  if (!plan || plan.length === 0) {
+  if (mode === "manage" && inventory.length === 0) {
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("No tracked or trackable GitHub skills were found."));
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("Choose Add skills from GitHub to install and track one."));
+    return;
+  }
+  const plan = mode === "add" ? await createAddPlan(manifestResult.manifest, backend, interaction) : await createManagePlan(inventory, backend, interaction);
+  if (!plan) {
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("Cancelled."));
+    return;
+  }
+  if (plan.length === 0) {
     writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("No changes selected."));
     return;
   }
@@ -4352,7 +4415,7 @@ async function runSkills(args, scope, dependencies = {}) {
   process.exitCode = result.failed.length === 0 ? 0 : 1;
 }
 function writeInventory(scope, inventory) {
-  writeHumanStatus(scope.context, processOutput, import_picocolors3.default.bold("Managed Codex skills"));
+  writeHumanStatus(scope.context, processOutput, import_picocolors3.default.bold("Codex skills reconciliation"));
   if (inventory.length === 0) {
     writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("(none)"));
     return;
@@ -4361,7 +4424,7 @@ function writeInventory(scope, inventory) {
     writeHumanStatus(scope.context, processOutput, `${row.name.padEnd(28)} ${row.state.padEnd(20)} ${import_picocolors3.default.dim(row.source)}`);
   }
 }
-async function createManagePlan(inventory, interaction) {
+async function createManagePlan(inventory, backend, interaction) {
   const actionable = inventory.filter((row) => row.availableActions.some((action) => action !== "none"));
   if (actionable.length === 0) {
     return [];
@@ -4376,13 +4439,44 @@ async function createManagePlan(inventory, interaction) {
     if (!row) {
       continue;
     }
-    plan.push({
-      action: choice.action,
-      name: row.name,
-      skill: row.skill,
-      installedPath: row.installedPath,
-      installedManaged: row.installedManaged
-    });
+    if (choice.action === "track") {
+      const candidate = row.localGitHubCandidate;
+      if (!candidate) {
+        throw new Error(`Missing local GitHub provenance for ${row.name}.`);
+      }
+      const trackingType = await interaction.chooseTrackingType(candidate);
+      if (!trackingType) {
+        return;
+      }
+      const ref = await interaction.requestTrackingRef(trackingType, candidate.ref);
+      if (!ref) {
+        return;
+      }
+      const skill = {
+        name: row.name,
+        source: "github",
+        repository: candidate.repository,
+        selector: candidate.selector,
+        tracking: { type: trackingType, ref: ref.trim() },
+        enabled: true
+      };
+      await backend.validate(skill);
+      plan.push({
+        action: "track",
+        name: row.name,
+        skill,
+        installedPath: row.installedPath,
+        installedManaged: true
+      });
+    } else {
+      plan.push({
+        action: choice.action,
+        name: row.name,
+        skill: row.skill,
+        installedPath: row.installedPath,
+        installedManaged: row.installedManaged
+      });
+    }
   }
   return plan;
 }
@@ -4446,7 +4540,7 @@ var defaultSkillsInteraction = {
     const answer = await le2({
       message: "Codex skills",
       options: [
-        { value: "manage", label: "Manage tracked skills" },
+        { value: "manage", label: "Manage tracked and local skills" },
         { value: "add", label: "Add skills from GitHub" }
       ]
     });
@@ -4485,10 +4579,10 @@ var defaultSkillsInteraction = {
     });
     return lD2(answer) ? undefined : answer;
   },
-  async requestTrackingRef(type) {
+  async requestTrackingRef(type, initialValue) {
     const answer = await ae({
       message: type === "branch" ? "Branch" : "Commit or tag",
-      initialValue: type === "branch" ? "main" : undefined,
+      initialValue: initialValue ?? (type === "branch" ? "main" : undefined),
       validate: (value) => value.trim().length > 0 ? undefined : "A ref is required."
     });
     return lD2(answer) ? undefined : answer.trim();
@@ -4512,7 +4606,7 @@ async function promptManagedActionTable(rows) {
   const control = String.fromCharCode(27);
   function render() {
     const lines = [
-      import_picocolors3.default.bold("Choose managed skill actions"),
+      import_picocolors3.default.bold("Choose skill actions"),
       import_picocolors3.default.dim("↑/↓ move · Space cycles valid actions · Enter reviews plan"),
       ...rows.map((row, index) => {
         const action = row.availableActions[indexes[index] ?? 0] ?? "none";
@@ -4582,6 +4676,9 @@ function writePlan(scope, plan) {
   }
 }
 function describePlanEffect(item) {
+  if (item.action === "track" && item.skill) {
+    return `(manifest only; ${item.skill.repository}:${item.skill.selector}@${item.skill.tracking.ref} ${item.skill.tracking.type}; keep local installation unchanged)`;
+  }
   if (item.action === "add" || item.action === "install") {
     return "(install locally; add/retain manifest entry)";
   }
@@ -4608,7 +4705,7 @@ var codexCommand = defineCommand({
     skills: defineCommand({
       meta: {
         name: "skills",
-        description: "Interactively manage manifest-tracked GitHub skills."
+        description: "Reconcile manifest-tracked and eligible local GitHub skills."
       },
       args: commonArgs,
       async run({ args }) {
