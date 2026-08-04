@@ -35,3 +35,10 @@ second MCP server.
 Keep repository-owned plugin source, manifests, and implementation assets under
 `codex/plugins/cthu-codex`. Keep generated command or skill adapters out of the
 repository; regenerate them per tool or platform.
+
+## TODO
+
+- Integrate the future Notion Movie Library workflow with CthuTool's backend
+  movie-metadata capability. Keep candidate disambiguation and explicit
+  confirmation before every Notion write; use the backend only as the metadata
+  source.

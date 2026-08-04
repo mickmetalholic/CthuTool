@@ -1,6 +1,6 @@
 {
   "name": "cthu-codex",
-  "version": "0.1.5+codex.20260718181440",
+  "version": "0.1.5+codex.20260731173552",
   "description": "Provides a personal Codex toolkit for CthuTool workflows and reusable assistant utilities.",
   "author": {
     "name": "mickmetalholic"
@@ -8,7 +8,7 @@
   "interface": {
     "displayName": "CthuCodex",
     "shortDescription": "Personal Codex toolkit for CthuTool workflows.",
-    "longDescription": "CthuCodex provides reusable Codex utilities for CthuTool workflows, including a prompt-submission language coaching hook, an Anki MCP server, explicit Anki card-creation skills, and guarded Notion channel-library and album-maintenance skills.",
+    "longDescription": "CthuCodex provides reusable Codex utilities for CthuTool workflows, including a prompt-submission language coaching hook, an Anki MCP server, explicit Anki card-creation skills, and guarded Notion channel-library, album-maintenance, and movie-library skills.",
     "developerName": "mickmetalholic",
     "category": "Productivity",
     "brandColor": "#6D5DFD",
