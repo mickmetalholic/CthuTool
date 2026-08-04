@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Keep the repository mirror for local development, but use npmjs on GitHub-hosted runners.
+  NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+
 jobs:
   package:
     name: Package desktop (${{ matrix.os }})
