@@ -14,6 +14,24 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const expectedRoot = join(repoRoot, 'apps', 'cli', 'dist');
 const buildScript = join(repoRoot, 'scripts', 'build-cli-dist.mjs');
 const actualRoot = await mkdtemp(join(tmpdir(), 'cthutool-cli-dist-'));
+const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+
+const runCommand = async (command, args, failureLabel) => {
+  await new Promise((resolvePromise, reject) => {
+    const child = spawn(command, args, {
+      cwd: repoRoot,
+      stdio: 'inherit',
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolvePromise();
+      } else {
+        reject(new Error(`${failureLabel} failed with exit code ${code ?? 1}`));
+      }
+    });
+  });
+};
 
 const listFiles = async (root) => {
   const files = [];
@@ -35,20 +53,16 @@ try {
   if (!(await stat(join(expectedRoot, 'index.js'))).isFile()) {
     throw new Error(`Missing committed CLI bundle: ${expectedRoot}`);
   }
-  await new Promise((resolvePromise, reject) => {
-    const child = spawn(process.execPath, [buildScript, actualRoot], {
-      cwd: repoRoot,
-      stdio: 'inherit',
-    });
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolvePromise();
-      } else {
-        reject(new Error(`CLI rebuild failed with exit code ${code ?? 1}`));
-      }
-    });
-  });
+  await runCommand(
+    pnpmCommand,
+    ['--filter', '@cthutool/cli', 'run', 'build:deps'],
+    'CLI dependency build',
+  );
+  await runCommand(
+    process.execPath,
+    [buildScript, actualRoot],
+    'CLI rebuild',
+  );
 
   const [expectedFiles, actualFiles] = await Promise.all([
     listFiles(expectedRoot),
