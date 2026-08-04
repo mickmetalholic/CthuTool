@@ -228,6 +228,260 @@ describe('CthuCodex Anki MCP server tools', () => {
     expect(result.warnings[0]).toContain('browser unavailable');
   });
 
+  test('rejects malformed and oversized note updates before AnkiConnect calls', async () => {
+    const { createAnkiTools } = await loadServerModule();
+    const { fetchFn, requests } = createMockFetch(() => {
+      throw new Error('should not be called');
+    });
+    const tools = createAnkiTools({ fetchFn, maxBatchSize: 1 });
+
+    const malformed = await tools.cthu_anki_update_notes({
+      updates: [{ noteId: 101 }],
+    });
+    const oversized = await tools.cthu_anki_update_notes({
+      updates: [
+        { noteId: 101, fields: { Front: 'new front' } },
+        { noteId: 102, fields: { Front: 'another front' } },
+      ],
+    });
+
+    expect(malformed).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_updates' },
+    });
+    expect(oversized).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_updates', maxBatchSize: 1 },
+    });
+    expect(requests).toHaveLength(0);
+  });
+
+  test('rejects stale note updates before mutation calls', async () => {
+    const { createAnkiTools } = await loadServerModule();
+    const { fetchFn, requests } = createMockFetch((request) => {
+      expect(request.action).toBe('notesInfo');
+      return {
+        result: [
+          {
+            noteId: 301,
+            modelName: 'Japanese Sentence',
+            fields: {
+              文: { value: 'current sentence', order: 0 },
+              訳: { value: 'current translation', order: 2 },
+            },
+          },
+        ],
+        error: null,
+      };
+    });
+    const tools = createAnkiTools({ fetchFn });
+
+    const result = await tools.cthu_anki_update_notes({
+      updates: [
+        {
+          noteId: 301,
+          fields: { 文: 'new sentence' },
+          expectedFields: {
+            文: 'previewed sentence',
+            訳: 'current translation',
+          },
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'stale_note',
+        noteId: 301,
+        fieldName: '文',
+        expected: 'previewed sentence',
+        actual: 'current sentence',
+      },
+    });
+    expect(requests.map((request) => request.action)).toEqual(['notesInfo']);
+  });
+
+  test('updates requested fields and opens updated notes', async () => {
+    const { createAnkiTools } = await loadServerModule();
+    const { fetchFn, requests } = createMockFetch((request) => {
+      if (request.action === 'notesInfo') {
+        return {
+          result: [
+            {
+              noteId: 401,
+              modelName: 'Japanese Sentence',
+              tags: ['existing'],
+              fields: {
+                文: { value: 'old sentence', order: 0 },
+                ヒント: { value: 'grammar', order: 1 },
+                訳: { value: 'English translation', order: 2 },
+                メモ: { value: 'memo', order: 3 },
+              },
+            },
+          ],
+          error: null,
+        };
+      }
+      if (request.action === 'updateNoteFields') {
+        return { result: null, error: null };
+      }
+      if (request.action === 'guiBrowse') {
+        return { result: [401], error: null };
+      }
+      throw new Error(`Unexpected action: ${request.action}`);
+    });
+    const tools = createAnkiTools({ fetchFn });
+
+    const result = await tools.cthu_anki_update_notes({
+      updates: [
+        {
+          noteId: 401,
+          fields: { 文: 'new sentence' },
+          expectedFields: {
+            文: 'old sentence',
+            訳: 'English translation',
+          },
+        },
+      ],
+      openAfterUpdate: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      partial: false,
+      results: [
+        {
+          index: 0,
+          noteId: 401,
+          ok: true,
+          fields: { ok: true },
+        },
+      ],
+      openResult: { ok: true, openedNoteIds: [401] },
+    });
+    expect(requests.map((request) => request.action)).toEqual([
+      'notesInfo',
+      'updateNoteFields',
+      'guiBrowse',
+    ]);
+    expect(requests[1]?.params).toEqual({
+      note: { id: 401, fields: { 文: 'new sentence' } },
+    });
+  });
+
+  test('reports field partial failures and caps Browser opening', async () => {
+    const { createAnkiTools } = await loadServerModule();
+    const { fetchFn, requests } = createMockFetch((request) => {
+      const params = request.params as {
+        note?: { id?: number };
+      };
+      if (request.action === 'notesInfo') {
+        return {
+          result: [501, 502, 503].map((noteId) => ({
+            noteId,
+            fields: { 文: { value: `old ${noteId}`, order: 0 } },
+          })),
+          error: null,
+        };
+      }
+      if (request.action === 'updateNoteFields') {
+        if (params.note?.id === 502) {
+          return { result: null, error: 'field update failed' };
+        }
+        return { result: null, error: null };
+      }
+      if (request.action === 'guiBrowse') {
+        return { result: [501], error: null };
+      }
+      throw new Error(`Unexpected action: ${request.action}`);
+    });
+    const tools = createAnkiTools({ fetchFn, maxBatchSize: 3 });
+
+    const result = await tools.cthu_anki_update_notes({
+      updates: [501, 502, 503].map((noteId) => ({
+        noteId,
+        fields: { 文: `new ${noteId}` },
+        expectedFields: { 文: `old ${noteId}` },
+      })),
+      openAfterUpdate: true,
+      browserOpenLimit: 1,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.partial).toBe(true);
+    expect(result.results).toMatchObject([
+      {
+        noteId: 501,
+        ok: true,
+        fields: { ok: true },
+      },
+      {
+        noteId: 502,
+        ok: false,
+        fields: {
+          ok: false,
+          error: { code: 'anki_connect_error' },
+        },
+      },
+      {
+        noteId: 503,
+        ok: true,
+        fields: { ok: true },
+      },
+    ]);
+    expect(result.openResult).toMatchObject({
+      ok: true,
+      openedNoteIds: [501],
+    });
+    expect(result.warnings[0]).toContain('capped at 1 of 2 notes');
+    expect(requests.at(-1)?.params).toEqual({ query: 'nid:501' });
+  });
+
+  test('keeps note updates successful when Browser opening fails', async () => {
+    const { createAnkiTools } = await loadServerModule();
+    const { fetchFn } = createMockFetch((request) => {
+      if (request.action === 'notesInfo') {
+        return {
+          result: [
+            {
+              noteId: 601,
+              fields: { Front: { value: 'old', order: 0 } },
+            },
+          ],
+          error: null,
+        };
+      }
+      if (request.action === 'updateNoteFields') {
+        return { result: null, error: null };
+      }
+      if (request.action === 'guiBrowse') {
+        return { result: null, error: 'browser unavailable' };
+      }
+      throw new Error(`Unexpected action: ${request.action}`);
+    });
+    const tools = createAnkiTools({ fetchFn });
+
+    const result = await tools.cthu_anki_update_notes({
+      updates: [
+        {
+          noteId: 601,
+          fields: { Front: 'new' },
+          expectedFields: { Front: 'old' },
+        },
+      ],
+      openAfterUpdate: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.results[0]).toMatchObject({
+      ok: true,
+      fields: { ok: true },
+    });
+    expect(result.openResult.ok).toBe(false);
+    expect(result.warnings[0]).toContain('browser unavailable');
+  });
+
   test('lists MCP tools through stdio JSON-RPC', async () => {
     const proc = Bun.spawn(['node', serverPath], {
       cwd: repoRoot,
@@ -256,6 +510,7 @@ describe('CthuCodex Anki MCP server tools', () => {
       'cthu_anki_get_notes',
       'cthu_anki_validate_notes',
       'cthu_anki_add_notes',
+      'cthu_anki_update_notes',
       'cthu_anki_store_media',
       'cthu_anki_open_notes',
     ]);

@@ -9,7 +9,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 
 - language coach hook
 - Anki MCP server
-- Anki card-creation skills
+- Anki card-creation and mature-card conversion skills
 - Notion channel-library skill
 - Notion album-maintenance skill
 - Notion movie-library skill
@@ -46,10 +46,13 @@ Available tools:
 - `cthu_anki_get_notes`
 - `cthu_anki_validate_notes`
 - `cthu_anki_add_notes`
+- `cthu_anki_update_notes`
 - `cthu_anki_store_media`
 - `cthu_anki_open_notes`
 
 `cthu_anki_add_notes` validates before writing and limits batch size. When `openAfterCreate` is true, it opens created notes in Anki's Browser. Browser opening failures are reported as warnings and do not undo successful note creation.
+
+`cthu_anki_update_notes` updates existing note fields in batches of at most 20. It can compare expected field values before writing, rejects the entire batch when a preview is stale, reports per-note field outcomes, and can open successfully updated notes in Anki's Browser.
 
 ## Japanese Sentence Cards
 
@@ -69,6 +72,28 @@ Or a separate grammar point line:
 ```
 
 When `tags:` is provided, or when a standalone line looks like a tag hierarchy, spaced hyphen hierarchy shorthand such as `新完全マスター - N３・文法 - 第１部・１１課` is normalized to `新完全マスター::N３・文法::第１部・１１課`.
+
+## Mature Japanese Sentence Conversion
+
+Use `$anki-convert-mature-japanese-sentence-cards` to preview familiar `Japanese Sentence` notes for promotion from a local grammar cloze to whole-sentence Japanese production.
+
+The default FSRS search requires stability of at least 45 days and at least 3 reviews:
+
+```text
+deck:"0.Japanese::Japanese Sentences" note:"Japanese Sentence" is:review -is:learn -is:suspended -is:buried prop:s>=45 prop:reps>=3
+```
+
+For a supported note, the skill proposes this transformation:
+
+```text
+Before:
+冷蔵庫が壊れたので、新しいのを{{c1::買うことにした::decided to buy}}。
+
+After:
+{{c1::冷蔵庫が壊れたので、新しいのを買うことにした。::The refrigerator broke, so I decided to buy a new one.}}
+```
+
+Every run starts with a read-only preview containing note IDs and exact before/after `文` values. Updating requires a later explicit confirmation, is limited to 20 notes per batch, and uses the previewed `文` and `訳` values to prevent stale overwrites. It does not modify tags, and repeated runs skip notes whose proposed `文` already equals the current value. The skill does not silently replace FSRS stability with an interval query.
 
 ## Japanese Vocabulary Cards
 
