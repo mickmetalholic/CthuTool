@@ -26,6 +26,22 @@ describe("CI workflow contract", () => {
     expect(hasWorkflow("desktop-artifacts.yml")).toBe(false);
   });
 
+  it("uses npmjs in GitHub Actions while preserving the local registry mirror", () => {
+    expect(readFileSync(join(root, ".npmrc"), "utf8")).toContain(
+      "registry=https://mirrors.cloud.tencent.com/npm/",
+    );
+
+    for (const yml of [
+      readWorkflow("ci.yml"),
+      readWorkflow("cli.yml"),
+      readWorkflow("desktop.yml"),
+    ]) {
+      expect(yml).toContain(
+        "NPM_CONFIG_REGISTRY: https://registry.npmjs.org/",
+      );
+    }
+  });
+
   it("runs complete root validation as focused CI jobs", () => {
     const yml = readWorkflow("ci.yml");
 
