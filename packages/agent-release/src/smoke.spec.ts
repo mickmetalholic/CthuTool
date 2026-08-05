@@ -23,7 +23,7 @@ describe('clean-host Agent bundle smoke', () => {
     }
   });
 
-  test('uses the bundled Node with an empty PATH and coordinates shutdown', async () => {
+  test('uses the bundled Node and waits for environment switching within the smoke timeout', async () => {
     root = await mkdtemp('/tmp/ct-smoke-');
     const bundleRoot = join(root, 'bundle');
     const layout = createBundleLayout('darwin-arm64', '1.2.3');
@@ -63,6 +63,7 @@ describe('clean-host Agent bundle smoke', () => {
     await chmod(bundledNode, 0o755);
     const result = await smokeExtractedAgentBundle({
       bundleRoot: relative(process.cwd(), bundleRoot),
+      environment: { CTHUTOOL_SMOKE_SWITCH_DELAY_MS: '5100' },
       timeoutMs: 10_000,
       userDataDir: relative(process.cwd(), join(root, 'user-data')),
     });
@@ -71,7 +72,7 @@ describe('clean-host Agent bundle smoke', () => {
       bundledNodePath: await realpath(bundledNode),
       environmentId: 'production',
     });
-  });
+  }, 15_000);
 });
 
 const FAKE_AGENT = String.raw`
@@ -88,6 +89,7 @@ const instancePath = path.join(runtimeDir, 'instance.json');
 const endpoint = path.join(runtimeDir, 'control.sock');
 const catalog = JSON.parse(fs.readFileSync(process.env.CTHUTOOL_AGENT_ENVIRONMENTS_PATH, 'utf8'));
 const environment = catalog.profiles[0];
+const switchDelayMs = Number(process.env.CTHUTOOL_SMOKE_SWITCH_DELAY_MS || 0);
 const nonce = crypto.randomUUID();
 const instanceId = crypto.randomUUID();
 
@@ -124,6 +126,12 @@ bridge.listen(0, '127.0.0.1', () => {
         result = { environments: [{ active: true, id: environment.environmentId, label: environment.label }] };
       } else if (request.operation === 'environment.switch') {
         result = { accepted: true, environmentId: request.environmentId };
+        if (switchDelayMs > 0) {
+          setTimeout(() => {
+            socket.end(JSON.stringify({ ok: true, protocolVersion: 1, result }) + '\n');
+          }, switchDelayMs);
+          return;
+        }
       } else if (request.operation === 'bridge.launch') {
         result = { endpoint: bridgeEndpoint, environmentId: environment.environmentId, instanceId, launchUrl: environment.webAgentUrl + '#endpoint=' + encodeURIComponent(bridgeEndpoint) };
       } else if (request.operation === 'shutdown') {

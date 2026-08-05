@@ -118,7 +118,12 @@ export async function smokeExtractedAgentBundle(input: {
       );
     }
     requireSuccess(
-      await requestControl(record, 'environment.switch', environmentId),
+      await requestControl(
+        record,
+        'environment.switch',
+        environmentId,
+        timeoutMs,
+      ),
       'environment.switch',
     );
     const launch = requireSuccess(
@@ -226,13 +231,14 @@ async function requestControl(
     | 'bridge.launch'
     | 'shutdown',
   environmentId?: string,
+  timeoutMs = 5_000,
 ): Promise<unknown> {
   return new Promise((resolvePromise, rejectPromise) => {
     const socket = createConnection(record.controlEndpoint);
     const timer = setTimeout(() => {
       socket.destroy();
       rejectPromise(new Error(`Agent ${operation} request timed out`));
-    }, 5_000);
+    }, timeoutMs);
     let payload = '';
     socket.setEncoding('utf8');
     socket.once('connect', () => {
