@@ -36,7 +36,7 @@ export async function smokeExtractedAgentBundle(input: {
     layout.target,
     await listBundleFiles(input.bundleRoot),
   );
-  const catalogPath = join(
+  const catalogPath = resolve(
     input.bundleRoot,
     ...layout.entryPoints.environmentCatalog.split('/'),
   );

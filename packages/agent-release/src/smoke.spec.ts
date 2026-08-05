@@ -7,7 +7,7 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { canonicalJson } from './contracts';
 import { createBundleLayout } from './layout';
@@ -62,7 +62,7 @@ describe('clean-host Agent bundle smoke', () => {
     await copyFile(process.execPath, bundledNode);
     await chmod(bundledNode, 0o755);
     const result = await smokeExtractedAgentBundle({
-      bundleRoot,
+      bundleRoot: relative(process.cwd(), bundleRoot),
       timeoutMs: 10_000,
       userDataDir: join(root, 'user-data'),
     });

@@ -1,5 +1,6 @@
+#[cfg(unix)]
+use std::fs;
 use std::{
-    fs,
     hash::{DefaultHasher, Hash, Hasher},
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
