@@ -125,4 +125,17 @@ enabled plugins, and synchronizes their cache. It does not manage standalone
 skills, prompts, or rules. The retired `codex status`, `export`, and `apply`
 subcommands are rejected as unknown commands.
 
+OpenCode consumes the same repository plugin assets through two explicit
+adapter commands:
+
+```bash
+chc opencode skills
+chc opencode mcp
+```
+
+The first adds enabled plugin skill directories to OpenCode's `skills.paths`;
+the second converts plugin `.mcp.json` declarations into OpenCode's `mcp`
+configuration. Both preserve unrelated configuration and leave `install`
+reserved for plugin installation.
+
 Source reference: `apps/cli/README.md`.

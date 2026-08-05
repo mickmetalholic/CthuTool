@@ -2328,7 +2328,7 @@ async function runMain(cmd, opts = {}) {
 }
 
 // src/index.ts
-var import_picocolors8 = __toESM(require_picocolors(), 1);
+var import_picocolors9 = __toESM(require_picocolors(), 1);
 
 // src/command/command-discovery.ts
 function stripAnsi3(value) {
@@ -3043,15 +3043,23 @@ function createCodexConfigPaths(options = {}) {
   const repoRoot = resolve(options.repoRoot ?? getDefaultRepoRoot());
   const homeRoot = resolve(options.homeRoot ?? homedir());
   const localCodexRoot = resolve(options.codexHome ?? join(homeRoot, ".codex"));
+  const localOpenCodeRoot = resolve(options.openCodeHome ?? join(homeRoot, ".config", "opencode"));
+  const openCodeConfigPath = resolve(options.openCodeConfig ?? getDefaultOpenCodeConfigPath(localOpenCodeRoot));
   return {
     repoRoot,
     repoCodexRoot: resolve(repoRoot, "codex"),
     homeRoot,
     localCodexRoot,
+    localOpenCodeRoot,
+    openCodeConfigPath,
     marketplacePath: resolve(options.marketplace ?? join(homeRoot, ".agents", "plugins", "marketplace.json")),
     pluginsRoot: resolve(options.pluginsRoot ?? join(repoRoot, "codex", "plugins")),
     cacheRoot: resolve(options.cacheRoot ?? join(homeRoot, ".codex", "plugins", "cache", "personal"))
   };
+}
+function getDefaultOpenCodeConfigPath(openCodeRoot) {
+  const jsoncPath = join(openCodeRoot, "opencode.jsonc");
+  return existsSync(jsoncPath) ? jsoncPath : join(openCodeRoot, "opencode.json");
 }
 function assertPathInside(parent, child) {
   const parentPath = resolve(parent);
@@ -3365,12 +3373,25 @@ async function readPluginManifest(pluginRoot) {
 
 // src/domain/codex-plugin-install-manager.ts
 async function installRepositoryCodexPlugins(paths) {
+  const plugins = await discoverEnabledRepositoryCodexPlugins(paths);
+  const selectedNames = plugins.map((plugin) => plugin.name);
+  const installedPlugins = await installCodexPlugins({
+    homeRoot: paths.homeRoot,
+    configPath: join2(paths.localCodexRoot, "config.toml"),
+    marketplacePath: paths.marketplacePath,
+    plugins,
+    selectedNames
+  });
+  const syncedPluginCaches = await Promise.all(plugins.map((plugin) => syncCodexPluginCache({ cacheRoot: paths.cacheRoot, plugin })));
+  return { installedPlugins, syncedPluginCaches };
+}
+async function discoverEnabledRepositoryCodexPlugins(paths) {
   const manifest = await readPluginManifest2(paths.repoCodexRoot);
   const discovered = await discoverCodexPlugins(paths.pluginsRoot);
   const disabledNames = new Set(manifest.plugins.filter((plugin) => plugin.enabled === false).map((plugin) => plugin.name));
   const configured = manifest.plugins.filter((plugin) => plugin.enabled && plugin.source === "repo");
   const configuredNames = new Set(configured.map((plugin) => plugin.name));
-  const plugins = await Promise.all([
+  return Promise.all([
     ...configured.map(async (entry) => {
       const root = resolve3(paths.repoRoot, entry.path);
       assertPathInside(paths.repoCodexRoot, root);
@@ -3383,16 +3404,6 @@ async function installRepositoryCodexPlugins(paths) {
     }),
     ...discovered.filter((plugin) => !configuredNames.has(plugin.name) && !disabledNames.has(plugin.name))
   ]);
-  const selectedNames = plugins.map((plugin) => plugin.name);
-  const installedPlugins = await installCodexPlugins({
-    homeRoot: paths.homeRoot,
-    configPath: join2(paths.localCodexRoot, "config.toml"),
-    marketplacePath: paths.marketplacePath,
-    plugins,
-    selectedNames
-  });
-  const syncedPluginCaches = await Promise.all(plugins.map((plugin) => syncCodexPluginCache({ cacheRoot: paths.cacheRoot, plugin })));
-  return { installedPlugins, syncedPluginCaches };
 }
 async function readPluginManifest2(repoCodexRoot) {
   const path = join2(repoCodexRoot, "plugins.manifest.json");
@@ -5035,8 +5046,468 @@ function createInternalCompleteCommand(resolveRootCommand) {
   });
 }
 
+// src/command/opencode.command.ts
+var import_picocolors4 = __toESM(require_picocolors(), 1);
+
+// src/domain/opencode-config-manager.ts
+import { mkdir as mkdir5, readFile as readFile6, rename as rename3, rm as rm4, writeFile as writeFile4 } from "node:fs/promises";
+import { dirname as dirname7, isAbsolute as isAbsolute3, resolve as resolve5 } from "node:path";
+async function syncOpenCodeSkillPaths(input) {
+  const plugins = [];
+  const paths = [];
+  for (const plugin of input.plugins) {
+    const pluginPaths = await readPluginSkillPaths(plugin);
+    if (pluginPaths.length === 0) {
+      continue;
+    }
+    plugins.push({ name: plugin.name, paths: pluginPaths });
+    paths.push(...pluginPaths);
+  }
+  const config = await readOpenCodeConfig(input.configPath);
+  const currentSkills = readOptionalRecord(config.skills, "skills");
+  const currentPaths = readOptionalStringArray(currentSkills?.paths, "skills.paths");
+  const nextPaths = uniqueStrings([...currentPaths, ...paths]);
+  const changed = !sameStringArray(currentPaths, nextPaths);
+  if (changed) {
+    config.skills = { ...currentSkills ?? {}, paths: nextPaths };
+    await writeOpenCodeConfig(input.configPath, config);
+  }
+  return {
+    configPath: input.configPath,
+    paths: nextPaths,
+    plugins,
+    changed
+  };
+}
+async function syncOpenCodeMcpServers(input) {
+  const servers = new Map;
+  for (const plugin of input.plugins) {
+    const pluginServers = await readPluginMcpServers(plugin);
+    for (const [name, value] of Object.entries(pluginServers)) {
+      const previous = servers.get(name);
+      if (previous && JSON.stringify(previous.value) !== JSON.stringify(value)) {
+        throw new Error(`MCP server name collision for "${name}" between ${previous.plugin} and ${plugin.name}.`);
+      }
+      servers.set(name, { plugin: plugin.name, value });
+    }
+  }
+  const config = await readOpenCodeConfig(input.configPath);
+  const currentMcp = readOptionalRecord(config.mcp, "mcp");
+  const nextMcp = { ...currentMcp ?? {} };
+  let changed = false;
+  const resultServers = [];
+  for (const [name, entry] of servers) {
+    resultServers.push({ name, plugin: entry.plugin });
+    if (JSON.stringify(nextMcp[name]) !== JSON.stringify(entry.value)) {
+      nextMcp[name] = entry.value;
+      changed = true;
+    }
+  }
+  if (changed) {
+    config.mcp = nextMcp;
+    await writeOpenCodeConfig(input.configPath, config);
+  }
+  return {
+    configPath: input.configPath,
+    servers: resultServers,
+    changed
+  };
+}
+async function readOpenCodeConfig(configPath) {
+  let raw;
+  try {
+    raw = await readFile6(configPath, "utf8");
+  } catch (error) {
+    if (isMissingFileError4(error)) {
+      return {};
+    }
+    throw error;
+  }
+  try {
+    const value = JSON.parse(parseJsonc(raw));
+    if (!isRecord4(value)) {
+      throw new Error("expected a JSON object");
+    }
+    return value;
+  } catch (error) {
+    throw new Error(`Invalid OpenCode config JSON: ${configPath}`, {
+      cause: error
+    });
+  }
+}
+async function writeOpenCodeConfig(configPath, config) {
+  const path = resolve5(configPath);
+  const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  await mkdir5(dirname7(path), { recursive: true });
+  try {
+    await writeFile4(temporaryPath, `${JSON.stringify(config, null, 2)}
+`, "utf8");
+    await rename3(temporaryPath, path);
+  } finally {
+    await rm4(temporaryPath, { force: true });
+  }
+}
+async function readPluginSkillPaths(plugin) {
+  const manifest = await readPluginJson(plugin);
+  const declared = manifest.skills;
+  const candidates = typeof declared === "string" ? [declared] : Array.isArray(declared) ? declared.filter((value) => typeof value === "string") : [];
+  return candidates.map((candidate) => {
+    const path = resolve5(plugin.root, candidate);
+    assertPathInside(plugin.root, path);
+    return path;
+  });
+}
+async function readPluginMcpServers(plugin) {
+  const path = resolve5(plugin.root, ".mcp.json");
+  let parsed;
+  try {
+    parsed = JSON.parse(await readFile6(path, "utf8"));
+  } catch (error) {
+    if (isMissingFileError4(error)) {
+      return {};
+    }
+    throw new Error(`Invalid plugin MCP config JSON: ${path}`, {
+      cause: error
+    });
+  }
+  if (!isRecord4(parsed) || parsed.mcpServers === undefined) {
+    return {};
+  }
+  const sourceServers = readRecord(parsed.mcpServers, "mcpServers");
+  return Object.fromEntries(Object.entries(sourceServers).map(([name, value]) => [
+    name,
+    renderOpenCodeMcpServer(plugin, name, readRecord(value, `mcpServers.${name}`))
+  ]));
+}
+function renderOpenCodeMcpServer(plugin, name, source) {
+  if (typeof source.url === "string" && source.url.trim().length > 0) {
+    return {
+      type: "remote",
+      url: source.url,
+      ...isRecord4(source.headers) ? { headers: source.headers } : {},
+      enabled: source.enabled !== false
+    };
+  }
+  const command = readCommand(source.command, name).map((entry) => entry.replaceAll("<PLUGIN_ROOT>", plugin.root));
+  const args = (source.args === undefined ? [] : readStringArray(source.args, `mcpServers.${name}.args`)).map((entry) => entry.replaceAll("<PLUGIN_ROOT>", plugin.root));
+  const environment = readEnvironment(source.env, name);
+  const cwd = resolveMcpCwd(plugin, source.cwd);
+  const timeout = readTimeout(source.tool_timeout_sec, name);
+  return {
+    type: "local",
+    command: [...command, ...args],
+    ...environment ? { environment } : {},
+    ...cwd ? { cwd } : {},
+    ...timeout ? { timeout } : {},
+    enabled: source.enabled !== false
+  };
+}
+function readCommand(value, name) {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return [value];
+  }
+  if (Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
+    if (value.length > 0) {
+      return value;
+    }
+  }
+  throw new Error(`MCP server ${name} must declare a command or URL.`);
+}
+function readEnvironment(value, name) {
+  if (value === undefined) {
+    return;
+  }
+  const source = readRecord(value, `mcpServers.${name}.env`);
+  return Object.fromEntries(Object.entries(source).map(([key, entry]) => {
+    if (typeof entry !== "string" && typeof entry !== "number" && typeof entry !== "boolean") {
+      throw new Error(`MCP environment value must be scalar: mcpServers.${name}.env.${key}`);
+    }
+    return [key, String(entry)];
+  }));
+}
+function readTimeout(value, name) {
+  if (value === undefined) {
+    return;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`Invalid MCP timeout for ${name}.`);
+  }
+  return Math.round(value * 1000);
+}
+function resolveMcpCwd(plugin, value) {
+  if (value === undefined) {
+    return plugin.root;
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Invalid MCP cwd for ${plugin.name}.`);
+  }
+  const replaced = value.replaceAll("<PLUGIN_ROOT>", plugin.root);
+  return isAbsolute3(replaced) ? resolve5(replaced) : resolve5(plugin.root, replaced);
+}
+async function readPluginJson(plugin) {
+  const path = resolve5(plugin.root, ".codex-plugin", "plugin.json");
+  try {
+    const value = JSON.parse(await readFile6(path, "utf8"));
+    if (!isRecord4(value)) {
+      throw new Error("expected a JSON object");
+    }
+    return value;
+  } catch (error) {
+    throw new Error(`Invalid plugin manifest JSON: ${path}`, { cause: error });
+  }
+}
+function readOptionalRecord(value, label) {
+  if (value === undefined) {
+    return;
+  }
+  return readRecord(value, label);
+}
+function readRecord(value, label) {
+  if (!isRecord4(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+  return value;
+}
+function readOptionalStringArray(value, label) {
+  if (value === undefined) {
+    return [];
+  }
+  return readStringArray(value, label);
+}
+function readStringArray(value, label) {
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
+    throw new Error(`${label} must be an array of strings.`);
+  }
+  return [...value];
+}
+function uniqueStrings(values) {
+  return [...new Set(values)];
+}
+function sameStringArray(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+function parseJsonc(value) {
+  const withoutComments = stripJsonComments(value);
+  return stripTrailingCommas(withoutComments);
+}
+function stripJsonComments(value) {
+  let output = "";
+  let inString = false;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = 0;index < value.length; index += 1) {
+    const current = value[index] ?? "";
+    const next = value[index + 1] ?? "";
+    if (lineComment) {
+      if (current === `
+` || current === "\r") {
+        lineComment = false;
+        output += current;
+      } else {
+        output += " ";
+      }
+      continue;
+    }
+    if (blockComment) {
+      if (current === "*" && next === "/") {
+        blockComment = false;
+        output += "  ";
+        index += 1;
+      } else {
+        output += current === `
+` || current === "\r" ? current : " ";
+      }
+      continue;
+    }
+    if (inString) {
+      output += current;
+      if (escaped) {
+        escaped = false;
+      } else if (current === "\\") {
+        escaped = true;
+      } else if (current === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (current === '"') {
+      inString = true;
+      output += current;
+    } else if (current === "/" && next === "/") {
+      lineComment = true;
+      output += "  ";
+      index += 1;
+    } else if (current === "/" && next === "*") {
+      blockComment = true;
+      output += "  ";
+      index += 1;
+    } else {
+      output += current;
+    }
+  }
+  return output;
+}
+function stripTrailingCommas(value) {
+  let output = "";
+  let inString = false;
+  let escaped = false;
+  for (let index = 0;index < value.length; index += 1) {
+    const current = value[index] ?? "";
+    if (inString) {
+      output += current;
+      if (escaped) {
+        escaped = false;
+      } else if (current === "\\") {
+        escaped = true;
+      } else if (current === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (current === '"') {
+      inString = true;
+      output += current;
+      continue;
+    }
+    if (current === ",") {
+      let lookahead = index + 1;
+      while (/\s/u.test(value[lookahead] ?? "")) {
+        lookahead += 1;
+      }
+      if (value[lookahead] === "}" || value[lookahead] === "]") {
+        continue;
+      }
+    }
+    output += current;
+  }
+  return output;
+}
+function isRecord4(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isMissingFileError4(error) {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+// src/command/opencode.command.ts
+var commonArgs2 = {
+  ...cliContractArgs,
+  repoRoot: { type: "string", description: "Override the repository root" },
+  home: { type: "string", description: "Override the home directory" },
+  pluginsRoot: {
+    type: "string",
+    description: "Override the repository-managed codex/plugins directory"
+  },
+  openCodeHome: {
+    type: "string",
+    description: "Override the OpenCode configuration directory"
+  },
+  openCodeConfig: {
+    type: "string",
+    description: "Override the OpenCode JSON or JSONC config path"
+  }
+};
+function getStringArg2(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+function createPaths2(args) {
+  return createCodexConfigPaths({
+    repoRoot: getStringArg2(args.repoRoot),
+    homeRoot: getStringArg2(args.home),
+    pluginsRoot: getStringArg2(args.pluginsRoot),
+    openCodeHome: getStringArg2(args.openCodeHome),
+    openCodeConfig: getStringArg2(args.openCodeConfig)
+  });
+}
+async function runObservedOpenCodeSubcommand(subcommand, args, run) {
+  await runObservedCliCommand(args, { command: "opencode", subcommand }, run);
+}
+async function runSkills2(args, scope) {
+  const paths = createPaths2(args);
+  const plugins = await discoverEnabledRepositoryCodexPlugins(paths);
+  const result = await syncOpenCodeSkillPaths({
+    configPath: paths.openCodeConfigPath,
+    plugins
+  });
+  if (scope.context.json) {
+    writeJsonValue(processOutput, {
+      ok: true,
+      command: "opencode skills",
+      result
+    });
+  } else {
+    writeHumanStatus(scope.context, processOutput, import_picocolors4.default.cyan("OpenCode skills"));
+    writeHumanStatus(scope.context, processOutput, `${result.changed ? "updated" : "unchanged"} ${result.configPath}`);
+    for (const plugin of result.plugins) {
+      writeHumanStatus(scope.context, processOutput, `${plugin.name}: ${plugin.paths.join(", ")}`);
+    }
+    if (result.plugins.length === 0) {
+      writeHumanStatus(scope.context, processOutput, import_picocolors4.default.dim("(no plugin skills)"));
+    }
+  }
+  process.exitCode = 0;
+}
+async function runMcp(args, scope) {
+  const paths = createPaths2(args);
+  const plugins = await discoverEnabledRepositoryCodexPlugins(paths);
+  const result = await syncOpenCodeMcpServers({
+    configPath: paths.openCodeConfigPath,
+    plugins
+  });
+  if (scope.context.json) {
+    writeJsonValue(processOutput, {
+      ok: true,
+      command: "opencode mcp",
+      result
+    });
+  } else {
+    writeHumanStatus(scope.context, processOutput, import_picocolors4.default.cyan("OpenCode MCP"));
+    writeHumanStatus(scope.context, processOutput, `${result.changed ? "updated" : "unchanged"} ${result.configPath}`);
+    for (const server of result.servers) {
+      writeHumanStatus(scope.context, processOutput, `${server.name} <- ${server.plugin}`);
+    }
+    if (result.servers.length === 0) {
+      writeHumanStatus(scope.context, processOutput, import_picocolors4.default.dim("(no plugin MCP servers)"));
+    }
+  }
+  process.exitCode = 0;
+}
+var opencodeCommand = defineCommand({
+  meta: {
+    name: "opencode",
+    description: "Sync shared CthuCodex skills and MCP servers to OpenCode."
+  },
+  subCommands: {
+    skills: defineCommand({
+      meta: {
+        name: "skills",
+        description: "Expose repository plugin skills to OpenCode."
+      },
+      args: commonArgs2,
+      async run({ args }) {
+        await runObservedOpenCodeSubcommand("skills", args, async (scope) => {
+          await runSkills2(args, scope);
+        });
+      }
+    }),
+    mcp: defineCommand({
+      meta: {
+        name: "mcp",
+        description: "Sync repository plugin MCP servers to OpenCode."
+      },
+      args: commonArgs2,
+      async run({ args }) {
+        await runObservedOpenCodeSubcommand("mcp", args, async (scope) => {
+          await runMcp(args, scope);
+        });
+      }
+    })
+  }
+});
+
 // src/command/run-scripts.command.ts
-var import_picocolors5 = __toESM(require_picocolors(), 1);
+var import_picocolors6 = __toESM(require_picocolors(), 1);
 
 // ../../node_modules/.pnpm/neverthrow@8.2.0/node_modules/neverthrow/dist/index.cjs.js
 var defaultErrorConfig = {
@@ -5053,11 +5524,11 @@ var createNeverThrowError = (message, result, config = defaultErrorConfig) => {
 };
 function __awaiter(thisArg, _arguments, P5, generator) {
   function adopt(value) {
-    return value instanceof P5 ? value : new P5(function(resolve5) {
-      resolve5(value);
+    return value instanceof P5 ? value : new P5(function(resolve6) {
+      resolve6(value);
     });
   }
-  return new (P5 || (P5 = Promise))(function(resolve5, reject) {
+  return new (P5 || (P5 = Promise))(function(resolve6, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -5073,7 +5544,7 @@ function __awaiter(thisArg, _arguments, P5, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve5(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve6(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -5161,14 +5632,14 @@ function __asyncValues(o3) {
   }, i2);
   function verb(n2) {
     i2[n2] = o3[n2] && function(v3) {
-      return new Promise(function(resolve5, reject) {
-        v3 = o3[n2](v3), settle(resolve5, reject, v3.done, v3.value);
+      return new Promise(function(resolve6, reject) {
+        v3 = o3[n2](v3), settle(resolve6, reject, v3.done, v3.value);
       });
     };
   }
-  function settle(resolve5, reject, d3, v3) {
+  function settle(resolve6, reject, d3, v3) {
     Promise.resolve(v3).then(function(v4) {
-      resolve5({ value: v4, done: d3 });
+      resolve6({ value: v4, done: d3 });
     }, reject);
   }
 }
@@ -5595,14 +6066,14 @@ function runBundledScript(pkg, args, context) {
 }
 
 // src/infra/bundled-script-catalog.ts
-var import_picocolors4 = __toESM(require_picocolors(), 1);
+var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
 import { existsSync as existsSync2 } from "node:fs";
-import { dirname as dirname7, join as join8 } from "node:path";
+import { dirname as dirname8, join as join8 } from "node:path";
 import { fileURLToPath } from "node:url";
 function getBundledScriptsRoot() {
-  const moduleDir = dirname7(fileURLToPath(import.meta.url));
+  const moduleDir = dirname8(fileURLToPath(import.meta.url));
   const candidates = [
     join8(moduleDir, "scripts"),
     join8(moduleDir, "../scripts"),
@@ -5612,7 +6083,7 @@ function getBundledScriptsRoot() {
 }
 
 // src/infra/discover-scripts.ts
-import { readdir as readdir2, readFile as readFile6, stat } from "node:fs/promises";
+import { readdir as readdir2, readFile as readFile7, stat } from "node:fs/promises";
 import { join as join9 } from "node:path";
 
 // src/domain/script-id.ts
@@ -5999,7 +6470,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let rawJson;
     try {
-      rawJson = await readFile6(manifestPath, "utf8");
+      rawJson = await readFile7(manifestPath, "utf8");
     } catch (e3) {
       const msg = e3 instanceof Error ? e3.message : String(e3);
       pushWarning(warnings, manifestPath, `cannot read manifest: ${msg}`);
@@ -6073,7 +6544,7 @@ function formatBundledScriptCatalog(catalog, heading = "AVAILABLE SCRIPTS") {
   } else {
     for (const row of rows) {
       const detail = row.description ? `${row.title} — ${row.description}` : row.title;
-      lines.push(`  ${import_picocolors4.default.cyan(row.id.padEnd(width + 2))}${detail}`);
+      lines.push(`  ${import_picocolors5.default.cyan(row.id.padEnd(width + 2))}${detail}`);
     }
   }
   if (catalog.warnings.length > 0) {
@@ -6106,7 +6577,7 @@ async function renderBundledScriptHelpAppendix() {
 var defaultDeps = {
   isInteractive: () => process.stdin.isTTY === true,
   pickScriptId: async (rows) => {
-    pe(import_picocolors5.default.cyan("▶ Script Selection"));
+    pe(import_picocolors6.default.cyan("▶ Script Selection"));
     const choice = await le2({
       message: "Choose a bundled script to run",
       options: rows.map((o3) => ({
@@ -6202,7 +6673,7 @@ async function executeBundledScript(args, deps) {
     }
   });
   for (const warning of catalog.warnings) {
-    writeWarning(processOutput, import_picocolors5.default.yellow(`${warning.path}: ${warning.message}`));
+    writeWarning(processOutput, import_picocolors6.default.yellow(`${warning.path}: ${warning.message}`));
     diagnostics.emit({
       level: "warn",
       event: "cli.script_discovery_warning",
@@ -6368,14 +6839,14 @@ var createScriptsCommand = (deps = defaultDeps) => {
 var scriptsCommand = createScriptsCommand();
 
 // src/command/self-update.command.ts
-var import_picocolors7 = __toESM(require_picocolors(), 1);
+var import_picocolors8 = __toESM(require_picocolors(), 1);
 
 // src/domain/self-update-manager.ts
 import { spawn } from "node:child_process";
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "node:fs";
-import { mkdir as mkdir5 } from "node:fs/promises";
+import { mkdir as mkdir6 } from "node:fs/promises";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname8, join as join10, resolve as resolve5 } from "node:path";
+import { dirname as dirname9, join as join10, resolve as resolve6 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var defaultSelfUpdateRepo = "https://github.com/mickmetalholic/CthuTool.git";
 var defaultSelfUpdateRef = "main";
@@ -6414,7 +6885,7 @@ function createSelfUpdateDeps(onEvent) {
   return {
     exists: existsSync3,
     mkdir: async (path) => {
-      await mkdir5(path, { recursive: true });
+      await mkdir6(path, { recursive: true });
     },
     run: runCommand2,
     env: process.env,
@@ -6432,7 +6903,7 @@ async function resolveSelfUpdateSource(options, deps) {
   const envInstallDir = nonEmpty(deps.env.CHC_INSTALL_DIR);
   const explicitInstallDir = options.installDir !== undefined || envInstallDir !== undefined;
   const installDir = options.installDir ?? envInstallDir ?? runtimeRoot;
-  const mode = resolve5(runtimeRoot) === resolve5(managedRoot) ? "remote" : "local";
+  const mode = resolve6(runtimeRoot) === resolve6(managedRoot) ? "remote" : "local";
   const gitRoot = join10(installDir, ".git");
   const canInspectCheckout = deps.exists(gitRoot);
   const repoOverride = options.repo ?? nonEmpty(deps.env.CHC_REPO_URL) ?? nonEmpty(deps.env.CHC_REPO);
@@ -6662,7 +7133,7 @@ async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
       before: initial,
       target: remote.target,
       targetKind: remote.isBranch ? "branch" : "detached",
-      relinkRequired: resolve5(resolved.installDir) !== resolve5(resolved.runtimeRoot),
+      relinkRequired: resolve6(resolved.installDir) !== resolve6(resolved.runtimeRoot),
       phases
     });
   }
@@ -6776,7 +7247,7 @@ async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
   const isInstall = plan.status === "install_required";
   if (isInstall) {
     await runPhase(deps, "clone", async () => {
-      await deps.mkdir(dirname8(plan.installDir));
+      await deps.mkdir(dirname9(plan.installDir));
       await execute(deps, "clone", "git", [
         "clone",
         resolved.repo,
@@ -6875,7 +7346,7 @@ async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDep
   }) : undefined;
   return {
     version: getCliVersion(),
-    mode: resolve5(resolved.installDir) === resolve5(resolved.managedRoot) ? "remote" : "local",
+    mode: resolve6(resolved.installDir) === resolve6(resolved.managedRoot) ? "remote" : "local",
     installDir: resolved.installDir,
     repo,
     ref,
@@ -6968,12 +7439,12 @@ function runCommand2(command, args, options = {}) {
   });
 }
 function findRepoRootFromModule() {
-  let current = dirname8(fileURLToPath2(import.meta.url));
+  let current = dirname9(fileURLToPath2(import.meta.url));
   while (true) {
     if (isCthuToolRoot(current)) {
       return current;
     }
-    const parent = dirname8(current);
+    const parent = dirname9(current);
     if (parent === current) {
       throw new Error("Unable to locate CthuTool package root.");
     }
@@ -6997,7 +7468,7 @@ function readPackageVersion(root) {
 }
 
 // src/command/self-update-output.ts
-var import_picocolors6 = __toESM(require_picocolors(), 1);
+var import_picocolors7 = __toESM(require_picocolors(), 1);
 var defaultDeps2 = {
   output: processOutput,
   isOutputTty: () => process.stdout.isTTY === true,
@@ -7018,7 +7489,7 @@ function identity(value) {
 function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
   const human = !context.json && !context.quiet;
   const interactiveOutput = human && context.isTty && deps.isOutputTty();
-  const colors2 = import_picocolors6.default.createColors(interactiveOutput);
+  const colors2 = import_picocolors7.default.createColors(interactiveOutput);
   let activeSpinner;
   let activePhase;
   let headerWritten = false;
@@ -7186,7 +7657,7 @@ var selfUpdateArgs = {
     description: "Show bounded Git and npm command details"
   }
 };
-function getStringArg2(value) {
+function getStringArg3(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 function toUpdateCliError(error) {
@@ -7218,9 +7689,9 @@ function createUpdateCommand() {
     args: selfUpdateArgs,
     async run({ args }) {
       await runObservedCliCommand(args, { command: "update" }, async ({ context, fail }) => {
-        const repo = getStringArg2(args.repo);
-        const ref = getStringArg2(args.ref);
-        const installDir = getStringArg2(args["install-dir"]);
+        const repo = getStringArg3(args.repo);
+        const ref = getStringArg3(args.ref);
+        const installDir = getStringArg3(args["install-dir"]);
         const renderer = createSelfUpdateRenderer(context, {
           verbose: args.verbose === true
         });
@@ -7302,9 +7773,9 @@ var statusCommand = defineCommand({
     await runObservedCliCommand(args, { command: "status" }, async ({ context, fail }) => {
       try {
         const status = await getCliInstallationStatus({
-          repo: getStringArg2(args.repo),
-          ref: getStringArg2(args.ref),
-          installDir: getStringArg2(args["install-dir"])
+          repo: getStringArg3(args.repo),
+          ref: getStringArg3(args.ref),
+          installDir: getStringArg3(args["install-dir"])
         });
         if (context.json) {
           writeJsonValue(processOutput, {
@@ -7313,7 +7784,7 @@ var statusCommand = defineCommand({
             status
           });
         } else {
-          writeHumanStatus(context, processOutput, import_picocolors7.default.cyan("CthuTool status"));
+          writeHumanStatus(context, processOutput, import_picocolors8.default.cyan("CthuTool status"));
           writeHumanStatus(context, processOutput, `version:     ${status.version}`);
           writeHumanStatus(context, processOutput, `mode:        ${status.mode}`);
           writeHumanStatus(context, processOutput, `install dir: ${status.installDir}`);
@@ -7339,6 +7810,12 @@ var rootCommandRegistrations = [
   {
     name: "codex",
     command: codexCommand,
+    visibility: "public",
+    bareBehavior: "help"
+  },
+  {
+    name: "opencode",
+    command: opencodeCommand,
     visibility: "public",
     bareBehavior: "help"
   },
@@ -7409,7 +7886,7 @@ function normalizeCommandRows(value, hiddenCommands) {
     }
     const width = Math.max(...visibleRows.map((row) => row.name.length));
     for (const row of visibleRows) {
-      normalized.push(`  ${import_picocolors8.default.bold(import_picocolors8.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
+      normalized.push(`  ${import_picocolors9.default.bold(import_picocolors9.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
     }
     pendingRows = [];
   };

@@ -228,6 +228,24 @@ registers them in the personal marketplace, enables them in Codex, normalizes
 plugin metadata, and synchronizes the personal plugin cache. It does not read or
 install skills and does not synchronize prompts or rules.
 
+## OpenCode Shared Assets
+
+```bash
+chc opencode skills
+chc opencode mcp
+```
+
+These commands use the same repository plugin sources as `chc codex install`.
+`chc opencode skills` adds enabled plugin skill directories to OpenCode's
+`skills.paths`; `chc opencode mcp` translates each plugin `.mcp.json` into
+OpenCode's `mcp` configuration. Existing unrelated OpenCode configuration is
+preserved, and these commands do not create an OpenCode plugin or `install`
+command.
+
+The default target is `~/.config/opencode/opencode.json` (or an existing
+`opencode.jsonc`). Use `--open-code-config`, `--open-code-home`, or
+`--plugins-root` to override the target and source paths.
+
 ## Local Development
 
 For local development, install the checkout once and keep the built CLI

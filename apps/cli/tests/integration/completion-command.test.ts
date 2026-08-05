@@ -142,6 +142,7 @@ describe('shell completion command', () => {
     expect(lines((await runCli(['__complete', ''])).out)).toEqual([
       'codex',
       'completion',
+      'opencode',
       'scripts',
       'status',
       'update',
@@ -149,6 +150,10 @@ describe('shell completion command', () => {
     expect(lines((await runCli(['__complete', 'co'])).out)).toEqual([
       'codex',
       'completion',
+    ]);
+    expect(lines((await runCli(['__complete', 'opencode', ''])).out)).toEqual([
+      'mcp',
+      'skills',
     ]);
     expect(lines((await runCli(['__complete', 'codex', ''])).out)).toEqual([
       'install',
