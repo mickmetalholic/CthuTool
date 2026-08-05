@@ -34,7 +34,7 @@ describe("CI workflow contract", () => {
     for (const yml of [
       readWorkflow("ci.yml"),
       readWorkflow("cli.yml"),
-      readWorkflow("desktop.yml"),
+      readWorkflow("agent-release.yml"),
     ]) {
       expect(yml).toContain(
         "NPM_CONFIG_REGISTRY: https://registry.npmjs.org/",

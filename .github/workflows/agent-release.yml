@@ -55,6 +55,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Keep the repository mirror for local development, but use npmjs on GitHub-hosted runners.
+  NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+
 concurrency:
   group: agent-release-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
