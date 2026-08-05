@@ -1,86 +1,41 @@
 ---
 title: Observability
-description: Metrics, logs, traces, readiness, and dashboards for Kubernetes-managed CthuTool services.
+description: Application-level metrics, logs, traces, and readiness for CthuTool services.
 ---
 
-Use this page when operating CthuTool in Kubernetes and you need to inspect service health beyond a single `/health` request.
+Use this page when operating CthuTool and you need to inspect service health beyond a single `/health` request. The cluster-wide observability platform is an external deployment platform responsibility; CthuOps may take it over later. CthuTool keeps application-level diagnostics so runtime behavior and local troubleshooting data are preserved.
 
-## Stack Components
+## Application Diagnostics
 
-The observability stack is managed by ArgoCD Applications under `gitops/apps/` and runs in the `observability` namespace.
-
-| Component | Application | Purpose |
-| --- | --- | --- |
-| Prometheus and Grafana | `observability-kube-prometheus-stack` | Metrics collection, alerting foundation, dashboards, and Kubernetes workload views |
-| Loki | `observability-loki` | Structured log storage and query |
-| Grafana Alloy | `observability-alloy` | Kubernetes stdout/stderr log collection into Loki |
-| Tempo | `observability-tempo` | Trace storage and query |
-| OpenTelemetry Collector | `observability-otel-collector` | OTLP trace ingestion and forwarding to Tempo |
-
-Source details live in `gitops/observability/README.md`.
-
-## Health and Readiness
-
-The backend exposes separate health endpoints:
+The backend exposes diagnostics directly from its HTTP service:
 
 ```text
 GET /health
 GET /health/ready
-```
-
-`/health` is process liveness. Kubernetes uses it for the liveness probe.
-
-`/health/ready` is dependency readiness. Kubernetes uses it for the readiness probe so degraded dependencies can keep a pod out of Service traffic without treating the process as dead.
-
-## Metrics
-
-The backend exposes Prometheus metrics at:
-
-```text
 GET /metrics
 ```
 
-`k8s/service.yaml` opts the backend Service into scraping with annotations:
+- `/health` is process liveness.
+- `/health/ready` is dependency readiness.
+- `/metrics` exposes Prometheus-compatible metrics in the text exposition format and is not a Kubernetes probe.
 
-```yaml
-prometheus.io/scrape: "true"
-prometheus.io/path: /metrics
-prometheus.io/port: "3000"
-```
+Backend structured logs are written to stdout/stderr as JSON records and remain available to local tooling or whatever external log collector is selected by the deployment platform. Correlation values such as request IDs, trace IDs, and command IDs remain structured log fields rather than storage-platform labels.
 
-`/metrics` is not a Kubernetes probe. Use `/health` and `/health/ready` for probes.
+## Metrics
+
+The backend exposes Prometheus metrics at `GET /metrics` through the existing backend HTTP service so an external metrics consumer can scrape it when configured. CthuTool does not require a particular GitOps-managed Prometheus stack; scraping and alerting are configured by the owning deployment platform.
 
 ## Logs
 
-Backend logs are written to pod stdout/stderr. Grafana Alloy collects Kubernetes logs and writes them to Loki.
-
-Use bounded Loki labels for lookup:
-
-```text
-namespace
-app
-component
-pod
-container
-```
-
-Request IDs, trace IDs, command IDs, URLs, session IDs, and user-provided values should remain structured log fields rather than Loki labels.
+Backend logs are written to pod stdout/stderr as structured JSON records. Cluster log storage and collection (for example Loki or Grafana Alloy) are configured by the owning operations platform and are not part of CthuTool's source repository.
 
 ## Traces
 
-The backend exports OpenTelemetry traces when an OTLP endpoint is configured. In Kubernetes, `k8s/configmap.yaml` points the backend at:
-
-```text
-http://otel-collector.observability.svc.cluster.local:4318
-```
-
-The OpenTelemetry Collector accepts OTLP HTTP and gRPC and forwards traces to Tempo. Prometheus remains the metrics path and Loki remains the log path.
+The backend exports OpenTelemetry traces only when an OTLP endpoint is configured in its environment (`OTEL_SDK_DISABLED=true` disables tracing entirely). The deployment platform configures any collector and trace backend; CthuTool keeps the optional trace export code but does not own collector or Tempo deployment state.
 
 ## Dashboards and Alerts
 
-The kube-prometheus-stack values include a starter Grafana dashboard for CthuTool Kubernetes workloads. The current alert rule foundation covers backend target availability, readiness degradation, HTTP error rate, HTTP p95 latency, browser task timeouts, and local Agent command failures.
-
-Notification receivers such as email, Slack, PagerDuty, or webhooks are environment-specific and are not configured by this repository.
+Dashboards and alert rules for the Backend are owned by the deployment platform (for example CthuOps) using the retained Backend health and metrics contracts. CthuTool no longer provisions Grafana dashboards, Prometheus alert rules, or notification receivers.
 
 ## Safety Boundary
 
@@ -90,5 +45,4 @@ Requirement sources:
 
 - `openspec/specs/apps-backend-observability/spec.md`
 - `openspec/specs/apps-runtime-structured-logs/spec.md`
-- `openspec/specs/gitops-observability-stack/spec.md`
 - `openspec/specs/packages-config-observability/spec.md`

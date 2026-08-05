@@ -1,4 +1,4 @@
-# Web Sub-Application
+# Backend Sub-Application
 
 This README is the package-local backend development reference. For user-facing
 homelab deployment and operations documentation, see the docs site under
@@ -21,11 +21,13 @@ pnpm install
 Use explicit runtime configuration:
 
 ```bash
-PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/backend run start:dev
+PORT=3000 NODE_ENV=development LOG_LEVEL=info pnpm --filter @cthutool/backend run dev
 ```
 
-This command is for local development and debugging. Homelab deployment is
-defined by the Kubernetes and GitOps manifests in `gitops/` and `k8s/`.
+This command is for local development and debugging only. Homelab deployment is
+owned by the separate `CthuOps` repository, which pins the published GHCR image
+digest and reconciles the Backend Deployment through Argo CD. CthuTool itself no
+longer contains Kubernetes or GitOps deployment manifests.
 
 ## Verify
 - Health endpoint: `curl http://localhost:3000/health`

@@ -12,7 +12,6 @@ const targets = {
     workspacePackage: '@cthutool/backend',
     extraPaths: [
       '.github/workflows/backend.yml',
-      'k8s/**',
       'package.json',
       'pnpm-lock.yaml',
       'pnpm-workspace.yaml',

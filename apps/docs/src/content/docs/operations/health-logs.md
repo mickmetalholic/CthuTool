@@ -1,7 +1,11 @@
 ---
 title: Health and Logs
-description: Health checks and log entry points for Kubernetes-managed CthuTool services.
+description: Health checks and log entry points for CthuTool services deployed through CthuOps.
 ---
+
+The homelab cluster deployment of CthuTool services is owned by the separate
+**CthuOps** repository. The commands below operate on the live cluster; durable
+deployment changes belong in CthuOps, not in the CthuTool checkout.
 
 ## Backend Health
 
@@ -68,6 +72,6 @@ curl http://localhost:3000/metrics
 
 ## Local Development Diagnostics
 
-Running the backend from a checkout with `pnpm --filter @cthutool/backend run start:dev` is a development/debugging workflow. Use it to reproduce backend behavior outside the cluster, not as the homelab deployment path.
+Running the backend from a checkout with `pnpm --filter @cthutool/backend run dev` is a development/debugging workflow. Use it to reproduce backend behavior outside the cluster, not as the homelab deployment path.
 
 Package-local commands remain documented in `apps/backend/README.md`.

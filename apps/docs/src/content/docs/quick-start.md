@@ -7,31 +7,26 @@ Use this path when you want the current CthuTool pieces running without reading 
 
 ## 1. Prepare the Homelab Cluster
 
-CthuTool server-side services deploy through Kubernetes/GitOps. For a small homelab, k3s is the expected Kubernetes distribution, but the manifests are ordinary Kubernetes resources.
+CthuTool server-side services deploy through Kubernetes/GitOps managed by the separate **CthuOps** repository. CthuTool is the image-producing source repository: it builds `apps/backend/Dockerfile` and publishes GHCR tags.
 
 You need:
 
 - a Kubernetes or k3s cluster reachable with `kubectl`
-- ArgoCD installed in the cluster
-- access to this repository's `gitops/` and `k8s/` directories
+- ArgoCD installed in the cluster (see CthuOps `bootstrap/`)
+- access to the CthuOps repository at `https://github.com/mickmetalholic/CthuOps`
 
-Install ArgoCD if the cluster does not already have it:
+If the cluster does not already have Argo CD, follow the pinned installation
+and root-Application procedure in the [CthuOps Argo CD bootstrap guide](https://github.com/mickmetalholic/CthuOps/blob/main/bootstrap/argocd/README.md).
 
-```bash
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-```
+## 2. Deploy the Backend from CthuOps
 
-## 2. Apply GitOps Entry Points
+The CthuOps repository owns the Backend Deployment, Service, Ingress, and Argo CD Application:
 
-The repository does not yet use an app-of-apps root Application, so bootstrap the current GitOps entry points manually:
+- `apps/cthutool/` in CthuOps holds the Backend manifests and digest-pinned Kustomize root.
+- `argocd/applications/cthutool.yaml` in CthuOps registers the Argo CD Application.
+- `docs/cthutool-release.md` in CthuOps documents the image promotion workflow.
 
-```bash
-kubectl apply -f gitops/namespaces/
-kubectl apply -f gitops/apps/ --recursive
-```
-
-The `cthutool` ArgoCD Application points at `https://github.com/mickmetalholic/CthuTool`, revision `main`, path `k8s/`. ArgoCD then reconciles the backend `ConfigMap`, `Deployment`, and `Service` into the `cthutool` namespace.
+CthuTool does not contain Kubernetes or Argo CD manifests.
 
 ## 3. Verify the Backend Rollout
 
@@ -48,7 +43,7 @@ Then verify the backend through the address you expose from your cluster:
 curl http://<homelab-backend-url>/health
 ```
 
-The in-cluster Service is currently `ClusterIP` on port `3000`. Ingress, TLS, or LAN exposure should be handled by your cluster's existing networking layer.
+The in-cluster Service is `ClusterIP` on port `3000`. Ingress, TLS, or LAN exposure should be handled by CthuOps or your cluster's existing networking layer.
 
 ## 4. Install the CLI on a Client Computer
 

@@ -17,8 +17,7 @@ description: Repository package layout and ownership map.
 | `packages/config` | shared configuration package |
 | `packages/obsidian-enhancer` | Obsidian plugin package |
 | `codex/plugins/cthu-codex` | repository-managed Codex plugin |
-| `gitops` | cluster GitOps namespaces, ArgoCD Application CRs, and observability stack manifests |
-| `k8s` | CthuTool backend Kubernetes resources reconciled by ArgoCD |
+| `gitops` | ownership pointer to the CthuOps repository (CthuTool keeps no cluster manifests) |
 | `openspec/specs` | authoritative capability requirements |
 
 Use package README files for local package development commands. Use this docs site for user, operator, and architecture reading paths.

@@ -23,7 +23,7 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 ### Backend Domains And Delivery
 
 - [apps-backend-douban-movie-info](apps-backend-douban-movie-info/spec.md): Douban movie information retrieval and parsing through controlled browser content.
-- [apps-backend-image-ci](apps-backend-image-ci/spec.md): backend image CI build, verification, publishing, and deployment image behavior.
+- [apps-backend-image-ci](apps-backend-image-ci/spec.md): backend image CI build, verification, publishing, and externalized deployment ownership.
 - [apps-backend-observability](apps-backend-observability/spec.md): backend request context, events, readiness, metrics, and trace semantics.
 
 ## CLI
@@ -67,7 +67,10 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 - [codex-plugins-cthu-codex-language-coach](codex-plugins-cthu-codex-language-coach/spec.md): prompt-time English prose coaching hook behavior.
 - [codex-plugins-cthu-codex-notion-album-skill](codex-plugins-cthu-codex-notion-album-skill/spec.md): guarded personal Notion Album matching, metadata completion, source reconciliation, and verified writes.
 
-## GitOps
+## Deployment Ownership
 
-- [gitops-delivery](gitops-delivery/spec.md): GitOps bootstrap, namespace, and ArgoCD Application delivery resources for deployed apps.
-- [gitops-observability-stack](gitops-observability-stack/spec.md): GitOps-managed Kubernetes observability stack and telemetry extension boundaries.
+Homelab cluster deployment desired state (Kubernetes manifests, Argo CD
+Applications, and image digest promotion) is owned by the separate `CthuOps`
+repository and is intentionally not represented under `openspec/specs/` in this
+repository. The cluster observability platform is an external deployment
+platform responsibility that CthuOps may take over later.

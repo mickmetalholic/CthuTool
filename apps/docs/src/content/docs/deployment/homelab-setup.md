@@ -1,47 +1,40 @@
 ---
 title: Homelab Setup
-description: Kubernetes, ArgoCD, GitOps bootstrap, and first backend rollout checks.
+description: CthuOps-managed Kubernetes, ArgoCD, GitOps bootstrap, and first backend rollout checks.
 ---
 
-This page documents the official homelab setup path for CthuTool server-side services. Use Kubernetes/GitOps for deployment; use local `pnpm` backend commands only for development or focused debugging.
+This page documents the official homelab setup path for CthuTool server-side services. Cluster deployment is owned by the separate **CthuOps** repository; use local `pnpm` backend commands only for development or focused debugging.
+
+## Deployment Entry Point
+
+The CthuOps repository owns the homelab cluster desired state:
+
+```text
+https://github.com/mickmetalholic/CthuOps
+```
+
+Key CthuOps paths for the Backend:
+
+- `apps/cthutool/` — Backend `Deployment`, `Service`, `Ingress`, and the Kustomize root that pins the GHCR image digest.
+- `argocd/applications/cthutool.yaml` — Argo CD Application reconciling the Backend into the `cthutool` namespace.
+- `docs/cthutool-release.md` — image promotion workflow and digest-pin instructions.
+- `bootstrap/` and `argocd/` — Argo CD bootstrap and root Application notes.
 
 ## Prerequisites
 
 - A Kubernetes cluster, such as k3s, reachable from your admin machine with `kubectl`.
-- ArgoCD installed or permission to install it.
+- ArgoCD installed or permission to install it (see CthuOps `bootstrap/`).
 - Network exposure for the backend after it is running, through your cluster's existing ingress, reverse proxy, load balancer, or port-forward workflow.
-- Access to this repository at `https://github.com/mickmetalholic/CthuTool`.
+- Access to the CthuOps repository at `https://github.com/mickmetalholic/CthuOps`.
 
-## Install ArgoCD
+## Release a New Backend Image
 
-If ArgoCD is not already installed:
+1. Merge a backend-relevant change in CthuTool and confirm the `Backend Image` workflow pushed `ghcr.io/mickmetalholic/cthutool-backend:main` and the commit-SHA tag.
+2. Capture the digest returned by the image push step.
+3. Open a pull request in CthuOps that changes only the `images[].digest` value in `apps/cthutool/kustomization.yaml`.
+4. Let CthuOps manifest validation run, merge the pull request, and allow Argo CD to reconcile the new digest.
 
-```bash
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-```
-
-Wait until ArgoCD is ready:
-
-```bash
-kubectl -n argocd rollout status deployment/argocd-server
-kubectl -n argocd get pods
-```
-
-## Apply GitOps Resources
-
-The current repository keeps namespace manifests and Application CRs under `gitops/`. There is no root app-of-apps Application yet, so apply the entry points manually:
-
-```bash
-kubectl apply -f gitops/namespaces/
-kubectl apply -f gitops/apps/ --recursive
-```
-
-For CthuTool, this creates:
-
-- namespace `cthutool`
-- ArgoCD Application `cthutool` in namespace `argocd`
-- a GitOps source pointing at this repository's `main` branch and `k8s/` path
+See `docs/cthutool-release.md` in CthuOps for the complete promotion workflow.
 
 ## Verify ArgoCD Sync
 
