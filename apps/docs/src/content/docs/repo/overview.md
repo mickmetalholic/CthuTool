@@ -8,9 +8,9 @@ The repository has several documentation layers:
 | Area | Source |
 | --- | --- |
 | User deployment, install, module usage, operations, architecture | `apps/docs/src/content/docs/` |
-| Homelab deployment desired state | `gitops/` and `k8s/` |
+| Homelab deployment desired state | separate [CthuOps](https://github.com/mickmetalholic/CthuOps) repository |
 | Browser client SDK development details | `packages/browser-client/README.md` |
-| Observability stack desired state | `gitops/observability/` and `gitops/apps/observability-*` |
+| Cluster observability platform desired state | external deployment platform (CthuOps may take over later) |
 | Repository setup and workspace conventions | `README.md` |
 | Cross-package legacy/source notes | `docs/` |
 | Package-local development commands | nearest package `README.md` |

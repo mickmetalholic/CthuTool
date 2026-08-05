@@ -89,31 +89,38 @@ runtime capability.
 ### 4. Rewrite repository documentation to express the ownership boundary
 
 Deployment and operations pages will point operators to CthuOps for Kubernetes,
-Argo CD, TLS, Secrets, image digest promotion, and cluster logging. CthuTool
-documentation will retain local development and Backend image-build guidance.
+Argo CD, TLS, Secrets, and image digest promotion. They will identify the
+external deployment platform as the current owner of cluster logging and
+observability. CthuTool documentation will retain local development and Backend
+image-build guidance.
 Historical archived OpenSpec artifacts remain untouched; active requirements
 that describe the old ownership are changed or removed through this change's
 delta specs.
 
-### 5. Guard against losing unrelated GitOps entries
+### 5. Accept deferred PixelPlayground handover
 
 The old CthuTool `gitops/` tree includes a PixelPlayground Application in
-addition to CthuTool and observability resources. Implementation must identify
-whether that entry has already moved to CthuOps or another operations
-repository. It must not silently claim that application is migrated merely by
-deleting the old directory.
+addition to CthuTool and observability resources. CthuOps currently owns only
+the CthuTool Backend and Emby, so PixelPlayground is not migrated as part of
+this change. The accepted decision is to remove its old CthuTool Application
+and namespace now, record that the handover is deferred, and let a future
+CthuOps change restore ownership if the workload is still needed. This change
+must not claim that PixelPlayground has already been migrated.
 
 ## Risks / Trade-offs
 
 - **[Risk] Existing operators still apply CthuTool's old GitOps paths** → Update
   quick-start and operations docs to link CthuOps and remove the old commands;
   validate that no active workflow still references `k8s/` or `gitops/`.
-- **[Risk] Deleting `gitops/` also removes the PixelPlayground Application** →
-  record its external owner or migrate it separately before implementation is
-  considered complete.
-- **[Risk] Platform log collection disappears before CthuOps replaces it** →
-  keep application stdout/stderr diagnostics and state explicitly that cluster
-  log storage is an external CthuOps responsibility.
+- **[Accepted trade-off] Deleting `gitops/` also removes the PixelPlayground
+  Application** → accept the temporary loss of CthuTool desired-state
+  ownership, retain the migration note, and create a separate CthuOps change
+  before the workload needs continued GitOps management. This cleanup does not
+  itself delete live cluster resources.
+- **[Risk] Platform log collection disappears before an external platform
+  replaces it** → keep application stdout/stderr diagnostics and state
+  explicitly that cluster log storage is an external deployment-platform
+  responsibility; CthuOps may take it over later.
 - **[Risk] Contract tests fail after source removal** → Replace deployment and
   observability-stack contract tests with image-only and external-ownership
   assertions; do not weaken unrelated CI checks.
@@ -127,8 +134,8 @@ deleting the old directory.
    ownership/promotion link in CthuTool documentation.
 2. Update active specs, CI affected-path logic, tests, and documentation to
    remove CthuTool-owned deployment and cluster-observability assumptions.
-3. Remove the CthuTool `k8s/` and `gitops/` trees after the unrelated
-   PixelPlayground ownership check is recorded.
+3. Remove the CthuTool `k8s/` and `gitops/` trees after the accepted deferred
+   PixelPlayground handover decision is recorded.
 4. Run repository-targeted lint, typecheck, tests, and `git diff --check`.
 5. Validate the external CthuOps Kustomize roots separately in the CthuOps
    repository before deploying an updated Backend image.
@@ -137,10 +144,18 @@ Rollback is a Git revert of the CthuTool cleanup commit. Since CthuOps is not
 modified by this change, the active cluster desired state remains available
 there during rollback.
 
-## Open Questions
+## Deferred Follow-up
 
-- Has the PixelPlayground Argo CD Application been migrated to CthuOps, or must
-  it be preserved in another operations repository before deleting CthuTool's
-  `gitops/` tree?
+- If PixelPlayground remains active, create a separate CthuOps change for its
+  Argo CD Application and namespace before relying on CthuOps as its desired
+  state owner.
 - Should CthuOps later own Prometheus scrape annotations and OTLP configuration,
   or should the cluster platform remain entirely log/metric-system agnostic?
+- CthuOps must add production Backend configuration before a new image is
+  promoted: `CTHUTOOL_ENVIRONMENT_ID=production` matching the Agent catalog,
+  `CTHUTOOL_OPERATOR_ACCESS_MODE=trusted-proxy`,
+  `CTHUTOOL_TRUSTED_PROXY_IPS` matching the ingress controller source IPs and
+  supplied through the out-of-band Backend Secret, a `CTHUTOOL_AGENT_SECRET`
+  (32+ characters) in that Secret, and an Ingress TLS secret for
+  `cthutool.cthulhu.home.arpa`. Prepared in a separate CthuOps pull request on branch
+  `cthutool-production-config`.

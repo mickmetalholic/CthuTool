@@ -1,17 +1,17 @@
 ---
 title: GitOps Rollouts
-description: ArgoCD sync, retry, drift correction, rollout checks, and backend probes.
+description: CthuOps ArgoCD sync, digest promotion, rollout checks, and backend probes.
 ---
 
-Use this page when a backend change has landed on `main` or when the cluster state does not match git.
+Use this page when a backend change has landed on `main` or when the cluster state does not match git. The cluster rollout path is owned by the separate **CthuOps** repository.
 
 ## Rollout Flow
 
-1. GitHub Actions builds `apps/backend/Dockerfile`.
+1. GitHub Actions in CthuTool builds `apps/backend/Dockerfile`.
 2. The workflow pushes `ghcr.io/mickmetalholic/cthutool-backend:main` and `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`.
-3. `k8s/deployment.yaml` references `ghcr.io/mickmetalholic/cthutool-backend:main`.
-4. Argo CD Image Updater digest tracking, or an equivalent rollout trigger, restarts the backend Deployment for the new `:main` digest.
-5. ArgoCD reconciles `gitops/apps/cthutool/application.yaml`, which points at `main` and path `k8s/`.
+3. An operator opens a digest-pin pull request in CthuOps that updates `images[].digest` in `apps/cthutool/kustomization.yaml`.
+4. After the pull request merges, Argo CD reconciles the `cthutool` Application and restarts the Backend Deployment for the new digest.
+5. CthuTool never commits or updates Kubernetes manifests; deployment state lives only in CthuOps.
 
 ## ArgoCD Sync State
 
@@ -22,7 +22,7 @@ kubectl -n argocd get application cthutool
 kubectl -n argocd describe application cthutool
 ```
 
-The CthuTool Application enables:
+The CthuOps `cthutool` Application enables:
 
 - automated sync
 - prune
@@ -30,19 +30,19 @@ The CthuTool Application enables:
 - retry limit `5`
 - retry backoff from `5s` up to `3m`
 
-If rollout is delayed, first confirm the backend image workflow pushed a new `:main` digest, then inspect the Image Updater or rollout trigger status and the Application status.
+If rollout is delayed, first confirm the backend image workflow pushed a new digest, then inspect the CthuOps Application status and the pinned digest in `apps/cthutool/kustomization.yaml`.
 
 ## Drift Correction
 
 ArgoCD owns the live Kubernetes resources. Manual edits such as `kubectl edit deployment/cthutool-backend` or `kubectl set image` are temporary and should be expected to revert.
 
-Make durable changes in:
+Make durable changes in CthuOps:
 
-- `k8s/configmap.yaml` for backend environment values
-- `k8s/deployment.yaml` for image, resources, and probes
-- `k8s/service.yaml` for Service shape
-- `gitops/apps/observability-*` for observability stack Applications
-- `gitops/apps/cthutool/application.yaml` for ArgoCD sync behavior
+- `apps/cthutool/kustomization.yaml` for image digest and backend environment values
+- `apps/cthutool/deployment.yaml` for image, resources, and probes
+- `apps/cthutool/service.yaml` for Service shape
+- `apps/cthutool/ingress.yaml` for Ingress and TLS
+- `argocd/applications/cthutool.yaml` for ArgoCD sync behavior
 
 ## Kubernetes Rollout Checks
 
@@ -62,11 +62,11 @@ kubectl -n cthutool logs deployment/cthutool-backend
 
 ## Health Probes and Metrics
 
-The backend Deployment separates process liveness from dependency readiness:
+The CthuOps Backend Deployment separates process liveness from dependency readiness:
 
-- liveness uses `GET /health`, starts after 10 seconds, and runs every 15 seconds
-- readiness uses `GET /health/ready`, starts after 5 seconds, and runs every 5 seconds
-- both use timeout 3 seconds and failure threshold 3
+- liveness uses `GET /health`
+- readiness uses `GET /health/ready`
+- `/metrics` is exposed for Prometheus scraping and is not used as a Kubernetes probe
 
 For an admin check without ingress:
 
@@ -77,7 +77,7 @@ curl http://localhost:3000/health/ready
 curl http://localhost:3000/metrics
 ```
 
-Prometheus scrapes `/metrics` through Service annotations in `k8s/service.yaml`. `/metrics` is not used as a Kubernetes probe.
+The backend exposes `/metrics` through its HTTP service so an external metrics consumer can scrape it when configured. CthuTool does not require or own a particular GitOps-managed Prometheus stack.
 
 ## Image Rollout Troubleshooting
 
@@ -85,7 +85,6 @@ If a backend change exists but the cluster still runs an older image:
 
 1. Check the backend image workflow for the `main` commit.
 2. Confirm GHCR has the commit tag.
-3. Confirm `k8s/deployment.yaml` on `main` references `ghcr.io/mickmetalholic/cthutool-backend:main`.
-4. Confirm Argo CD Image Updater digest tracking or the equivalent rollout trigger detected the new `:main` digest.
-5. Inspect ArgoCD Application sync status.
-6. Check the Kubernetes Deployment rollout and pod events.
+3. Confirm the CthuOps `apps/cthutool/kustomization.yaml` digest points at the verified image.
+4. Inspect ArgoCD Application sync status in the cluster.
+5. Check the Kubernetes Deployment rollout and pod events.

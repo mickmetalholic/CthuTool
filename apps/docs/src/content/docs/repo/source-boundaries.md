@@ -8,8 +8,8 @@ The docs site is the primary user and operator reading surface. It should reduce
 ## Canonical Sources
 
 - User-facing deployment, installation, module usage, operations, and architecture docs live in `apps/docs/src/content/docs/`.
-- Official homelab deployment desired state lives in `gitops/` and `k8s/`, with user/operator explanation in this docs site.
-- Observability platform desired state lives in `gitops/apps/observability-*` and `gitops/observability/`, with operator explanation in this docs site.
+- Official homelab deployment desired state lives in the separate [CthuOps](https://github.com/mickmetalholic/CthuOps) repository, with user/operator explanation in this docs site.
+- Cluster observability platform desired state is an external deployment platform responsibility; CthuOps may take it over later. CthuTool retains only application-level diagnostics.
 - Browser client SDK development details live in `packages/browser-client/README.md`; user integration guidance lives in this docs site.
 - Repository setup and workspace conventions remain in `README.md`.
 - Legacy cross-package runtime source notes remain in `docs/` until migrated or retired.
@@ -19,9 +19,9 @@ The docs site is the primary user and operator reading surface. It should reduce
 
 ## Deployment vs Development
 
-Homelab deployment docs should describe the Kubernetes/GitOps path: namespace resources, ArgoCD Application CRs, `k8s/` manifests, GHCR backend images, rollout checks, and cluster health checks.
+Homelab deployment is owned by the separate CthuOps repository, which keeps the Backend Deployment, Service, Ingress, Argo CD Application, and digest pinning. Cluster observability is an external deployment platform responsibility that CthuOps may take over later. This docs site explains the boundary and points operators at CthuOps paths.
 
-Local commands such as `pnpm --filter @cthutool/backend run start:dev` are development or debugging commands. They may appear in package README files or clearly labeled development/reference pages, but they should not be presented as the official homelab deployment path.
+Local commands such as `pnpm --filter @cthutool/backend run dev` are development or debugging commands. They may appear in package README files or clearly labeled development/reference pages, but they should not be presented as the official homelab deployment path.
 
 ## Docs-Site Pages
 

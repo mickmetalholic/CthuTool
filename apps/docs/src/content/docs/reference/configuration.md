@@ -5,17 +5,26 @@ description: Current configuration references for backend, Agent, CLI, and brows
 
 ## Backend
 
-In homelab deployment, backend environment values are defined in `k8s/configmap.yaml` and consumed by `k8s/deployment.yaml`.
+In homelab deployment, backend environment values are defined in the CthuOps repository and consumed by its Backend Deployment. CthuOps generates `ConfigMap/cthutool-backend` through `apps/cthutool/kustomization.yaml`; CthuTool does not keep Kubernetes manifests.
 
-Current Kubernetes values:
+Current homelab values:
 
 ```yaml
 NODE_ENV: "production"
 PORT: "3000"
 LOG_LEVEL: "info"
+OTEL_SDK_DISABLED: "true"
+CTHUTOOL_ENVIRONMENT_ID: "production"
+CTHUTOOL_OPERATOR_ACCESS_MODE: "trusted-proxy"
 ```
 
-For local development or debugging from a checkout, the same values can be supplied as environment variables when starting the backend. Local commands are not the homelab deployment path.
+The Deployment reads `CTHUTOOL_AGENT_SECRET` and
+`CTHUTOOL_TRUSTED_PROXY_IPS` from the out-of-band
+`Secret/cthutool-backend-secrets`; create both through the CthuOps procedure and
+never commit their values. The proxy IP setting must contain the actual ingress
+proxy source IPs before rollout. For local development or debugging from a
+checkout, the same values can be supplied as environment variables when
+starting the backend. Local commands are not the homelab deployment path.
 
 ## Browser Sites
 
@@ -42,7 +51,7 @@ Site entries are merged by `siteId`: a matching entry overrides the built-in sit
 
 Example source: `docs/examples/browser-sites.json`.
 
-If this policy is used in the Kubernetes deployment, mount it through Kubernetes-managed configuration and set `BROWSER_SITES_CONFIG_FILE` in the backend environment. Do not bake private runtime files into the backend image.
+If this policy is used in the Kubernetes deployment, mount it through CthuOps-managed configuration and set `BROWSER_SITES_CONFIG_FILE` in the backend environment. Do not bake private runtime files into the backend image.
 
 ## Local Agent
 

@@ -24,8 +24,9 @@ description: Start here for CthuTool homelab deployment, client installation, mo
         <span></span>
         <span></span>
       </div>
-      <pre><code>kubectl apply -f gitops/namespaces/
-kubectl apply -f gitops/apps/ --recursive
+      <pre><code># Deploy via CthuOps (cluster desired state)
+#  https://github.com/mickmetalholic/CthuOps
+# CthuTool publishes the backend image via GHCR
 
 curl http://&lt;homelab-backend-url&gt;/health
 

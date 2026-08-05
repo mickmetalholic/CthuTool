@@ -1,17 +1,17 @@
 ---
 title: Upgrade and Troubleshooting
-description: GitOps upgrade flow and first-response troubleshooting for homelab deployments.
+description: Image digest promotion and first-response troubleshooting for CthuOps-managed homelab deployments.
 ---
 
 ## Upgrade Flow
 
-CthuTool backend upgrades are delivered through GitHub Actions, GHCR, Kubernetes manifests, and ArgoCD.
+CthuTool backend upgrades are delivered through GitHub Actions, GHCR, and the CthuOps-managed Kubernetes/Argo CD deployment.
 
 1. Merge a backend-relevant change to `main`.
 2. Confirm the `Backend Image` workflow succeeds.
 3. Confirm the workflow pushed `ghcr.io/mickmetalholic/cthutool-backend:main` and `ghcr.io/mickmetalholic/cthutool-backend:<commit-sha>`.
-4. Confirm Argo CD Image Updater digest tracking, or an equivalent rollout trigger, detected the new `:main` digest.
-5. Watch ArgoCD sync the `cthutool` Application.
+4. Capture the digest and open a digest-pin pull request in CthuOps that updates `apps/cthutool/kustomization.yaml`.
+5. Merge the CthuOps pull request and watch Argo CD sync the `cthutool` Application.
 6. Watch Kubernetes roll out `Deployment/cthutool-backend`.
 
 ```bash
@@ -32,17 +32,17 @@ If a reverse proxy or ingress is in front of the backend, verify both the Servic
 
 ## ArgoCD Does Not Sync
 
-- Confirm `gitops/apps/cthutool/application.yaml` points at repo `https://github.com/mickmetalholic/CthuTool`, revision `main`, path `k8s/`.
+- Confirm the CthuOps `argocd/applications/cthutool.yaml` points at `git@github.com:mickmetalholic/CthuOps.git`, revision `main`, path `apps/cthutool`.
 - Inspect the Application status with `kubectl -n argocd describe application cthutool`.
 - Confirm the namespace exists: `kubectl get namespace cthutool`.
-- Confirm the manifests are valid by applying them to a test cluster or inspecting ArgoCD events.
+- Confirm the CthuOps manifests are valid by rendering them with Kustomize or inspecting ArgoCD events.
 
 ## Image Did Not Change
 
 - Check the `Backend Image` GitHub Actions run for the relevant `main` commit.
 - Confirm the workflow had permission to push GHCR packages.
-- Confirm `k8s/deployment.yaml` contains `ghcr.io/mickmetalholic/cthutool-backend:main`.
-- Confirm the Image Updater or equivalent rollout trigger detected the new `:main` digest and restarted the Deployment.
+- Confirm the CthuOps `apps/cthutool/kustomization.yaml` digest points at the verified image.
+- Confirm the CthuOps digest-pin pull request merged and Argo CD restarted the Deployment.
 
 ## Agent Connectivity
 

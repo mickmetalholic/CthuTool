@@ -32,7 +32,7 @@ describe("CI affected workflow detector", () => {
     expectChanged("backend-image", ["packages/agent-protocol/src/index.ts"]);
     expectChanged("backend-image", ["packages/config/src/index.ts"]);
     expectChanged("backend-image", [".github/workflows/backend.yml"]);
-    expectChanged("backend-image", ["k8s/deployment.yaml"]);
+    expectUnchanged("backend-image", ["k8s/deployment.yaml"]);
     expectUnchanged("backend-image", ["packages/obsidian-enhancer/src/index.ts"]);
   });
 

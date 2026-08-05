@@ -36,6 +36,7 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 - `apps-cli-command-discovery`
 - `apps-cli-distribution-ci`
 - `apps-cli-observability`
+- `apps-cli-opencode-shared-assets`
 - `apps-cli-self-installation`
 - `apps-cli-shell-completion`
 - `apps-cli-update-experience`
@@ -53,13 +54,9 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 - `codex-plugins-cthu-codex-japanese-sentence-skill`
 - `codex-plugins-cthu-codex-japanese-vocabulary-skill`
 - `codex-plugins-cthu-codex-language-coach`
+- `codex-plugins-cthu-codex-mature-japanese-sentence-conversion-skill`
 - `codex-plugins-cthu-codex-notion-album-skill`
 - `codex-plugins-cthu-codex-notion-channel-skill`
-
-## GitOps
-
-- `gitops-delivery`
-- `gitops-observability-stack`
 
 ## Packages
 

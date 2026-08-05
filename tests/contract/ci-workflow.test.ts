@@ -169,5 +169,7 @@ describe("CI workflow contract", () => {
     expect(yml).not.toContain("Commit deployment manifest update");
     expect(yml).not.toContain("git add k8s/deployment.yaml");
     expect(yml).not.toContain("git push");
+    expect(yml).not.toContain("k8s/");
+    expect(yml).not.toContain("gitops/");
   });
 });

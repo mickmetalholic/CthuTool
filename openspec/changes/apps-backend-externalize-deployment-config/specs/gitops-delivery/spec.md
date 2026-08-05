@@ -6,7 +6,10 @@
 
 ### Requirement: ArgoCD Application CR per deployed app
 **Reason**: Argo CD Application definitions are now maintained by CthuOps, not by CthuTool.
-**Migration**: Update CthuOps Applications for the workloads it owns. Preserve or separately migrate unrelated entries such as PixelPlayground before deleting the old CthuTool GitOps tree.
+**Migration**: CthuOps manages the workloads it currently owns. This change
+intentionally removes the unrelated PixelPlayground entry from CthuTool before
+its deferred CthuOps handover; add it to CthuOps later if the workload remains
+needed.
 
 ### Requirement: Namespace for each deployed application
 **Reason**: Namespace resources are cluster desired state and are outside the CthuTool source repository boundary.
