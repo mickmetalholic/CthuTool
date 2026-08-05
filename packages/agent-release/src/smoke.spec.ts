@@ -64,7 +64,7 @@ describe('clean-host Agent bundle smoke', () => {
     const result = await smokeExtractedAgentBundle({
       bundleRoot: relative(process.cwd(), bundleRoot),
       timeoutMs: 10_000,
-      userDataDir: join(root, 'user-data'),
+      userDataDir: relative(process.cwd(), join(root, 'user-data')),
     });
     expect(result).toMatchObject({
       applicationVersion: '1.2.3',
