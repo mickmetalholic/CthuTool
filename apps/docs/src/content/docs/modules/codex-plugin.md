@@ -9,9 +9,10 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 
 - language coach hook
 - Anki MCP server
-- Anki card-creation skills
+- Anki card-creation and mature-card conversion skills
 - Notion channel-library skill
 - Notion album-maintenance skill
+- Notion movie-library skill
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -49,10 +50,13 @@ Available tools:
 - `cthu_anki_get_notes`
 - `cthu_anki_validate_notes`
 - `cthu_anki_add_notes`
+- `cthu_anki_update_notes`
 - `cthu_anki_store_media`
 - `cthu_anki_open_notes`
 
 `cthu_anki_add_notes` validates before writing and limits batch size. When `openAfterCreate` is true, it opens created notes in Anki's Browser. Browser opening failures are reported as warnings and do not undo successful note creation.
+
+`cthu_anki_update_notes` updates existing note fields in batches of at most 20. It can compare expected field values before writing, rejects the entire batch when a preview is stale, reports per-note field outcomes, and can open successfully updated notes in Anki's Browser.
 
 ## Japanese Sentence Cards
 
@@ -72,6 +76,28 @@ Or a separate grammar point line:
 ```
 
 When `tags:` is provided, or when a standalone line looks like a tag hierarchy, spaced hyphen hierarchy shorthand such as `新完全マスター - N３・文法 - 第１部・１１課` is normalized to `新完全マスター::N３・文法::第１部・１１課`.
+
+## Mature Japanese Sentence Conversion
+
+Use `$anki-convert-mature-japanese-sentence-cards` to preview familiar `Japanese Sentence` notes for promotion from a local grammar cloze to whole-sentence Japanese production.
+
+The default FSRS search requires stability of at least 45 days and at least 3 reviews:
+
+```text
+deck:"0.Japanese::Japanese Sentences" note:"Japanese Sentence" is:review -is:learn -is:suspended -is:buried prop:s>=45 prop:reps>=3
+```
+
+For a supported note, the skill proposes this transformation:
+
+```text
+Before:
+冷蔵庫が壊れたので、新しいのを{{c1::買うことにした::decided to buy}}。
+
+After:
+{{c1::冷蔵庫が壊れたので、新しいのを買うことにした。::The refrigerator broke, so I decided to buy a new one.}}
+```
+
+Every run starts with a read-only preview containing note IDs and exact before/after `文` values. Updating requires a later explicit confirmation, is limited to 20 notes per batch, and uses the previewed `文` and `訳` values to prevent stale overwrites. It does not modify tags, and repeated runs skip notes whose proposed `文` already equals the current value. The skill does not silently replace FSRS stability with an interval query.
 
 ## Japanese Vocabulary Cards
 
@@ -187,8 +213,31 @@ the live schema and pages to reject stale plans, then verifies each approved wri
 Normal album metadata maintenance never writes personal listening fields:
 `Status`, `Listened Date`, `Score`, or the `Rating` formula. Streaming services may
 be retained as listening links, but are not authority for core metadata.
+## Notion Movie Library
+
+Use `$notion-manage-movies` to retrieve entries from the personal Notion Movie Library or to prepare one reviewed movie addition. The skill also allows implicit invocation for requests that clearly target this database, such as:
+
+```text
+查询我看过的科幻片
+```
+
+Retrieval stays inside the authorized Notion connector. Structured filters use parameterized data-source queries, fuzzy title retrieval uses data-source-scoped Notion search, and every result includes its Notion page URL. The skill reports pagination, connector limits, and non-queryable properties instead of presenting partial data as complete.
+
+For a fuzzy add request:
+
+```text
+新增 星际穿越
+```
+
+the skill uses the agent's built-in web search and page-reading capabilities to find public movie candidates. It does not call a CthuTool backend, direct movie API, helper script, local service, or additional MCP server. Public pages are treated as untrusted evidence, and external IDs are included only when directly evidenced.
+
+When multiple movies remain plausible, the skill shows a numbered list with available title, original title, year, director, and stable IDs, then waits for a selection. Selecting a candidate is not write authorization. After metadata reconciliation, live genre mapping, and duplicate checks, the skill shows a separate final Notion property preview and requires explicit confirmation even when only one candidate was found.
+
+Public metadata can populate `Name`, `Genres`, `Release Date`, `IMDB ID`, and `TMDB ID`. Personal properties remain user-owned. When omitted, the preview proposes `Status` as `Want to watch` when that option still exists, leaves `Score` and `Date` unset, and proposes `Is in Library` as false. Public ratings never populate `Score`.
+
+The current version does not write the `Rating` or `In Library` formulas, does not write the `Director` or `Cast` relations, does not update existing entries, and does not perform batch additions. The plugin README tracks future use of CthuTool backend movie metadata while preserving candidate disambiguation and explicit confirmation before every Notion write.
 
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
-- Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-album-skill/spec.md`
+- Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-album-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-movie-library-skill/spec.md`

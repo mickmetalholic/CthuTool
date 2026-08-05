@@ -1,0 +1,6 @@
+interface:
+  display_name: "Anki · Convert Mature Japanese Sentences"
+  short_description: "Promote mature Japanese sentence cards to whole-sentence production."
+  default_prompt: "Use $anki-convert-mature-japanese-sentence-cards to preview mature Japanese Sentence notes for whole-sentence production conversion."
+policy:
+  allow_implicit_invocation: false

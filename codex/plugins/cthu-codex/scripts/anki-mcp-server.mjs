@@ -92,6 +92,35 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'cthu_anki_update_notes',
+    description:
+      'Safely update existing Anki note fields with stale-value checks and bounded batches.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        updates: {
+          type: 'array',
+          minItems: 1,
+          maxItems: DEFAULT_MAX_BATCH_SIZE,
+          items: {
+            type: 'object',
+            properties: {
+              noteId: { type: 'number' },
+              fields: { type: 'object', minProperties: 1 },
+              expectedFields: { type: 'object', minProperties: 1 },
+            },
+            required: ['noteId', 'fields'],
+            additionalProperties: false,
+          },
+        },
+        openAfterUpdate: { type: 'boolean' },
+        browserOpenLimit: { type: 'number' },
+      },
+      required: ['updates'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'cthu_anki_store_media',
     description: 'Store a media file in Anki for note fields to reference.',
     inputSchema: {
@@ -272,6 +301,79 @@ export function createAnkiTools(options = {}) {
       return response;
     },
 
+    async cthu_anki_update_notes(args = {}) {
+      const validation = validateUpdates(args.updates, maxBatchSize);
+      if (!validation.ok) {
+        return validation;
+      }
+
+      const preflight = await preflightUpdates({
+        invoke,
+        updates: validation.updates,
+      });
+      if (!preflight.ok) {
+        return preflight;
+      }
+
+      const results = [];
+      for (const [index, update] of validation.updates.entries()) {
+        const result = {
+          index,
+          noteId: update.noteId,
+          ok: false,
+          fields: { ok: false },
+        };
+
+        try {
+          await invoke('updateNoteFields', {
+            note: {
+              id: update.noteId,
+              fields: update.fields,
+            },
+          });
+          result.fields = { ok: true };
+        } catch (error) {
+          result.fields = { ok: false, error: summarizeError(error) };
+          results.push(result);
+          continue;
+        }
+
+        result.ok = true;
+        results.push(result);
+      }
+
+      const anyMutationSucceeded = results.some(
+        (result) => result.fields.ok === true,
+      );
+      const response = {
+        ok: results.every((result) => result.ok),
+        partial:
+          anyMutationSucceeded && results.some((result) => !result.ok),
+        results,
+        warnings: [],
+      };
+
+      if (args.openAfterUpdate === true && anyMutationSucceeded) {
+        const updatedNoteIds = results
+          .filter((result) => result.fields.ok === true)
+          .map((result) => result.noteId);
+        const openResult = await openNotes({
+          invoke,
+          noteIds: updatedNoteIds,
+          limit: args.browserOpenLimit ?? defaultBrowserOpenLimit,
+        });
+        response.openResult = openResult;
+        if (openResult.warning) {
+          response.warnings.push(openResult.warning);
+        }
+        if (!openResult.ok && openResult.error?.message) {
+          response.warnings.push(openResult.error.message);
+        }
+      }
+
+      return response;
+    },
+
     async cthu_anki_store_media(args = {}) {
       const params = validateMediaPayload(args);
       const result = await invoke('storeMediaFile', params);
@@ -395,6 +497,158 @@ function validateNotes(notes, maxBatchSize) {
   return { ok: true, notes: normalized };
 }
 
+function validateUpdates(updates, maxBatchSize) {
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return invalidUpdates('updates must contain at least one update.');
+  }
+  if (updates.length > maxBatchSize) {
+    return invalidUpdates(
+      `updates exceeds maximum batch size of ${maxBatchSize}.`,
+      { maxBatchSize },
+    );
+  }
+
+  const normalized = [];
+  const seenNoteIds = new Set();
+  for (const [index, update] of updates.entries()) {
+    if (!isObject(update)) {
+      return invalidUpdates(`update at index ${index} must be an object.`);
+    }
+
+    const noteId = Number(update.noteId);
+    if (!Number.isSafeInteger(noteId) || noteId <= 0) {
+      return invalidUpdates(
+        `update at index ${index} has an invalid noteId.`,
+      );
+    }
+    if (seenNoteIds.has(noteId)) {
+      return invalidUpdates(`update noteId ${noteId} appears more than once.`);
+    }
+    seenNoteIds.add(noteId);
+
+    const fields = validateFieldMap(update.fields, `update at index ${index}`);
+    if (!fields.ok) {
+      return fields;
+    }
+
+    let expectedFields = {};
+    if (update.expectedFields !== undefined) {
+      const expected = validateFieldMap(
+        update.expectedFields,
+        `expectedFields at index ${index}`,
+      );
+      if (!expected.ok) {
+        return expected;
+      }
+      expectedFields = expected.fields;
+    }
+
+    normalized.push({
+      noteId,
+      fields: fields.fields,
+      expectedFields,
+    });
+  }
+
+  return { ok: true, updates: normalized };
+}
+
+function validateFieldMap(value, label) {
+  if (!isObject(value) || Object.keys(value).length === 0) {
+    return invalidUpdates(`${label} must contain at least one field.`);
+  }
+  for (const fieldName of Object.keys(value)) {
+    if (fieldName.trim() === '') {
+      return invalidUpdates(`${label} contains an empty field name.`);
+    }
+  }
+  return { ok: true, fields: stringifyFields(value) };
+}
+
+async function preflightUpdates({ invoke, updates }) {
+  const noteIds = updates.map((update) => update.noteId);
+  const notes = await invoke('notesInfo', { notes: noteIds });
+  if (!Array.isArray(notes)) {
+    return invalidUpdates('AnkiConnect returned invalid note details.');
+  }
+
+  const notesById = new Map(
+    notes
+      .filter((note) => isObject(note))
+      .map((note) => [Number(note.noteId), note]),
+  );
+
+  for (const update of updates) {
+    const note = notesById.get(update.noteId);
+    if (!note) {
+      return {
+        ok: false,
+        error: {
+          code: 'missing_note',
+          message: `Note ${update.noteId} was not returned by AnkiConnect.`,
+          noteId: update.noteId,
+        },
+      };
+    }
+    if (!isObject(note.fields)) {
+      return {
+        ok: false,
+        error: {
+          code: 'invalid_note_fields',
+          message: `Note ${update.noteId} has no readable fields.`,
+          noteId: update.noteId,
+        },
+      };
+    }
+
+    const fieldNames = new Set([
+      ...Object.keys(update.fields),
+      ...Object.keys(update.expectedFields),
+    ]);
+    for (const fieldName of fieldNames) {
+      if (!Object.prototype.hasOwnProperty.call(note.fields, fieldName)) {
+        return {
+          ok: false,
+          error: {
+            code: 'missing_note_field',
+            message: `Note ${update.noteId} is missing field ${fieldName}.`,
+            noteId: update.noteId,
+            fieldName,
+          },
+        };
+      }
+    }
+
+    for (const [fieldName, expected] of Object.entries(
+      update.expectedFields,
+    )) {
+      const actual = readNoteFieldValue(note.fields[fieldName]);
+      if (actual !== expected) {
+        return {
+          ok: false,
+          error: {
+            code: 'stale_note',
+            message: `Note ${update.noteId} field ${fieldName} changed after preview.`,
+            noteId: update.noteId,
+            fieldName,
+            expected,
+            actual,
+          },
+        };
+      }
+    }
+  }
+
+  return { ok: true };
+}
+
+function readNoteFieldValue(field) {
+  if (isObject(field) && Object.prototype.hasOwnProperty.call(field, 'value')) {
+    return String(field.value ?? '');
+  }
+  return String(field ?? '');
+}
+
 function stringifyFields(fields) {
   return Object.fromEntries(
     Object.entries(fields).map(([name, value]) => [name, String(value)]),
@@ -406,6 +660,17 @@ function invalidNotes(message, extra = {}) {
     ok: false,
     error: {
       code: 'invalid_notes',
+      message,
+      ...extra,
+    },
+  };
+}
+
+function invalidUpdates(message, extra = {}) {
+  return {
+    ok: false,
+    error: {
+      code: 'invalid_updates',
       message,
       ...extra,
     },
@@ -559,7 +824,7 @@ async function handleJsonRpcMessage(message, tools) {
           version: '0.1.0',
         },
         instructions:
-          'Use these Anki tools to inspect local collection schema, validate candidate notes, create notes, and open created notes for review. Do not use them for destructive Anki operations.',
+          'Use these Anki tools to inspect local collection schema, validate and create candidate notes, safely update confirmed existing notes, and open notes for review. Do not use them for deletion or scheduling mutations.',
       },
     };
   }

@@ -209,14 +209,20 @@ chc codex skills
 chc codex install
 ```
 
-`chc codex skills` opens an interactive manager for third-party GitHub skills
-declared in `codex/skills.manifest.json`. Use Space to select managed entries,
-review the explicit plan, and confirm before anything changes. The version 2
-manifest records the repository, skill selector, branch or pinned ref, and
-enabled state. Local skills absent from the manifest are ignored; the command
-only calls them out when their name collides with a selected managed skill.
-`--json` emits a read-only inventory, and a non-interactive bare invocation
-fails instead of choosing actions automatically.
+`chc codex skills` opens an interactive manager for third-party GitHub skills.
+Its inventory combines entries from `codex/skills.manifest.json` with locally
+installed skills whose pinned-backend metadata provides a supported GitHub
+repository and selector. Use Space to select state-valid actions, review the
+explicit plan, and confirm before anything changes.
+
+A GitHub skill that exists only locally appears as `local_only`; Track records
+its reviewed repository, selector, and branch or pinned ref in the version 2
+manifest without reinstalling the skill or copying its directory. Use Add
+skills from GitHub for a skill that is not installed locally. Self-authored,
+manually copied, well-known, plugin-provided, system, non-GitHub, and
+provenance-incomplete local skills remain ignored. `--json` emits the same
+eligible inventory without writing, and a non-interactive bare invocation fails
+instead of choosing actions automatically.
 
 Skill discovery and local operations use the pinned
 `npx --yes skills@1.5.19` backend at Codex user scope. Updates are offered only

@@ -32,6 +32,14 @@ export type InstalledSkill = {
   readonly path: string;
   readonly managed: boolean;
   readonly repository?: string;
+  readonly localGitHubCandidate?: LocalGitHubSkillCandidate;
+};
+
+export type LocalGitHubSkillCandidate = {
+  readonly repository: string;
+  readonly selector: string;
+  readonly skillPath: string;
+  readonly ref?: string;
 };
 
 export type DiscoveredSkill = {
@@ -39,8 +47,11 @@ export type DiscoveredSkill = {
 };
 
 export type SkillsBackend = {
-  readonly listInstalled: () => Promise<InstalledSkill[]>;
+  readonly listInstalled: (options?: {
+    readonly trackableOnly?: boolean;
+  }) => Promise<InstalledSkill[]>;
   readonly discover: (repository: string) => Promise<DiscoveredSkill[]>;
+  readonly validate: (skill: ManagedCodexSkill) => Promise<void>;
   readonly checkUpdates: (
     skills: readonly ManagedCodexSkill[],
   ) => Promise<Set<string>>;
@@ -86,26 +97,61 @@ export function createNpxSkillsBackend(
   };
 
   return {
-    async listInstalled() {
+    async listInstalled(listOptions) {
+      const lockEntries = await readSkillLock(options.homeRoot);
+      if (
+        listOptions?.trackableOnly &&
+        ![...lockEntries].some(([name, lock]) => {
+          const repository = readGitHubRepository(lock);
+          return (
+            repository !== undefined &&
+            readLocalGitHubCandidate(name, lock, repository) !== undefined
+          );
+        })
+      ) {
+        return [];
+      }
       const result = await run(
         ['list', '--global', '--agent', 'codex', '--json'],
         env,
       );
       const installed = parseInstalledSkills(result.stdout);
-      const lockEntries = await readSkillLock(options.homeRoot);
       return installed.map((skill) => {
         const lock = lockEntries.get(skill.name);
         const repository = lock ? readGitHubRepository(lock) : undefined;
+        const localGitHubCandidate =
+          lock && repository
+            ? readLocalGitHubCandidate(skill.name, lock, repository)
+            : undefined;
         return {
           ...skill,
           managed: repository !== undefined,
           repository,
+          localGitHubCandidate,
         };
       });
     },
     async discover(repository) {
       const result = await run(['add', repository, '--list'], env);
       return parseDiscoveredSkills(result.stdout);
+    },
+    async validate(skill) {
+      const result = await run(
+        ['add', resolveSkillSource(skill), '--list'],
+        env,
+      );
+      const discovered = parseDiscoveredSkills(result.stdout);
+      if (
+        !discovered.some(
+          (candidate) =>
+            candidate.name === skill.selector || candidate.name === skill.name,
+        )
+      ) {
+        throw new SkillsBackendError(
+          'contract_mismatch',
+          `Skill ${skill.selector} was not found in ${skill.repository}@${skill.tracking.ref}.`,
+        );
+      }
     },
     async checkUpdates(skills) {
       if (skills.length === 0) {
@@ -282,6 +328,40 @@ function readGitHubRepository(
     /^https:\/\/github\.com\/([^/]+\/[^/#]+?)(?:\.git)?(?:[/#]|$)/u,
   );
   return match?.[1];
+}
+
+function readLocalGitHubCandidate(
+  name: string,
+  lock: Record<string, unknown>,
+  repository: string,
+): LocalGitHubSkillCandidate | undefined {
+  if (typeof lock.skillPath !== 'string') {
+    return undefined;
+  }
+  const skillPath = lock.skillPath.trim().replaceAll('\\', '/');
+  const segments = skillPath.split('/');
+  if (
+    skillPath.length === 0 ||
+    skillPath.startsWith('/') ||
+    segments.includes('..') ||
+    segments.at(-1)?.toLowerCase() !== 'skill.md'
+  ) {
+    return undefined;
+  }
+  const directoryName = segments.at(-2);
+  if (directoryName !== name) {
+    return undefined;
+  }
+  const ref =
+    typeof lock.ref === 'string' && lock.ref.trim().length > 0
+      ? lock.ref.trim()
+      : undefined;
+  return {
+    repository,
+    selector: name,
+    skillPath,
+    ...(ref ? { ref } : {}),
+  };
 }
 
 function resolveSkillSource(skill: ManagedCodexSkill): string {
