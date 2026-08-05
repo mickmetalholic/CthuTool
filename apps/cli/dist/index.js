@@ -5034,7 +5034,7 @@ var require_smoke = __commonJS((exports) => {
       if (!environmentId || !environments.environments?.some((item) => item.id === environmentId)) {
         throw new Error("Agent smoke did not load the release environment catalog");
       }
-      requireSuccess(await requestControl(record, "environment.switch", environmentId), "environment.switch");
+      requireSuccess(await requestControl(record, "environment.switch", environmentId, timeoutMs), "environment.switch");
       const launch = requireSuccess(await requestControl(record, "bridge.launch"), "bridge.launch");
       if (launch.endpoint !== healthResult.bridge.endpoint || launch.environmentId !== environmentId || typeof launch.launchUrl !== "string") {
         throw new Error("Agent bridge launch metadata is inconsistent");
@@ -5091,13 +5091,13 @@ ${detail}` : ""}`, { cause: error });
     }
     throw new Error("Timed out waiting for Agent readiness record");
   }
-  async function requestControl(record, operation, environmentId) {
+  async function requestControl(record, operation, environmentId, timeoutMs = 5000) {
     return new Promise((resolvePromise, rejectPromise) => {
       const socket = (0, node_net_1.createConnection)(record.controlEndpoint);
       const timer = setTimeout(() => {
         socket.destroy();
         rejectPromise(new Error(`Agent ${operation} request timed out`));
-      }, 5000);
+      }, timeoutMs);
       let payload = "";
       socket.setEncoding("utf8");
       socket.once("connect", () => {
