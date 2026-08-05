@@ -17,11 +17,15 @@ From the repository root:
 
 ```bash
 chc codex install
+chc opencode skills
+chc opencode mcp
 ```
 
 After install, start a new Codex thread or restart Codex so the bundled MCP
 server is loaded. In a fresh thread, use `/mcp` to verify the `anki` server and
-its tools are available.
+its tools are available. The two OpenCode commands reference the same plugin
+skill directories and translate the same `.mcp.json` declaration into
+OpenCode's configuration; restart or reload OpenCode after syncing.
 
 ## Mature Japanese Sentence Conversion
 

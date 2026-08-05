@@ -3,6 +3,7 @@ import { basename, join, resolve } from 'node:path';
 import type { CodexConfigPaths } from '../infra/codex-config-paths';
 import { assertPathInside } from '../infra/codex-config-paths';
 import {
+  type CodexPlugin,
   discoverCodexPlugins,
   type InstallCodexPluginResult,
   installCodexPlugins,
@@ -30,6 +31,32 @@ export type InstallRepositoryCodexPluginsResult = {
 export async function installRepositoryCodexPlugins(
   paths: CodexConfigPaths,
 ): Promise<InstallRepositoryCodexPluginsResult> {
+  const plugins = await discoverEnabledRepositoryCodexPlugins(paths);
+  const selectedNames = plugins.map((plugin) => plugin.name);
+  const installedPlugins = await installCodexPlugins({
+    homeRoot: paths.homeRoot,
+    configPath: join(paths.localCodexRoot, 'config.toml'),
+    marketplacePath: paths.marketplacePath,
+    plugins,
+    selectedNames,
+  });
+  const syncedPluginCaches = await Promise.all(
+    plugins.map((plugin) =>
+      syncCodexPluginCache({ cacheRoot: paths.cacheRoot, plugin }),
+    ),
+  );
+  return { installedPlugins, syncedPluginCaches };
+}
+
+/**
+ * Resolve the repository plugins that are enabled by the same rules used by
+ * `chc codex install`. Other agent adapters use this list so they consume the
+ * same repository-owned skill and MCP sources without installing Codex
+ * plugins themselves.
+ */
+export async function discoverEnabledRepositoryCodexPlugins(
+  paths: CodexConfigPaths,
+): Promise<CodexPlugin[]> {
   const manifest = await readPluginManifest(paths.repoCodexRoot);
   const discovered = await discoverCodexPlugins(paths.pluginsRoot);
   const disabledNames = new Set(
@@ -42,7 +69,7 @@ export async function installRepositoryCodexPlugins(
   );
   const configuredNames = new Set(configured.map((plugin) => plugin.name));
 
-  const plugins = await Promise.all([
+  return Promise.all([
     ...configured.map(async (entry) => {
       const root = resolve(paths.repoRoot, entry.path);
       assertPathInside(paths.repoCodexRoot, root);
@@ -58,20 +85,6 @@ export async function installRepositoryCodexPlugins(
         !configuredNames.has(plugin.name) && !disabledNames.has(plugin.name),
     ),
   ]);
-  const selectedNames = plugins.map((plugin) => plugin.name);
-  const installedPlugins = await installCodexPlugins({
-    homeRoot: paths.homeRoot,
-    configPath: join(paths.localCodexRoot, 'config.toml'),
-    marketplacePath: paths.marketplacePath,
-    plugins,
-    selectedNames,
-  });
-  const syncedPluginCaches = await Promise.all(
-    plugins.map((plugin) =>
-      syncCodexPluginCache({ cacheRoot: paths.cacheRoot, plugin }),
-    ),
-  );
-  return { installedPlugins, syncedPluginCaches };
 }
 
 export async function readPluginManifest(

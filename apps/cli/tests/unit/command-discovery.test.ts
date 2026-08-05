@@ -48,7 +48,12 @@ describe('command discovery registry', () => {
       .map((registration) => registration.name)
       .sort();
 
-    expect(bareHelpNames).toEqual(['codex', 'completion', 'scripts']);
+    expect(bareHelpNames).toEqual([
+      'codex',
+      'completion',
+      'opencode',
+      'scripts',
+    ]);
   });
 
   test('nested completion candidates match public child registrations', async () => {

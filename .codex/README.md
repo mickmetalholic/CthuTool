@@ -10,6 +10,11 @@ Managed entries:
 - `plugins.manifest.json`
 - `README.md`
 
+The repository plugin directories under `../codex/plugins` are also the source
+for the OpenCode adapters. Run `chc opencode skills` and `chc opencode mcp` to
+reference the same skill and MCP assets from OpenCode; do not duplicate them
+under an agent-specific directory.
+
 Do not commit Codex runtime state here. Keep these local to `C:\Users\yuans\.codex` or other personal backup tooling:
 
 - `auth.json`

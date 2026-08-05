@@ -7,4 +7,10 @@ describe('root command', () => {
 
     expect(Object.keys(subCommands ?? {})).not.toContain('browser');
   });
+
+  test('exposes the OpenCode adapter command group', async () => {
+    const subCommands = await rootCommand.subCommands;
+
+    expect(Object.keys(subCommands ?? {})).toContain('opencode');
+  });
 });

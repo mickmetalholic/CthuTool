@@ -42,6 +42,12 @@ describe('codex config paths', () => {
     expect(paths.repoCodexRoot).toBe(resolve(repoRoot, 'codex'));
     expect(paths.homeRoot).toBe(resolve(homeRoot));
     expect(paths.localCodexRoot).toBe(resolve(homeRoot, '.codex'));
+    expect(paths.localOpenCodeRoot).toBe(
+      resolve(homeRoot, '.config', 'opencode'),
+    );
+    expect(paths.openCodeConfigPath).toBe(
+      resolve(homeRoot, '.config', 'opencode', 'opencode.json'),
+    );
     expect(paths.marketplacePath).toBe(
       resolve(homeRoot, '.agents', 'plugins', 'marketplace.json'),
     );
@@ -63,6 +69,20 @@ describe('codex config paths', () => {
 
     expect(paths.localCodexRoot).toBe(resolve(codexHome));
     expect(paths.marketplacePath).toBe(resolve(marketplace));
+  });
+
+  test('uses an existing JSONC OpenCode config by default', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const openCodeRoot = join(homeRoot, '.config', 'opencode');
+    await mkdir(openCodeRoot, { recursive: true });
+    await writeFile(join(openCodeRoot, 'opencode.jsonc'), '{}', 'utf8');
+
+    const paths = createCodexConfigPaths({ repoRoot, homeRoot });
+
+    expect(paths.openCodeConfigPath).toBe(
+      resolve(openCodeRoot, 'opencode.jsonc'),
+    );
   });
 
   test('refuses child paths outside the intended root', async () => {

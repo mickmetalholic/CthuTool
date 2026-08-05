@@ -24,9 +24,13 @@ User Codex environment, with local dependencies such as Anki and AnkiConnect whe
 
 ```bash
 chc codex install
+chc opencode skills
+chc opencode mcp
 ```
 
-Restart Codex after install so plugin-provided tools are loaded.
+Restart Codex after install so plugin-provided tools are loaded. The OpenCode
+commands reference the same skill directories and MCP declaration from this
+plugin; reload OpenCode after syncing.
 
 ## Anki MCP Server
 

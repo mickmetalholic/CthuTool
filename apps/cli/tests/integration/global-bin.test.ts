@@ -238,6 +238,7 @@ describe('global bin', () => {
     for (const [args, explicitHelpArgs] of [
       [[], ['--help']],
       [['codex'], ['codex', '--help']],
+      [['opencode'], ['opencode', '--help']],
       [['scripts'], ['scripts', '--help']],
       [['completion'], ['completion', '--help']],
     ] as const) {
@@ -286,6 +287,13 @@ describe('global bin', () => {
           '\n  status      Show chc CLI installation status.',
         );
         expect(plain).not.toContain('\n    codex');
+      } else if (args[0] === 'opencode') {
+        expect(plain).toContain(
+          '\n  skills  Expose repository plugin skills to OpenCode.',
+        );
+        expect(plain).toContain(
+          '\n  mcp     Sync repository plugin MCP servers to OpenCode.',
+        );
       } else if (args[0] === 'codex') {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(
