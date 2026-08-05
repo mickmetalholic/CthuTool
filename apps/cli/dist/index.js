@@ -4994,14 +4994,15 @@ var require_smoke = __commonJS((exports) => {
     const timeoutMs = input.timeoutMs ?? 20000;
     const layout = (0, layout_1.validateBundleLayout)(JSON.parse(await (0, promises_1.readFile)((0, node_path_1.join)(input.bundleRoot, "layout.json"), "utf8")));
     (0, layout_1.validateBundleInventory)(layout.target, await listBundleFiles(input.bundleRoot));
-    const catalogPath = (0, node_path_1.join)(input.bundleRoot, ...layout.entryPoints.environmentCatalog.split("/"));
+    const catalogPath = (0, node_path_1.resolve)(input.bundleRoot, ...layout.entryPoints.environmentCatalog.split("/"));
     const catalog = (0, contracts_1.validateEnvironmentCatalog)(JSON.parse(await (0, promises_1.readFile)(catalogPath, "utf8")));
+    const userDataDir = (0, node_path_1.resolve)(input.userDataDir);
     const nodePath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...layout.entryPoints.node.split("/")));
     const agentPath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...layout.entryPoints.agent.split("/")));
-    const instancePath = (0, node_path_1.join)(input.userDataDir, "runtime", "instance.json");
+    const instancePath = (0, node_path_1.join)(userDataDir, "runtime", "instance.json");
     await (0, promises_1.rm)(instancePath, { force: true });
     const stderr = [];
-    const child = (0, node_child_process_1.spawn)(nodePath, [agentPath, "--user-data-dir", input.userDataDir], {
+    const child = (0, node_child_process_1.spawn)(nodePath, [agentPath, "--user-data-dir", userDataDir], {
       cwd: input.bundleRoot,
       env: {
         ...process.env,

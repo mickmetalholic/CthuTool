@@ -43,33 +43,30 @@ export async function smokeExtractedAgentBundle(input: {
   const catalog = validateEnvironmentCatalog(
     JSON.parse(await readFile(catalogPath, 'utf8')),
   );
+  const userDataDir = resolve(input.userDataDir);
   const nodePath = await realpath(
     resolve(input.bundleRoot, ...layout.entryPoints.node.split('/')),
   );
   const agentPath = await realpath(
     resolve(input.bundleRoot, ...layout.entryPoints.agent.split('/')),
   );
-  const instancePath = join(input.userDataDir, 'runtime', 'instance.json');
+  const instancePath = join(userDataDir, 'runtime', 'instance.json');
   await rm(instancePath, { force: true });
 
   const stderr: Buffer[] = [];
-  const child = spawn(
-    nodePath,
-    [agentPath, '--user-data-dir', input.userDataDir],
-    {
-      cwd: input.bundleRoot,
-      env: {
-        ...process.env,
-        ...input.environment,
-        CTHUTOOL_AGENT_DISABLED: '1',
-        CTHUTOOL_AGENT_ENVIRONMENTS_PATH: catalogPath,
-        CTHUTOOL_AGENT_VERSION: layout.releaseVersion,
-        NODE_ENV: 'production',
-        PATH: '',
-      },
-      stdio: ['ignore', 'ignore', 'pipe'],
+  const child = spawn(nodePath, [agentPath, '--user-data-dir', userDataDir], {
+    cwd: input.bundleRoot,
+    env: {
+      ...process.env,
+      ...input.environment,
+      CTHUTOOL_AGENT_DISABLED: '1',
+      CTHUTOOL_AGENT_ENVIRONMENTS_PATH: catalogPath,
+      CTHUTOOL_AGENT_VERSION: layout.releaseVersion,
+      NODE_ENV: 'production',
+      PATH: '',
     },
-  );
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
   child.stderr?.on('data', (chunk: Buffer) => {
     if (Buffer.concat(stderr).byteLength < 64 * 1024) {
       stderr.push(chunk);
