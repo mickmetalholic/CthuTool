@@ -4,57 +4,50 @@
 TBD - created by archiving change add-agent-environment-routing. Update Purpose after archive.
 ## Requirements
 ### Requirement: Public machine-control operator boundary
-A publicly reachable backend SHALL reject anonymous Agent status and machine-control API requests and SHALL require a configured single-operator access boundary.
+A Backend SHALL protect Agent status and machine-control APIs with a fixed
+private-network socket-peer boundary. Requests are authorized only when the
+direct peer address is loopback or a private-network address; the Backend
+MUST NOT rely on forwarded client IP headers or configurable operator identity
+headers.
 
-#### Scenario: Authenticated operator calls command API
-- **WHEN** a request carries a valid repository-owned operator session or trusted access-gateway identity
-- **THEN** the backend may process the command for its trusted environment context
+#### Scenario: Private-network operator calls command API
+- **WHEN** a request for Agent status or machine control arrives from a
+  loopback, RFC1918 IPv4, IPv6 unique-local, or IPv6 link-local socket peer
+- **THEN** the Backend may process the request for its configured environment
 
-#### Scenario: Anonymous caller reaches public backend
-- **WHEN** an unauthenticated request calls Agent status or a machine-control API
-- **THEN** the backend rejects it before registry lookup or command dispatch
+#### Scenario: Public caller reaches Backend directly
+- **WHEN** a request for Agent status or machine control arrives from a public
+  socket peer
+- **THEN** the Backend rejects it before registry lookup or command dispatch
 
-#### Scenario: Trusted proxy mode is used
-- **WHEN** deployment delegates operator authentication to an access gateway
-- **THEN** the backend accepts identity only from a verified proxy path that strips client-supplied identity headers
+#### Scenario: Caller spoofs forwarded address or gateway identity
+- **WHEN** a request carries `X-Forwarded-For` or an operator identity header
+  without a private socket peer
+- **THEN** the Backend rejects the request and does not treat either header as
+  authentication
 
-#### Scenario: Existing Web authentication is available
-- **WHEN** the deployed Web application already establishes an authenticated operator session
-- **THEN** machine-control APIs reuse that validated session without requiring a second product login
+#### Scenario: External Web request uses the supported entry path
+- **WHEN** an external operator reaches the Web or Backend through an
+  authenticated Cloudflare Access/Tunnel path
+- **THEN** the external access layer authenticates the operator and the
+  Backend authorizes only the resulting private-network socket peer
 
-### Requirement: Environment-scoped static Agent authentication
-Each publicly reachable Agent WebSocket endpoint SHALL require a static environment-scoped Agent secret before registration.
+### Requirement: Environment-scoped Agent network authentication
+The Agent WebSocket endpoint SHALL require the configured environment id and a
+private-network socket peer before accepting Agent registration. It MUST NOT
+require or parse a static Agent secret.
 
-#### Scenario: Agent secret is valid
-- **WHEN** the Agent connects over WSS with the configured environment id and valid static Agent secret
-- **THEN** the backend authenticates the environment before accepting `agent.hello`
+#### Scenario: Agent connects from the private network
+- **WHEN** the Agent opens WSS from a private-network peer with the matching
+  environment id
+- **THEN** the Backend authenticates the network boundary and environment
+  before accepting `agent.hello`
 
-#### Scenario: Agent secret is absent or invalid
-- **WHEN** a public Agent connection omits or fails static-secret verification
-- **THEN** the backend closes the connection without registering or revealing expected secret data
+#### Scenario: Agent connects from a public peer
+- **WHEN** an Agent WebSocket connection arrives from a public socket peer
+- **THEN** the Backend closes the connection without registering the Agent
 
-#### Scenario: Private development exception is enabled
-- **WHEN** an explicit loopback/private development mode disables static-secret authentication
-- **THEN** readiness and diagnostics mark the backend non-production and the exception cannot activate under production configuration
-
-### Requirement: Operator and Agent secret separation
-The backend SHALL keep operator authentication material separate from the Agent WebSocket secret.
-
-#### Scenario: Agent secret is compromised
-- **WHEN** a caller knows only the Agent secret
-- **THEN** it cannot establish an operator Web session or call protected machine-control HTTP APIs
-
-#### Scenario: Operator session is compromised
-- **WHEN** a caller has only an operator Web session
-- **THEN** it cannot register a replacement Agent WebSocket without the separate Agent secret
-
-### Requirement: Minimal static-secret lifecycle
-The system SHALL support manual configuration and replacement of the per-environment Agent secret and operator access configuration without implementing enrollment, device ownership, automated rotation, or revocation workflows.
-
-#### Scenario: Agent secret is replaced
-- **WHEN** the operator updates the backend secret and matching user-restricted local environment value
-- **THEN** old Agent connections fail subsequent authentication and the new value is used after reconnect
-
-#### Scenario: Secret reaches diagnostics
-- **WHEN** authentication or configuration errors are logged or returned
-- **THEN** static secrets, operator passwords, cookies, and authorization headers are omitted or redacted
+#### Scenario: Agent uses another environment id
+- **WHEN** a private-network Agent presents an environment id different from
+  the Backend configuration
+- **THEN** the Backend rejects the connection without registering the Agent

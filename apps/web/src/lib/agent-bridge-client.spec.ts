@@ -195,6 +195,5 @@ function resourceSnapshot() {
     },
     profiles: [],
     protocolVersion: 1,
-    secret: { status: 'configured' },
   };
 }

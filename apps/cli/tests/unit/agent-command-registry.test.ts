@@ -30,7 +30,7 @@ describe('public Agent command registry', () => {
       (getCommandRegistrations(environment?.command ?? agentCommand) ?? []).map(
         (item) => item.name,
       ),
-    ).toEqual(['list', 'get', 'set', 'set-secret']);
+    ).toEqual(['list', 'get', 'set']);
     const autostart = getCommandRegistration(agentCommand, 'autostart');
     expect(
       (getCommandRegistrations(autostart?.command ?? agentCommand) ?? []).map(

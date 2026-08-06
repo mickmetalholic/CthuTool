@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -33,7 +32,6 @@ export type AgentEnvironmentCatalog = {
 export type AgentEnvironmentDataPaths = {
   readonly rootDir: string;
   readonly configPath: string;
-  readonly secretPath: string;
   readonly profilesDir: string;
   readonly runtimeDir: string;
   readonly logsDir: string;
@@ -46,11 +44,6 @@ export type AgentEnvironmentSelection = {
 export type AgentEnvironmentStorage = {
   readonly readSelection: () => AgentEnvironmentSelection;
   readonly writeSelection: (selection: AgentEnvironmentSelection) => void;
-  readonly readSecret: (profile: AgentEnvironmentProfile) => string | undefined;
-  readonly writeSecret: (
-    profile: AgentEnvironmentProfile,
-    secret: string,
-  ) => void;
 };
 
 export type AgentEnvironmentSwitchPort = AgentConfigPort & {
@@ -71,7 +64,7 @@ export type AgentEnvironmentSwitchPort = AgentConfigPort & {
 
 export class JsonAgentEnvironmentStorage implements AgentEnvironmentStorage {
   constructor(
-    private readonly paths: AgentDataPaths,
+    paths: AgentDataPaths,
     private readonly selectionPath = join(paths.rootDir, 'environment.json'),
   ) {}
 
@@ -90,26 +83,6 @@ export class JsonAgentEnvironmentStorage implements AgentEnvironmentStorage {
   writeSelection(selection: AgentEnvironmentSelection): void {
     atomicWriteJson(this.selectionPath, selection);
   }
-
-  readSecret(profile: AgentEnvironmentProfile): string | undefined {
-    const secretPath = resolveAgentEnvironmentDataPaths(
-      this.paths,
-      profile,
-    ).secretPath;
-    if (!existsSync(secretPath)) {
-      return undefined;
-    }
-    return normalizeText(readFileSync(secretPath, 'utf8'));
-  }
-
-  writeSecret(profile: AgentEnvironmentProfile, secret: string): void {
-    const normalized = normalizeAgentSecret(secret);
-    const secretPath = resolveAgentEnvironmentDataPaths(
-      this.paths,
-      profile,
-    ).secretPath;
-    atomicWrite(secretPath, `${normalized}\n`, 0o600);
-  }
 }
 
 export class AgentEnvironmentManager implements AgentEnvironmentSwitchPort {
@@ -118,7 +91,6 @@ export class AgentEnvironmentManager implements AgentEnvironmentSwitchPort {
     private readonly catalog: AgentEnvironmentCatalog,
     private readonly paths: AgentDataPaths,
     private readonly storage: AgentEnvironmentStorage,
-    private readonly bootstrapSecret?: string,
   ) {}
 
   listProfiles(): readonly AgentEnvironmentProfile[] {
@@ -167,8 +139,6 @@ export class AgentEnvironmentManager implements AgentEnvironmentSwitchPort {
         namespace: profile.namespace,
         trust: profile.trust,
       },
-      agentSecret:
-        this.storage.readSecret(profile) ?? normalizeText(this.bootstrapSecret),
       backendUrl: profile.backendHttpUrl,
       agentWsUrl: profile.backendAgentWsUrl,
       browserRuntime: {
@@ -201,16 +171,6 @@ export class AgentEnvironmentManager implements AgentEnvironmentSwitchPort {
       paths: resolveAgentEnvironmentDataPaths(this.paths, profile),
       profile,
     };
-  }
-
-  setEnvironmentSecret(environmentId: string, secret: string): void {
-    const profile = this.catalog.profiles.find(
-      (candidate) => candidate.environmentId === environmentId,
-    );
-    if (!profile) {
-      throw new Error(`Unknown Agent environment "${environmentId}"`);
-    }
-    this.storage.writeSecret(profile, secret);
   }
 
   updateActiveSettings(patch: {
@@ -297,34 +257,10 @@ export function resolveAgentEnvironmentDataPaths(
   return {
     rootDir,
     configPath: join(rootDir, 'config.json'),
-    secretPath: join(rootDir, 'agent-secret'),
     profilesDir: join(rootDir, 'browser-profiles'),
     runtimeDir: join(rootDir, 'runtime'),
     logsDir: join(rootDir, 'logs'),
   };
-}
-
-export function normalizeAgentSecret(secret: string): string {
-  const value = normalizeText(secret);
-  if (!value || value.length < 32 || value.length > 512) {
-    throw new Error('Agent secret must contain between 32 and 512 characters');
-  }
-  return value;
-}
-
-export function constantTimeSecretEqual(
-  expected: string,
-  actual: string,
-): boolean {
-  const expectedBuffer = Buffer.from(expected);
-  const actualBuffer = Buffer.from(actual);
-  if (expectedBuffer.length !== actualBuffer.length) {
-    const padded = Buffer.alloc(expectedBuffer.length);
-    actualBuffer.copy(padded, 0, 0, expectedBuffer.length);
-    timingSafeEqual(expectedBuffer, padded);
-    return false;
-  }
-  return timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
 function parseCatalogInput(

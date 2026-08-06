@@ -45,8 +45,10 @@ describe('legacy Electron Desktop data migration', () => {
     await expect(inspectLegacyDesktopMigration(input)).resolves.toMatchObject({
       status: 'absent',
       reason: 'legacy-data-absent',
-      secretRequired: false,
     });
+    expect(
+      (await inspectLegacyDesktopMigration(input)) as Record<string, unknown>,
+    ).not.toHaveProperty('secretRequired');
   });
 
   test('resolves the exact legacy Electron roots on macOS and Windows', () => {
@@ -96,9 +98,9 @@ describe('legacy Electron Desktop data migration', () => {
       environmentId: 'production',
       copiedProfileFiles: 2,
       configApplied: true,
-      secretRequired: true,
-      retryCommand: 'chc agent env set-secret production --secret-stdin',
     });
+    expect(result).not.toHaveProperty('secretRequired');
+    expect(result.retryCommand).toBeUndefined();
     const target = join(input.agentRootDir, 'environments', 'production');
     await expect(readJson(join(target, 'config.json'))).resolves.toEqual({
       deviceName: 'Migrated Mac',

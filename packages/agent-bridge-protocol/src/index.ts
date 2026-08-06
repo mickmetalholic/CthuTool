@@ -126,9 +126,6 @@ export const AgentBridgeResourceSnapshotSchema = v.object({
     supported: v.boolean(),
     enabled: v.boolean(),
   }),
-  secret: v.object({
-    status: v.picklist(['configured', 'missing', 'invalid']),
-  }),
   diagnostics: v.pipe(
     v.array(
       v.object({

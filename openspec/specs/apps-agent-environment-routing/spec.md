@@ -23,7 +23,7 @@ The Agent SHALL persist and connect exactly one active environment at a time.
 
 #### Scenario: Agent starts with a selected environment
 - **WHEN** a valid active environment id is persisted
-- **THEN** the Agent loads only that environment's backend connection, secret reference, profiles, and diagnostics namespace
+- **THEN** the Agent loads only that environment's backend connection, profiles, and diagnostics namespace
 
 #### Scenario: No environment is selected
 - **WHEN** the Agent has profiles but no active selection
@@ -45,15 +45,23 @@ The Agent SHALL switch environments without restarting the tray and SHALL preven
 - **THEN** the operation succeeds idempotently without discarding profiles or creating a second connection
 
 ### Requirement: Environment-scoped mutable state
-The Agent SHALL isolate static Agent secrets, browser profiles, configuration overrides, logs, and pending command state by environment.
+The Agent SHALL isolate browser profiles, configuration overrides, logs, and
+pending command state by environment. It MUST NOT require or persist a static
+Agent secret for an environment.
 
 #### Scenario: Test environment uses a profile
 - **WHEN** the test environment launches a site profile
-- **THEN** it uses the test namespace and cannot open production profile data by default
+- **THEN** it uses the test namespace and cannot open production profile data
+  by default
 
 #### Scenario: Environment diagnostics are read
 - **WHEN** status or logs are requested
-- **THEN** entries identify their environment id without revealing another environment's secret or raw profile data
+- **THEN** entries identify their environment id without revealing another
+  environment's authorization material or raw profile data
+
+#### Scenario: Legacy secret file exists
+- **WHEN** an existing environment directory contains an `agent-secret` file
+- **THEN** the Agent ignores the file and does not delete it implicitly
 
 ### Requirement: Stable non-secret Agent identity
 The Agent SHALL use a persisted random Agent id for correlation and SHALL NOT treat that id as an authentication credential.
@@ -82,12 +90,17 @@ The Agent SHALL expose local Web bridge access only to the exact Web origin conf
 - **THEN** all local bridge tickets and sessions issued for the prior Web origin become invalid
 
 ### Requirement: Redacted environment diagnostics
-Environment lifecycle diagnostics SHALL include bounded environment, connection, and switch outcomes while excluding static secrets, operator sessions, local tickets, and raw browser artifacts.
+Environment lifecycle diagnostics SHALL include bounded environment,
+connection, and switch outcomes while excluding operator sessions, local
+tickets, authorization material, and raw browser artifacts.
 
-#### Scenario: Backend authentication fails
-- **WHEN** the public backend rejects the Agent secret
-- **THEN** diagnostics report the environment id and authentication-failed category without the submitted value
+#### Scenario: Backend rejects a connection
+- **WHEN** the Backend rejects an Agent because its socket peer is public or
+  its environment id is incorrect
+- **THEN** diagnostics report only the bounded rejection category and
+  environment id without a submitted credential value
 
 #### Scenario: Environment switch is recorded
 - **WHEN** an environment switch starts or finishes
-- **THEN** diagnostics record source/target ids, phase, outcome, and timestamp without profile contents
+- **THEN** diagnostics record source/target ids, phase, outcome, and timestamp
+  without profile contents

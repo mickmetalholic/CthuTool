@@ -13,7 +13,6 @@ export type CliErrorCode =
   | 'agent_integrity_failed'
   | 'agent_incompatible'
   | 'agent_environment_invalid'
-  | 'agent_secret_input_invalid'
   | 'agent_start_failed'
   | 'agent_autostart_unsupported'
   | 'agent_purge_confirmation_required'

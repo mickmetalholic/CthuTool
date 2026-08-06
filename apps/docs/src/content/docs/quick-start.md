@@ -71,14 +71,15 @@ chc update
 ## 5. Install the Local Agent
 
 The tray-owned Agent runs on client computers, not in the cluster. Install a
-signed release, select one catalog environment, and configure its static Agent
-secret:
+signed release and select one catalog environment. The Agent connects with the
+environment id over the private network; Cloudflare Access/Tunnel is used only
+for external Web or operator Backend HTTP access. No static Agent secret is
+configured:
 
 ```bash
 chc agent install
 chc agent env list
 chc agent env set production
-printf '%s\n' "$AGENT_SECRET" | chc agent env set-secret production --secret-stdin
 chc agent autostart enable
 chc agent start
 chc agent settings

@@ -25,15 +25,37 @@ PORT: "3000"
 LOG_LEVEL: "info"
 OTEL_SDK_DISABLED: "true"
 CTHUTOOL_ENVIRONMENT_ID: "production"
-CTHUTOOL_OPERATOR_ACCESS_MODE: "trusted-proxy"
 ```
 
 The Deployment consumes these values with `envFrom.configMapRef.name: cthutool-backend`.
-The Deployment reads `CTHUTOOL_AGENT_SECRET` and
-`CTHUTOOL_TRUSTED_PROXY_IPS` from the out-of-band
-`Secret/cthutool-backend-secrets`. The latter must contain the actual source IP
-or IPs of the ingress proxy; do not commit secret material or an unresolved
-proxy placeholder.
+`CTHUTOOL_ENVIRONMENT_ID` selects the deployment environment; it is not a
+credential. CthuTool no longer reads `CTHUTOOL_OPERATOR_ACCESS_MODE`,
+`CTHUTOOL_TRUSTED_PROXY_IPS`, `CTHUTOOL_OPERATOR_GATEWAY_HEADER`,
+`CTHUTOOL_PRIVATE_DEVELOPMENT`, or `CTHUTOOL_AGENT_SECRET`.
+
+## Private-network access boundary
+
+The Backend authorizes protected HTTP APIs and `/ws/agents` only when the
+direct socket peer is loopback or a private-network address. It ignores
+`X-Forwarded-For` and gateway identity headers. Place Backend and Agents on the
+homelab private network; do not expose the raw Backend port to the public
+Internet.
+
+## External access (Cloudflare Access / Tunnel)
+
+External operator and Web HTTP traffic must enter through Cloudflare Access and
+Cloudflare Tunnel to private ingress. The Agent WebSocket remains
+private-network only, so `/ws/agents` must not be exposed through Cloudflare
+Access in this deployment. Direct public Backend port exposure or bypassing
+Access is unsupported.
+
+## CthuOps follow-up after Backend rollout
+
+After the private-network Backend image is deployed and verified, a separate
+CthuOps change should remove any pending trusted-proxy, trusted-IP, gateway
+identity header, and Agent Secret wiring. Keep TLS and the Cloudflare Access /
+Tunnel route. Do not edit CthuOps from this repository; track that cleanup in
+the operations checkout.
 
 ## Backend Deployment
 
@@ -57,7 +79,9 @@ The Deployment also defines:
 
 CthuOps exposes `Service/cthutool-backend` as `ClusterIP` on port `3000`, targeting the backend container port `3000`. Any Prometheus scrape configuration for the external metrics platform is owned by the deployment environment.
 
-Use your cluster's existing ingress, reverse proxy, load balancer, or port-forward workflow to expose the backend to client computers. Ingress and TLS manifests are owned by CthuOps.
+Expose the backend only through the private network and the Cloudflare
+Access/Tunnel path owned by CthuOps. Ingress and TLS manifests remain in
+CthuOps.
 
 ## Browser Site Policy
 

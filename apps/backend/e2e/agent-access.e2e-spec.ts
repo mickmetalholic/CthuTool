@@ -6,18 +6,13 @@ import WebSocket from 'ws';
 import { AppModule } from '../src/app.module';
 import { configureApplication } from '../src/main';
 
-describe('public Agent access boundary (e2e)', () => {
+describe('private-network Agent access boundary (e2e)', () => {
   let app: INestApplication;
   let baseUrl: string;
-  const agentSecret = 's'.repeat(32);
 
   beforeAll(async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('CTHUTOOL_ENVIRONMENT_ID', 'prod');
-    vi.stubEnv('CTHUTOOL_AGENT_SECRET', agentSecret);
-    vi.stubEnv('CTHUTOOL_OPERATOR_ACCESS_MODE', 'trusted-proxy');
-    vi.stubEnv('CTHUTOOL_TRUSTED_PROXY_IPS', '127.0.0.1');
-    vi.stubEnv('CTHUTOOL_PRIVATE_DEVELOPMENT', '0');
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -36,26 +31,15 @@ describe('public Agent access boundary (e2e)', () => {
     vi.unstubAllEnvs();
   });
 
-  it('rejects anonymous status and accepts only trusted proxy identity', async () => {
-    await request(baseUrl).get('/api/agents').expect(401);
+  it('accepts loopback operator requests without gateway headers', async () => {
     await request(baseUrl)
       .get('/api/agents')
-      .set('x-cthutool-operator', 'owner@example.com')
-      .expect(200);
-  });
-
-  it('rejects an invalid Agent secret before registration', async () => {
-    await expect(connectAgent(baseUrl, 'x'.repeat(32))).rejects.toBeDefined();
-
-    await request(baseUrl)
-      .get('/api/agents')
-      .set('x-cthutool-operator', 'owner@example.com')
       .expect(200)
       .expect({ agents: [] });
   });
 
-  it('registers with the separate valid environment Agent secret', async () => {
-    const ws = await connectAgent(baseUrl, agentSecret);
+  it('registers Agents from private peers with environment id only', async () => {
+    const ws = await connectAgent(baseUrl);
     ws.send(agentHello());
     const message = await waitForMessage(ws);
     expect(message).toMatchObject({
@@ -70,24 +54,53 @@ describe('public Agent access boundary (e2e)', () => {
     ws.close();
     await onceClose(ws);
 
-    const reconnect = await connectAgent(baseUrl, agentSecret);
+    const reconnect = await connectAgent(baseUrl);
     reconnect.send(agentHello());
     await expect(waitForMessage(reconnect)).resolves.toMatchObject({
       payload: { connectionGeneration: 2 },
     });
     reconnect.close();
   });
+
+  it('rejects Agents that present another environment id', async () => {
+    await expect(
+      connectAgent(baseUrl, { environmentId: 'test' }),
+    ).rejects.toBeDefined();
+
+    await request(baseUrl)
+      .get('/api/agents')
+      .expect(200)
+      .expect({ agents: [] });
+  });
+
+  it('does not require Authorization headers for Agent connections', async () => {
+    const ws = await connectAgent(baseUrl, {
+      authorization: `Agent ${'x'.repeat(32)}`,
+    });
+    ws.send(agentHello());
+    await expect(waitForMessage(ws)).resolves.toMatchObject({
+      type: 'agent.registered',
+      payload: { environmentId: 'prod', agentId: 'agent-1' },
+    });
+    ws.close();
+  });
 });
 
 async function connectAgent(
   baseUrl: string,
-  secret: string,
+  options: {
+    readonly environmentId?: string;
+    readonly authorization?: string;
+  } = {},
 ): Promise<WebSocket> {
+  const headers: Record<string, string> = {
+    'x-cthutool-environment-id': options.environmentId ?? 'prod',
+  };
+  if (options.authorization) {
+    headers.authorization = options.authorization;
+  }
   const ws = new WebSocket(`${baseUrl.replace('http', 'ws')}/ws/agents`, {
-    headers: {
-      authorization: `Agent ${secret}`,
-      'x-cthutool-environment-id': 'prod',
-    },
+    headers,
   });
   await new Promise<void>((resolve, reject) => {
     ws.once('open', resolve);

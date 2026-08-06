@@ -97,7 +97,6 @@ export type LegacyDesktopMigrationReport = {
   readonly reason: LegacyDesktopMigrationReason;
   readonly message: string;
   readonly environmentId?: string;
-  readonly secretRequired: boolean;
   readonly copiedProfileFiles: number;
   readonly configApplied: boolean;
   readonly retryCommand?: string;
@@ -192,7 +191,6 @@ export async function migrateLegacyDesktopData(
         message:
           'Legacy data migration is blocked by an active Agent profile lock; stop the Agent and retry.',
         environmentId: plan.target.environmentId,
-        secretRequired: await secretRequired(plan.targetRootDir),
         retryCommand: 'chc agent stop && chc agent start',
       }),
     );
@@ -209,7 +207,6 @@ export async function migrateLegacyDesktopData(
         message:
           'Another legacy data migration owns the environment lock; retry after it finishes.',
         environmentId: plan.target.environmentId,
-        secretRequired: await secretRequired(plan.targetRootDir),
         retryCommand: 'chc agent doctor',
       }),
     );
@@ -281,12 +278,8 @@ export async function migrateLegacyDesktopData(
         message:
           'Legacy Desktop settings and browser profiles were copied without changing the originals.',
         environmentId: plan.target.environmentId,
-        secretRequired: await secretRequired(plan.targetRootDir),
         copiedProfileFiles: marker.sourceProfileFiles,
         configApplied,
-        retryCommand: (await secretRequired(plan.targetRootDir))
-          ? `chc agent env set-secret ${plan.target.environmentId} --secret-stdin`
-          : undefined,
       }),
     );
   } catch (error) {
@@ -297,7 +290,6 @@ export async function migrateLegacyDesktopData(
         reason: 'migration-failed',
         message: safeErrorMessage(error),
         environmentId: plan.target.environmentId,
-        secretRequired: await secretRequired(plan.targetRootDir),
         retryCommand: 'chc agent doctor',
       }),
     );
@@ -409,7 +401,6 @@ async function createMigrationPlan(
       reason: 'migration-failed',
       message: safeErrorMessage(error),
       environmentId: target.environmentId,
-      secretRequired: await secretRequired(targetRootDir),
       retryCommand: 'chc agent doctor',
     });
   }
@@ -424,7 +415,6 @@ async function createMigrationPlan(
         message:
           'The environment migration marker belongs to a different legacy root or environment.',
         environmentId: target.environmentId,
-        secretRequired: await secretRequired(targetRootDir),
         retryCommand: 'chc agent doctor',
       });
     }
@@ -435,12 +425,8 @@ async function createMigrationPlan(
         message:
           'Legacy Desktop data was already migrated; the original data remains available for rollback.',
         environmentId: target.environmentId,
-        secretRequired: await secretRequired(targetRootDir),
         copiedProfileFiles: marker.sourceProfileFiles,
         configApplied: marker.configApplied,
-        retryCommand: (await secretRequired(targetRootDir))
-          ? `chc agent env set-secret ${target.environmentId} --secret-stdin`
-          : undefined,
       }),
       legacyConfig,
       legacyProfilesDir: hasProfiles ? profilesDir : undefined,
@@ -455,7 +441,6 @@ async function createMigrationPlan(
       reason: selectionReason,
       message: 'Legacy Desktop data is ready for non-destructive migration.',
       environmentId: target.environmentId,
-      secretRequired: await secretRequired(targetRootDir),
     }),
     legacyConfig,
     legacyProfilesDir: hasProfiles ? profilesDir : undefined,
@@ -693,16 +678,6 @@ async function chmodPrivate(path: string): Promise<void> {
   if (process.platform !== 'win32') await chmod(path, 0o600);
 }
 
-async function secretRequired(environmentRoot: string): Promise<boolean> {
-  try {
-    const metadata = await stat(join(environmentRoot, 'agent-secret'));
-    return !metadata.isFile() || metadata.size < 33;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true;
-    throw error;
-  }
-}
-
 async function directoryHasEntries(path: string): Promise<boolean> {
   try {
     return (await readdir(path)).some((name) => name !== PROFILE_LOCK_NAME);
@@ -802,7 +777,6 @@ function report(
       Pick<
         LegacyDesktopMigrationReport,
         | 'environmentId'
-        | 'secretRequired'
         | 'copiedProfileFiles'
         | 'configApplied'
         | 'retryCommand'
@@ -814,7 +788,6 @@ function report(
     status: input.status,
     reason: input.reason,
     message: input.message,
-    secretRequired: input.secretRequired ?? false,
     copiedProfileFiles: input.copiedProfileFiles ?? 0,
     configApplied: input.configApplied ?? false,
     ...(input.environmentId ? { environmentId: input.environmentId } : {}),
@@ -828,7 +801,6 @@ function publicReport(plan: MigrationPlan): LegacyDesktopMigrationReport {
     status: plan.status,
     reason: plan.reason,
     message: plan.message,
-    secretRequired: plan.secretRequired,
     copiedProfileFiles: plan.copiedProfileFiles,
     configApplied: plan.configApplied,
     ...(plan.environmentId ? { environmentId: plan.environmentId } : {}),

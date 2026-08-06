@@ -123,7 +123,6 @@ and local Agent service:
 ```bash
 chc agent install
 chc agent env set production
-printf '%s\n' "$AGENT_SECRET" | chc agent env set-secret production --secret-stdin
 chc agent autostart enable
 chc agent start
 chc agent settings
@@ -133,7 +132,9 @@ The settings command opens the deployed Web UI through a fresh local bridge;
 there is no bundled settings window or local Web application. Agent releases
 and their public environment catalogs are signed. The CLI build must pin the
 release public key, and installation fails closed when it is absent or when any
-signature, digest, protocol, endpoint, or platform check fails.
+signature, digest, protocol, endpoint, or platform check fails. The Agent
+connects with the selected environment id; there is no static Agent secret to
+configure.
 
 Use `chc update` to update the CLI itself and `chc agent update` to update only
 the Agent. See [CLI Commands](/reference/cli/#local-agent) for all lifecycle,
@@ -141,9 +142,8 @@ environment, autostart, diagnostic, and uninstall operations.
 
 `chc agent doctor` also detects legacy CthuDesktop data. It reports whether the
 backend matched exactly one trusted release environment, whether explicit
-`chc agent env set <id>` is required, whether a migration/profile lock is
-active, and whether a new Agent secret is missing. Output is redacted; legacy
-credentials are never reused or printed.
+`chc agent env set <id>` is required, and whether a migration/profile lock is
+active. Output is redacted; legacy credentials are never reused or printed.
 
 ## Uninstall
 

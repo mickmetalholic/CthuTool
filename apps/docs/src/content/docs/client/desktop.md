@@ -18,7 +18,6 @@ Install `chc` first, then install the signed Agent release:
 chc agent install
 chc agent env list
 chc agent env set production
-printf '%s\n' "$AGENT_SECRET" | chc agent env set-secret production --secret-stdin
 chc agent autostart enable
 chc agent start
 ```
@@ -43,20 +42,17 @@ The launch ticket is single-use, short-lived, bound to the selected environment
 and Web origin, and is never printed by the CLI. The loopback API requires the
 negotiated bearer session after launch.
 
-## Environments and secrets
+## Environments
 
 Only environments from the signed release catalog can be selected. Each has
-its own settings, Agent secret, browser profiles, runtime state, and logs. A Web
-page cannot add or replace catalog endpoints.
+its own settings, browser profiles, runtime state, and logs. A Web page cannot
+add or replace catalog endpoints.
 
-This personal-use design intentionally uses one static Agent secret per
-environment rather than device enrollment. Supply it only through stdin or a
-user-private file:
-
-```bash
-chc agent env set-secret production --secret-stdin
-chc agent env set-secret production --secret-file ./agent-secret
-```
+The Agent authenticates to the Backend through the private-network boundary.
+Agents remain on the private network and do not use Cloudflare Access
+credentials; Cloudflare protects external Web or operator Backend HTTP access.
+Select an environment with `chc agent env set`; there is no `set-secret` command
+and no per-environment Agent secret to rotate.
 
 ## Update, diagnostics, and uninstall
 
@@ -70,7 +66,7 @@ chc agent uninstall
 
 Agent update is independent of `chc update`. A failed Agent readiness check
 restores the previous active Agent version. Uninstall removes binaries and
-autostart but preserves settings, secrets, profiles, and logs unless
+autostart but preserves settings, profiles, and logs unless
 `--purge --yes` is explicitly confirmed.
 
 ## Legacy Desktop migration
@@ -78,8 +74,7 @@ autostart but preserves settings, secrets, profiles, and logs unless
 On first Agent start, legacy CthuDesktop settings and browser profiles are
 detected and copied into exactly one trusted environment. Exact legacy backend
 matching is used when possible; otherwise run `chc agent env set <id>` and
-restart. Old device identifiers and credentials are never reused, so configure
-a new static Agent secret.
+restart. Old device identifiers and credentials are never reused.
 
 The migration is locked, validated, idempotent, and non-destructive. The
 original CthuDesktop data remains in place for rollback. See

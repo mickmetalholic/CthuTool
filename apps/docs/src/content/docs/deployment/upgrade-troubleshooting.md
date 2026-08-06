@@ -46,12 +46,15 @@ If a reverse proxy or ingress is in front of the backend, verify both the Servic
 
 ## Agent Connectivity
 
-The local Agent connects to its catalog backend through WSS. If Agent status is
-offline:
+The local Agent connects to its catalog backend through WSS from a
+private-network peer. Agents do not use Cloudflare Access credentials;
+Cloudflare protects external Web or operator Backend HTTP traffic only. If
+Agent status is offline:
 
-- run `chc agent doctor` and confirm an environment and secret are configured
+- run `chc agent doctor` and confirm an environment is selected
 - confirm the catalog HTTPS/WSS endpoints are reachable from the client
-- check whether the Agent WebSocket endpoint is allowed by the proxy or ingress
+- confirm the Agent host resolves the catalog WSS endpoint to a private route
+- confirm the Backend is not exposed on a raw public port that bypasses Access
 - confirm the backend pod is ready and `/health` responds
 - use `chc agent logs --lines 200` for redacted local diagnostics
 

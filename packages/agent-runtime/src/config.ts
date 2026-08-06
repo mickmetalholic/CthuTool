@@ -28,7 +28,6 @@ export type AgentConnectionEnvironment = {
 export type AgentConnectionConfig = {
   readonly backendUrl: string;
   readonly agentWsUrl?: string;
-  readonly agentSecret?: string;
   readonly agentId: string;
   readonly deviceName: string;
   readonly connectionEnabled: boolean;

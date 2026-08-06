@@ -6,7 +6,6 @@ import {
   readdir,
   readFile,
   rename,
-  stat,
   writeFile,
 } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -14,7 +13,6 @@ import { dirname, join } from 'node:path';
 import {
   type ActiveVersionPointer,
   type BundleLayout,
-  type ReleaseEnvironment,
   type ReleaseEnvironmentCatalog,
   readActiveVersion,
   validateBundleInventory,
@@ -124,47 +122,6 @@ export async function writeEnvironmentSelection(
   );
 }
 
-export function environmentRoot(
-  paths: AgentPaths,
-  environment: ReleaseEnvironment,
-): string {
-  return join(paths.userDataDir, 'environments', environment.namespace);
-}
-
-export async function secretConfigured(
-  paths: AgentPaths,
-  environment: ReleaseEnvironment,
-): Promise<boolean> {
-  try {
-    const metadata = await stat(
-      join(environmentRoot(paths, environment), 'agent-secret'),
-    );
-    return metadata.isFile() && metadata.size >= 33;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
-export async function writeEnvironmentSecret(
-  paths: AgentPaths,
-  environment: ReleaseEnvironment,
-  secret: string,
-): Promise<void> {
-  const normalized = secret.trim();
-  if (
-    normalized.length < 32 ||
-    normalized.length > 512 ||
-    normalized.includes('\0')
-  ) {
-    throw new Error('Agent secret must contain between 32 and 512 characters');
-  }
-  await atomicPrivateWrite(
-    join(environmentRoot(paths, environment), 'agent-secret'),
-    `${normalized}\n`,
-  );
-}
-
 export async function atomicPrivateWrite(
   path: string,
   value: string | Uint8Array,
@@ -197,9 +154,7 @@ async function protectWindowsFile(path: string): Promise<void> {
     child.once('exit', resolvePromise);
   });
   if (exitCode !== 0) {
-    throw new Error(
-      'Unable to protect Agent secret storage with a user-only ACL',
-    );
+    throw new Error('Unable to protect Agent storage with a user-only ACL');
   }
 }
 

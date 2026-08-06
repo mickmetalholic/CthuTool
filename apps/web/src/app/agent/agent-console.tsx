@@ -360,7 +360,6 @@ function EnvironmentCard({
         <Fact label="Agent" value={resources.agent.deviceName} />
         <Fact label="Backend" value={resources.agent.backendStatus} />
         <Fact label="Process" value={resources.agent.processState} />
-        <Fact label="Agent secret" value={resources.secret.status} />
       </dl>
       <p className="card-note">
         环境切换只能在托盘或 CLI 中完成，Web 页面不能更改信任边界。

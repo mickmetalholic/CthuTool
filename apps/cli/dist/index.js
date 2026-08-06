@@ -988,7 +988,6 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
         reason: "migration-active-lock",
         message: "Legacy data migration is blocked by an active Agent profile lock; stop the Agent and retry.",
         environmentId: plan.target.environmentId,
-        secretRequired: await secretRequired(plan.targetRootDir),
         retryCommand: "chc agent stop && chc agent start"
       }));
     }
@@ -1000,7 +999,6 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
         reason: "migration-active-lock",
         message: "Another legacy data migration owns the environment lock; retry after it finishes.",
         environmentId: plan.target.environmentId,
-        secretRequired: await secretRequired(plan.targetRootDir),
         retryCommand: "chc agent doctor"
       }));
     }
@@ -1047,10 +1045,8 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
         reason: "migration-complete",
         message: "Legacy Desktop settings and browser profiles were copied without changing the originals.",
         environmentId: plan.target.environmentId,
-        secretRequired: await secretRequired(plan.targetRootDir),
         copiedProfileFiles: marker.sourceProfileFiles,
-        configApplied,
-        retryCommand: await secretRequired(plan.targetRootDir) ? `chc agent env set-secret ${plan.target.environmentId} --secret-stdin` : undefined
+        configApplied
       }));
     } catch (error) {
       return persistAndReturn(input.agentRootDir, report({
@@ -1058,7 +1054,6 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
         reason: "migration-failed",
         message: safeErrorMessage(error),
         environmentId: plan.target.environmentId,
-        secretRequired: await secretRequired(plan.targetRootDir),
         retryCommand: "chc agent doctor"
       }));
     } finally {
@@ -1142,7 +1137,6 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
         reason: "migration-failed",
         message: safeErrorMessage(error),
         environmentId: target.environmentId,
-        secretRequired: await secretRequired(targetRootDir),
         retryCommand: "chc agent doctor"
       });
     }
@@ -1153,7 +1147,6 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
           reason: "migration-failed",
           message: "The environment migration marker belongs to a different legacy root or environment.",
           environmentId: target.environmentId,
-          secretRequired: await secretRequired(targetRootDir),
           retryCommand: "chc agent doctor"
         });
       }
@@ -1163,10 +1156,8 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
           reason: "migration-already-complete",
           message: "Legacy Desktop data was already migrated; the original data remains available for rollback.",
           environmentId: target.environmentId,
-          secretRequired: await secretRequired(targetRootDir),
           copiedProfileFiles: marker.sourceProfileFiles,
-          configApplied: marker.configApplied,
-          retryCommand: await secretRequired(targetRootDir) ? `chc agent env set-secret ${target.environmentId} --secret-stdin` : undefined
+          configApplied: marker.configApplied
         }),
         legacyConfig,
         legacyProfilesDir: hasProfiles ? profilesDir : undefined,
@@ -1179,8 +1170,7 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
         status: "ready",
         reason: selectionReason,
         message: "Legacy Desktop data is ready for non-destructive migration.",
-        environmentId: target.environmentId,
-        secretRequired: await secretRequired(targetRootDir)
+        environmentId: target.environmentId
       }),
       legacyConfig,
       legacyProfilesDir: hasProfiles ? profilesDir : undefined,
@@ -1360,16 +1350,6 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
     if (process.platform !== "win32")
       await (0, promises_1.chmod)(path, 384);
   }
-  async function secretRequired(environmentRoot) {
-    try {
-      const metadata = await (0, promises_1.stat)((0, node_path_1.join)(environmentRoot, "agent-secret"));
-      return !metadata.isFile() || metadata.size < 33;
-    } catch (error) {
-      if (error.code === "ENOENT")
-        return true;
-      throw error;
-    }
-  }
   async function directoryHasEntries(path) {
     try {
       return (await (0, promises_1.readdir)(path)).some((name) => name !== PROFILE_LOCK_NAME);
@@ -1466,7 +1446,6 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
       status: input.status,
       reason: input.reason,
       message: input.message,
-      secretRequired: input.secretRequired ?? false,
       copiedProfileFiles: input.copiedProfileFiles ?? 0,
       configApplied: input.configApplied ?? false,
       ...input.environmentId ? { environmentId: input.environmentId } : {},
@@ -1479,7 +1458,6 @@ var require_legacy_desktop_migration = __commonJS((exports) => {
       status: plan.status,
       reason: plan.reason,
       message: plan.message,
-      secretRequired: plan.secretRequired,
       copiedProfileFiles: plan.copiedProfileFiles,
       configApplied: plan.configApplied,
       ...plan.environmentId ? { environmentId: plan.environmentId } : {},
@@ -1559,10 +1537,13 @@ var require_layout = __commonJS((exports) => {
   ];
   exports.MUTABLE_AGENT_PATH_SEGMENTS = [
     "environment.json",
-    "agent-secret",
     "browser-profiles",
     "logs",
     "config.json"
+  ];
+  var FORBIDDEN_VERSION_PATH_SEGMENTS = [
+    ...exports.MUTABLE_AGENT_PATH_SEGMENTS,
+    "agent-secret"
   ];
 
   class BundleLayoutError extends Error {
@@ -1642,7 +1623,7 @@ var require_layout = __commonJS((exports) => {
       if (lower.startsWith("electron/") || lower.includes("/node_modules/electron/") || lower.includes("electron framework") || lower.startsWith("webview/") || lower.includes("/embeddedwebview.framework/") || lower.startsWith("desktop/") || lower.includes("/renderer/") || lower.startsWith("web/") || lower.includes("/_next/") || !dependencyAsset && (lower.endsWith(".html") || lower.endsWith(".css")) || lower.endsWith(".js") && !lower.startsWith("agent/")) {
         throw new BundleLayoutError("FORBIDDEN_CONTENT", `Agent bundle contains local UI runtime or assets: ${path}`);
       }
-      if (exports.MUTABLE_AGENT_PATH_SEGMENTS.some((segment) => path === segment || path.split("/").includes(segment))) {
+      if (FORBIDDEN_VERSION_PATH_SEGMENTS.some((segment) => path === segment || path.split("/").includes(segment))) {
         throw new BundleLayoutError("MUTABLE_CONTENT", `Mutable Agent data must remain outside version contents: ${path}`);
       }
     }
@@ -6699,9 +6680,6 @@ function getCommandHelpAppendixProvider(command) {
   return helpAppendixByCommand.get(command);
 }
 
-// src/command/agent.command.ts
-import { readFile as readFile7, stat as stat6 } from "node:fs/promises";
-
 // ../../node_modules/.pnpm/@clack+core@0.3.5/node_modules/@clack/core/dist/index.mjs
 var import_sisteransi = __toESM(require_src(), 1);
 var import_picocolors = __toESM(require_picocolors(), 1);
@@ -7344,7 +7322,7 @@ var AGENT_CLI_RESPONSE_SCHEMA_VERSION = 1;
 // src/infra/agent-lifecycle-service.ts
 var import_agent_data_migration = __toESM(require_dist(), 1);
 var import_agent_release3 = __toESM(require_dist2(), 1);
-import { readFile as readFile6, rm as rm3, stat as stat5 } from "node:fs/promises";
+import { readFile as readFile6, rm as rm3, stat as stat4 } from "node:fs/promises";
 import { join as join7 } from "node:path";
 
 // src/domain/self-update-manager.ts
@@ -8059,7 +8037,6 @@ import {
   readdir,
   readFile as readFile3,
   rename,
-  stat as stat3,
   writeFile
 } from "node:fs/promises";
 import { homedir as homedir3 } from "node:os";
@@ -8303,27 +8280,6 @@ async function writeEnvironmentSelection(paths, environmentId) {
   await atomicPrivateWrite(join4(paths.userDataDir, "environment.json"), `${JSON.stringify({ activeEnvironmentId: environmentId }, null, 2)}
 `);
 }
-function environmentRoot(paths, environment) {
-  return join4(paths.userDataDir, "environments", environment.namespace);
-}
-async function secretConfigured(paths, environment) {
-  try {
-    const metadata = await stat3(join4(environmentRoot(paths, environment), "agent-secret"));
-    return metadata.isFile() && metadata.size >= 33;
-  } catch (error) {
-    if (error.code === "ENOENT")
-      return false;
-    throw error;
-  }
-}
-async function writeEnvironmentSecret(paths, environment, secret) {
-  const normalized = secret.trim();
-  if (normalized.length < 32 || normalized.length > 512 || normalized.includes("\x00")) {
-    throw new Error("Agent secret must contain between 32 and 512 characters");
-  }
-  await atomicPrivateWrite(join4(environmentRoot(paths, environment), "agent-secret"), `${normalized}
-`);
-}
 async function atomicPrivateWrite(path, value) {
   await mkdir2(dirname2(path), { mode: 448, recursive: true });
   const temporary = `${path}.tmp-${randomUUID()}`;
@@ -8346,7 +8302,7 @@ async function protectWindowsFile(path) {
     child.once("exit", resolvePromise);
   });
   if (exitCode !== 0) {
-    throw new Error("Unable to protect Agent secret storage with a user-only ACL");
+    throw new Error("Unable to protect Agent storage with a user-only ACL");
   }
 }
 async function listRelativeFiles(root, directory = root) {
@@ -8530,7 +8486,7 @@ import {
   readdir as readdir2,
   readFile as readFile5,
   rm as rm2,
-  stat as stat4,
+  stat as stat3,
   writeFile as writeFile3
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9119,7 +9075,7 @@ async function directoryFingerprint(root, directory = root) {
 }
 async function pathExists(path) {
   try {
-    await stat4(path);
+    await stat3(path);
     return true;
   } catch (error) {
     if (error.code === "ENOENT")
@@ -9295,14 +9251,13 @@ class FileSystemAgentLifecycleService {
   async listEnvironments() {
     const { catalog } = await readInstalledBundle(this.paths);
     const selected = await readEnvironmentSelection(this.paths) ?? catalog.profiles[0]?.environmentId;
-    return Promise.all(catalog.profiles.map(async (environment) => ({
+    return catalog.profiles.map((environment) => ({
       id: environment.environmentId,
       label: environment.label,
       active: environment.environmentId === selected,
       webOrigin: environment.webOrigin,
-      backendHttpUrl: environment.backendHttpUrl,
-      secretConfigured: await secretConfigured(this.paths, environment)
-    })));
+      backendHttpUrl: environment.backendHttpUrl
+    }));
   }
   async getEnvironment(id) {
     const environments = await this.listEnvironments();
@@ -9325,20 +9280,6 @@ class FileSystemAgentLifecycleService {
     else
       await writeEnvironmentSelection(this.paths, id);
     return { id, changed: previous !== id };
-  }
-  async setEnvironmentSecret(id, secret) {
-    const { catalog } = await readInstalledBundle(this.paths);
-    const environment = catalog.profiles.find((candidate) => candidate.environmentId === id);
-    if (!environment)
-      throw new Error(`Unknown Agent environment "${id}"`);
-    await writeEnvironmentSecret(this.paths, environment, secret);
-    const tray = await readTrayInstanceRecord(resolveTrayInstancePath(this.paths.userDataDir)).catch(() => {
-      return;
-    });
-    if (tray) {
-      await requestTrayEnvironmentSwitch({ record: tray, environmentId: id });
-    }
-    return { id, configured: true };
   }
   async autostart(action) {
     if (action === "status")
@@ -9371,7 +9312,7 @@ class FileSystemAgentLifecycleService {
       checks.push({
         id: "environment",
         status: environment ? "pass" : "fail",
-        message: environment ? `${environment.label}; secret ${environment.secretConfigured ? "configured" : "missing"}` : "No valid active environment"
+        message: environment ? environment.label : "No valid active environment"
       });
       if (environment) {
         const profile = installed.catalog.profiles.find((candidate) => candidate.environmentId === environment.id);
@@ -9481,7 +9422,7 @@ class FileSystemAgentLifecycleService {
 }
 async function exists(path) {
   try {
-    await stat5(path);
+    await stat4(path);
     return true;
   } catch (error) {
     if (error.code === "ENOENT")
@@ -9862,7 +9803,7 @@ function createAgentCommand(service) {
       ...lifecycleArgs,
       purge: {
         type: "boolean",
-        description: "Also remove environment selection, secrets, profiles, and logs"
+        description: "Also remove environment selection, profiles, and logs"
       },
       yes: {
         type: "boolean",
@@ -9875,7 +9816,7 @@ function createAgentCommand(service) {
         let confirmed = args.yes === true;
         if (args.purge === true && !confirmed && context.interactive) {
           const answer = await ce2({
-            message: "Permanently delete Agent secrets, profiles, selection, and logs?",
+            message: "Permanently delete Agent profiles, selection, and logs?",
             initialValue: false
           });
           confirmed = !lD2(answer) && answer === true;
@@ -9897,7 +9838,7 @@ function createAgentCommand(service) {
   const envGet = defineCommand({
     meta: {
       name: "get",
-      description: "Show the active or named environment without secrets."
+      description: "Show the active or named environment."
     },
     args: {
       ...lifecycleArgs,
@@ -9920,43 +9861,15 @@ function createAgentCommand(service) {
     },
     run: ({ args }) => execute2(args, "env set", () => service.setEnvironment(requiredString(args.id, "environment id")), (result) => `Active Agent environment: ${result.id}.`)
   });
-  const envSetSecret = defineCommand({
-    meta: {
-      name: "set-secret",
-      description: "Store an Agent secret from stdin or a protected file."
-    },
-    args: {
-      ...lifecycleArgs,
-      id: { type: "positional", required: true, description: "Environment id" },
-      "secret-stdin": {
-        type: "boolean",
-        description: "Read the secret from stdin"
-      },
-      "secret-file": {
-        type: "string",
-        description: "Read the secret from a user-private file"
-      }
-    },
-    async run({ args }) {
-      await execute2(args, "env set-secret", async () => {
-        const secret = await readSecretInput({
-          stdin: args["secret-stdin"] === true,
-          file: stringValue(args["secret-file"])
-        });
-        return service.setEnvironmentSecret(requiredString(args.id, "environment id"), secret);
-      }, (result) => `Agent secret stored for ${result.id}.`);
-    }
-  });
   const envRegistrations = [
     registration("list", envList),
     registration("get", envGet),
-    registration("set", envSet),
-    registration("set-secret", envSetSecret)
+    registration("set", envSet)
   ];
   const environment = registerCommandGroup(defineCommand({
     meta: {
       name: "env",
-      description: "Manage verified Agent environments and environment-scoped secrets."
+      description: "Manage verified Agent environments."
     },
     subCommands: buildRegisteredSubCommands(envRegistrations)
   }), envRegistrations);
@@ -10067,8 +9980,6 @@ function classifyAgentError(error) {
     return "agent_incompatible";
   if (message.includes("unknown agent environment") || message.includes("no agent environment"))
     return "agent_environment_invalid";
-  if (message.includes("secret"))
-    return "agent_secret_input_invalid";
   if (message.includes("timed out waiting") && message.includes("ready"))
     return "agent_start_failed";
   if (message.includes("purging agent data"))
@@ -10100,35 +10011,15 @@ function requiredString(value, label) {
     throw createCliError("missing_required_argument", `Missing required ${label}`);
   return result;
 }
-async function readSecretInput(input) {
-  if (Number(input.stdin) + Number(Boolean(input.file)) !== 1)
-    throw createCliError("agent_secret_input_invalid", "Choose exactly one of --secret-stdin or --secret-file");
-  if (input.file) {
-    const metadata = await stat6(input.file);
-    if (!metadata.isFile())
-      throw createCliError("agent_secret_input_invalid", "Secret input must be a regular file");
-    if (process.platform !== "win32" && (metadata.mode & 63) !== 0)
-      throw createCliError("agent_secret_input_invalid", "Secret file must not be accessible by group or other users");
-    return readFile7(input.file, "utf8");
-  }
-  const chunks = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    if (Buffer.concat(chunks).byteLength > 1024)
-      throw createCliError("agent_secret_input_invalid", "Secret input is too large");
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
 function environmentListMessage(result) {
-  return result.map((environment) => `${environment.active ? "*" : " "} ${environment.id}	${environment.label}	secret:${environment.secretConfigured ? "configured" : "missing"}`).join(`
+  return result.map((environment) => `${environment.active ? "*" : " "} ${environment.id}	${environment.label}`).join(`
 `);
 }
 function environmentMessage(result) {
   const environment = result;
   return `${environment.active ? "Active " : ""}${environment.id} (${environment.label})
 Web: ${environment.webOrigin}
-Backend: ${environment.backendHttpUrl}
-Secret: ${environment.secretConfigured ? "configured" : "missing"}`;
+Backend: ${environment.backendHttpUrl}`;
 }
 function installationMessage(result) {
   const value = result;
@@ -10164,7 +10055,7 @@ import { emitKeypressEvents as emitKeypressEvents2 } from "node:readline";
 var import_picocolors3 = __toESM(require_picocolors(), 1);
 
 // src/domain/codex-plugin-install-manager.ts
-import { readFile as readFile9 } from "node:fs/promises";
+import { readFile as readFile8 } from "node:fs/promises";
 import { basename as basename2, join as join9, resolve as resolve5 } from "node:path";
 
 // src/infra/codex-config-paths.ts
@@ -10228,7 +10119,7 @@ function isWorkspaceRoot(path) {
 }
 
 // src/domain/codex-plugin-manager.ts
-import { cp, mkdir as mkdir5, readdir as readdir3, readFile as readFile8, rm as rm4, writeFile as writeFile4 } from "node:fs/promises";
+import { cp, mkdir as mkdir5, readdir as readdir3, readFile as readFile7, rm as rm4, writeFile as writeFile4 } from "node:fs/promises";
 import { dirname as dirname6, isAbsolute as isAbsolute2, relative as relative2, resolve as resolve4 } from "node:path";
 async function discoverCodexPlugins(pluginsRoot) {
   let entries;
@@ -10258,7 +10149,7 @@ async function discoverCodexPlugins(pluginsRoot) {
 }
 async function readMarketplace(marketplacePath) {
   try {
-    const raw = await readFile8(marketplacePath, "utf8");
+    const raw = await readFile7(marketplacePath, "utf8");
     const parsed = JSON.parse(raw);
     return {
       name: typeof parsed.name === "string" ? parsed.name : "personal",
@@ -10349,13 +10240,13 @@ function toHomeRelativeMarketplacePath(pluginRoot, homeRoot) {
 }
 async function bumpPluginPatchVersion(pluginRoot) {
   const manifestPath = resolve4(pluginRoot, ".codex-plugin", "plugin.json");
-  const manifest = JSON.parse(await readFile8(manifestPath, "utf8"));
+  const manifest = JSON.parse(await readFile7(manifestPath, "utf8"));
   const nextVersion = incrementPatchVersion(typeof manifest.version === "string" ? manifest.version : "0.0.0");
   manifest.version = nextVersion;
   await writeJsonFile(manifestPath, manifest);
   const packageJsonPath = resolve4(pluginRoot, "package.json");
   try {
-    const packageJson = JSON.parse(await readFile8(packageJsonPath, "utf8"));
+    const packageJson = JSON.parse(await readFile7(packageJsonPath, "utf8"));
     packageJson.version = nextVersion;
     await writeJsonFile(packageJsonPath, packageJson);
   } catch {}
@@ -10372,7 +10263,7 @@ function incrementPatchVersion(version) {
   return `${major}.${minor}.${patch}`;
 }
 async function readPluginVersion(pluginRoot) {
-  const raw = await readFile8(resolve4(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
+  const raw = await readFile7(resolve4(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
   const parsed = JSON.parse(raw);
   if (typeof parsed.version !== "string" || parsed.version.trim() === "") {
     throw new Error(`Plugin manifest is missing a version: ${pluginRoot}`);
@@ -10389,7 +10280,7 @@ async function enableCodexPlugins(configPath, pluginIds) {
   }
   let raw;
   try {
-    raw = await readFile8(configPath, "utf8");
+    raw = await readFile7(configPath, "utf8");
   } catch {
     raw = "";
   }
@@ -10439,7 +10330,7 @@ async function normalizePluginHookCommands(runtimePluginRoot, sourcePluginRoot) 
   const hooksPath = resolve4(runtimePluginRoot, "hooks", "hooks.json");
   let raw;
   try {
-    raw = await readFile8(hooksPath, "utf8");
+    raw = await readFile7(hooksPath, "utf8");
   } catch {
     return;
   }
@@ -10450,7 +10341,7 @@ async function normalizePluginMcpServers(runtimePluginRoot) {
   const mcpPath = resolve4(runtimePluginRoot, ".mcp.json");
   let raw;
   try {
-    raw = await readFile8(mcpPath, "utf8");
+    raw = await readFile7(mcpPath, "utf8");
   } catch {
     return;
   }
@@ -10488,7 +10379,7 @@ function assertPathInside2(parent, child) {
 }
 async function readPluginManifest(pluginRoot) {
   try {
-    const raw = await readFile8(resolve4(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
+    const raw = await readFile7(resolve4(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
     const parsed = JSON.parse(raw);
     if (typeof parsed.name !== "string" || parsed.name.trim().length === 0) {
       return;
@@ -10540,7 +10431,7 @@ async function discoverEnabledRepositoryCodexPlugins(paths) {
 async function readPluginManifest2(repoCodexRoot) {
   const path = join9(repoCodexRoot, "plugins.manifest.json");
   try {
-    const value = JSON.parse(await readFile9(path, "utf8"));
+    const value = JSON.parse(await readFile8(path, "utf8"));
     if (!isRecord2(value) || value.version !== 1 || !Array.isArray(value.plugins)) {
       throw new Error("expected version 1 and a plugins array");
     }
@@ -10570,7 +10461,7 @@ function validatePluginManifestEntry(value, index) {
 }
 async function readPluginDisplayName(root) {
   try {
-    const value = JSON.parse(await readFile9(join9(root, ".codex-plugin", "plugin.json"), "utf8"));
+    const value = JSON.parse(await readFile8(join9(root, ".codex-plugin", "plugin.json"), "utf8"));
     return typeof value.interface?.displayName === "string" ? value.interface.displayName : basename2(root);
   } catch {
     return basename2(root);
@@ -10585,7 +10476,7 @@ function isMissingFileError(error) {
 
 // src/domain/codex-skills-backend.ts
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile as readFile10 } from "node:fs/promises";
+import { readFile as readFile9 } from "node:fs/promises";
 import { join as join10 } from "node:path";
 import { promisify } from "node:util";
 var execFile = promisify(execFileCallback);
@@ -10733,7 +10624,7 @@ async function runSkillsProcess(args, env2) {
 }
 async function readSkillLock(homeRoot) {
   try {
-    const parsed = JSON.parse(await readFile10(join10(homeRoot, ".agents", ".skill-lock.json"), "utf8"));
+    const parsed = JSON.parse(await readFile9(join10(homeRoot, ".agents", ".skill-lock.json"), "utf8"));
     if (!isRecord3(parsed) || parsed.version !== 3 || !isRecord3(parsed.skills)) {
       throw new Error("expected lock version 3 with a skills object");
     }
@@ -10866,7 +10757,7 @@ import { mkdir as mkdir7, rename as rename3, rm as rm6 } from "node:fs/promises"
 import { dirname as dirname8, join as join12 } from "node:path";
 
 // src/domain/codex-skills-manifest.ts
-import { mkdir as mkdir6, readFile as readFile11, rename as rename2, rm as rm5, writeFile as writeFile5 } from "node:fs/promises";
+import { mkdir as mkdir6, readFile as readFile10, rename as rename2, rm as rm5, writeFile as writeFile5 } from "node:fs/promises";
 import { dirname as dirname7, join as join11, resolve as resolve6 } from "node:path";
 var emptyCodexSkillsManifest = () => ({
   version: 2,
@@ -10876,7 +10767,7 @@ async function readCodexSkillsManifest(repoCodexRoot) {
   const path = getManifestPath(repoCodexRoot);
   let value;
   try {
-    value = JSON.parse(await readFile11(path, "utf8"));
+    value = JSON.parse(await readFile10(path, "utf8"));
   } catch (error) {
     if (isMissingFileError3(error)) {
       return { manifest: emptyCodexSkillsManifest(), legacyEntries: [] };
@@ -11615,7 +11506,7 @@ var codexCommand = defineCommand({
 
 // src/command/completion.command.ts
 import { execFile as execFile2 } from "node:child_process";
-import { mkdir as mkdir8, readFile as readFile12, writeFile as writeFile6 } from "node:fs/promises";
+import { mkdir as mkdir8, readFile as readFile11, writeFile as writeFile6 } from "node:fs/promises";
 import { homedir as homedir6, platform as platform2 } from "node:os";
 import { dirname as dirname9, join as join13 } from "node:path";
 import { promisify as promisify2 } from "node:util";
@@ -11783,7 +11674,7 @@ function removeLegacyZshCompletionLine(content) {
 }
 async function readTextIfExists(path) {
   try {
-    return await readFile12(path, "utf8");
+    return await readFile11(path, "utf8");
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       return "";
@@ -12011,7 +11902,7 @@ var import_picocolors4 = __toESM(require_picocolors(), 1);
 
 // src/domain/obsidian-agents-config.ts
 import { randomUUID as randomUUID2 } from "node:crypto";
-import { mkdir as mkdir9, readFile as readFile13, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
+import { mkdir as mkdir9, readFile as readFile12, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
 import { isAbsolute as isAbsolute3, join as join14, relative as relative3, resolve as resolve7, sep as sep4 } from "node:path";
 var OBSIDIAN_AGENTS_CONFIG_VERSION = 2;
 
@@ -12050,7 +11941,7 @@ function normalizeObsidianAgentsProfile(input) {
 async function readObsidianAgentsConfig(paths) {
   let raw;
   try {
-    raw = await readFile13(paths.configPath, "utf8");
+    raw = await readFile12(paths.configPath, "utf8");
   } catch (error) {
     if (isMissingFileError4(error))
       return;
@@ -12154,7 +12045,7 @@ import {
   realpath as realpath2,
   rename as rename5,
   rmdir,
-  stat as stat7,
+  stat as stat5,
   symlink,
   unlink
 } from "node:fs/promises";
@@ -12559,7 +12450,7 @@ async function pathExists2(path) {
 }
 async function isDirectory(path) {
   try {
-    return (await stat7(path)).isDirectory();
+    return (await stat5(path)).isDirectory();
   } catch (error) {
     if (isMissingFileError5(error))
       return false;
@@ -12873,7 +12764,7 @@ var obsidianCommand = defineCommand({
 var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // src/domain/opencode-config-manager.ts
-import { mkdir as mkdir11, readFile as readFile14, rename as rename6, rm as rm7, writeFile as writeFile8 } from "node:fs/promises";
+import { mkdir as mkdir11, readFile as readFile13, rename as rename6, rm as rm7, writeFile as writeFile8 } from "node:fs/promises";
 import { dirname as dirname11, isAbsolute as isAbsolute5, resolve as resolve10 } from "node:path";
 async function syncOpenCodeSkillPaths(input) {
   const plugins = [];
@@ -12939,7 +12830,7 @@ async function syncOpenCodeMcpServers(input) {
 async function readOpenCodeConfig(configPath) {
   let raw;
   try {
-    raw = await readFile14(configPath, "utf8");
+    raw = await readFile13(configPath, "utf8");
   } catch (error) {
     if (isMissingFileError6(error)) {
       return {};
@@ -12984,7 +12875,7 @@ async function readPluginMcpServers(plugin) {
   const path = resolve10(plugin.root, ".mcp.json");
   let parsed;
   try {
-    parsed = JSON.parse(await readFile14(path, "utf8"));
+    parsed = JSON.parse(await readFile13(path, "utf8"));
   } catch (error) {
     if (isMissingFileError6(error)) {
       return {};
@@ -13070,7 +12961,7 @@ function resolveMcpCwd(plugin, value) {
 async function readPluginJson(plugin) {
   const path = resolve10(plugin.root, ".codex-plugin", "plugin.json");
   try {
-    const value = JSON.parse(await readFile14(path, "utf8"));
+    const value = JSON.parse(await readFile13(path, "utf8"));
     if (!isRecord6(value)) {
       throw new Error("expected a JSON object");
     }
@@ -13906,7 +13797,7 @@ function getBundledScriptsRoot() {
 }
 
 // src/infra/discover-scripts.ts
-import { readdir as readdir5, readFile as readFile15, stat as stat8 } from "node:fs/promises";
+import { readdir as readdir5, readFile as readFile14, stat as stat6 } from "node:fs/promises";
 import { join as join20 } from "node:path";
 
 // src/domain/script-id.ts
@@ -14272,7 +14163,7 @@ async function scanScriptsRoot(scriptsRoot) {
     let entryStat;
     for (const candidate of ENTRY_FILES) {
       try {
-        const candidateStat = await stat8(join20(dirPath, candidate));
+        const candidateStat = await stat6(join20(dirPath, candidate));
         if (candidateStat.isFile()) {
           entryRelative = candidate;
           entryStat = candidateStat;
@@ -14282,7 +14173,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let manifestStat;
     try {
-      manifestStat = await stat8(manifestPath);
+      manifestStat = await stat6(manifestPath);
     } catch {
       pushWarning(warnings, dirPath, `missing ${MANIFEST_FILE} or ${ENTRY_FILES.join("/")} under script package`);
       continue;
@@ -14293,7 +14184,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let rawJson;
     try {
-      rawJson = await readFile15(manifestPath, "utf8");
+      rawJson = await readFile14(manifestPath, "utf8");
     } catch (e3) {
       const msg = e3 instanceof Error ? e3.message : String(e3);
       pushWarning(warnings, manifestPath, `cannot read manifest: ${msg}`);

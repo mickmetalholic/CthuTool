@@ -15,16 +15,32 @@ PORT: "3000"
 LOG_LEVEL: "info"
 OTEL_SDK_DISABLED: "true"
 CTHUTOOL_ENVIRONMENT_ID: "production"
-CTHUTOOL_OPERATOR_ACCESS_MODE: "trusted-proxy"
 ```
 
-The Deployment reads `CTHUTOOL_AGENT_SECRET` and
-`CTHUTOOL_TRUSTED_PROXY_IPS` from the out-of-band
-`Secret/cthutool-backend-secrets`; create both through the CthuOps procedure and
-never commit their values. The proxy IP setting must contain the actual ingress
-proxy source IPs before rollout. For local development or debugging from a
-checkout, the same values can be supplied as environment variables when
-starting the backend. Local commands are not the homelab deployment path.
+`CTHUTOOL_ENVIRONMENT_ID` is environment-routing metadata, not a credential.
+CthuTool does not configure an operator access mode, trusted proxy IP list,
+gateway identity header, private-development flag, or Agent Secret. Protected
+HTTP APIs and the Agent WebSocket accept only loopback or private-network
+socket peers and ignore forwarded client IP and gateway identity headers.
+
+The Deployment consumes these values with `envFrom.configMapRef.name:
+cthutool-backend`. For local development or debugging from a checkout, the same
+values can be supplied as environment variables when starting the backend.
+Local commands are not the homelab deployment path.
+
+### External access
+
+External Web and operator Backend HTTP access must go through Cloudflare Access
+and Cloudflare Tunnel into the private network. The Agent `/ws/agents` path
+stays private-network only; Agents do not carry Cloudflare Access credentials.
+Direct public exposure of the Backend port, or any unprotected HTTP ingress
+that bypasses Access, is unsupported. Keep TLS and the Cloudflare/Tunnel route
+in CthuOps; do not reintroduce trusted-proxy, trusted-IP, gateway-header, or
+Agent Secret wiring after the private-network Backend is deployed.
+
+The release catalog's `backendAgentWsUrl` must resolve to a private route from
+Agent hosts. If external Web traffic uses the same hostname, configure
+split-horizon DNS or an equivalent private route for the Agent.
 
 ## Browser Sites
 
@@ -56,9 +72,10 @@ If this policy is used in the Kubernetes deployment, mount it through CthuOps-ma
 ## Local Agent
 
 Agent endpoints come only from the signed release environment catalog. Select
-one environment and store its static Agent secret with `chc agent env`; do not
-put secrets in the catalog or command argv. Mutable settings and browser
-profiles are isolated by environment namespace.
+one environment with `chc agent env`; do not put credentials in the catalog or
+command argv. Mutable settings and browser profiles are isolated by environment
+namespace. Any leftover local `agent-secret` file is ignored and is not required
+for connection.
 
 Default browser runtime:
 

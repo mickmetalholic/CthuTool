@@ -19,6 +19,14 @@ Raw browser login state belongs to the local CthuTool Agent and stays on the cli
 
 It must not store raw browser storage or local profile directories.
 
+## Access boundary
+
+Protected Backend APIs and `/ws/agents` accept only private-network socket
+peers. External Web or operator Backend HTTP entry uses Cloudflare
+Access/Tunnel; the Agent WebSocket remains private-network only. A direct
+public Backend port is unsupported. CthuTool does not configure Agent secrets
+or trusted-proxy headers.
+
 ## Public Status
 
 The backend can store public profile summaries and pending auth task summaries so users can see whether required login work is needed.

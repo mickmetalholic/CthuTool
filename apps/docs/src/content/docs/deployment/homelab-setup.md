@@ -24,7 +24,10 @@ Key CthuOps paths for the Backend:
 
 - A Kubernetes cluster, such as k3s, reachable from your admin machine with `kubectl`.
 - ArgoCD installed or permission to install it (see CthuOps `bootstrap/`).
-- Network exposure for the backend after it is running, through your cluster's existing ingress, reverse proxy, load balancer, or port-forward workflow.
+- Private-network placement for Backend and Agents, plus Cloudflare Access/Tunnel
+  when the Web or operator Backend HTTP path must be reachable from outside the
+  homelab. The Agent `/ws/agents` path remains private-network only.
+  Direct public Backend port exposure or bypassing Access is unsupported.
 - Access to the CthuOps repository at `https://github.com/mickmetalholic/CthuOps`.
 
 ## Release a New Backend Image
@@ -61,7 +64,9 @@ kubectl -n cthutool port-forward service/cthutool-backend 3000:3000
 curl http://localhost:3000/health
 ```
 
-For normal use, expose the Service through your homelab networking layer and point the local CthuTool Agent or other clients at that URL.
+For normal use, keep the Service on the private network and point Agents at the
+catalog HTTPS/WSS endpoints. External operator access must go through Cloudflare
+Access/Tunnel; see [Configuration](/deployment/configuration/).
 
 ## Development Debugging
 

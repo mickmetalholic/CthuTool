@@ -79,15 +79,16 @@ The bridge SHALL support browser-mediated loopback access and provide bounded er
 - **THEN** no local API executes and the page can present permission remediation without scanning other ports
 
 ### Requirement: Sanitized local resources
-The bridge SHALL expose active environment/backend state, versions, Chrome facts, public environment-scoped profile state, autostart adapter state, and bounded diagnostics without static secrets or raw browser data.
+The bridge SHALL expose active environment/backend state, versions, Chrome
+facts, public environment-scoped profile state, autostart adapter state, and
+bounded diagnostics without authorization material, cookies, raw profiles, or
+command payloads.
 
 #### Scenario: Local status is requested
 - **WHEN** an authorized session reads status
-- **THEN** it receives environment, process, backend, browser, version, and adapter facts without Agent/operator secrets, cookies, raw profiles, or command payloads
-
-#### Scenario: Environment secret status is requested
-- **WHEN** the page needs readiness information
-- **THEN** the bridge reports configured/missing/invalid state without returning the static value
+- **THEN** it receives environment, process, backend, browser, version, and
+  adapter facts without Agent/operator authorization material, cookies, raw
+  profiles, or command payloads
 
 ### Requirement: Safe local mutations
 The bridge SHALL validate local settings/profile/lifecycle mutations, write configuration atomically, require explicit confirmation for destructive actions, and classify runtime effect.
@@ -116,7 +117,9 @@ The bridge SHALL expose only existing allowlisted browser operations with their 
 - **THEN** the Agent rejects it without execution
 
 ### Requirement: Bridge secret redaction
-The bridge SHALL exclude launch tickets, bearer tokens, backend Agent/operator secrets, authorization headers, URL fragments, cookies, and raw browser artifacts from logs, telemetry, diagnostics, and public errors.
+The bridge SHALL exclude launch tickets, bearer tokens, operator sessions,
+authorization headers, URL fragments, cookies, and raw browser artifacts from
+logs, telemetry, diagnostics, and public errors.
 
 #### Scenario: Sensitive bridge value reaches an event
 - **WHEN** request or failure data contains a forbidden value

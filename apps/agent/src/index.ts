@@ -89,7 +89,6 @@ export async function runAgentProcess(
     catalog,
     paths,
     environmentStorage,
-    process.env.CTHUTOOL_AGENT_SECRET,
   );
   const activePaths = environments.getActivePaths();
   const controlEndpoint = resolveAgentControlEndpoint({
@@ -196,13 +195,6 @@ export async function runAgentProcess(
               }),
             ),
             protocolVersion: 1,
-            secret: {
-              status: !config.agentSecret
-                ? ('missing' as const)
-                : config.agentSecret.length >= 32
-                  ? ('configured' as const)
-                  : ('invalid' as const),
-            },
           };
         },
         isProfileLocked: (input) =>

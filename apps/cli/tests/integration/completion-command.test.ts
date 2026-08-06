@@ -197,7 +197,7 @@ describe('shell completion command', () => {
     ]);
     expect(
       lines((await runCli(['__complete', 'agent', 'env', ''])).out),
-    ).toEqual(['get', 'list', 'set', 'set-secret']);
+    ).toEqual(['get', 'list', 'set']);
     expect(lines((await runCli(['__complete', 'completion', ''])).out)).toEqual(
       ['disable', 'enable', 'powershell', 'status', 'zsh'],
     );
