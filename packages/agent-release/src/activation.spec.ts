@@ -23,15 +23,15 @@ describe('version staging and activation', () => {
   test('stages complete immutable version and keeps mutable data external', async () => {
     root = await mkdtemp(join(tmpdir(), 'cthutool-activation-'));
     const extracted = await createExtractedFixture(root, '1.2.3');
-    const mutableSecret = join(
+    const mutableConfig = join(
       root,
       'install',
-      'environments/prod/agent-secret',
+      'environments/prod/config.json',
     );
     await mkdir(join(root, 'install', 'environments/prod'), {
       recursive: true,
     });
-    await writeFile(mutableSecret, 'secret-outside-version');
+    await writeFile(mutableConfig, '{"deviceName":"Outside version"}\n');
 
     const versionRoot = await stageVersion({
       installRoot: join(root, 'install'),
@@ -41,8 +41,8 @@ describe('version staging and activation', () => {
     });
 
     expect(versionRoot).toBe(join(root, 'install', 'versions', '1.2.3'));
-    expect(await readFile(mutableSecret, 'utf8')).toBe(
-      'secret-outside-version',
+    expect(await readFile(mutableConfig, 'utf8')).toBe(
+      '{"deviceName":"Outside version"}\n',
     );
 
     expect(

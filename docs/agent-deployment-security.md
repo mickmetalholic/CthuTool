@@ -2,27 +2,60 @@
 
 The personal-use deployment has two deliberately small trust boundaries:
 
-- Browser/operator requests reach Agent status and machine-control APIs only through an authenticated reverse proxy or access gateway.
-- The local Agent authenticates its outbound WebSocket with a separate, environment-specific static secret.
+- Backend and Agents run on the homelab private network. Protected HTTP APIs and
+  the Agent WebSocket accept only loopback or private-network socket peers.
+- When external Web or operator Backend HTTP traffic is reachable from the
+  public Internet, Cloudflare Access authenticates the operator and Cloudflare
+  Tunnel forwards into the private network. The Agent WebSocket remains
+  private-network only; Agents do not carry Cloudflare Access credentials.
+  Direct public Backend port exposure or bypassing Access is unsupported.
 
-This is not a device-enrollment or multi-user credential system. The stable `agentId` is correlation metadata and is never an authentication credential.
+This is not a device-enrollment or multi-user credential system. The stable
+`agentId` and `CTHUTOOL_ENVIRONMENT_ID` are correlation and routing metadata;
+neither is an authentication credential. CthuTool does not use a static Agent
+secret, trusted-proxy IP allowlist, gateway identity header, or
+private-development access mode.
 
 ## Backend configuration
 
-Public production deployments require all of the following values:
+Homelab production deployments require:
 
 ```dotenv
 NODE_ENV=production
 CTHUTOOL_ENVIRONMENT_ID=prod
-CTHUTOOL_AGENT_SECRET=<at-least-32-random-characters>
-CTHUTOOL_OPERATOR_ACCESS_MODE=trusted-proxy
-CTHUTOOL_OPERATOR_GATEWAY_HEADER=x-cthutool-operator
-CTHUTOOL_TRUSTED_PROXY_IPS=10.0.0.2
 ```
 
-The access gateway must remove any client-provided operator identity header and inject its own authenticated identity. Direct backend ingress must be firewalled so only the configured proxy addresses can reach it. CthuTool validates the direct socket peer address; it does not trust `X-Forwarded-For` as an identity signal.
+Optional local runtime values such as `PORT` and `LOG_LEVEL` may still be set.
+Do not configure `CTHUTOOL_AGENT_SECRET`, `CTHUTOOL_OPERATOR_ACCESS_MODE`,
+`CTHUTOOL_OPERATOR_GATEWAY_HEADER`, `CTHUTOOL_TRUSTED_PROXY_IPS`, or
+`CTHUTOOL_PRIVATE_DEVELOPMENT`; the Backend ignores those removed knobs.
 
-`CTHUTOOL_PRIVATE_DEVELOPMENT=1` permits loopback-only requests and unauthenticated Agent registration for local development. Startup rejects this mode when `NODE_ENV=production`.
+CthuTool validates the direct socket peer address. It does not trust
+`X-Forwarded-For` or caller-provided gateway identity headers. Firewall the
+Backend so public clients cannot reach the raw port without Cloudflare Access
+and the private Tunnel path.
+
+## External access path
+
+```text
+External Web/operator HTTP
+        |
+        v
+Cloudflare Access + Tunnel
+        |
+        v
+Private ingress / service peer
+        |
+        v
+      Backend
+```
+
+The Cloudflare application must cover the external Web and Backend HTTP
+routes. `/ws/agents` remains a private-network-only endpoint for Agents and
+must not be exposed through Cloudflare Access in this deployment. After the
+new Backend is deployed, a separate CthuOps change should remove any pending
+trusted-proxy, trusted-IP, gateway, and Secret wiring while keeping TLS and
+the Cloudflare/Tunnel route for HTTP traffic.
 
 ## Agent environment catalog
 
@@ -44,26 +77,32 @@ Packaged environments use a release-controlled JSON catalog:
 }
 ```
 
-Set `CTHUTOOL_AGENT_ENVIRONMENTS_PATH` to the installed catalog path. Custom development catalogs additionally require `CTHUTOOL_AGENT_ALLOW_CUSTOM_ENVIRONMENTS=1`, are marked `custom-development`, may use insecure protocols only on loopback, and are rejected in production.
+Agents consume `backendAgentWsUrl` from the private network. If the same
+hostname is used for external Web access, split-horizon DNS or an equivalent
+private route must resolve the Agent endpoint to the homelab; a
+Cloudflare-Access-only public WSS URL is not an Agent endpoint.
 
-Each environment gets a separate `config.json`, `agent-secret`, `browser-profiles`, `logs`, and `runtime` root below the Agent data directory. The secret file is created with user-only permissions. A deployed Web page cannot supply or replace catalog URLs.
+Set `CTHUTOOL_AGENT_ENVIRONMENTS_PATH` to the installed catalog path. Custom
+development catalogs additionally require
+`CTHUTOOL_AGENT_ALLOW_CUSTOM_ENVIRONMENTS=1`, are marked `custom-development`,
+may use insecure protocols only on loopback, and are rejected in production.
 
-## Replacing a static Agent secret
+Each environment gets a separate `config.json`, `browser-profiles`, `logs`, and
+`runtime` root below the Agent data directory. A leftover `agent-secret` file,
+if present, is ignored and is not deleted automatically. A deployed Web page
+cannot supply or replace catalog URLs.
 
-1. Generate a new random value of at least 32 characters.
-2. Update `CTHUTOOL_AGENT_SECRET` in the backend secret manager and restart or roll the backend deployment. Existing Agent connections are closed or become unusable when the deployment changes.
-3. Update the matching local environment secret without exposing it in argv:
-   `printf '%s\n' "$AGENT_SECRET" | chc agent env set-secret <id> --secret-stdin`.
-   Then reconnect or restart the Agent.
-4. Confirm authenticated Agent status through the access gateway.
+## Credential hygiene
 
-There is intentionally no enrollment, automatic rotation, revocation list, or device ownership UI. If a secret leaks, manually replace it on both sides. Never put Agent secrets, operator sessions, authorization headers, or local bridge tickets in URLs, logs, or diagnostics.
+There is intentionally no enrollment, automatic rotation, revocation list, or
+device ownership UI. Never put operator sessions, authorization headers, or
+local bridge tickets in URLs, logs, or diagnostics. Network reachability to the
+private Backend is the access control for this single-user deployment.
 
 ## Legacy Desktop migration
 
 Legacy CthuDesktop identifiers and credentials are not authentication inputs
 for the Agent and are never copied. Migration resolves the old backend to one
-trusted release environment, copies only safe settings and browser profiles,
-and then requires the environment-specific static secret above. Run
-`chc agent doctor` for a redacted status and repair command. See
+trusted release environment and copies only safe settings and browser profiles.
+Run `chc agent doctor` for a redacted status and repair command. See
 `docs/agent-migration.md` for paths, locking, retry, and rollback behavior.

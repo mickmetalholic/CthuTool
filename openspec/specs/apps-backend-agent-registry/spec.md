@@ -4,26 +4,34 @@
 Define the backend desktop agent registry for WebSocket registration, heartbeat freshness, connected-agent status, diagnostics, and transport-only delegation.
 ## Requirements
 ### Requirement: Agent WebSocket endpoint
-The backend SHALL expose a WebSocket endpoint that authenticates the configured environment's static Agent secret before accepting Agent registration.
+The Backend SHALL expose a WebSocket endpoint that authenticates a private
+network socket peer and the configured environment id before accepting Agent
+registration. The endpoint MUST NOT require a static Agent secret.
 
 #### Scenario: Environment Agent connects
-- **WHEN** an Agent opens WSS with a valid environment id and matching static Agent secret and then sends a valid versioned `agent.hello`
-- **THEN** the backend authenticates the environment and registers the stable non-secret Agent id
+- **WHEN** an Agent opens WSS from a private-network peer with the matching
+  environment id and then sends a valid versioned `agent.hello`
+- **THEN** the Backend authenticates the peer and environment and registers
+  the stable non-secret Agent id
 
-#### Scenario: Invalid registration is rejected
-- **WHEN** a socket omits or fails environment authentication, sends invalid registration, or reports an unexpected environment id
-- **THEN** the backend closes the socket without registering the Agent and records a redacted failure category
+#### Scenario: Invalid network or environment registration is rejected
+- **WHEN** a socket comes from a public peer, omits environment authentication,
+  fails environment authentication, or reports an unexpected environment id
+- **THEN** the Backend closes the socket without registering the Agent and
+  records a redacted failure category
 
 #### Scenario: Registered Agent is acknowledged
-- **WHEN** an authenticated socket sends a valid `agent.hello`
-- **THEN** the backend records it online and acknowledges environment id, Agent id, connection generation, negotiated protocol version, and server time
+- **WHEN** a private-network socket sends a valid `agent.hello` for the
+  configured environment
+- **THEN** the Backend records it online and acknowledges environment id, Agent
+  id, connection generation, negotiated protocol version, and server time
 
 ### Requirement: Agent registry state
 The backend SHALL maintain an in-memory registry keyed by environment id and stable non-secret Agent id, with one authoritative connection for the personal-use deployment.
 
 #### Scenario: Agent status is recorded
 - **WHEN** an environment Agent registers successfully
-- **THEN** the registry stores environment id, Agent id, connection id/generation, display metadata, platform, version, capabilities, connected time, and last-seen time without storing the presented secret
+- **THEN** the registry stores environment id, Agent id, connection id/generation, display metadata, platform, version, capabilities, connected time, and last-seen time without storing authorization material
 
 #### Scenario: Same Agent reconnects
 - **WHEN** a new authenticated connection registers with the same environment and Agent id
@@ -45,19 +53,26 @@ The backend SHALL use heartbeat messages to keep agent freshness current and det
 - **THEN** the backend marks that agent offline or removes it from the active agent list
 
 ### Requirement: Connected agents API
-The backend SHALL expose Agent connection state only through the configured single-operator access boundary when publicly reachable.
+The Backend SHALL expose Agent connection state only through the fixed
+private-network access boundary when the Backend is reachable through an
+external ingress.
 
-#### Scenario: Operator lists environment Agent
-- **WHEN** an authenticated operator requests Agent state for the deployment environment
-- **THEN** the backend returns environment id, Agent id, display metadata, platform, version, capabilities, connected time, last-seen time, generation, and connection state
+#### Scenario: Private-network operator lists environment Agent
+- **WHEN** a private-network operator requests Agent state for the deployment
+  environment
+- **THEN** the Backend returns environment id, Agent id, display metadata,
+  platform, version, capabilities, connected time, last-seen time, generation,
+  and connection state
 
-#### Scenario: Anonymous caller lists Agents
-- **WHEN** an unauthenticated caller requests the public Agent status API
-- **THEN** the backend rejects the request without revealing whether an Agent is online
+#### Scenario: Public caller lists Agents
+- **WHEN** a public socket peer requests the Agent status API
+- **THEN** the Backend rejects the request without revealing whether an Agent
+  is online
 
 #### Scenario: Raw internals are hidden
 - **WHEN** Agent state is returned
-- **THEN** it excludes WebSocket objects, raw headers, static secrets, operator sessions, local bridge tickets, and socket internals
+- **THEN** it excludes WebSocket objects, raw headers, authorization material,
+  local bridge tickets, and socket internals
 
 ### Requirement: Agent registry is capability-neutral
 The backend SHALL store agent capabilities generically without requiring browser-specific behavior in this change.
@@ -71,15 +86,20 @@ The backend SHALL store agent capabilities generically without requiring browser
 - **THEN** the registry preserves the capability value in status output without attempting to execute it
 
 ### Requirement: Agent registry diagnostics
-The backend SHALL expose enough diagnostics to troubleshoot environment authentication and connection lifecycle without leaking sensitive values.
+The Backend SHALL expose enough diagnostics to troubleshoot private-network
+peer validation, environment authentication, and connection lifecycle without
+leaking credentials or raw request data.
 
 #### Scenario: Connection event is logged
-- **WHEN** an Agent connects, authenticates, registers, reconnects, heartbeats, or disconnects
-- **THEN** the backend logs environment id, Agent id when available, connection id/generation, event type, and timestamp
+- **WHEN** an Agent connects, authenticates, registers, reconnects, heartbeats,
+  or disconnects
+- **THEN** the Backend logs environment id, Agent id when available,
+  connection id/generation, event type, and timestamp
 
-#### Scenario: Authentication or payload is invalid
-- **WHEN** a socket fails static-secret or protocol validation
-- **THEN** diagnostics include a bounded failure category without secret values, authorization headers, cookies, or arbitrary payload bodies
+#### Scenario: Network or environment authentication is invalid
+- **WHEN** a socket fails private-network or environment validation
+- **THEN** diagnostics include a bounded failure category without authorization
+  headers, cookies, or arbitrary payload bodies
 
 ### Requirement: Agent registry delegates command dispatch
 The registry SHALL provide authoritative connection lookup for an explicit environment and Agent id without owning operator authentication, command correlation, or capability-specific business behavior.

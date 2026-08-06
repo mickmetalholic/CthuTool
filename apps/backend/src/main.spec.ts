@@ -18,11 +18,7 @@ describe('bootstrap', () => {
       environmentId: 'local',
       logLevel: 'info',
       nodeEnv: 'development',
-      operatorAccessMode: 'private-development',
-      operatorGatewayHeader: 'x-cthutool-operator',
       port: 3000,
-      privateDevelopment: true,
-      trustedProxyIps: [],
     };
 
     await bootstrap({

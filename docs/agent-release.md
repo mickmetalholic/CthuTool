@@ -21,8 +21,8 @@ content, deployed Web application content, and mutable user data.
 
 The immutable bundle root contains `layout.json`, target-specific tray and Node
 entry points, `agent/dist/index.js`, `agent/environments.json`, and licenses.
-Environment selection, Agent secrets, browser profiles, logs, and runtime locks
-remain in the user-scoped data root outside `versions/<version>`.
+Environment selection, browser profiles, logs, and runtime locks remain in the
+user-scoped data root outside `versions/<version>`.
 
 ## Environment catalog
 
@@ -35,9 +35,9 @@ non-empty `profiles` array. Every profile contains only:
 - the same-origin exact `/agent` HTTPS `webAgentUrl`
 - an HTTPS backend URL and WSS Agent endpoint
 
-Credentials, operator sessions, local bridge tickets, and Agent secrets are
-invalid catalog fields. Catalog bytes are included in each archive and bound to
-the signed manifest by schema version and SHA-256 digest.
+Credentials, operator sessions, and local bridge tickets are invalid catalog
+fields. Catalog bytes are included in each archive and bound to the signed
+manifest by schema version and SHA-256 digest.
 
 ## Pull-request validation
 

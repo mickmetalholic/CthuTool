@@ -1,4 +1,3 @@
-import { readFile, stat } from 'node:fs/promises';
 import { confirm, isCancel } from '@clack/prompts';
 import { type ArgsDef, defineCommand } from 'citty';
 import {
@@ -194,8 +193,7 @@ export function createAgentCommand(service: AgentLifecycleService) {
       ...lifecycleArgs,
       purge: {
         type: 'boolean',
-        description:
-          'Also remove environment selection, secrets, profiles, and logs',
+        description: 'Also remove environment selection, profiles, and logs',
       },
       yes: {
         type: 'boolean',
@@ -212,7 +210,7 @@ export function createAgentCommand(service: AgentLifecycleService) {
           if (args.purge === true && !confirmed && context.interactive) {
             const answer = await confirm({
               message:
-                'Permanently delete Agent secrets, profiles, selection, and logs?',
+                'Permanently delete Agent profiles, selection, and logs?',
               initialValue: false,
             });
             confirmed = !isCancel(answer) && answer === true;
@@ -251,7 +249,7 @@ export function createAgentCommand(service: AgentLifecycleService) {
   const envGet = defineCommand({
     meta: {
       name: 'get',
-      description: 'Show the active or named environment without secrets.',
+      description: 'Show the active or named environment.',
     },
     args: {
       ...lifecycleArgs,
@@ -288,54 +286,16 @@ export function createAgentCommand(service: AgentLifecycleService) {
           `Active Agent environment: ${(result as { readonly id: string }).id}.`,
       ),
   });
-  const envSetSecret = defineCommand({
-    meta: {
-      name: 'set-secret',
-      description: 'Store an Agent secret from stdin or a protected file.',
-    },
-    args: {
-      ...lifecycleArgs,
-      id: { type: 'positional', required: true, description: 'Environment id' },
-      'secret-stdin': {
-        type: 'boolean',
-        description: 'Read the secret from stdin',
-      },
-      'secret-file': {
-        type: 'string',
-        description: 'Read the secret from a user-private file',
-      },
-    },
-    async run({ args }) {
-      await execute(
-        args,
-        'env set-secret',
-        async () => {
-          const secret = await readSecretInput({
-            stdin: args['secret-stdin'] === true,
-            file: stringValue(args['secret-file']),
-          });
-          return service.setEnvironmentSecret(
-            requiredString(args.id, 'environment id'),
-            secret,
-          );
-        },
-        (result) =>
-          `Agent secret stored for ${(result as { readonly id: string }).id}.`,
-      );
-    },
-  });
   const envRegistrations: readonly CliCommandRegistration[] = [
     registration('list', envList),
     registration('get', envGet),
     registration('set', envSet),
-    registration('set-secret', envSetSecret),
   ];
   const environment = registerCommandGroup(
     defineCommand({
       meta: {
         name: 'env',
-        description:
-          'Manage verified Agent environments and environment-scoped secrets.',
+        description: 'Manage verified Agent environments.',
       },
       subCommands: buildRegisteredSubCommands(envRegistrations),
     }),
@@ -528,7 +488,6 @@ function classifyAgentError(error: unknown): CliErrorCode {
     message.includes('no agent environment')
   )
     return 'agent_environment_invalid';
-  if (message.includes('secret')) return 'agent_secret_input_invalid';
   if (message.includes('timed out waiting') && message.includes('ready'))
     return 'agent_start_failed';
   if (message.includes('purging agent data'))
@@ -574,53 +533,17 @@ function requiredString(value: unknown, label: string): string {
   return result;
 }
 
-async function readSecretInput(input: {
-  readonly stdin: boolean;
-  readonly file?: string;
-}): Promise<string> {
-  if (Number(input.stdin) + Number(Boolean(input.file)) !== 1)
-    throw createCliError(
-      'agent_secret_input_invalid',
-      'Choose exactly one of --secret-stdin or --secret-file',
-    );
-  if (input.file) {
-    const metadata = await stat(input.file);
-    if (!metadata.isFile())
-      throw createCliError(
-        'agent_secret_input_invalid',
-        'Secret input must be a regular file',
-      );
-    if (process.platform !== 'win32' && (metadata.mode & 0o077) !== 0)
-      throw createCliError(
-        'agent_secret_input_invalid',
-        'Secret file must not be accessible by group or other users',
-      );
-    return readFile(input.file, 'utf8');
-  }
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    if (Buffer.concat(chunks).byteLength > 1024)
-      throw createCliError(
-        'agent_secret_input_invalid',
-        'Secret input is too large',
-      );
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}
-
 function environmentListMessage(result: unknown): string {
   return (
     result as readonly {
       readonly id: string;
       readonly label: string;
       readonly active: boolean;
-      readonly secretConfigured: boolean;
     }[]
   )
     .map(
       (environment) =>
-        `${environment.active ? '*' : ' '} ${environment.id}\t${environment.label}\tsecret:${environment.secretConfigured ? 'configured' : 'missing'}`,
+        `${environment.active ? '*' : ' '} ${environment.id}\t${environment.label}`,
     )
     .join('\n');
 }
@@ -631,9 +554,8 @@ function environmentMessage(result: unknown): string {
     readonly active: boolean;
     readonly webOrigin: string;
     readonly backendHttpUrl: string;
-    readonly secretConfigured: boolean;
   };
-  return `${environment.active ? 'Active ' : ''}${environment.id} (${environment.label})\nWeb: ${environment.webOrigin}\nBackend: ${environment.backendHttpUrl}\nSecret: ${environment.secretConfigured ? 'configured' : 'missing'}`;
+  return `${environment.active ? 'Active ' : ''}${environment.id} (${environment.label})\nWeb: ${environment.webOrigin}\nBackend: ${environment.backendHttpUrl}`;
 }
 function installationMessage(result: unknown): string {
   const value = result as {

@@ -167,11 +167,13 @@ describe('headless Agent process entry', () => {
         origin: 'http://localhost:5173',
       },
     });
-    expect(await resourcesResponse.json()).toMatchObject({
+    expect(resourcesResponse.status).toBe(200);
+    const resources = await resourcesResponse.json();
+    expect(resources).toMatchObject({
       agent: { version: '0.1.0-test' },
       environment: { id: 'local' },
-      secret: { status: 'missing' },
     });
+    expect(resources).not.toHaveProperty('secret');
     const settingsResponse = await fetch(`${launch.endpoint}/v1/rpc`, {
       body: JSON.stringify({
         id: 'settings-1',

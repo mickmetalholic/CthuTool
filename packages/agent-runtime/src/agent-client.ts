@@ -224,9 +224,6 @@ export class AgentClient {
       {
         headers: {
           'x-cthutool-environment-id': config.activeEnvironment.id,
-          ...(config.agentSecret
-            ? { authorization: `Agent ${config.agentSecret}` }
-            : {}),
         },
       },
     );

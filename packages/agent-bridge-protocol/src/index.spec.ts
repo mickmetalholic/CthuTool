@@ -83,7 +83,6 @@ describe('Agent bridge resources', () => {
         },
         profiles: [],
         protocolVersion: 1,
-        secret: { status: 'configured' },
       }).ok,
     ).toBe(true);
   });

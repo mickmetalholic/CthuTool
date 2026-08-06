@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
@@ -88,7 +88,7 @@ describe('Agent environment catalog and storage', () => {
     ).toThrow(/non-production/);
   });
 
-  test('persists one selection and isolates secrets, profiles, config, and logs', async () => {
+  test('persists one selection and isolates profiles, config, and logs', async () => {
     root = await mkdtemp(join(tmpdir(), 'cthutool-environments-'));
     const paths = resolveAgentDataPaths({ rootDir: root });
     const baseConfig: AgentConfigPort = {
@@ -109,8 +109,6 @@ describe('Agent environment catalog and storage', () => {
       storage,
     );
 
-    manager.setEnvironmentSecret('prod', 'p'.repeat(32));
-    manager.setEnvironmentSecret('test', 't'.repeat(32));
     const prodPaths = resolveAgentEnvironmentDataPaths(
       paths,
       manager.listProfiles()[0],
@@ -123,9 +121,13 @@ describe('Agent environment catalog and storage', () => {
     expect(prodPaths.profilesDir).not.toBe(testPaths.profilesDir);
     expect(prodPaths.configPath).not.toBe(testPaths.configPath);
     expect(prodPaths.logsDir).not.toBe(testPaths.logsDir);
-    expect(await readFile(prodPaths.secretPath, 'utf8')).toBe(
-      `${'p'.repeat(32)}\n`,
+
+    await mkdir(prodPaths.rootDir, { recursive: true });
+    await writeFile(
+      join(prodPaths.rootDir, 'config.json'),
+      `${JSON.stringify({ deviceName: 'Prod Agent' }, null, 2)}\n`,
     );
+    await writeFile(join(prodPaths.rootDir, 'agent-secret'), 'legacy-secret\n');
 
     expect(manager.selectEnvironment('test').changed).toBe(true);
     expect(manager.load()).toMatchObject({
@@ -133,9 +135,17 @@ describe('Agent environment catalog and storage', () => {
         id: 'test',
         webOrigin: 'https://test.example.com',
       },
-      agentSecret: 't'.repeat(32),
       agentWsUrl: 'wss://test-api.example.com/ws/agents',
+      backendUrl: 'https://test-api.example.com',
     });
+    expect(manager.load()).not.toHaveProperty('agentSecret');
     expect(manager.selectEnvironment('test').changed).toBe(false);
+
+    expect(
+      await readFile(join(prodPaths.rootDir, 'config.json'), 'utf8'),
+    ).toContain('Prod Agent');
+    expect(
+      await readFile(join(prodPaths.rootDir, 'agent-secret'), 'utf8'),
+    ).toBe('legacy-secret\n');
   });
 });

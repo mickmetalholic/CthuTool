@@ -77,16 +77,15 @@ Environment and autostart operations are nested public groups:
 chc agent env list
 chc agent env get [environment-id]
 chc agent env set <environment-id>
-chc agent env set-secret <environment-id> --secret-stdin
-chc agent env set-secret <environment-id> --secret-file ./agent-secret
 chc agent autostart enable|disable|status
 ```
 
 Only environments from the verified release catalog can be selected. Catalog
 entries require HTTPS Web/backend origins, a WSS Agent endpoint, and the exact
-same-origin `/agent` Web page. Secrets are stored per environment in
-user-private mutable storage and are represented only as `configured` or
-`missing` in human and schema-version-1 JSON output.
+same-origin `/agent` Web page. There is no `env set-secret` command; the Agent
+connects with the selected environment id over the private-network Backend
+path. Cloudflare protects external Web or operator Backend HTTP access, not
+the Agent WebSocket path.
 
 `settings` auto-starts the tray and opens a newly issued one-time bridge URL in
 the default browser; the URL and ticket are never written to CLI output.
@@ -96,13 +95,13 @@ streaming mode and cannot be combined with `--json`.
 `doctor` includes the legacy CthuDesktop migration state. A zero or ambiguous
 trusted-environment match requires `env set`; an active profile lock requires
 stopping the tray/Agent before retry. The report may provide an exact next
-command but never includes legacy credentials, Agent secrets, bridge tickets,
-or authorization headers.
+command but never includes legacy credentials, bridge tickets, or authorization
+headers.
 
-`chc agent uninstall` preserves environment selection, secrets, browser
-profiles, and logs. `--purge` additionally removes those categories and
-requires an interactive confirmation, or `--yes` when prompts are disabled.
-The command never removes data when purge confirmation is absent.
+`chc agent uninstall` preserves environment selection, browser profiles, and
+logs. `--purge` additionally removes those categories and requires an
+interactive confirmation, or `--yes` when prompts are disabled. The command
+never removes data when purge confirmation is absent.
 
 `chc update` and `chc agent update` are intentionally unrelated: the first
 updates the CLI source/install, while the second stages a signed Agent release,

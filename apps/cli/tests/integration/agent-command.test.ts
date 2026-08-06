@@ -1,12 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +35,9 @@ describe('Agent CLI command contract', () => {
         },
       },
     });
-    expect(result.out).not.toMatch(/ticket|nonce|agent-secret/i);
+    expect(result.out).not.toMatch(
+      /ticket|nonce|agent-secret|secretConfigured/i,
+    );
   });
 
   test('fails closed with a stable versioned error when no release key is pinned', async () => {
@@ -64,53 +59,37 @@ describe('Agent CLI command contract', () => {
     });
   });
 
-  test('offers only stdin and protected-file secret inputs', async () => {
-    const root = await isolatedRoot();
-    const result = await runCli(['agent', 'env', 'set-secret', '--help'], root);
-    expect(result.code).toBe(0);
-    expect(result.out).toContain('--secret-stdin');
-    expect(result.out).toContain('--secret-file');
-    expect(result.out).not.toMatch(/--secret\s/);
-  });
-
-  test('never exposes a stdin-provided secret in human or JSON output', async () => {
+  test('lists and shows environments without secret-configured state', async () => {
     const root = await isolatedRoot();
     await writeInstalledFixture(root);
-    const secret = 'integration-secret-value-that-must-stay-private';
-    const json = await runCli(
-      ['agent', 'env', 'set-secret', 'production', '--secret-stdin', '--json'],
-      root,
-      secret,
-    );
-    expect(json.code).toBe(0);
-    expect(JSON.parse(json.out)).toMatchObject({
+    const listed = await runCli(['agent', 'env', 'list', '--json'], root);
+    expect(listed.code).toBe(0);
+    const listedPayload = JSON.parse(listed.out);
+    expect(listedPayload).toMatchObject({
       schemaVersion: 1,
       ok: true,
-      command: 'agent env set-secret',
-      result: { configured: true, id: 'production' },
+      command: 'agent env list',
     });
-    expect(`${json.out}${json.err}`).not.toContain(secret);
+    expect(listedPayload.result).toEqual([
+      expect.objectContaining({
+        active: true,
+        id: 'production',
+        label: 'Production',
+      }),
+    ]);
+    expect(JSON.stringify(listedPayload)).not.toMatch(
+      /secretConfigured|set-secret|agent-secret/i,
+    );
 
-    const humanSecret = 'second-secret-value-that-must-remain-private';
-    const human = await runCli(
-      ['agent', 'env', 'set-secret', 'production', '--secret-stdin'],
-      root,
-      humanSecret,
-    );
+    const human = await runCli(['agent', 'env', 'get'], root);
     expect(human.code).toBe(0);
-    expect(human.out).toContain('Agent secret stored for production');
-    expect(`${human.out}${human.err}`).not.toContain(humanSecret);
-    const secretPath = join(
-      root,
-      'data',
-      'environments',
-      'production',
-      'agent-secret',
-    );
-    expect(await readFile(secretPath, 'utf8')).toBe(`${humanSecret}\n`);
-    if (process.platform !== 'win32') {
-      expect((await stat(secretPath)).mode & 0o077).toBe(0);
-    }
+    expect(human.out).toContain('production');
+    expect(human.out).toContain('https://app.example.com');
+    expect(human.out).not.toMatch(/secret/i);
+
+    const help = await runCli(['agent', 'env', '--help'], root);
+    expect(help.code).toBe(0);
+    expect(help.out).not.toContain('set-secret');
   });
 });
 
@@ -120,7 +99,7 @@ async function isolatedRoot(): Promise<string> {
   return root;
 }
 
-async function runCli(args: readonly string[], root: string, stdin?: string) {
+async function runCli(args: readonly string[], root: string) {
   const processHandle = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
     cwd: cliRoot,
     env: {
@@ -129,14 +108,10 @@ async function runCli(args: readonly string[], root: string, stdin?: string) {
       CTHUTOOL_AGENT_INSTALL_DIR: join(root, 'install'),
       CTHUTOOL_PINNED_AGENT_RELEASE_PUBLIC_KEY_PEM: '',
     },
-    stdin: stdin === undefined ? 'ignore' : 'pipe',
+    stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
   });
-  if (stdin !== undefined) {
-    processHandle.stdin?.write(stdin);
-    processHandle.stdin?.end();
-  }
   const [out, err, code] = await Promise.all([
     new Response(processHandle.stdout).text(),
     new Response(processHandle.stderr).text(),

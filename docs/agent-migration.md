@@ -13,7 +13,9 @@ Legacy roots are detected at:
 
 The Agent copies data into the selected environment namespace below its
 user-scoped data root. Each environment has separate `config.json`,
-`agent-secret`, `browser-profiles`, `runtime`, and `logs` paths.
+`browser-profiles`, `runtime`, and `logs` paths. A leftover `agent-secret`
+file, if present from earlier installs, is ignored and is not migrated or
+deleted automatically.
 
 Only `deviceName`, `connectionEnabled`, and the optional host Chrome executable
 path are transformed from legacy config. Browser profile files are copied with
@@ -43,17 +45,14 @@ An explicit selection chooses the target trusted environment on the next Agent
 start. The legacy backend URL is not added to or used in place of the signed
 catalog.
 
-## New Agent secret
+## Authentication after migration
 
-Legacy credentials are not a trust source for the new service. Configure a new
-static secret for each environment:
-
-```bash
-printf '%s\n' "$AGENT_SECRET" | chc agent env set-secret <environment-id> --secret-stdin
-```
-
-For a file input, the file must be user-private. Human and JSON status output
-show only `configured` or `missing` and never return the secret.
+Legacy credentials are not a trust source for the new service. After selecting
+a trusted environment, the Agent connects with that environment id over the
+private-network Backend boundary. Agents remain on the private network and do
+not use Cloudflare Access credentials; Cloudflare Access/Tunnel is only for
+external Web or operator Backend HTTP access. There is no
+`chc agent env set-secret` step.
 
 ## Safety and retry behavior
 
@@ -80,7 +79,6 @@ Common repair paths are:
 - active profile lock: stop the tray/Agent, then start again
 - interrupted migration: run the Agent again after resolving the reported
   filesystem problem
-- missing secret: configure a fresh secret through stdin or a protected file
 
 ## Rollback
 

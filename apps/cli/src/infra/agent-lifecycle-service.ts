@@ -22,8 +22,6 @@ import {
   readEnvironmentSelection,
   readInstalledBundle,
   resolveAgentPaths,
-  secretConfigured,
-  writeEnvironmentSecret,
   writeEnvironmentSelection,
 } from './agent-paths';
 import {
@@ -244,16 +242,13 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
     const selected =
       (await readEnvironmentSelection(this.paths)) ??
       catalog.profiles[0]?.environmentId;
-    return Promise.all(
-      catalog.profiles.map(async (environment) => ({
-        id: environment.environmentId,
-        label: environment.label,
-        active: environment.environmentId === selected,
-        webOrigin: environment.webOrigin,
-        backendHttpUrl: environment.backendHttpUrl,
-        secretConfigured: await secretConfigured(this.paths, environment),
-      })),
-    );
+    return catalog.profiles.map((environment) => ({
+      id: environment.environmentId,
+      label: environment.label,
+      active: environment.environmentId === selected,
+      webOrigin: environment.webOrigin,
+      backendHttpUrl: environment.backendHttpUrl,
+    }));
   }
 
   async getEnvironment(id?: string): Promise<AgentEnvironmentView> {
@@ -286,22 +281,6 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
       await requestTrayEnvironmentSwitch({ record: tray, environmentId: id });
     else await writeEnvironmentSelection(this.paths, id);
     return { id, changed: previous !== id };
-  }
-
-  async setEnvironmentSecret(id: string, secret: string) {
-    const { catalog } = await readInstalledBundle(this.paths);
-    const environment = catalog.profiles.find(
-      (candidate) => candidate.environmentId === id,
-    );
-    if (!environment) throw new Error(`Unknown Agent environment "${id}"`);
-    await writeEnvironmentSecret(this.paths, environment, secret);
-    const tray = await readTrayInstanceRecord(
-      resolveTrayInstancePath(this.paths.userDataDir),
-    ).catch(() => undefined);
-    if (tray) {
-      await requestTrayEnvironmentSwitch({ record: tray, environmentId: id });
-    }
-    return { id, configured: true as const };
   }
 
   async autostart(action: 'enable' | 'disable' | 'status') {
@@ -342,7 +321,7 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
         id: 'environment',
         status: environment ? 'pass' : 'fail',
         message: environment
-          ? `${environment.label}; secret ${environment.secretConfigured ? 'configured' : 'missing'}`
+          ? environment.label
           : 'No valid active environment',
       });
       if (environment) {

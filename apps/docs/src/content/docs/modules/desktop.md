@@ -16,10 +16,10 @@ There is no embedded renderer or settings window. Product UI is deployed once
 as the Web application. The Agent exposes only versioned, bounded local
 resources and RPC operations after a one-time tray/CLI launch handshake.
 
-Raw cookies, localStorage, browser storage state, profile paths, Agent secrets,
-and bridge tickets stay off the backend and out of diagnostics. Browser
-commands remain structured; the backend and deployed Web page cannot submit
-arbitrary Playwright code.
+Raw cookies, localStorage, browser storage state, profile paths, and bridge
+tickets stay off the backend and out of diagnostics. Browser commands remain
+structured; the backend and deployed Web page cannot submit arbitrary Playwright
+code.
 
 Use [Local Agent](/client/desktop/) for installation and lifecycle commands,
 [Browser Auth](/modules/browser-auth/) for profile ownership, and

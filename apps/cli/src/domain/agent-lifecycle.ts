@@ -6,7 +6,6 @@ export type AgentEnvironmentView = {
   readonly active: boolean;
   readonly webOrigin: string;
   readonly backendHttpUrl: string;
-  readonly secretConfigured: boolean;
 };
 
 export type AgentLifecycleStatus = {
@@ -52,10 +51,6 @@ export interface AgentLifecycleService {
   setEnvironment(
     id: string,
   ): Promise<{ readonly id: string; readonly changed: boolean }>;
-  setEnvironmentSecret(
-    id: string,
-    secret: string,
-  ): Promise<{ readonly id: string; readonly configured: true }>;
   autostart(
     action: 'enable' | 'disable' | 'status',
   ): Promise<{ readonly enabled: boolean; readonly supported: boolean }>;

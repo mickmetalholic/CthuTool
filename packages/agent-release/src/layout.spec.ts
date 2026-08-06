@@ -69,6 +69,7 @@ describe('Agent bundle layout', () => {
     'environments/prod/agent-secret',
     'browser-profiles/profile/data',
     'logs/agent.log',
+    'config.json',
   ])('rejects mutable data %s from version contents', (path) => {
     expect(() =>
       validateBundleInventory('darwin-arm64', [...validInventory(), path]),

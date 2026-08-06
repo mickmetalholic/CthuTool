@@ -10,10 +10,14 @@ export const REQUIRED_COMMON_BUNDLE_PATHS = [
 
 export const MUTABLE_AGENT_PATH_SEGMENTS = [
   'environment.json',
-  'agent-secret',
   'browser-profiles',
   'logs',
   'config.json',
+] as const;
+
+const FORBIDDEN_VERSION_PATH_SEGMENTS = [
+  ...MUTABLE_AGENT_PATH_SEGMENTS,
+  'agent-secret',
 ] as const;
 
 export type BundleLayout = {
@@ -183,7 +187,7 @@ export function validateBundleInventory(
       );
     }
     if (
-      MUTABLE_AGENT_PATH_SEGMENTS.some(
+      FORBIDDEN_VERSION_PATH_SEGMENTS.some(
         (segment) => path === segment || path.split('/').includes(segment),
       )
     ) {

@@ -81,10 +81,15 @@ describe('AgentLocalBridge', () => {
       },
     });
     expect(resources.status).toBe(200);
-    const raw = await resources.text();
-    expect(raw).toContain('configured');
-    expect(raw).not.toContain('agent-secret-value');
-    expect(raw).not.toContain(session.sessionToken);
+    const payload = (await resources.json()) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      agent: { backendStatus: 'connected' },
+    });
+    expect(payload).not.toHaveProperty('secret');
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toContain('"secret"');
+    expect(serialized).not.toContain('agent-secret-value');
+    expect(serialized).not.toContain(session.sessionToken);
   });
 
   test('rejects wrong Origin, Host, environment, expired tickets, and cookie-only calls', async () => {
@@ -381,7 +386,6 @@ async function createBridge(
       },
       profiles: [],
       protocolVersion: 1,
-      secret: { status: 'configured' },
     }),
     instanceId: 'bridge-instance-1',
     lifecycleAction: async () => ({ accepted: true }),

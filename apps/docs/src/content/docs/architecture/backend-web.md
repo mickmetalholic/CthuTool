@@ -44,9 +44,11 @@ POST /api/browser/sessions/{sessionId}/actions
 DELETE /api/browser/sessions/{sessionId}
 ```
 
-The public browser session API is intended for trusted deployments. It routes
-bounded browser action lists through an online local Agent. Backend state is
-routing metadata; Playwright runtime state remains Agent-owned.
+The public browser session API is intended for trusted private-network
+deployments. It routes bounded browser action lists through an online local
+Agent. Backend state is routing metadata; Playwright runtime state remains
+Agent-owned. External entry must use Cloudflare Access/Tunnel; a direct public
+Backend port is unsupported.
 
 ## Web Console
 

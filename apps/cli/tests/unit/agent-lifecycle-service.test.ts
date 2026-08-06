@@ -17,40 +17,32 @@ describe('filesystem Agent lifecycle service', () => {
     );
   });
 
-  test('selects verified environments and stores only protected environment-scoped secrets', async () => {
-    const { paths, service } = await createService();
+  test('selects verified environments without secret configuration state', async () => {
+    const { service } = await createService();
     expect(await service.listEnvironments()).toEqual([
       expect.objectContaining({
         active: true,
         id: 'production',
-        secretConfigured: false,
+        label: 'Production',
+        webOrigin: 'https://app.example.com',
+        backendHttpUrl: 'https://api.example.com',
       }),
       expect.objectContaining({
         active: false,
         id: 'staging',
-        secretConfigured: false,
+        label: 'Staging',
       }),
     ]);
+    expect(JSON.stringify(await service.listEnvironments())).not.toMatch(
+      /secretConfigured|agent-secret/i,
+    );
     await expect(service.setEnvironment('staging')).resolves.toEqual({
       changed: true,
       id: 'staging',
     });
-    const secret = 'environment-specific-secret-value-1234';
-    await expect(
-      service.setEnvironmentSecret('staging', secret),
-    ).resolves.toEqual({ configured: true, id: 'staging' });
-    const secretPath = join(
-      paths.userDataDir,
-      'environments',
-      'staging',
-      'agent-secret',
+    await expect(service.getEnvironment()).resolves.toEqual(
+      expect.objectContaining({ active: true, id: 'staging' }),
     );
-    expect(await readFile(secretPath, 'utf8')).toBe(`${secret}\n`);
-    expect(
-      JSON.stringify(await service.getEnvironment('staging')),
-    ).not.toContain(secret);
-    if (process.platform !== 'win32')
-      expect((await stat(secretPath)).mode & 0o077).toBe(0);
   });
 
   test('default uninstall preserves mutable data and unconfirmed purge deletes nothing', async () => {
@@ -65,11 +57,12 @@ describe('filesystem Agent lifecycle service', () => {
     const log = join(first.paths.logsDir, 'agent.log');
     await mkdir(profile, { recursive: true });
     await mkdir(first.paths.logsDir, { recursive: true });
+    await mkdir(first.paths.userDataDir, { recursive: true });
     await writeFile(join(profile, 'state'), 'profile');
     await writeFile(log, 'redacted log');
-    await first.service.setEnvironmentSecret(
-      'production',
-      'production-secret-value-that-is-long-enough',
+    await writeFile(
+      join(first.paths.userDataDir, 'environment.json'),
+      `${JSON.stringify({ activeEnvironmentId: 'production' }, null, 2)}\n`,
     );
     await expect(first.service.uninstall()).resolves.toMatchObject({
       purged: false,
@@ -80,9 +73,10 @@ describe('filesystem Agent lifecycle service', () => {
     expect(await readFile(log, 'utf8')).toBe('redacted log');
 
     const second = await createService();
-    await second.service.setEnvironmentSecret(
-      'production',
-      'another-production-secret-value-long-enough',
+    await mkdir(second.paths.userDataDir, { recursive: true });
+    await writeFile(
+      join(second.paths.userDataDir, 'environment.json'),
+      `${JSON.stringify({ activeEnvironmentId: 'production' }, null, 2)}\n`,
     );
     await expect(
       second.service.uninstall({ purge: true, confirmed: false }),
