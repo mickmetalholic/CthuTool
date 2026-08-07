@@ -10,9 +10,19 @@ context: |
   Keep each OpenSpec change scoped to one task or one change. Do not archive,
   sync, or commit neighboring OpenSpec changes unless explicitly requested.
 
-  Treat generated agent adapter instructions under .claude/, .codex/, and
-  .cursor/ as generated outputs. Do not hand-edit them for project policy;
-  regenerate adapters per tool or platform instead.
+  AI tooling ownership:
+  - OpenSpec owns openspec-* workflow adapters. Regenerate with
+    `pnpm setup:ai-tooling` (openspec init/update for agents,codex,cursor,opencode).
+  - Canonical project skills live in skills/ and are linked by setup.
+  - Third-party skills use `npx skills`; do not commit manual copies as source.
+  - `chc codex skills` manages only Codex user-scope manifest-backed GitHub skills.
+  - `codex/plugins/cthu-codex` is a protected business plugin and is out of scope.
+
+  Generated adapter policy:
+  - Generated OpenSpec skills under .agents/skills, .cursor/skills, and
+    .opencode/skills are reproducible outputs. Do not hand-edit them for project
+    policy and do not commit openspec-* adapter trees.
+  - Update durable policy here or in skills/, then regenerate adapters.
 
 rules:
   proposal:
@@ -24,9 +34,11 @@ rules:
     - Preserve existing clear prefixes unless a rename is explicitly requested.
     - Do not sync unrelated neighboring changes or specs into the current change.
   design:
-    - Describe why project policy belongs in OpenSpec config instead of generated adapter files when relevant.
+    - Describe why project policy belongs in OpenSpec config or skills/ instead of generated adapter files when relevant.
     - Keep generated agent adapter files out of the implementation plan unless regeneration is the explicit change.
+    - Keep codex/plugins/cthu-codex unchanged unless the change is explicitly about that business plugin.
   tasks:
     - Keep implementation tasks scoped to the selected change only.
     - Include verification steps for OpenSpec validation and affected repository policy.
     - Confirm generated agent adapter files remain unchanged unless the change explicitly regenerates them.
+    - Confirm setup/check commands do not modify codex/plugins/cthu-codex.

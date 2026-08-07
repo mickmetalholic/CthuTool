@@ -16,6 +16,7 @@ and reference reading paths.
 | --- | --- |
 | `../README.md` | Repository entry point: prerequisites, common commands, workspace layout, and documentation routing. |
 | `../apps/docs/` | Astro Starlight documentation site for users, operators, architecture readers, and OpenSpec browsing. |
+| `ai-tooling.md` | OpenSpec / Codex / Cursor / OpenCode / Reasonix ownership, setup, and invocation reference. |
 | `agent-migration.md` | Safe migration from legacy CthuDesktop data into environment-scoped Agent storage. |
 | `agent-deployment-security.md` | Personal-use public-deployment and static Agent-secret boundary. |
 | `agent-release.md` | Signed UI-free Agent bundle, publication, and rollback contract. |

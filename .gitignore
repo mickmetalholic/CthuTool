@@ -61,18 +61,31 @@ Thumbs.db
 # Keep documented env samples
 !.env.example
 
-# Cursor: ignore local cache, but keep shared Project Rules, skills, and non-generated commands.
+# Cursor: ignore local cache, but keep shared Project Rules, authored skills, and non-generated commands.
 .cursor/*
+.cursor/skills/*
 !.cursor/rules/
 !.cursor/rules/**
 !.cursor/skills/
-!.cursor/skills/**
+!.cursor/skills/commit/
+!.cursor/skills/commit/**
+!.cursor/skills/create-pull-request/
+!.cursor/skills/create-pull-request/**
 !.cursor/commands/
 !.cursor/commands/**
+
+# Generated OpenSpec / shared agent skill surfaces (regenerate with pnpm setup:ai-tooling)
+.agents/
+.opencode/
+
+# Legacy generated OpenSpec copies under agent dirs (do not reintroduce)
+.codex/skills/
+.claude/skills/
 
 # References codes for agents
 .references/
 
+# Reasonix local desktop/session state and optional machine-local settings
 .reasonix/
 
 .superpowers
