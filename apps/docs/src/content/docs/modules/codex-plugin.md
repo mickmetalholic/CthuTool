@@ -138,7 +138,19 @@ The `Sentence` field uses Anki cloze syntax with a short synonym or paraphrase h
 
 ## Notion Channel Library
 
-Use `$notion-add-channel` to add one or more YouTube or Bilibili channels to the personal Notion Channel Library. The explicit-only skill validates current tags, checks for input and database duplicates, selects each platform-specific template, verifies created entries, and returns per-channel Notion URLs.
+Use `$notion-add-channel` to add one or more YouTube, Bilibili, or Xiaohongshu channels to the personal Notion Channel Library. It accepts supported homepage URLs and, when explicitly requested, one exact attached or selected browser tab. The explicit-only skill validates current tags, checks for input and database duplicates, selects each platform-specific template, verifies created entries, and returns per-channel Notion URLs.
+
+Use the canonical Xiaohongshu creator homepage form; note, board, search, and unresolved share-link pages are not supported:
+
+```text
+$notion-add-channel https://www.xiaohongshu.com/user/profile/creator-id
+```
+
+Use the selected Chrome tab only when you request it explicitly:
+
+```text
+$notion-add-channel Chrome current tab
+```
 
 An exact tag supplied by the user is used without inspecting the channel description or recent content and without a second confirmation. The skill still reads the minimum channel metadata required for its name and duplicate identity.
 
@@ -150,9 +162,21 @@ tags: Technology, AI
 
 https://www.youtube.com/@channel-a
 https://space.bilibili.com/123456
+https://www.xiaohongshu.com/user/profile/creator-id
 ```
 
-Put `tags:` on a channel line to replace the batch default for that item:
+One current tab can participate in the same batch and inherit the shared tags:
+
+```text
+$notion-add-channel
+tags: Technology, AI
+
+Chrome current tab
+https://www.youtube.com/@channel-a
+https://space.bilibili.com/123456
+```
+
+Put `tags:` on an item line to replace the batch default for that item:
 
 ```text
 $notion-add-channel
@@ -160,10 +184,12 @@ tags: Technology
 
 https://www.youtube.com/@channel-a | tags: AI
 https://space.bilibili.com/123456 | tags: Japanese, Education
-https://www.youtube.com/@channel-c
+Chrome current tab | tags: Lifestyle
 ```
 
 Only channels without effective user-supplied tags require content inspection and inferred-tag confirmation. In a mixed batch, the skill consolidates those decisions before it creates any new entries.
+
+Browser input is optional and exact-tab-only. URL-only invocations do not connect to a browser. The skill never navigates or mutates the selected tab and never inspects other tab contents or browser-private state; claiming an exact attachment may use one metadata-only tab listing solely to match its full ID, title, and URL tuple. If browser control is unavailable, no tab is selected, authentication or verification blocks the page, the page is unsupported, or its URL changes during the read, the workflow stops before reading Notion and asks for a ready homepage tab or canonical URL.
 
 ## Notion Album Library
 

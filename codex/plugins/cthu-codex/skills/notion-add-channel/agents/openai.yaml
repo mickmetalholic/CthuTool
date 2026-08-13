@@ -1,6 +1,6 @@
 interface:
   display_name: "Notion · Add Channel"
-  short_description: "Add YouTube or Bilibili channels to Notion."
-  default_prompt: "Use $notion-add-channel to add one or more channel URLs to my Notion Channel Library with optional shared or per-channel tags."
+  short_description: "Add YouTube, Bilibili, Xiaohongshu, or one current tab."
+  default_prompt: "Use $notion-add-channel to add YouTube, Bilibili, or Xiaohongshu channel URLs—or one explicit current browser tab—to my Notion Channel Library with optional shared or per-item tags."
 policy:
   allow_implicit_invocation: false
