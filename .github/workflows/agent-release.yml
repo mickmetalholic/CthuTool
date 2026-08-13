@@ -1,27 +1,9 @@
 name: Agent Release
 
 on:
+  # This workflow must start for every PR because `aggregate-pr` is required by
+  # the main ruleset. The lightweight scope job below gates the native matrix.
   pull_request:
-    paths:
-      - ".github/actions/build-agent-bundle/**"
-      - ".github/workflows/agent-release.yml"
-      - "apps/agent/**"
-      - "apps/agent-tray/**"
-      - "apps/cli/**"
-      - "packages/agent-bridge-protocol/**"
-      - "packages/agent-protocol/**"
-      - "packages/agent-release/**"
-      - "packages/agent-runtime/**"
-      - "packages/browser-runtime-protocol/**"
-      - "release/agent/**"
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "rust-toolchain.toml"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "tsconfig.json"
-      - "turbo.json"
   push:
     tags:
       - "agent-v*"
@@ -64,6 +46,66 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  pr_scope:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      agent_changed: ${{ steps.changes.outputs.agent_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changes
+        name: Detect Agent release inputs
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed_paths_file="$RUNNER_TEMP/agent-release-changed-paths.txt"
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > "$changed_paths_file"
+          CHANGED_PATHS_FILE="$changed_paths_file" node <<'NODE'
+          const fs = require('node:fs');
+
+          const changedPaths = fs
+            .readFileSync(process.env.CHANGED_PATHS_FILE, 'utf8')
+            .split('\n')
+            .filter(Boolean);
+          const prefixes = [
+            '.github/actions/build-agent-bundle/',
+            'apps/agent/',
+            'apps/agent-tray/',
+            'apps/cli/',
+            'packages/agent-bridge-protocol/',
+            'packages/agent-protocol/',
+            'packages/agent-release/',
+            'packages/agent-runtime/',
+            'packages/browser-runtime-protocol/',
+            'release/agent/',
+          ];
+          const exactPaths = new Set([
+            '.github/workflows/agent-release.yml',
+            'Cargo.lock',
+            'Cargo.toml',
+            'rust-toolchain.toml',
+            'package.json',
+            'pnpm-lock.yaml',
+            'pnpm-workspace.yaml',
+            'tsconfig.json',
+            'turbo.json',
+          ]);
+          const agentChanged = changedPaths.some(
+            (path) =>
+              exactPaths.has(path) || prefixes.some((prefix) => path.startsWith(prefix)),
+          );
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `agent_changed=${agentChanged ? 'true' : 'false'}\n`,
+          );
+          NODE
+
   matrix:
     runs-on: ubuntu-latest
     outputs:
@@ -96,8 +138,12 @@ jobs:
           node -e "const fs=require('node:fs'); const input=process.env.INPUT_VERSION; const ref=process.env.REF_NAME; const version=input || ref.replace(/^agent-v/, ''); if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error('Agent release version must be semver'); const channel=process.env.INPUT_CHANNEL || 'stable'; fs.appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + version + '\nchannel=' + channel + '\nbase-url=https://github.com/' + process.env.REPOSITORY + '/releases/download/agent-v' + version + '/\n');"
 
   build-pr:
-    if: github.event_name == 'pull_request'
-    needs: matrix
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.pr_scope.outputs.agent_changed == 'true'
+    needs:
+      - matrix
+      - pr_scope
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
@@ -125,28 +171,63 @@ jobs:
           retention-days: 7
 
   aggregate-pr:
-    if: github.event_name == 'pull_request'
+    if: ${{ always() && github.event_name == 'pull_request' }}
     needs:
       - build-pr
+      - pr_scope
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Validate Agent PR prerequisites
+        shell: bash
+        env:
+          AGENT_CHANGED: ${{ needs.pr_scope.outputs.agent_changed }}
+          BUILD_RESULT: ${{ needs['build-pr'].result }}
+          SCOPE_RESULT: ${{ needs.pr_scope.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$SCOPE_RESULT" != "success" ]]; then
+            echo "Agent path detection did not succeed: $SCOPE_RESULT" >&2
+            exit 1
+          fi
+          case "$AGENT_CHANGED" in
+            true)
+              if [[ "$BUILD_RESULT" != "success" ]]; then
+                echo "Agent PR matrix did not succeed: $BUILD_RESULT" >&2
+                exit 1
+              fi
+              ;;
+            false)
+              echo "No Agent release inputs changed; aggregate-pr is satisfied."
+              ;;
+            *)
+              echo "Agent path detection returned an invalid value: $AGENT_CHANGED" >&2
+              exit 1
+              ;;
+          esac
       - uses: actions/checkout@v4
+        if: ${{ success() && needs.pr_scope.outputs.agent_changed == 'true' }}
       - uses: pnpm/action-setup@v4
+        if: ${{ success() && needs.pr_scope.outputs.agent_changed == 'true' }}
         with:
           version: 9.15.4
       - uses: actions/setup-node@v4
+        if: ${{ success() && needs.pr_scope.outputs.agent_changed == 'true' }}
         with:
           node-version: "24.14.1"
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @cthutool/agent-release build
+      - if: ${{ success() && needs.pr_scope.outputs.agent_changed == 'true' }}
+        run: pnpm install --frozen-lockfile
+      - if: ${{ success() && needs.pr_scope.outputs.agent_changed == 'true' }}
+        run: pnpm --filter @cthutool/agent-release build
       - uses: actions/download-artifact@v4
+        if: ${{ success() && needs.pr_scope.outputs.agent_changed == 'true' }}
         with:
           pattern: agent-pr-*
           path: .release/downloads
           merge-multiple: true
       - name: Validate aggregate PR manifest
+        if: ${{ success() && needs.pr_scope.outputs.agent_changed == 'true' }}
         shell: bash
         run: |
           RECEIPTS="$(find .release/downloads -name 'receipt-*.json' -print | sort | paste -sd, -)"
@@ -160,6 +241,7 @@ jobs:
           node packages/agent-release/dist/cli.js validate-manifest \
             --input .release/downloads/manifest-unsigned-pr.json
       - uses: actions/upload-artifact@v4
+        if: ${{ success() && needs.pr_scope.outputs.agent_changed == 'true' }}
         with:
           name: agent-pr-aggregate
           path: .release/downloads/manifest-unsigned-pr.json
