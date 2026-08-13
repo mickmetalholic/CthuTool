@@ -155,10 +155,12 @@ jobs:
         with:
           target: ${{ matrix.target }}
           rust-target: ${{ matrix.rustTarget }}
-          release-version: 0.0.0-pr.${{ github.event.pull_request.number }}.${{ github.run_attempt }}
+          # run_id is stable across partial reruns, so receipts from different
+          # attempts retain one validation identity.
+          release-version: 0.0.0-pr.${{ github.event.pull_request.number }}.run${{ github.run_id }}
           provenance: pull-request-validation
-          pull-request-marker: ${{ github.event.pull_request.number }}-${{ github.run_attempt }}
-          immutable-base-url: https://pr-validation.invalid/${{ github.run_id }}/0.0.0-pr.${{ github.event.pull_request.number }}.${{ github.run_attempt }}/
+          pull-request-marker: ${{ github.event.pull_request.number }}-${{ github.run_id }}
+          immutable-base-url: https://pr-validation.invalid/${{ github.run_id }}/0.0.0-pr.${{ github.event.pull_request.number }}.run${{ github.run_id }}/
       - name: Upload marked validation artifact
         uses: actions/upload-artifact@v4
         with:
@@ -232,7 +234,7 @@ jobs:
         run: |
           RECEIPTS="$(find .release/downloads -name 'receipt-*.json' -print | sort | paste -sd, -)"
           node packages/agent-release/dist/cli.js manifest \
-            --version "0.0.0-pr.${{ github.event.pull_request.number }}.${{ github.run_attempt }}" \
+            --version "0.0.0-pr.${{ github.event.pull_request.number }}.run${{ github.run_id }}" \
             --minimum-cli-version 0.0.0 \
             --catalog packages/agent-release/fixtures/catalog.valid.json \
             --receipts "$RECEIPTS" \
