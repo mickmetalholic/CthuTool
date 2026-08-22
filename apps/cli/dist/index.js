@@ -6615,7 +6615,7 @@ async function runMain(cmd, opts = {}) {
 }
 
 // src/index.ts
-var import_picocolors9 = __toESM(require_picocolors(), 1);
+var import_picocolors10 = __toESM(require_picocolors(), 1);
 
 // src/command/command-discovery.ts
 function stripAnsi3(value) {
@@ -11982,12 +11982,1233 @@ function createInternalCompleteCommand(resolveRootCommand) {
   });
 }
 
-// src/command/opencode.command.ts
+// src/command/obsidian.command.ts
+import { stat as stat9 } from "node:fs/promises";
+import { join as join18 } from "node:path";
 var import_picocolors4 = __toESM(require_picocolors(), 1);
 
+// src/domain/obsidian-agents-config.ts
+import { randomUUID as randomUUID2 } from "node:crypto";
+import { mkdir as mkdir9, readFile as readFile13, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
+import { isAbsolute as isAbsolute3, join as join14, resolve as resolve7 } from "node:path";
+var OBSIDIAN_AGENTS_CONFIG_VERSION = 1;
+
+class ObsidianAgentsConfigError extends Error {
+  constructor(message, options) {
+    super(message, options);
+    this.name = "ObsidianAgentsConfigError";
+  }
+}
+function createEmptyObsidianAgentsConfig() {
+  return {
+    version: OBSIDIAN_AGENTS_CONFIG_VERSION,
+    profiles: {}
+  };
+}
+function normalizeObsidianAgentsProfile(input) {
+  const id = input.id.trim();
+  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(id)) {
+    throw new ObsidianAgentsConfigError("Profile id must start with a lowercase letter or number and contain only lowercase letters, numbers, hyphens, or underscores.");
+  }
+  const vaultPath = normalizeAbsolutePath(input.vaultPath, "vault path");
+  const agentsPath = normalizeAbsolutePath(input.agentsPath?.trim() || join14(vaultPath, ".agents"), "agents path");
+  if (vaultPath === agentsPath) {
+    throw new ObsidianAgentsConfigError("The agents path must be different from the Obsidian vault path.");
+  }
+  return { id, vaultPath, agentsPath };
+}
+async function readObsidianAgentsConfig(paths) {
+  let raw;
+  try {
+    raw = await readFile13(paths.configPath, "utf8");
+  } catch (error) {
+    if (isMissingFileError4(error))
+      return;
+    throw new ObsidianAgentsConfigError(`Unable to read Obsidian agents configuration: ${paths.configPath}`, { cause: error });
+  }
+  try {
+    return parseObsidianAgentsConfig(JSON.parse(raw));
+  } catch (error) {
+    if (error instanceof ObsidianAgentsConfigError)
+      throw error;
+    throw new ObsidianAgentsConfigError(`Invalid Obsidian agents configuration: ${paths.configPath}`, { cause: error });
+  }
+}
+async function writeObsidianAgentsConfig(paths, config) {
+  const normalized = parseObsidianAgentsConfig(config);
+  await mkdir9(paths.dataRoot, { recursive: true });
+  const temporaryPath = `${paths.configPath}.tmp-${randomUUID2()}`;
+  await writeFile7(temporaryPath, `${JSON.stringify(normalized, null, 2)}
+`, "utf8");
+  await rename4(temporaryPath, paths.configPath);
+}
+function parseObsidianAgentsConfig(value) {
+  if (!isRecord5(value) || value.version !== OBSIDIAN_AGENTS_CONFIG_VERSION) {
+    throw new ObsidianAgentsConfigError(`Obsidian agents configuration must use version ${OBSIDIAN_AGENTS_CONFIG_VERSION}.`);
+  }
+  if (!isRecord5(value.profiles)) {
+    throw new ObsidianAgentsConfigError("Obsidian agents configuration must contain a profiles object.");
+  }
+  const profiles = {};
+  for (const [id, rawProfile] of Object.entries(value.profiles)) {
+    if (!isRecord5(rawProfile)) {
+      throw new ObsidianAgentsConfigError(`Profile "${id}" is invalid.`);
+    }
+    const profile = normalizeObsidianAgentsProfile({
+      id,
+      vaultPath: readString(rawProfile.vaultPath, `Profile "${id}" vaultPath`),
+      agentsPath: readString(rawProfile.agentsPath, `Profile "${id}" agentsPath`)
+    });
+    profiles[id] = profile;
+  }
+  const defaultProfile = value.defaultProfile === undefined ? undefined : readString(value.defaultProfile, "defaultProfile");
+  if (defaultProfile && !profiles[defaultProfile]) {
+    throw new ObsidianAgentsConfigError(`Default profile "${defaultProfile}" does not exist.`);
+  }
+  return {
+    version: OBSIDIAN_AGENTS_CONFIG_VERSION,
+    ...defaultProfile ? { defaultProfile } : {},
+    profiles
+  };
+}
+function selectObsidianAgentsProfile(config, profileId) {
+  const selectedId = profileId?.trim() || config.defaultProfile;
+  if (selectedId)
+    return config.profiles[selectedId];
+  const first = Object.values(config.profiles)[0];
+  return first;
+}
+function upsertObsidianAgentsProfile(config, profile) {
+  return {
+    ...config,
+    defaultProfile: profile.id,
+    profiles: { ...config.profiles, [profile.id]: profile }
+  };
+}
+function normalizeAbsolutePath(value, label) {
+  const trimmed = value.trim();
+  if (!trimmed || !isAbsolute3(trimmed)) {
+    throw new ObsidianAgentsConfigError(`${label} must be an absolute path.`);
+  }
+  return resolve7(trimmed);
+}
+function readString(value, label) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ObsidianAgentsConfigError(`${label} must be a non-empty string.`);
+  }
+  return value;
+}
+function isRecord5(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isMissingFileError4(error) {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+// src/domain/obsidian-agents-git.ts
+import { spawn as spawn4 } from "node:child_process";
+
+class ObsidianAgentsGitError extends Error {
+  kind;
+  result;
+  constructor(kind, message, result, options) {
+    super(message, options);
+    this.name = "ObsidianAgentsGitError";
+    this.kind = kind;
+    this.result = result;
+  }
+}
+async function runGit(args, options) {
+  const result = await spawnGit(args, options);
+  if (result.code !== 0 && options.allowFailure !== true) {
+    throw createGitError(result);
+  }
+  return result;
+}
+async function readGitSnapshot(cwd) {
+  const root = await runGit(["rev-parse", "--show-toplevel"], {
+    cwd,
+    allowFailure: true
+  });
+  if (root.code !== 0) {
+    return {
+      isRepository: false,
+      hasHead: false,
+      worktree: [],
+      comparisonAvailable: false
+    };
+  }
+  const branchResult = await runGit(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd, allowFailure: true });
+  const branch = branchResult.code === 0 ? trimOutput(branchResult.stdout) : undefined;
+  const remoteResult = await runGit(["remote", "get-url", "origin"], {
+    cwd,
+    allowFailure: true
+  });
+  const remote = remoteResult.code === 0 ? trimOutput(remoteResult.stdout) : undefined;
+  const headResult = await runGit(["rev-parse", "--verify", "HEAD"], {
+    cwd,
+    allowFailure: true
+  });
+  const head = headResult.code === 0 ? trimOutput(headResult.stdout) : undefined;
+  const statusResult = await runGit(["status", "--porcelain", "--untracked-files=all"], { cwd, allowFailure: true });
+  const worktree = statusResult.code === 0 ? splitLines(statusResult.stdout) : [];
+  const comparison = branch && head ? await readAheadBehind(cwd, branch) : { ahead: undefined, behind: undefined, available: false };
+  return {
+    isRepository: true,
+    branch,
+    remote,
+    hasHead: head !== undefined,
+    head,
+    worktree,
+    ahead: comparison.ahead,
+    behind: comparison.behind,
+    comparisonAvailable: comparison.available
+  };
+}
+async function initializeGitRepository(cwd, branch) {
+  assertBranchName(branch);
+  await runGit(["init"], { cwd });
+  await runGit(["symbolic-ref", "HEAD", `refs/heads/${branch}`], { cwd });
+}
+async function cloneGitRepository(remote, targetPath, cwd) {
+  await runGit(["clone", remote, targetPath], { cwd });
+}
+async function configureGitRemote(cwd, remote) {
+  const current = await runGit(["remote", "get-url", "origin"], {
+    cwd,
+    allowFailure: true
+  });
+  if (current.code === 0) {
+    if (trimOutput(current.stdout) !== remote) {
+      await runGit(["remote", "set-url", "origin", remote], { cwd });
+    }
+    return;
+  }
+  await runGit(["remote", "add", "origin", remote], { cwd });
+}
+async function fetchGitRemote(cwd) {
+  await runGit(["fetch", "--no-tags", "origin"], { cwd });
+}
+async function remoteBranchExists(cwd, branch) {
+  assertBranchName(branch);
+  const result = await runGit(["rev-parse", "--verify", `refs/remotes/origin/${branch}`], { cwd, allowFailure: true });
+  return result.code === 0;
+}
+async function mergeFastForward(cwd, branch) {
+  assertBranchName(branch);
+  await runGit(["merge", "--ff-only", `origin/${branch}`], { cwd });
+}
+async function commitAll(cwd, message) {
+  const before = await runGit(["status", "--porcelain", "--untracked-files=all"], { cwd });
+  if (trimOutput(before.stdout).length === 0) {
+    return { changed: false };
+  }
+  await runGit(["add", "--all"], { cwd });
+  await runGit(["commit", "-m", message], { cwd });
+  const head = await runGit(["rev-parse", "--verify", "HEAD"], { cwd });
+  return { changed: true, commit: trimOutput(head.stdout) };
+}
+async function pushGitBranch(cwd, branch) {
+  assertBranchName(branch);
+  await runGit(["push", "--set-upstream", "origin", branch], { cwd });
+}
+function redactGitText(value) {
+  return value.replace(/:\/\/[^/\s]+@/gu, "://***@").replace(/(token|secret|password|passwd|authorization|credential)=([^&\s]+)/giu, "$1=[redacted]");
+}
+async function readAheadBehind(cwd, branch) {
+  if (!await remoteBranchExists(cwd, branch)) {
+    return { available: false };
+  }
+  const result = await runGit(["rev-list", "--left-right", "--count", `HEAD...origin/${branch}`], { cwd, allowFailure: true });
+  if (result.code !== 0)
+    return { available: false };
+  const [aheadRaw, behindRaw] = trimOutput(result.stdout).split(/\s+/u);
+  const ahead = Number.parseInt(aheadRaw ?? "", 10);
+  const behind = Number.parseInt(behindRaw ?? "", 10);
+  if (!Number.isFinite(ahead) || !Number.isFinite(behind)) {
+    return { available: false };
+  }
+  return { ahead, behind, available: true };
+}
+function spawnGit(args, options) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn4("git", [...args], {
+      cwd: options.cwd,
+      env: options.env ? { ...process.env, ...options.env } : process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true
+    });
+    let stdout2 = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout2 += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      rejectPromise(new ObsidianAgentsGitError("start", `Unable to start git: ${redactGitText(error.message)}`, undefined, { cause: error }));
+    });
+    child.on("close", (code) => {
+      resolvePromise({
+        command: "git",
+        args,
+        cwd: options.cwd,
+        code: code ?? 1,
+        stdout: stdout2,
+        stderr
+      });
+    });
+  });
+}
+function createGitError(result) {
+  const kind = classifyGitFailure(result);
+  const detail = redactGitText(`${result.stderr.trim()} ${result.stdout.trim()}`).trim();
+  const command = ["git", ...result.args].join(" ");
+  return new ObsidianAgentsGitError(kind, detail.length > 0 ? `Git ${kind.replaceAll("_", " ")} failure while running ${command}: ${detail}` : `Git ${kind.replaceAll("_", " ")} failure while running ${command}.`, result);
+}
+function classifyGitFailure(result) {
+  const text = `${result.stderr}
+${result.stdout}`.toLowerCase();
+  if (/authentication failed|permission denied|could not read username|access denied|http 401|http 403/u.test(text)) {
+    return "authentication";
+  }
+  if (/non-fast-forward|fetch first|rejected|failed to push/u.test(text)) {
+    return "non_fast_forward";
+  }
+  if (/conflict|merge conflict|unmerged/u.test(text))
+    return "conflict";
+  if (/could not resolve host|network is unreachable|connection timed out|unable to access/u.test(text)) {
+    return "network";
+  }
+  if (/not a git repository|working tree/u.test(text))
+    return "worktree";
+  return "unknown";
+}
+function assertBranchName(branch) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(branch) || branch.includes("..") || branch.includes("//") || branch.endsWith("/") || branch.endsWith(".")) {
+    throw new ObsidianAgentsGitError("worktree", `Invalid Git branch name: ${branch}`);
+  }
+}
+function trimOutput(value) {
+  return value.trim();
+}
+function splitLines(value) {
+  return value.split(/\r?\n/u).filter((line) => line.length > 0);
+}
+
+// src/domain/obsidian-agents-lock.ts
+import { randomUUID as randomUUID3 } from "node:crypto";
+import { mkdir as mkdir10, open, readFile as readFile14, stat as stat7, unlink } from "node:fs/promises";
+import { join as join15 } from "node:path";
+var DEFAULT_WAIT_MS = 5000;
+var RETRY_MS = 100;
+var STALE_AFTER_MS = 10 * 60000;
+
+class ObsidianAgentsLockError extends Error {
+  code = "busy";
+  constructor(message) {
+    super(message);
+    this.name = "ObsidianAgentsLockError";
+  }
+}
+async function withObsidianAgentsLock(paths, profileId, action, options = {}) {
+  const lockPath = join15(paths.locksRoot, `${profileId}.lock`);
+  const token = randomUUID3();
+  const deadline = Date.now() + (options.waitMs ?? DEFAULT_WAIT_MS);
+  let acquired = false;
+  await mkdir10(paths.locksRoot, { recursive: true });
+  while (!acquired) {
+    try {
+      const handle = await open(lockPath, "wx");
+      await handle.writeFile(JSON.stringify({
+        token,
+        profileId,
+        pid: process.pid,
+        acquiredAt: new Date().toISOString()
+      }), "utf8");
+      await handle.close();
+      acquired = true;
+    } catch (error) {
+      if (!isAlreadyExistsError(error))
+        throw error;
+      if (await removeStaleLock(lockPath))
+        continue;
+      if (Date.now() >= deadline) {
+        throw new ObsidianAgentsLockError(`Obsidian agents profile "${profileId}" is busy; another synchronization is still running.`);
+      }
+      await delay2(RETRY_MS);
+    }
+  }
+  try {
+    return await action();
+  } finally {
+    await releaseLock(lockPath, token);
+  }
+}
+async function removeStaleLock(lockPath) {
+  try {
+    const metadata = await stat7(lockPath);
+    if (Date.now() - metadata.mtimeMs < STALE_AFTER_MS)
+      return false;
+    await unlink(lockPath);
+    return true;
+  } catch (error) {
+    return isMissingFileError5(error);
+  }
+}
+async function releaseLock(lockPath, token) {
+  try {
+    const value = JSON.parse(await readFile14(lockPath, "utf8"));
+    if (value.token === token)
+      await unlink(lockPath);
+  } catch (error) {
+    if (!isMissingFileError5(error))
+      return;
+  }
+}
+function isAlreadyExistsError(error) {
+  return error instanceof Error && "code" in error && error.code === "EEXIST";
+}
+function isMissingFileError5(error) {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+function delay2(ms) {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+}
+
+// src/domain/obsidian-agents-service.ts
+import { mkdir as mkdir11, readdir as readdir4, stat as stat8 } from "node:fs/promises";
+import { dirname as dirname10, join as join16 } from "node:path";
+class ObsidianAgentsServiceError extends Error {
+  code;
+  exitCode = 1;
+  constructor(code, message, options) {
+    super(message, options);
+    this.name = "ObsidianAgentsServiceError";
+    this.code = code;
+  }
+}
+async function createObsidianAgentsSetupPlan(_paths, input) {
+  const profile = normalizeObsidianAgentsProfile(input);
+  if (!await isDirectory(profile.vaultPath)) {
+    throw new ObsidianAgentsServiceError("invalid_configuration", `Obsidian vault does not exist or is not a directory: ${profile.vaultPath}`);
+  }
+  const agentsPathExists = await pathExists2(profile.agentsPath);
+  if (agentsPathExists && !await isDirectory(profile.agentsPath)) {
+    throw new ObsidianAgentsServiceError("invalid_configuration", `The configured agents path is not a directory: ${profile.agentsPath}`);
+  }
+  const agentsExists = agentsPathExists;
+  const agentsEmpty = agentsExists ? (await readdir4(profile.agentsPath)).length === 0 : true;
+  const initialFiles = agentsExists && agentsEmpty === false ? await listRelativeFiles2(profile.agentsPath) : [];
+  const snapshot = agentsExists ? await readGitSnapshot(profile.agentsPath) : emptyGitSnapshot();
+  const remote = input.remote?.trim() || snapshot.remote;
+  if (!remote) {
+    throw new ObsidianAgentsServiceError("setup_required", "A private Git remote is required. Re-run setup with a remote URL or configure origin in the .agents repository.");
+  }
+  const branch = snapshot.branch || input.branch?.trim() || "main";
+  assertBranchName2(branch);
+  const actions = [];
+  const shouldClone = !snapshot.isRepository && agentsEmpty;
+  if (shouldClone) {
+    actions.push(`clone ${redactRemote(remote)} into ${profile.agentsPath}`);
+  } else if (!snapshot.isRepository) {
+    actions.push(`initialize Git in ${profile.agentsPath}`);
+  }
+  if (snapshot.isRepository && snapshot.remote !== remote) {
+    actions.push(`set origin to ${redactRemote(remote)}`);
+  }
+  if (!snapshot.hasHead && !shouldClone && !agentsEmpty) {
+    actions.push("create the initial commit and push it to origin");
+  }
+  if (actions.length === 0)
+    actions.push("validate the existing repository");
+  return {
+    profile,
+    remote,
+    branch,
+    agentsExists,
+    agentsEmpty,
+    initialFiles,
+    snapshot,
+    actions
+  };
+}
+async function applyObsidianAgentsSetup(paths, plan) {
+  let initialCommit;
+  const shouldClone = !plan.snapshot.isRepository && plan.agentsEmpty;
+  if (shouldClone) {
+    await mkdir11(dirname10(plan.profile.agentsPath), { recursive: true });
+    await cloneGitRepository(plan.remote, plan.profile.agentsPath, dirname10(plan.profile.agentsPath));
+  } else {
+    await mkdir11(plan.profile.agentsPath, { recursive: true });
+    if (!plan.snapshot.isRepository) {
+      await initializeGitRepository(plan.profile.agentsPath, plan.branch);
+    }
+    await configureGitRemote(plan.profile.agentsPath, plan.remote);
+    if (!plan.snapshot.hasHead && !plan.agentsEmpty) {
+      const commit = await commitAll(plan.profile.agentsPath, "chc: initialize Obsidian agents");
+      if (commit.commit) {
+        initialCommit = commit.commit;
+        await pushGitBranch(plan.profile.agentsPath, plan.branch);
+      }
+    }
+  }
+  const existing = await readObsidianAgentsConfig(paths) ?? createEmptyObsidianAgentsConfig();
+  const next = upsertObsidianAgentsProfile(existing, plan.profile);
+  await writeObsidianAgentsConfig(paths, next);
+  const snapshot = await readGitSnapshot(plan.profile.agentsPath);
+  return {
+    profile: plan.profile,
+    remote: snapshot.remote ?? plan.remote,
+    branch: snapshot.branch ?? plan.branch,
+    actions: plan.actions,
+    initialCommit
+  };
+}
+async function getObsidianAgentsProfile(paths, profileId) {
+  const config = await readObsidianAgentsConfig(paths);
+  if (!config) {
+    throw new ObsidianAgentsServiceError("not_configured", "Obsidian agents is not configured. Run `chc obsidian agents setup` first.");
+  }
+  const profile = selectObsidianAgentsProfile(config, profileId);
+  if (!profile) {
+    throw new ObsidianAgentsServiceError("not_configured", "No Obsidian agents profile is configured. Run `chc obsidian agents setup` first.");
+  }
+  return profile;
+}
+async function synchronizeObsidianAgents(options) {
+  return withObsidianAgentsLock(options.paths, options.profile.id, async () => {
+    const initial = await readGitSnapshot(options.profile.agentsPath);
+    assertSyncRepository(initial, options.profile);
+    if (options.phase === "after") {
+      return finalizeAfterPhase(options.profile, initial);
+    }
+    return prepareBeforePhase(options.profile, initial);
+  }).catch((error) => {
+    if (error instanceof ObsidianAgentsLockError)
+      throw error;
+    if (error instanceof ObsidianAgentsServiceError)
+      throw error;
+    throw new ObsidianAgentsServiceError(classifySyncError(error), `Obsidian agents before/after synchronization failed for ${options.profile.agentsPath}: ${safeErrorMessage2(error)}`, { cause: error });
+  });
+}
+async function inspectObsidianAgentsStatus(options) {
+  const hook = options.hook ?? {
+    source: false,
+    installed: false,
+    ready: false
+  };
+  const config = await readObsidianAgentsConfig(options.paths);
+  if (!config) {
+    return {
+      configured: false,
+      healthy: false,
+      paths: { vaultExists: false, agentsExists: false },
+      git: {
+        isRepository: false,
+        worktreeChanges: [],
+        comparisonAvailable: false
+      },
+      sync: { state: "not_configured", refreshed: false },
+      hook
+    };
+  }
+  const profile = selectObsidianAgentsProfile(config, options.profileId);
+  if (!profile) {
+    return {
+      configured: false,
+      healthy: false,
+      paths: { vaultExists: false, agentsExists: false },
+      git: {
+        isRepository: false,
+        worktreeChanges: [],
+        comparisonAvailable: false
+      },
+      sync: { state: "not_configured", refreshed: false },
+      hook
+    };
+  }
+  const vaultExists = await isDirectory(profile.vaultPath);
+  const agentsExists = await isDirectory(profile.agentsPath);
+  if (!agentsExists) {
+    return {
+      configured: true,
+      healthy: false,
+      profile,
+      paths: { vaultExists, agentsExists },
+      git: {
+        isRepository: false,
+        worktreeChanges: [],
+        comparisonAvailable: false
+      },
+      sync: { state: "missing_path", refreshed: false },
+      hook
+    };
+  }
+  let refreshed = false;
+  let refreshError;
+  if (options.refresh) {
+    try {
+      await withObsidianAgentsLock(options.paths, profile.id, async () => {
+        const snapshot2 = await readGitSnapshot(profile.agentsPath);
+        if (snapshot2.isRepository && snapshot2.remote) {
+          await fetchGitRemote(profile.agentsPath);
+        }
+      });
+      refreshed = true;
+    } catch (error) {
+      refreshError = safeErrorMessage2(error);
+    }
+  }
+  const snapshot = await readGitSnapshot(profile.agentsPath);
+  const syncState = resolveSyncState(snapshot);
+  const healthy = vaultExists && agentsExists && snapshot.isRepository && snapshot.remote !== undefined && snapshot.worktree.length === 0 && syncState === "up_to_date" && hook.ready;
+  return {
+    configured: true,
+    healthy,
+    profile,
+    paths: { vaultExists, agentsExists },
+    git: {
+      isRepository: snapshot.isRepository,
+      branch: snapshot.branch,
+      head: snapshot.head,
+      remote: redactRemote(snapshot.remote),
+      worktreeChanges: snapshot.worktree,
+      ahead: snapshot.ahead,
+      behind: snapshot.behind,
+      comparisonAvailable: snapshot.comparisonAvailable
+    },
+    sync: {
+      state: refreshError ? "unavailable" : syncState,
+      refreshed,
+      ...refreshError ? { refreshError } : {}
+    },
+    hook
+  };
+}
+async function inspectObsidianAgentsHookReadiness(options) {
+  const source = await pathExists2(options.sourcePath);
+  let installed = false;
+  const pluginCacheRoot = join16(options.cacheRoot, "cthu-codex");
+  if (await isDirectory(pluginCacheRoot)) {
+    const versions = await readdir4(pluginCacheRoot, { withFileTypes: true });
+    installed = await hasCachedHook(pluginCacheRoot, versions);
+  }
+  return { source, installed, ready: source && installed };
+}
+async function prepareBeforePhase(profile, initial) {
+  let changed = false;
+  let committed = false;
+  let commit;
+  if (initial.worktree.length > 0) {
+    const result = await commitAll(profile.agentsPath, "chc: sync Obsidian agents");
+    changed = result.changed;
+    committed = result.changed;
+    commit = result.commit;
+  }
+  await fetchGitRemote(profile.agentsPath);
+  let snapshot = await readGitSnapshot(profile.agentsPath);
+  assertSyncRepository(snapshot, profile);
+  const branch = snapshot.branch;
+  if (await remoteBranchExists(profile.agentsPath, branch)) {
+    const ahead = snapshot.ahead ?? 0;
+    const behind = snapshot.behind ?? 0;
+    if (ahead > 0 && behind > 0) {
+      throw new ObsidianAgentsServiceError("conflict", `Obsidian agents history diverged: local is ahead ${ahead} and behind ${behind}. Reconcile ${profile.agentsPath} manually before invoking a Skill.`);
+    }
+    if (behind > 0) {
+      await mergeFastForward(profile.agentsPath, branch);
+      snapshot = await readGitSnapshot(profile.agentsPath);
+    }
+    if (ahead > 0) {
+      await pushGitBranch(profile.agentsPath, branch);
+      return {
+        phase: "before",
+        changed,
+        committed,
+        pushed: true,
+        branch,
+        commit,
+        ahead: 0,
+        behind: 0
+      };
+    }
+  } else if (snapshot.hasHead) {
+    await pushGitBranch(profile.agentsPath, branch);
+    return {
+      phase: "before",
+      changed,
+      committed,
+      pushed: true,
+      branch,
+      commit
+    };
+  }
+  return {
+    phase: "before",
+    changed,
+    committed,
+    pushed: false,
+    branch,
+    commit,
+    ahead: snapshot.ahead,
+    behind: snapshot.behind
+  };
+}
+async function finalizeAfterPhase(profile, initial) {
+  assertSyncRepository(initial, profile);
+  const branch = initial.branch;
+  const result = await commitAll(profile.agentsPath, "chc: sync Obsidian agents");
+  if (!result.changed) {
+    return {
+      phase: "after",
+      changed: false,
+      committed: false,
+      pushed: false,
+      branch,
+      ahead: initial.ahead,
+      behind: initial.behind
+    };
+  }
+  await pushGitBranch(profile.agentsPath, branch);
+  return {
+    phase: "after",
+    changed: true,
+    committed: true,
+    pushed: true,
+    branch,
+    commit: result.commit
+  };
+}
+function assertSyncRepository(snapshot, profile) {
+  if (!snapshot.isRepository || !snapshot.branch || !snapshot.remote) {
+    throw new ObsidianAgentsServiceError("setup_required", `The configured agents path is not a complete Git repository: ${profile.agentsPath}. Run "chc obsidian agents setup" first.`);
+  }
+}
+function resolveSyncState(snapshot) {
+  if (!snapshot.isRepository)
+    return "not_repository";
+  if (!snapshot.remote)
+    return "no_remote";
+  if (snapshot.worktree.length > 0)
+    return "dirty";
+  if (!snapshot.comparisonAvailable)
+    return "unavailable";
+  if ((snapshot.ahead ?? 0) > 0 && (snapshot.behind ?? 0) > 0) {
+    return "diverged";
+  }
+  if ((snapshot.ahead ?? 0) > 0)
+    return "ahead";
+  if ((snapshot.behind ?? 0) > 0)
+    return "behind";
+  return "up_to_date";
+}
+function classifySyncError(error) {
+  if (error instanceof ObsidianAgentsGitError) {
+    if (error.kind === "conflict" || error.kind === "non_fast_forward") {
+      return "conflict";
+    }
+  }
+  return "sync_failed";
+}
+function safeErrorMessage2(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+function redactRemote(value) {
+  return value?.replace(/:\/\/[^/\s]+@/gu, "://***@");
+}
+function emptyGitSnapshot() {
+  return {
+    isRepository: false,
+    hasHead: false,
+    worktree: [],
+    comparisonAvailable: false
+  };
+}
+async function hasCachedHook(root, entries) {
+  for (const entry of entries) {
+    if (!entry.isDirectory())
+      continue;
+    if (await pathExists2(join16(root, entry.name, "hooks", "hooks.json"))) {
+      return true;
+    }
+  }
+  return false;
+}
+async function listRelativeFiles2(root) {
+  const files = [];
+  await collectRelativeFiles(root, root, files);
+  return files.sort((left, right) => left.localeCompare(right));
+}
+async function collectRelativeFiles(root, current, files) {
+  for (const entry of await readdir4(current, { withFileTypes: true })) {
+    if (entry.name === ".git" && current === root)
+      continue;
+    const absolute = join16(current, entry.name);
+    if (entry.isDirectory()) {
+      await collectRelativeFiles(root, absolute, files);
+      continue;
+    }
+    files.push(absolute.slice(root.length + 1));
+  }
+}
+async function pathExists2(path) {
+  try {
+    await stat8(path);
+    return true;
+  } catch (error) {
+    if (isMissingFileError6(error))
+      return false;
+    throw error;
+  }
+}
+async function isDirectory(path) {
+  try {
+    return (await stat8(path)).isDirectory();
+  } catch (error) {
+    if (isMissingFileError6(error))
+      return false;
+    throw error;
+  }
+}
+function isMissingFileError6(error) {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+function assertBranchName2(branch) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(branch) || branch.includes("..") || branch.includes("//") || branch.endsWith("/") || branch.endsWith(".")) {
+    throw new ObsidianAgentsServiceError("invalid_configuration", `Invalid Git branch name: ${branch}`);
+  }
+}
+
+// src/infra/obsidian-agents-paths.ts
+import { homedir as homedir7 } from "node:os";
+import { join as join17, resolve as resolve8 } from "node:path";
+function resolveCthuToolChcDataRoot(options = {}) {
+  const env2 = options.env ?? process.env;
+  const explicit = options.dataRoot?.trim() || env2.CTHUTOOL_CHC_DATA_DIR;
+  if (explicit?.trim())
+    return resolve8(explicit);
+  const homeRoot = options.homeRoot ?? homedir7();
+  const platform3 = options.platform ?? process.platform;
+  if (platform3 === "win32") {
+    return resolve8(join17(env2.APPDATA ?? join17(homeRoot, "AppData", "Roaming"), "CthuTool", "chc"));
+  }
+  if (platform3 === "darwin") {
+    return resolve8(join17(homeRoot, "Library", "Application Support", "CthuTool", "chc"));
+  }
+  return resolve8(join17(env2.XDG_STATE_HOME ?? join17(homeRoot, ".local", "state"), "cthutool", "chc"));
+}
+function createObsidianAgentsDataPaths(options = {}) {
+  const dataRoot = resolveCthuToolChcDataRoot(options);
+  return {
+    dataRoot,
+    configPath: join17(dataRoot, "obsidian-agents.json"),
+    locksRoot: join17(dataRoot, "locks")
+  };
+}
+
+// src/command/obsidian.command.ts
+var commonArgs2 = {
+  ...cliContractArgs,
+  profile: {
+    type: "string",
+    description: "Obsidian agents profile id"
+  },
+  vault: {
+    type: "string",
+    description: "Obsidian vault path"
+  },
+  agentsPath: {
+    type: "string",
+    description: "Override the vault .agents path"
+  },
+  remote: {
+    type: "string",
+    description: "Private Git remote URL"
+  },
+  branch: {
+    type: "string",
+    description: "Git branch to initialize or publish"
+  },
+  dataRoot: {
+    type: "string",
+    description: "Override the local CthuTool chc data directory"
+  },
+  repoRoot: {
+    type: "string",
+    description: "Override the CthuTool repository root for Hook status"
+  },
+  home: {
+    type: "string",
+    description: "Override the user home directory"
+  },
+  codexHome: {
+    type: "string",
+    description: "Override the local Codex home directory"
+  },
+  cacheRoot: {
+    type: "string",
+    description: "Override the local Codex plugin cache directory"
+  },
+  yes: {
+    type: "boolean",
+    description: "Confirm setup mutations without prompting"
+  }
+};
+function getStringArg2(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+function createDataPaths(args) {
+  return createObsidianAgentsDataPaths({
+    dataRoot: getStringArg2(args.dataRoot),
+    homeRoot: getStringArg2(args.home)
+  });
+}
+function createCodexPaths(args) {
+  return createCodexConfigPaths({
+    repoRoot: getStringArg2(args.repoRoot),
+    homeRoot: getStringArg2(args.home),
+    codexHome: getStringArg2(args.codexHome),
+    cacheRoot: getStringArg2(args.cacheRoot)
+  });
+}
+async function runObservedObsidianSubcommand(subcommand, args, run) {
+  await runObservedCliCommand(args, { command: "obsidian agents", subcommand }, async (scope) => {
+    try {
+      await run(scope);
+    } catch (error) {
+      const cliError = toObsidianCliError(error);
+      scope.fail(cliError);
+      if (scope.context.json) {
+        writeJsonValue(processOutput, {
+          ok: false,
+          command: `obsidian agents ${subcommand}`,
+          error: { code: cliError.code, message: cliError.message }
+        });
+      } else {
+        writeCommandError(scope.context, processOutput, cliError);
+      }
+      process.exitCode = cliError.exitCode;
+      throw cliError;
+    }
+  });
+}
+async function runSetup(args, scope) {
+  const paths = createDataPaths(args);
+  const config = await readObsidianAgentsConfig(paths);
+  const current = config ? selectObsidianAgentsProfile(config, getStringArg2(args.profile)) : undefined;
+  const currentGit = current && await isDirectory2(current.agentsPath) ? await readGitSnapshot(current.agentsPath) : undefined;
+  const interactive = scope.context.interactive && !scope.context.json;
+  const input = await collectSetupInput(args, current, currentGit, interactive);
+  if (!input) {
+    const result2 = { status: "cancelled" };
+    writeSetupResult(scope.context, result2);
+    process.exitCode = 0;
+    return;
+  }
+  const plan = await createObsidianAgentsSetupPlan(paths, input);
+  if (!scope.context.json && !scope.context.quiet) {
+    writeHumanStatus(scope.context, processOutput, import_picocolors4.default.cyan("Obsidian agents setup"));
+    writeHumanStatus(scope.context, processOutput, `profile: ${plan.profile.id}`);
+    writeHumanStatus(scope.context, processOutput, `vault: ${plan.profile.vaultPath}`);
+    writeHumanStatus(scope.context, processOutput, `agents: ${plan.profile.agentsPath}`);
+    for (const action of plan.actions) {
+      writeHumanStatus(scope.context, processOutput, `- ${action}`);
+    }
+    if (plan.initialFiles.length > 0) {
+      writeHumanStatus(scope.context, processOutput, "initial files:");
+      for (const file of plan.initialFiles) {
+        writeHumanStatus(scope.context, processOutput, `  ${file}`);
+      }
+    }
+  }
+  const requiresConfirmation = plan.actions.some((action) => !action.startsWith("validate"));
+  if (requiresConfirmation && args.yes !== true) {
+    if (!interactive) {
+      throw createCliError("invalid_option", "Setup would mutate the agents repository. Use --yes in non-interactive mode.");
+    }
+    const answer = await ce2({
+      message: "Apply this Obsidian agents setup?",
+      initialValue: false
+    });
+    if (lD2(answer) || answer !== true) {
+      writeSetupResult(scope.context, { status: "cancelled" });
+      process.exitCode = 0;
+      return;
+    }
+  }
+  const result = await applyObsidianAgentsSetup(paths, plan);
+  writeSetupResult(scope.context, { status: "configured", ...result });
+  process.exitCode = 0;
+}
+async function runStatus(args, scope) {
+  const paths = createDataPaths(args);
+  const codexPaths = createCodexPaths(args);
+  const hook = await inspectObsidianAgentsHookReadiness({
+    sourcePath: join18(codexPaths.repoCodexRoot, "plugins", "cthu-codex", "hooks", "hooks.json"),
+    cacheRoot: codexPaths.cacheRoot
+  });
+  const result = await inspectObsidianAgentsStatus({
+    paths,
+    profileId: getStringArg2(args.profile),
+    refresh: args.refresh === true,
+    hook
+  });
+  if (scope.context.json) {
+    writeJsonValue(processOutput, {
+      ok: true,
+      command: "obsidian agents status",
+      result
+    });
+  } else {
+    writeStatusHuman(scope.context, result);
+  }
+  process.exitCode = 0;
+}
+async function runSync(args, scope) {
+  const phase = getStringArg2(args.phase);
+  if (phase !== "before" && phase !== "after") {
+    throw createCliError("invalid_option", "Sync phase must be either before or after.");
+  }
+  const paths = createDataPaths(args);
+  const profile = await getObsidianAgentsProfile(paths, getStringArg2(args.profile));
+  const result = await synchronizeObsidianAgents({
+    paths,
+    profile,
+    phase
+  });
+  if (scope.context.json) {
+    writeJsonValue(processOutput, {
+      ok: true,
+      command: `obsidian agents sync ${phase}`,
+      result
+    });
+  } else {
+    writeHumanStatus(scope.context, processOutput, import_picocolors4.default.cyan(`Obsidian agents sync (${phase})`));
+    writeHumanStatus(scope.context, processOutput, result.changed ? `committed: ${result.commit?.slice(0, 7) ?? "yes"}; pushed: ${result.pushed ? "yes" : "no"}` : "no changes");
+  }
+  process.exitCode = 0;
+}
+async function collectSetupInput(args, current, currentGit, interactive) {
+  const suppliedProfile = getStringArg2(args.profile);
+  const suppliedVault = getStringArg2(args.vault);
+  const suppliedAgents = getStringArg2(args.agentsPath);
+  const suppliedRemote = getStringArg2(args.remote);
+  const suppliedBranch = getStringArg2(args.branch);
+  if (!interactive) {
+    const vaultPath2 = suppliedVault ?? current?.vaultPath;
+    if (!vaultPath2) {
+      throw createCliError("missing_required_argument", "Setup requires --vault in non-interactive mode when no profile exists.");
+    }
+    return {
+      id: suppliedProfile ?? current?.id ?? "obsidian-main",
+      vaultPath: vaultPath2,
+      agentsPath: suppliedAgents ?? current?.agentsPath,
+      remote: suppliedRemote ?? currentGit?.remote,
+      branch: suppliedBranch ?? currentGit?.branch ?? "main"
+    };
+  }
+  let shouldEdit = current === undefined;
+  if (current) {
+    const choice = await le2({
+      message: `Existing profile "${current.id}" found.`,
+      options: [
+        { value: "keep", label: "Keep current configuration" },
+        { value: "edit", label: "Edit configuration" }
+      ],
+      initialValue: "keep"
+    });
+    if (lD2(choice))
+      return;
+    shouldEdit = choice === "edit";
+    if (!shouldEdit && !suppliedVault && !suppliedAgents && !suppliedRemote) {
+      return {
+        ...current,
+        remote: currentGit?.remote,
+        branch: currentGit?.branch ?? suppliedBranch ?? "main"
+      };
+    }
+  }
+  const id = suppliedProfile ?? current?.id ?? await promptString("Profile id", "obsidian-main", (value) => /^[a-z0-9][a-z0-9_-]*$/u.test(value.trim()) ? undefined : "Use lowercase letters, numbers, hyphens, or underscores.");
+  if (!id)
+    return;
+  const vaultPath = suppliedVault ?? await promptString("Obsidian vault path", current?.vaultPath, (value) => value.trim() ? undefined : "A vault path is required.");
+  if (!vaultPath)
+    return;
+  const agentsPath = suppliedAgents ?? await promptString("Agents path", current?.agentsPath ?? join18(vaultPath, ".agents"), (value) => value.trim() ? undefined : "An agents path is required.");
+  if (!agentsPath)
+    return;
+  const remote = suppliedRemote ?? await promptString("Private Git remote URL", currentGit?.remote, (value) => value.trim() ? undefined : "A private Git remote is required.");
+  if (!remote)
+    return;
+  const branch = suppliedBranch ?? await promptString("Git branch", currentGit?.branch ?? "main", (value) => value.trim() ? undefined : "A branch is required.");
+  if (!branch)
+    return;
+  return { id, vaultPath, agentsPath, remote, branch };
+}
+async function promptString(message, initialValue, validate2) {
+  const answer = await ae({ message, initialValue, validate: validate2 });
+  return lD2(answer) ? undefined : answer.trim();
+}
+function writeSetupResult(context, result) {
+  if (context.json) {
+    writeJsonValue(processOutput, {
+      ok: true,
+      command: "obsidian agents setup",
+      result
+    });
+    return;
+  }
+  if (result.status === "cancelled") {
+    writeHumanStatus(context, processOutput, "Setup cancelled.");
+    return;
+  }
+  writeHumanStatus(context, processOutput, import_picocolors4.default.green("Obsidian agents configured."));
+  const profile = result.profile;
+  if (profile?.id)
+    writeHumanStatus(context, processOutput, `profile: ${profile.id}`);
+}
+function writeStatusHuman(context, result) {
+  writeHumanStatus(context, processOutput, import_picocolors4.default.cyan("Obsidian agents status"));
+  if (!result.configured) {
+    writeHumanStatus(context, processOutput, "configuration: missing");
+    writeHumanStatus(context, processOutput, "run: chc obsidian agents setup");
+    return;
+  }
+  writeHumanStatus(context, processOutput, `profile: ${result.profile?.id ?? "unknown"}`);
+  writeHumanStatus(context, processOutput, `vault: ${check(result.paths.vaultExists)} ${result.profile?.vaultPath ?? ""}`);
+  writeHumanStatus(context, processOutput, `agents: ${check(result.paths.agentsExists)} ${result.profile?.agentsPath ?? ""}`);
+  writeHumanStatus(context, processOutput, `git: ${check(result.git.isRepository)} ${result.git.branch ?? "not a repository"}`);
+  writeHumanStatus(context, processOutput, `remote: ${result.git.remote ?? "missing"}`);
+  writeHumanStatus(context, processOutput, `worktree: ${result.git.worktreeChanges.length === 0 ? "clean" : `${result.git.worktreeChanges.length} change(s)`}`);
+  writeHumanStatus(context, processOutput, `sync: ${result.sync.state}${result.sync.refreshed ? " (refreshed)" : ""}`);
+  writeHumanStatus(context, processOutput, `hook: ${result.hook.ready ? "ready" : "not ready"}`);
+  if (result.sync.refreshError) {
+    writeHumanStatus(context, processOutput, `refresh error: ${result.sync.refreshError}`);
+  }
+}
+function check(value) {
+  return value ? import_picocolors4.default.green("OK") : import_picocolors4.default.red("FAIL");
+}
+function toObsidianCliError(error) {
+  if (error instanceof ObsidianAgentsServiceError) {
+    return createCliError(mapServiceError(error.code), error.message, error.exitCode);
+  }
+  if (error instanceof ObsidianAgentsConfigError) {
+    return createCliError("obsidian_agents_invalid_configuration", error.message);
+  }
+  if (error instanceof ObsidianAgentsLockError) {
+    return createCliError("obsidian_agents_busy", error.message);
+  }
+  if (error instanceof ObsidianAgentsGitError) {
+    return createCliError(error.kind === "conflict" || error.kind === "non_fast_forward" ? "obsidian_agents_conflict" : "obsidian_agents_sync_failed", error.message);
+  }
+  if (error instanceof Error && "code" in error && "exitCode" in error) {
+    return error;
+  }
+  return createCliError("obsidian_agents_sync_failed", error instanceof Error ? error.message : String(error));
+}
+function mapServiceError(code) {
+  switch (code) {
+    case "not_configured":
+      return "obsidian_agents_not_configured";
+    case "invalid_configuration":
+      return "obsidian_agents_invalid_configuration";
+    case "setup_required":
+      return "obsidian_agents_setup_required";
+    case "conflict":
+      return "obsidian_agents_conflict";
+    case "sync_failed":
+      return "obsidian_agents_sync_failed";
+  }
+}
+async function isDirectory2(path) {
+  try {
+    return (await stat9(path)).isDirectory();
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+var obsidianCommand = defineCommand({
+  meta: {
+    name: "obsidian",
+    description: "Manage Obsidian Skill and state synchronization."
+  },
+  subCommands: {
+    agents: defineCommand({
+      meta: {
+        name: "agents",
+        description: "Manage the Obsidian .agents Git repository."
+      },
+      subCommands: {
+        setup: defineCommand({
+          meta: {
+            name: "setup",
+            description: "Interactively configure or edit Obsidian agents."
+          },
+          args: commonArgs2,
+          async run({ args }) {
+            const typedArgs = args;
+            await runObservedObsidianSubcommand("setup", typedArgs, async (scope) => {
+              await runSetup(typedArgs, scope);
+            });
+          }
+        }),
+        status: defineCommand({
+          meta: {
+            name: "status",
+            description: "Show Obsidian agents configuration and sync status."
+          },
+          args: {
+            ...commonArgs2,
+            refresh: {
+              type: "boolean",
+              description: "Fetch remote metadata before reporting status"
+            }
+          },
+          async run({ args }) {
+            const typedArgs = args;
+            await runObservedObsidianSubcommand("status", typedArgs, async (scope) => {
+              await runStatus(typedArgs, scope);
+            });
+          }
+        }),
+        sync: defineCommand({
+          meta: {
+            name: "sync",
+            description: "Run one safe before or after synchronization phase."
+          },
+          args: {
+            ...commonArgs2,
+            phase: {
+              type: "string",
+              description: "Synchronization phase: before or after"
+            }
+          },
+          async run({ args }) {
+            const typedArgs = args;
+            await runObservedObsidianSubcommand("sync", typedArgs, async (scope) => {
+              await runSync(typedArgs, scope);
+            });
+          }
+        })
+      }
+    })
+  }
+});
+
+// src/command/opencode.command.ts
+var import_picocolors5 = __toESM(require_picocolors(), 1);
+
 // src/domain/opencode-config-manager.ts
-import { mkdir as mkdir9, readFile as readFile13, rename as rename4, rm as rm7, writeFile as writeFile7 } from "node:fs/promises";
-import { dirname as dirname10, isAbsolute as isAbsolute3, resolve as resolve7 } from "node:path";
+import { mkdir as mkdir12, readFile as readFile15, rename as rename5, rm as rm7, writeFile as writeFile8 } from "node:fs/promises";
+import { dirname as dirname11, isAbsolute as isAbsolute4, resolve as resolve9 } from "node:path";
 async function syncOpenCodeSkillPaths(input) {
   const plugins = [];
   const paths = [];
@@ -12052,16 +13273,16 @@ async function syncOpenCodeMcpServers(input) {
 async function readOpenCodeConfig(configPath) {
   let raw;
   try {
-    raw = await readFile13(configPath, "utf8");
+    raw = await readFile15(configPath, "utf8");
   } catch (error) {
-    if (isMissingFileError4(error)) {
+    if (isMissingFileError7(error)) {
       return {};
     }
     throw error;
   }
   try {
     const value = JSON.parse(parseJsonc(raw));
-    if (!isRecord5(value)) {
+    if (!isRecord6(value)) {
       throw new Error("expected a JSON object");
     }
     return value;
@@ -12072,13 +13293,13 @@ async function readOpenCodeConfig(configPath) {
   }
 }
 async function writeOpenCodeConfig(configPath, config) {
-  const path = resolve7(configPath);
+  const path = resolve9(configPath);
   const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`;
-  await mkdir9(dirname10(path), { recursive: true });
+  await mkdir12(dirname11(path), { recursive: true });
   try {
-    await writeFile7(temporaryPath, `${JSON.stringify(config, null, 2)}
+    await writeFile8(temporaryPath, `${JSON.stringify(config, null, 2)}
 `, "utf8");
-    await rename4(temporaryPath, path);
+    await rename5(temporaryPath, path);
   } finally {
     await rm7(temporaryPath, { force: true });
   }
@@ -12088,25 +13309,25 @@ async function readPluginSkillPaths(plugin) {
   const declared = manifest.skills;
   const candidates = typeof declared === "string" ? [declared] : Array.isArray(declared) ? declared.filter((value) => typeof value === "string") : [];
   return candidates.map((candidate) => {
-    const path = resolve7(plugin.root, candidate);
+    const path = resolve9(plugin.root, candidate);
     assertPathInside(plugin.root, path);
     return path;
   });
 }
 async function readPluginMcpServers(plugin) {
-  const path = resolve7(plugin.root, ".mcp.json");
+  const path = resolve9(plugin.root, ".mcp.json");
   let parsed;
   try {
-    parsed = JSON.parse(await readFile13(path, "utf8"));
+    parsed = JSON.parse(await readFile15(path, "utf8"));
   } catch (error) {
-    if (isMissingFileError4(error)) {
+    if (isMissingFileError7(error)) {
       return {};
     }
     throw new Error(`Invalid plugin MCP config JSON: ${path}`, {
       cause: error
     });
   }
-  if (!isRecord5(parsed) || parsed.mcpServers === undefined) {
+  if (!isRecord6(parsed) || parsed.mcpServers === undefined) {
     return {};
   }
   const sourceServers = readRecord(parsed.mcpServers, "mcpServers");
@@ -12120,7 +13341,7 @@ function renderOpenCodeMcpServer(plugin, name, source) {
     return {
       type: "remote",
       url: source.url,
-      ...isRecord5(source.headers) ? { headers: source.headers } : {},
+      ...isRecord6(source.headers) ? { headers: source.headers } : {},
       enabled: source.enabled !== false
     };
   }
@@ -12178,13 +13399,13 @@ function resolveMcpCwd(plugin, value) {
     throw new Error(`Invalid MCP cwd for ${plugin.name}.`);
   }
   const replaced = value.replaceAll("<PLUGIN_ROOT>", plugin.root);
-  return isAbsolute3(replaced) ? resolve7(replaced) : resolve7(plugin.root, replaced);
+  return isAbsolute4(replaced) ? resolve9(replaced) : resolve9(plugin.root, replaced);
 }
 async function readPluginJson(plugin) {
-  const path = resolve7(plugin.root, ".codex-plugin", "plugin.json");
+  const path = resolve9(plugin.root, ".codex-plugin", "plugin.json");
   try {
-    const value = JSON.parse(await readFile13(path, "utf8"));
-    if (!isRecord5(value)) {
+    const value = JSON.parse(await readFile15(path, "utf8"));
+    if (!isRecord6(value)) {
       throw new Error("expected a JSON object");
     }
     return value;
@@ -12199,7 +13420,7 @@ function readOptionalRecord(value, label) {
   return readRecord(value, label);
 }
 function readRecord(value, label) {
-  if (!isRecord5(value)) {
+  if (!isRecord6(value)) {
     throw new Error(`${label} must be an object.`);
   }
   return value;
@@ -12319,15 +13540,15 @@ function stripTrailingCommas(value) {
   }
   return output;
 }
-function isRecord5(value) {
+function isRecord6(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function isMissingFileError4(error) {
+function isMissingFileError7(error) {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 // src/command/opencode.command.ts
-var commonArgs2 = {
+var commonArgs3 = {
   ...cliContractArgs,
   repoRoot: { type: "string", description: "Override the repository root" },
   home: { type: "string", description: "Override the home directory" },
@@ -12344,16 +13565,16 @@ var commonArgs2 = {
     description: "Override the OpenCode JSON or JSONC config path"
   }
 };
-function getStringArg2(value) {
+function getStringArg3(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 function createPaths2(args) {
   return createCodexConfigPaths({
-    repoRoot: getStringArg2(args.repoRoot),
-    homeRoot: getStringArg2(args.home),
-    pluginsRoot: getStringArg2(args.pluginsRoot),
-    openCodeHome: getStringArg2(args.openCodeHome),
-    openCodeConfig: getStringArg2(args.openCodeConfig)
+    repoRoot: getStringArg3(args.repoRoot),
+    homeRoot: getStringArg3(args.home),
+    pluginsRoot: getStringArg3(args.pluginsRoot),
+    openCodeHome: getStringArg3(args.openCodeHome),
+    openCodeConfig: getStringArg3(args.openCodeConfig)
   });
 }
 async function runObservedOpenCodeSubcommand(subcommand, args, run) {
@@ -12373,13 +13594,13 @@ async function runSkills2(args, scope) {
       result
     });
   } else {
-    writeHumanStatus(scope.context, processOutput, import_picocolors4.default.cyan("OpenCode skills"));
+    writeHumanStatus(scope.context, processOutput, import_picocolors5.default.cyan("OpenCode skills"));
     writeHumanStatus(scope.context, processOutput, `${result.changed ? "updated" : "unchanged"} ${result.configPath}`);
     for (const plugin of result.plugins) {
       writeHumanStatus(scope.context, processOutput, `${plugin.name}: ${plugin.paths.join(", ")}`);
     }
     if (result.plugins.length === 0) {
-      writeHumanStatus(scope.context, processOutput, import_picocolors4.default.dim("(no plugin skills)"));
+      writeHumanStatus(scope.context, processOutput, import_picocolors5.default.dim("(no plugin skills)"));
     }
   }
   process.exitCode = 0;
@@ -12398,13 +13619,13 @@ async function runMcp(args, scope) {
       result
     });
   } else {
-    writeHumanStatus(scope.context, processOutput, import_picocolors4.default.cyan("OpenCode MCP"));
+    writeHumanStatus(scope.context, processOutput, import_picocolors5.default.cyan("OpenCode MCP"));
     writeHumanStatus(scope.context, processOutput, `${result.changed ? "updated" : "unchanged"} ${result.configPath}`);
     for (const server of result.servers) {
       writeHumanStatus(scope.context, processOutput, `${server.name} <- ${server.plugin}`);
     }
     if (result.servers.length === 0) {
-      writeHumanStatus(scope.context, processOutput, import_picocolors4.default.dim("(no plugin MCP servers)"));
+      writeHumanStatus(scope.context, processOutput, import_picocolors5.default.dim("(no plugin MCP servers)"));
     }
   }
   process.exitCode = 0;
@@ -12420,7 +13641,7 @@ var opencodeCommand = defineCommand({
         name: "skills",
         description: "Expose repository plugin skills to OpenCode."
       },
-      args: commonArgs2,
+      args: commonArgs3,
       async run({ args }) {
         await runObservedOpenCodeSubcommand("skills", args, async (scope) => {
           await runSkills2(args, scope);
@@ -12432,7 +13653,7 @@ var opencodeCommand = defineCommand({
         name: "mcp",
         description: "Sync repository plugin MCP servers to OpenCode."
       },
-      args: commonArgs2,
+      args: commonArgs3,
       async run({ args }) {
         await runObservedOpenCodeSubcommand("mcp", args, async (scope) => {
           await runMcp(args, scope);
@@ -12443,7 +13664,7 @@ var opencodeCommand = defineCommand({
 });
 
 // src/command/run-scripts.command.ts
-var import_picocolors6 = __toESM(require_picocolors(), 1);
+var import_picocolors7 = __toESM(require_picocolors(), 1);
 
 // ../../node_modules/.pnpm/neverthrow@8.2.0/node_modules/neverthrow/dist/index.cjs.js
 var defaultErrorConfig = {
@@ -12460,11 +13681,11 @@ var createNeverThrowError = (message, result, config = defaultErrorConfig) => {
 };
 function __awaiter(thisArg, _arguments, P5, generator) {
   function adopt(value) {
-    return value instanceof P5 ? value : new P5(function(resolve8) {
-      resolve8(value);
+    return value instanceof P5 ? value : new P5(function(resolve10) {
+      resolve10(value);
     });
   }
-  return new (P5 || (P5 = Promise))(function(resolve8, reject) {
+  return new (P5 || (P5 = Promise))(function(resolve10, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -12480,7 +13701,7 @@ function __awaiter(thisArg, _arguments, P5, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve10(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -12568,14 +13789,14 @@ function __asyncValues(o3) {
   }, i3);
   function verb(n2) {
     i3[n2] = o3[n2] && function(v3) {
-      return new Promise(function(resolve8, reject) {
-        v3 = o3[n2](v3), settle(resolve8, reject, v3.done, v3.value);
+      return new Promise(function(resolve10, reject) {
+        v3 = o3[n2](v3), settle(resolve10, reject, v3.done, v3.value);
       });
     };
   }
-  function settle(resolve8, reject, d3, v3) {
+  function settle(resolve10, reject, d3, v3) {
     Promise.resolve(v3).then(function(v4) {
-      resolve8({ value: v4, done: d3 });
+      resolve10({ value: v4, done: d3 });
     }, reject);
   }
 }
@@ -12922,10 +14143,10 @@ var resolvePackage = (catalog, id) => {
 };
 
 // src/flow/run-bundled-script.ts
-import { join as join14 } from "node:path";
+import { join as join19 } from "node:path";
 import { pathToFileURL } from "node:url";
 function runBundledScript(pkg, args, context) {
-  const entryPath = join14(pkg.rootPath, pkg.entryRelative);
+  const entryPath = join19(pkg.rootPath, pkg.entryRelative);
   const href = pathToFileURL(entryPath).href;
   const startedAt = Date.now();
   const diagnostics = context.diagnostics?.child({ scriptId: pkg.id });
@@ -13002,25 +14223,25 @@ function runBundledScript(pkg, args, context) {
 }
 
 // src/infra/bundled-script-catalog.ts
-var import_picocolors5 = __toESM(require_picocolors(), 1);
+var import_picocolors6 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
 import { existsSync as existsSync3 } from "node:fs";
-import { dirname as dirname11, join as join15 } from "node:path";
+import { dirname as dirname12, join as join20 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 function getBundledScriptsRoot() {
-  const moduleDir = dirname11(fileURLToPath2(import.meta.url));
+  const moduleDir = dirname12(fileURLToPath2(import.meta.url));
   const candidates = [
-    join15(moduleDir, "scripts"),
-    join15(moduleDir, "../scripts"),
-    join15(moduleDir, "../src/scripts")
+    join20(moduleDir, "scripts"),
+    join20(moduleDir, "../scripts"),
+    join20(moduleDir, "../src/scripts")
   ];
   return candidates.find((candidate) => existsSync3(candidate)) ?? candidates[0];
 }
 
 // src/infra/discover-scripts.ts
-import { readdir as readdir4, readFile as readFile14, stat as stat7 } from "node:fs/promises";
-import { join as join16 } from "node:path";
+import { readdir as readdir5, readFile as readFile16, stat as stat10 } from "node:fs/promises";
+import { join as join21 } from "node:path";
 
 // src/domain/script-id.ts
 var KEBAB_CASE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -13367,25 +14588,25 @@ async function scanScriptsRoot(scriptsRoot) {
   const seenIds = new Set;
   let entries;
   try {
-    entries = await readdir4(scriptsRoot, { withFileTypes: true });
+    entries = await readdir5(scriptsRoot, { withFileTypes: true });
   } catch (e3) {
     const msg = e3 instanceof Error ? e3.message : String(e3);
     throw new Error(`cannot read bundled scripts directory (${scriptsRoot}): ${msg}`);
   }
   const names = entries.filter((e3) => e3.isDirectory()).map((e3) => e3.name).sort((a4, b5) => a4.localeCompare(b5));
   for (const name of names) {
-    const dirPath = join16(scriptsRoot, name);
+    const dirPath = join21(scriptsRoot, name);
     const dirIdResult = validateScriptId(name);
     if (dirIdResult.isErr()) {
       pushWarning(warnings, dirPath, `skip non-kebab-case script folder: ${dirIdResult.error.message}`);
       continue;
     }
-    const manifestPath = join16(dirPath, MANIFEST_FILE);
+    const manifestPath = join21(dirPath, MANIFEST_FILE);
     let entryRelative;
     let entryStat;
     for (const candidate of ENTRY_FILES) {
       try {
-        const candidateStat = await stat7(join16(dirPath, candidate));
+        const candidateStat = await stat10(join21(dirPath, candidate));
         if (candidateStat.isFile()) {
           entryRelative = candidate;
           entryStat = candidateStat;
@@ -13395,7 +14616,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let manifestStat;
     try {
-      manifestStat = await stat7(manifestPath);
+      manifestStat = await stat10(manifestPath);
     } catch {
       pushWarning(warnings, dirPath, `missing ${MANIFEST_FILE} or ${ENTRY_FILES.join("/")} under script package`);
       continue;
@@ -13406,7 +14627,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let rawJson;
     try {
-      rawJson = await readFile14(manifestPath, "utf8");
+      rawJson = await readFile16(manifestPath, "utf8");
     } catch (e3) {
       const msg = e3 instanceof Error ? e3.message : String(e3);
       pushWarning(warnings, manifestPath, `cannot read manifest: ${msg}`);
@@ -13480,7 +14701,7 @@ function formatBundledScriptCatalog(catalog, heading = "AVAILABLE SCRIPTS") {
   } else {
     for (const row of rows) {
       const detail = row.description ? `${row.title} — ${row.description}` : row.title;
-      lines.push(`  ${import_picocolors5.default.cyan(row.id.padEnd(width + 2))}${detail}`);
+      lines.push(`  ${import_picocolors6.default.cyan(row.id.padEnd(width + 2))}${detail}`);
     }
   }
   if (catalog.warnings.length > 0) {
@@ -13513,7 +14734,7 @@ async function renderBundledScriptHelpAppendix() {
 var defaultDeps = {
   isInteractive: () => process.stdin.isTTY === true,
   pickScriptId: async (rows) => {
-    pe(import_picocolors6.default.cyan("▶ Script Selection"));
+    pe(import_picocolors7.default.cyan("▶ Script Selection"));
     const choice = await le2({
       message: "Choose a bundled script to run",
       options: rows.map((o3) => ({
@@ -13609,7 +14830,7 @@ async function executeBundledScript(args, deps) {
     }
   });
   for (const warning of catalog.warnings) {
-    writeWarning(processOutput, import_picocolors6.default.yellow(`${warning.path}: ${warning.message}`));
+    writeWarning(processOutput, import_picocolors7.default.yellow(`${warning.path}: ${warning.message}`));
     diagnostics.emit({
       level: "warn",
       event: "cli.script_discovery_warning",
@@ -13775,10 +14996,10 @@ var createScriptsCommand = (deps = defaultDeps) => {
 var scriptsCommand = createScriptsCommand();
 
 // src/command/self-update.command.ts
-var import_picocolors8 = __toESM(require_picocolors(), 1);
+var import_picocolors9 = __toESM(require_picocolors(), 1);
 
 // src/command/self-update-output.ts
-var import_picocolors7 = __toESM(require_picocolors(), 1);
+var import_picocolors8 = __toESM(require_picocolors(), 1);
 var defaultDeps2 = {
   output: processOutput,
   isOutputTty: () => process.stdout.isTTY === true,
@@ -13799,7 +15020,7 @@ function identity(value) {
 function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
   const human = !context.json && !context.quiet;
   const interactiveOutput = human && context.isTty && deps.isOutputTty();
-  const colors2 = import_picocolors7.default.createColors(interactiveOutput);
+  const colors2 = import_picocolors8.default.createColors(interactiveOutput);
   let activeSpinner;
   let activePhase;
   let headerWritten = false;
@@ -13967,7 +15188,7 @@ var selfUpdateArgs = {
     description: "Show bounded Git and npm command details"
   }
 };
-function getStringArg3(value) {
+function getStringArg4(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 function toUpdateCliError(error) {
@@ -13999,9 +15220,9 @@ function createUpdateCommand() {
     args: selfUpdateArgs,
     async run({ args }) {
       await runObservedCliCommand(args, { command: "update" }, async ({ context, fail }) => {
-        const repo = getStringArg3(args.repo);
-        const ref = getStringArg3(args.ref);
-        const installDir = getStringArg3(args["install-dir"]);
+        const repo = getStringArg4(args.repo);
+        const ref = getStringArg4(args.ref);
+        const installDir = getStringArg4(args["install-dir"]);
         const renderer = createSelfUpdateRenderer(context, {
           verbose: args.verbose === true
         });
@@ -14083,9 +15304,9 @@ var statusCommand = defineCommand({
     await runObservedCliCommand(args, { command: "status" }, async ({ context, fail }) => {
       try {
         const status = await getCliInstallationStatus({
-          repo: getStringArg3(args.repo),
-          ref: getStringArg3(args.ref),
-          installDir: getStringArg3(args["install-dir"])
+          repo: getStringArg4(args.repo),
+          ref: getStringArg4(args.ref),
+          installDir: getStringArg4(args["install-dir"])
         });
         if (context.json) {
           writeJsonValue(processOutput, {
@@ -14094,7 +15315,7 @@ var statusCommand = defineCommand({
             status
           });
         } else {
-          writeHumanStatus(context, processOutput, import_picocolors8.default.cyan("CthuTool status"));
+          writeHumanStatus(context, processOutput, import_picocolors9.default.cyan("CthuTool status"));
           writeHumanStatus(context, processOutput, `version:     ${status.version}`);
           writeHumanStatus(context, processOutput, `mode:        ${status.mode}`);
           writeHumanStatus(context, processOutput, `install dir: ${status.installDir}`);
@@ -14132,6 +15353,12 @@ var rootCommandRegistrations = [
   {
     name: "opencode",
     command: opencodeCommand,
+    visibility: "public",
+    bareBehavior: "help"
+  },
+  {
+    name: "obsidian",
+    command: obsidianCommand,
     visibility: "public",
     bareBehavior: "help"
   },
@@ -14202,7 +15429,7 @@ function normalizeCommandRows(value, hiddenCommands) {
     }
     const width = Math.max(...visibleRows.map((row) => row.name.length));
     for (const row of visibleRows) {
-      normalized.push(`  ${import_picocolors9.default.bold(import_picocolors9.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
+      normalized.push(`  ${import_picocolors10.default.bold(import_picocolors10.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
     }
     pendingRows = [];
   };

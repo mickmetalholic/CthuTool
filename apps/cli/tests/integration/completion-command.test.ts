@@ -143,6 +143,7 @@ describe('shell completion command', () => {
       'agent',
       'codex',
       'completion',
+      'obsidian',
       'opencode',
       'scripts',
       'status',
