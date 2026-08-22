@@ -270,6 +270,41 @@ registers them in the personal marketplace, enables them in Codex, normalizes
 plugin metadata, and synchronizes the personal plugin cache. It does not read or
 install skills and does not synchronize prompts or rules.
 
+### Obsidian Skill and state synchronization
+
+Use the interactive setup once on each machine that has the Obsidian vault:
+
+```bash
+chc obsidian agents setup
+```
+
+Setup stores the machine-specific vault and `.agents` paths under the local
+CthuTool `chc` data directory. The `.agents` directory itself is the Git
+working tree and contains the shared Skills, references, and `state/`; vault
+notes and `.obsidian` remain outside this workflow. Git credentials stay in SSH
+or the platform credential manager.
+
+Inspect the current local and cached remote state without mutating the working
+tree:
+
+```bash
+chc obsidian agents status
+chc obsidian agents status --refresh --json
+```
+
+The CthuCodex plugin invokes the combined sync operation before an explicitly
+requested managed Skill and at the end of a Codex turn:
+
+```bash
+chc obsidian agents sync --phase before
+chc obsidian agents sync --phase after
+```
+
+Normal use does not require separate commit and push commands. Changes under
+`.agents` are committed and pushed as one synchronization unit. Conflicts,
+authentication failures, and non-fast-forward updates are preserved and
+reported instead of being force-resolved.
+
 ## OpenCode Shared Assets
 
 ```bash

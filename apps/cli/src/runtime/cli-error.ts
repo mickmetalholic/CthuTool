@@ -17,6 +17,12 @@ export type CliErrorCode =
   | 'agent_start_failed'
   | 'agent_autostart_unsupported'
   | 'agent_purge_confirmation_required'
+  | 'obsidian_agents_not_configured'
+  | 'obsidian_agents_invalid_configuration'
+  | 'obsidian_agents_setup_required'
+  | 'obsidian_agents_conflict'
+  | 'obsidian_agents_busy'
+  | 'obsidian_agents_sync_failed'
   | 'update_failed';
 
 export type CliError = {

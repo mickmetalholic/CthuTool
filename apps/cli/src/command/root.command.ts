@@ -11,6 +11,7 @@ import {
   createCompletionCommand,
   createInternalCompleteCommand,
 } from './completion.command';
+import { obsidianCommand } from './obsidian.command';
 import { opencodeCommand } from './opencode.command';
 import { normalizeScriptsArgs, scriptsCommand } from './run-scripts.command';
 import {
@@ -37,6 +38,12 @@ const rootCommandRegistrations: readonly CliCommandRegistration[] = [
   {
     name: 'opencode',
     command: opencodeCommand,
+    visibility: 'public',
+    bareBehavior: 'help',
+  },
+  {
+    name: 'obsidian',
+    command: obsidianCommand,
     visibility: 'public',
     bareBehavior: 'help',
   },
