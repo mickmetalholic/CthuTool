@@ -137,7 +137,7 @@ If any new item remains invalid, unconfirmed, or has a missing or ambiguous temp
 
 Create all ready entries through one Notion multi-page creation operation when supported, using the discovered data-source ID as the common parent. For every page:
 
-- Set `template_id` to that item's platform template and provide no explicit page content.
+- Set `template_id` to that item's platform template and provide no explicit page content, when the connector accepts it. Some connector builds reject or silently drop a `template_id` argument on page creation; in that case create the page from properties alone and record that the platform template icon was not applied (see Connector notes).
 - Set `Name` to the current channel display name.
 - Set `Link` to the normalized channel URL.
 - Set `Source` to the detected platform.
@@ -147,11 +147,19 @@ If an exposed connector limit requires splitting a large batch, preserve the ori
 
 ### 9. Verify and report per channel
 
-1. Fetch every created page after template application. Verify its name, link, source, tags, and platform template icon.
+1. Fetch every created page after template application. Verify its name, link, source, tags, and platform template icon when the connector could apply the template; otherwise verify the fields and mark the icon signal as unverifiable.
 2. Retry the fetch briefly if template application is pending; never apply a second template to compensate for normal asynchronous delay.
 3. If creation is uncertain or partially fails, verify every returned or discoverable page and query the Channel Library again before retrying any uncertain item.
 4. Never roll back successful pages or blindly retry the whole batch.
 5. Report every input item as `created`, `already present`, `repeated in input`, or `failed`. Include a clickable Notion URL for every created or existing entry and identify any field or template signal that could not be verified.
+
+## Connector notes
+
+Live observations for the Notion connector; behavior is client-independent, so Codex and Hermes see the same API semantics.
+
+- **Parent identifier**: page creation under this database must use the database ID from the Channel Library URL as the parent `database_id` (the `2c52c070-…` segment). Passing the data-source ID returned by the connector (`77a6077c-…` here) instead yields `404 Could not find database`.
+- **`template_id` on create**: current connector builds only accept `parent`, `properties`, `icon`, `cover`, and `children` on page creation. A `template_id` argument can fail client-side before any request is sent. Do not fight this: create the page from properties alone and flag the missing template signal in the report.
+- **Icon via API**: updating a page icon with a `file` object is rejected, and an `external` icon is silently ignored when the integration token lacks content capability. Do not retry icon patches in a loop; report the icon as not verified and suggest setting it manually.
 
 ## Safety Rules
 
