@@ -82,25 +82,39 @@ describe('Agent release workflow contract', () => {
     }
   });
 
-  test('filters every local Agent release dependency', async () => {
+  test('tracks every local Agent release dependency in the PR scope detector', async () => {
     const workflow = await readFile(
       resolve(repositoryRoot, '.github/workflows/agent-release.yml'),
       'utf8',
     );
     for (const dependency of [
-      'apps/agent/**',
-      'apps/agent-tray/**',
-      'apps/cli/**',
-      'packages/agent-bridge-protocol/**',
-      'packages/agent-protocol/**',
-      'packages/agent-release/**',
-      'packages/agent-runtime/**',
-      'packages/browser-runtime-protocol/**',
-      'release/agent/**',
+      '.github/actions/build-agent-bundle/',
+      '.github/workflows/agent-release.yml',
+      'apps/agent/',
+      'apps/agent-tray/',
+      'apps/cli/',
+      'packages/agent-bridge-protocol/',
+      'packages/agent-protocol/',
+      'packages/agent-release/',
+      'packages/agent-runtime/',
+      'packages/browser-runtime-protocol/',
+      'release/agent/',
       'pnpm-lock.yaml',
       'Cargo.lock',
     ]) {
-      expect(workflow).toContain(`- "${dependency}"`);
+      expect(workflow).toContain(`'${dependency}'`);
     }
+  });
+
+  test('keeps PR validation identity stable across partial reruns', async () => {
+    const workflow = await readFile(
+      resolve(repositoryRoot, '.github/workflows/agent-release.yml'),
+      'utf8',
+    );
+    const expression = (value: string) => ['$', '{{ ', value, ' }}'].join('');
+    expect(workflow).toContain(
+      `0.0.0-pr.${expression('github.event.pull_request.number')}.run${expression('github.run_id')}`,
+    );
+    expect(workflow).not.toContain('github.run_attempt');
   });
 });
