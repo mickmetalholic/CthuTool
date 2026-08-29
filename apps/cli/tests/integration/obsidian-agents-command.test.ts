@@ -1,23 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, stat, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createObsidianAgentsDirectoryLink } from '../../src/domain/obsidian-agents-service';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
-const repoRoot = join(cliRoot, '../..');
-const gitEnv = {
-  ...process.env,
-  GIT_AUTHOR_NAME: 'CthuTool Test',
-  GIT_AUTHOR_EMAIL: 'cthutool@example.invalid',
-  GIT_COMMITTER_NAME: 'CthuTool Test',
-  GIT_COMMITTER_EMAIL: 'cthutool@example.invalid',
-};
 
 async function runCli(args: string[]) {
   const proc = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
     cwd: cliRoot,
-    env: gitEnv,
+    env: process.env,
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
@@ -29,32 +22,14 @@ async function runCli(args: string[]) {
   };
 }
 
-async function git(cwd: string, args: readonly string[]): Promise<string> {
-  const proc = Bun.spawn(['git', ...args], {
-    cwd,
-    env: gitEnv,
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  const code = await proc.exited;
-  if (code !== 0) throw new Error(stderr || stdout);
-  return stdout.trim();
-}
-
 describe('obsidian agents CLI', () => {
-  test('configures, refreshes, reports, and synchronizes a profile through JSON', async () => {
+  test('configures and reports the vault-local Agent topology through JSON', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
-    const remote = join(root, 'agents.git');
-    await git(root, ['init', '--bare', '--initial-branch=main', remote]);
     const vaultPath = join(root, 'vault');
+    const sourcePath = join(vaultPath, 'Agent');
     const agentsPath = join(vaultPath, '.agents');
-    await mkdir(agentsPath, { recursive: true });
-    await writeFile(join(agentsPath, 'skills.md'), 'initial\n', 'utf8');
     const dataRoot = join(root, 'chc-data');
-    const cacheRoot = join(root, 'cache');
+    await mkdir(vaultPath, { recursive: true });
 
     const setup = await runCli([
       'obsidian',
@@ -64,12 +39,8 @@ describe('obsidian agents CLI', () => {
       'obsidian-main',
       '--vault',
       vaultPath,
-      '--agents-path',
-      agentsPath,
-      '--remote',
-      remote,
-      '--branch',
-      'main',
+      '--source-path',
+      sourcePath,
       '--data-root',
       dataRoot,
       '--yes',
@@ -81,8 +52,20 @@ describe('obsidian agents CLI', () => {
     expect(JSON.parse(setup.out)).toMatchObject({
       ok: true,
       command: 'obsidian agents setup',
-      result: { status: 'configured', profile: { id: 'obsidian-main' } },
+      result: {
+        status: 'configured',
+        profile: {
+          id: 'obsidian-main',
+          vaultPath,
+          sourcePath,
+          agentsPath,
+        },
+        link: { status: 'correct' },
+      },
     });
+
+    expect((await stat(join(sourcePath, 'skills'))).isDirectory()).toBe(true);
+    expect((await stat(join(agentsPath, 'state'))).isDirectory()).toBe(true);
 
     const status = await runCli([
       'obsidian',
@@ -90,96 +73,203 @@ describe('obsidian agents CLI', () => {
       'status',
       '--data-root',
       dataRoot,
-      '--repo-root',
-      repoRoot,
-      '--cache-root',
-      cacheRoot,
-      '--refresh',
       '--json',
+      '--no-interactive',
     ]);
     expect(status.code).toBe(0);
-    const statusValue = JSON.parse(status.out);
-    expect(statusValue).toMatchObject({
+    expect(status.err).toBe('');
+    expect(JSON.parse(status.out)).toMatchObject({
       ok: true,
       command: 'obsidian agents status',
       result: {
         configured: true,
-        paths: { vaultExists: true, agentsExists: true },
-        git: { isRepository: true, branch: 'main' },
-        sync: { refreshed: true, state: 'up_to_date' },
-        hook: { source: true, installed: false, ready: false },
+        healthy: true,
+        paths: {
+          vaultExists: true,
+          sourceExists: true,
+          agentsExists: true,
+          skillsExists: true,
+          stateExists: true,
+        },
+        link: { status: 'correct' },
+        consistency: { provider: 'obsidian_sync', model: 'eventual' },
       },
     });
 
-    await mkdir(join(agentsPath, 'state'), { recursive: true });
-    await writeFile(join(agentsPath, 'state', 'state.json'), '{}\n', 'utf8');
-    const sync = await runCli([
+    const humanStatus = await runCli([
       'obsidian',
       'agents',
-      'sync',
-      '--phase',
-      'after',
+      'status',
+      '--data-root',
+      dataRoot,
+      '--no-interactive',
+    ]);
+    expect(humanStatus.code).toBe(0);
+    expect(humanStatus.out).toContain('.agents: OK correct');
+    expect(humanStatus.out).toContain('consistency: obsidian_sync (eventual)');
+
+    const repeated = await runCli([
+      'obsidian',
+      'agents',
+      'setup',
       '--data-root',
       dataRoot,
       '--json',
       '--no-interactive',
     ]);
-    expect(sync.code).toBe(0);
-    expect(JSON.parse(sync.out)).toMatchObject({
+    expect(repeated.code).toBe(0);
+    expect(JSON.parse(repeated.out)).toMatchObject({
       ok: true,
-      command: 'obsidian agents sync after',
-      result: { changed: true, committed: true, pushed: true },
+      result: { status: 'configured', transition: 'reuse' },
     });
+  });
 
-    const peer = join(root, 'peer');
-    await git(root, ['clone', remote, peer]);
+  test('status is read-only and guides setup when no profile exists', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
+    const dataRoot = join(root, 'chc-data');
+    const result = await runCli([
+      'obsidian',
+      'agents',
+      'status',
+      '--data-root',
+      dataRoot,
+      '--json',
+      '--no-interactive',
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.err).toBe('');
+    expect(JSON.parse(result.out)).toMatchObject({
+      ok: true,
+      result: { configured: false, healthy: false },
+    });
     expect(
-      (await readFile(join(peer, 'state', 'state.json'), 'utf8')).replaceAll(
-        '\r\n',
-        '\n',
-      ),
-    ).toBe('{}\n');
+      await Bun.file(join(dataRoot, 'obsidian-agents.json')).exists(),
+    ).toBe(false);
 
-    const edited = await runCli([
+    const human = await runCli([
+      'obsidian',
+      'agents',
+      'status',
+      '--data-root',
+      dataRoot,
+      '--no-interactive',
+    ]);
+    expect(human.code).toBe(0);
+    expect(human.out).toContain('configuration: missing');
+    expect(human.out).toContain('chc obsidian agents setup');
+  });
+
+  test('reports mismatched, broken, and legacy-Git topologies without mutation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
+    const vaultPath = join(root, 'vault');
+    const sourcePath = join(vaultPath, 'Agent');
+    const agentsPath = join(vaultPath, '.agents');
+    const oldTarget = join(vaultPath, 'OldAgent');
+    const dataRoot = join(root, 'chc-data');
+    await mkdir(vaultPath, { recursive: true });
+    const setup = await runCli([
       'obsidian',
       'agents',
       'setup',
-      '--profile',
-      'obsidian-main',
       '--vault',
       vaultPath,
-      '--remote',
-      remote,
       '--data-root',
       dataRoot,
       '--yes',
       '--json',
       '--no-interactive',
     ]);
-    expect(edited.code).toBe(0);
-    expect(JSON.parse(edited.out).result.status).toBe('configured');
-  });
+    expect(setup.code).toBe(0);
 
-  test('returns a stable setup-required error before any profile exists', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
-    const result = await runCli([
+    await mkdir(join(sourcePath, '.git'), { recursive: true });
+    await unlink(agentsPath);
+    await mkdir(oldTarget);
+    await createObsidianAgentsDirectoryLink(agentsPath, oldTarget);
+    const mismatched = await runCli([
       'obsidian',
       'agents',
-      'sync',
-      '--phase',
-      'before',
+      'status',
       '--data-root',
-      join(root, 'chc-data'),
+      dataRoot,
+      '--no-interactive',
+    ]);
+    expect(mismatched.code).toBe(0);
+    expect(mismatched.out).toContain('.agents: FAIL mismatched');
+    expect(mismatched.out).toContain('legacy Git metadata: present');
+
+    await rm(oldTarget, { recursive: true });
+    const before = await readdir(vaultPath);
+    const broken = await runCli([
+      'obsidian',
+      'agents',
+      'status',
+      '--data-root',
+      dataRoot,
       '--json',
       '--no-interactive',
     ]);
+    const after = await readdir(vaultPath);
+    expect(broken.code).toBe(0);
+    expect(JSON.parse(broken.out)).toMatchObject({
+      ok: true,
+      result: {
+        healthy: false,
+        link: { status: 'broken' },
+        legacy: { gitMetadata: true },
+      },
+    });
+    expect(after).toEqual(before);
+  });
+
+  test('requires a vault non-interactively and rejects sources outside it', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
+    const dataRoot = join(root, 'chc-data');
+    const missing = await runCli([
+      'obsidian',
+      'agents',
+      'setup',
+      '--data-root',
+      dataRoot,
+      '--json',
+      '--no-interactive',
+    ]);
+    expect(missing.code).not.toBe(0);
+    expect(JSON.parse(missing.out)).toMatchObject({
+      ok: false,
+      error: { code: 'missing_required_argument' },
+    });
+
+    const vaultPath = join(root, 'vault');
+    await mkdir(vaultPath, { recursive: true });
+    const invalid = await runCli([
+      'obsidian',
+      'agents',
+      'setup',
+      '--vault',
+      vaultPath,
+      '--source-path',
+      join(root, 'outside'),
+      '--data-root',
+      dataRoot,
+      '--yes',
+      '--json',
+      '--no-interactive',
+    ]);
+    expect(invalid.code).not.toBe(0);
+    expect(JSON.parse(invalid.out)).toMatchObject({
+      ok: false,
+      error: { code: 'obsidian_agents_invalid_configuration' },
+    });
+  });
+
+  test('exposes only setup and status operations', async () => {
+    const result = await runCli(['obsidian', 'agents', 'sync']);
 
     expect(result.code).not.toBe(0);
-    const value = JSON.parse(result.out);
-    expect(value).toMatchObject({
-      ok: false,
-      command: 'obsidian agents sync',
-      error: { code: 'obsidian_agents_not_configured' },
-    });
+    expect(result.out).toContain('COMMANDS');
+    expect(result.out).toContain('setup');
+    expect(result.out).toContain('status');
+    expect(result.err).toContain('Unknown command `sync`');
   });
 });

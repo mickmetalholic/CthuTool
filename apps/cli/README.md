@@ -278,32 +278,30 @@ Use the interactive setup once on each machine that has the Obsidian vault:
 chc obsidian agents setup
 ```
 
-Setup stores the machine-specific vault and `.agents` paths under the local
-CthuTool `chc` data directory. The `.agents` directory itself is the Git
-working tree and contains the shared Skills, references, and `state/`; vault
-notes and `.obsidian` remain outside this workflow. Git credentials stay in SSH
-or the platform credential manager.
+Setup creates a visible `<vault>/Agent/` source containing `skills/` and
+`state/`, then creates `<vault>/.agents` as a machine-local compatibility link
+to it. Windows uses a directory junction; macOS and Linux use a directory
+symlink. The source path is configurable during setup and the machine-specific
+choice is stored under the local CthuTool `chc` data directory.
 
-Inspect the current local and cached remote state without mutating the working
-tree:
+Obsidian Sync synchronizes the visible `Agent/` contents between machines. Run
+setup once on every machine so its local `.agents` link is created. The link is
+not shared, and no Git repository, Codex Hook, or explicit push/pull command is
+required. Obsidian Sync is eventually consistent, so wait for it to finish
+before using a Skill that was just changed on another machine.
+
+Inspect the configured paths, link target, `skills/`, `state/`, and any leftover
+legacy Git metadata without changing the vault:
 
 ```bash
 chc obsidian agents status
-chc obsidian agents status --refresh --json
+chc obsidian agents status --json
 ```
 
-The CthuCodex plugin invokes the combined sync operation before an explicitly
-requested managed Skill and at the end of a Codex turn:
-
-```bash
-chc obsidian agents sync --phase before
-chc obsidian agents sync --phase after
-```
-
-Normal use does not require separate commit and push commands. Changes under
-`.agents` are committed and pushed as one synchronization unit. Conflicts,
-authentication failures, and non-fast-forward updates are preserved and
-reported instead of being force-resolved.
+If both `Agent/` and a real `.agents/` directory already contain files, setup
+stops without merging or deleting either tree. Reconcile them manually, then
+run setup again. An existing real `.agents/` directory is otherwise adopted as
+the visible source, preserving any legacy `.git` metadata for manual cleanup.
 
 ## OpenCode Shared Assets
 

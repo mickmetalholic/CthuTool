@@ -21,8 +21,7 @@ export type CliErrorCode =
   | 'obsidian_agents_invalid_configuration'
   | 'obsidian_agents_setup_required'
   | 'obsidian_agents_conflict'
-  | 'obsidian_agents_busy'
-  | 'obsidian_agents_sync_failed'
+  | 'obsidian_agents_link_failed'
   | 'update_failed';
 
 export type CliError = {

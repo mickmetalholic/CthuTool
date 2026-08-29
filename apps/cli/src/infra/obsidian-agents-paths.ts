@@ -11,7 +11,6 @@ export type ObsidianAgentsDataPathOptions = {
 export type ObsidianAgentsDataPaths = {
   readonly dataRoot: string;
   readonly configPath: string;
-  readonly locksRoot: string;
 };
 
 export function resolveCthuToolChcDataRoot(
@@ -53,6 +52,5 @@ export function createObsidianAgentsDataPaths(
   return {
     dataRoot,
     configPath: join(dataRoot, 'obsidian-agents.json'),
-    locksRoot: join(dataRoot, 'locks'),
   };
 }

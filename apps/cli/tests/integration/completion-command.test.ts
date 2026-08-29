@@ -161,6 +161,12 @@ describe('shell completion command', () => {
       'install',
       'skills',
     ]);
+    expect(lines((await runCli(['__complete', 'obsidian', ''])).out)).toEqual([
+      'agents',
+    ]);
+    expect(
+      lines((await runCli(['__complete', 'obsidian', 'agents', ''])).out),
+    ).toEqual(['setup', 'status']);
     expect(
       lines(
         (
