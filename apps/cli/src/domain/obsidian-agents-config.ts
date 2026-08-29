@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { ObsidianAgentsDataPaths } from '../infra/obsidian-agents-paths';
 
-export const OBSIDIAN_AGENTS_CONFIG_VERSION = 1 as const;
+export const OBSIDIAN_AGENTS_CONFIG_VERSION = 2 as const;
 
 export type ObsidianAgentsProfile = {
   readonly id: string;
   readonly vaultPath: string;
+  readonly sourcePath: string;
   readonly agentsPath: string;
 };
 
@@ -20,7 +21,7 @@ export type ObsidianAgentsConfig = {
 export type ObsidianAgentsProfileInput = {
   readonly id: string;
   readonly vaultPath: string;
-  readonly agentsPath?: string;
+  readonly sourcePath?: string;
 };
 
 export class ObsidianAgentsConfigError extends Error {
@@ -48,17 +49,34 @@ export function normalizeObsidianAgentsProfile(
   }
 
   const vaultPath = normalizeAbsolutePath(input.vaultPath, 'vault path');
-  const agentsPath = normalizeAbsolutePath(
-    input.agentsPath?.trim() || join(vaultPath, '.agents'),
-    'agents path',
+  const sourcePath = normalizeAbsolutePath(
+    input.sourcePath?.trim() || join(vaultPath, 'Agent'),
+    'visible source path',
   );
-  if (vaultPath === agentsPath) {
+  const agentsPath = join(vaultPath, '.agents');
+  const sourceRelative = relative(vaultPath, sourcePath);
+  if (
+    sourceRelative.length === 0 ||
+    sourceRelative === '..' ||
+    sourceRelative.startsWith(`..${sep}`) ||
+    isAbsolute(sourceRelative)
+  ) {
     throw new ObsidianAgentsConfigError(
-      'The agents path must be different from the Obsidian vault path.',
+      'The visible source path must be a directory inside the Obsidian vault.',
+    );
+  }
+  if (sourceRelative.split(/[\\/]/u).some((part) => part.startsWith('.'))) {
+    throw new ObsidianAgentsConfigError(
+      'The visible source path must not contain hidden dot-prefixed directories.',
+    );
+  }
+  if (sourcePath === agentsPath) {
+    throw new ObsidianAgentsConfigError(
+      'The visible source path must be different from the vault .agents compatibility path.',
     );
   }
 
-  return { id, vaultPath, agentsPath };
+  return { id, vaultPath, sourcePath, agentsPath };
 }
 
 export async function readObsidianAgentsConfig(
@@ -91,11 +109,27 @@ export async function writeObsidianAgentsConfig(
   config: ObsidianAgentsConfig,
 ): Promise<void> {
   const normalized = parseObsidianAgentsConfig(config);
+  const persisted = {
+    version: normalized.version,
+    ...(normalized.defaultProfile
+      ? { defaultProfile: normalized.defaultProfile }
+      : {}),
+    profiles: Object.fromEntries(
+      Object.entries(normalized.profiles).map(([id, profile]) => [
+        id,
+        {
+          id: profile.id,
+          vaultPath: profile.vaultPath,
+          sourcePath: profile.sourcePath,
+        },
+      ]),
+    ),
+  };
   await mkdir(paths.dataRoot, { recursive: true });
   const temporaryPath = `${paths.configPath}.tmp-${randomUUID()}`;
   await writeFile(
     temporaryPath,
-    `${JSON.stringify(normalized, null, 2)}\n`,
+    `${JSON.stringify(persisted, null, 2)}\n`,
     'utf8',
   );
   await rename(temporaryPath, paths.configPath);
@@ -104,9 +138,9 @@ export async function writeObsidianAgentsConfig(
 export function parseObsidianAgentsConfig(
   value: unknown,
 ): ObsidianAgentsConfig {
-  if (!isRecord(value) || value.version !== OBSIDIAN_AGENTS_CONFIG_VERSION) {
+  if (!isRecord(value) || (value.version !== 1 && value.version !== 2)) {
     throw new ObsidianAgentsConfigError(
-      `Obsidian agents configuration must use version ${OBSIDIAN_AGENTS_CONFIG_VERSION}.`,
+      'Obsidian agents configuration must use version 1 or 2.',
     );
   }
   if (!isRecord(value.profiles)) {
@@ -120,15 +154,14 @@ export function parseObsidianAgentsConfig(
     if (!isRecord(rawProfile)) {
       throw new ObsidianAgentsConfigError(`Profile "${id}" is invalid.`);
     }
-    const profile = normalizeObsidianAgentsProfile({
+    profiles[id] = normalizeObsidianAgentsProfile({
       id,
       vaultPath: readString(rawProfile.vaultPath, `Profile "${id}" vaultPath`),
-      agentsPath: readString(
-        rawProfile.agentsPath,
-        `Profile "${id}" agentsPath`,
-      ),
+      sourcePath:
+        value.version === 2
+          ? readString(rawProfile.sourcePath, `Profile "${id}" sourcePath`)
+          : undefined,
     });
-    profiles[id] = profile;
   }
 
   const defaultProfile =
@@ -153,8 +186,7 @@ export function selectObsidianAgentsProfile(
 ): ObsidianAgentsProfile | undefined {
   const selectedId = profileId?.trim() || config.defaultProfile;
   if (selectedId) return config.profiles[selectedId];
-  const first = Object.values(config.profiles)[0];
-  return first;
+  return Object.values(config.profiles)[0];
 }
 
 export function upsertObsidianAgentsProfile(

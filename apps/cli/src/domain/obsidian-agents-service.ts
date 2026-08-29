@@ -1,5 +1,25 @@
-import { mkdir, readdir, stat } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import {
+  lstat,
+  mkdir,
+  readdir,
+  readlink,
+  realpath,
+  rename,
+  rmdir,
+  stat,
+  symlink,
+  unlink,
+} from 'node:fs/promises';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  normalize,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 import type { ObsidianAgentsDataPaths } from '../infra/obsidian-agents-paths';
 import {
   createEmptyObsidianAgentsConfig,
@@ -11,30 +31,13 @@ import {
   upsertObsidianAgentsProfile,
   writeObsidianAgentsConfig,
 } from './obsidian-agents-config';
-import {
-  cloneGitRepository,
-  commitAll,
-  configureGitRemote,
-  fetchGitRemote,
-  type GitSnapshot,
-  initializeGitRepository,
-  mergeFastForward,
-  ObsidianAgentsGitError,
-  pushGitBranch,
-  readGitSnapshot,
-  remoteBranchExists,
-} from './obsidian-agents-git';
-import {
-  ObsidianAgentsLockError,
-  withObsidianAgentsLock,
-} from './obsidian-agents-lock';
 
 export type ObsidianAgentsErrorCode =
   | 'not_configured'
   | 'invalid_configuration'
   | 'setup_required'
   | 'conflict'
-  | 'sync_failed';
+  | 'filesystem_failed';
 
 export class ObsidianAgentsServiceError extends Error {
   readonly code: ObsidianAgentsErrorCode;
@@ -51,47 +54,69 @@ export class ObsidianAgentsServiceError extends Error {
   }
 }
 
-export type ObsidianAgentsSetupInput = ObsidianAgentsProfileInput & {
-  readonly remote?: string;
-  readonly branch?: string;
+export type ObsidianAgentsSetupInput = ObsidianAgentsProfileInput;
+
+export type ObsidianAgentsPathKind =
+  | 'absent'
+  | 'directory'
+  | 'link'
+  | 'broken_link'
+  | 'file'
+  | 'other';
+
+export type ObsidianAgentsLinkType = 'junction' | 'symbolic_link';
+
+export type ObsidianAgentsPathState = {
+  readonly path: string;
+  readonly kind: ObsidianAgentsPathKind;
+  readonly empty?: boolean;
+  readonly linkType?: ObsidianAgentsLinkType;
+  readonly target?: string;
+  readonly resolvedTarget?: string;
 };
+
+export type ObsidianAgentsLinkStatus =
+  | 'correct'
+  | 'missing'
+  | 'broken'
+  | 'mismatched'
+  | 'not_link'
+  | 'unsupported';
+
+export type ObsidianAgentsTopology = {
+  readonly source: ObsidianAgentsPathState;
+  readonly agents: ObsidianAgentsPathState;
+  readonly linkStatus: ObsidianAgentsLinkStatus;
+  readonly expectedTarget: string;
+};
+
+export type ObsidianAgentsSetupTransition =
+  | 'create'
+  | 'link_existing_source'
+  | 'adopt_existing_agents'
+  | 'replace_empty_agents'
+  | 'repair_link'
+  | 'reuse';
 
 export type ObsidianAgentsSetupPlan = {
   readonly profile: ObsidianAgentsProfile;
-  readonly remote: string;
-  readonly branch: string;
-  readonly agentsExists: boolean;
-  readonly agentsEmpty: boolean;
-  readonly initialFiles: readonly string[];
-  readonly snapshot: GitSnapshot;
+  readonly platform: NodeJS.Platform;
+  readonly transition: ObsidianAgentsSetupTransition;
+  readonly topology: ObsidianAgentsTopology;
   readonly actions: readonly string[];
+  readonly requiresConfirmation: boolean;
 };
 
 export type ObsidianAgentsSetupResult = {
   readonly profile: ObsidianAgentsProfile;
-  readonly remote: string;
-  readonly branch: string;
+  readonly transition: ObsidianAgentsSetupTransition;
   readonly actions: readonly string[];
-  readonly initialCommit?: string;
-};
-
-export type ObsidianAgentsPhase = 'before' | 'after';
-
-export type ObsidianAgentsSyncResult = {
-  readonly phase: ObsidianAgentsPhase;
-  readonly changed: boolean;
-  readonly committed: boolean;
-  readonly pushed: boolean;
-  readonly branch: string;
-  readonly commit?: string;
-  readonly ahead?: number;
-  readonly behind?: number;
-};
-
-export type ObsidianAgentsHookReadiness = {
-  readonly source: boolean;
-  readonly installed: boolean;
-  readonly ready: boolean;
+  readonly link: {
+    readonly status: ObsidianAgentsLinkStatus;
+    readonly type?: ObsidianAgentsLinkType;
+    readonly target?: string;
+    readonly resolvedTarget?: string;
+  };
 };
 
 export type ObsidianAgentsStatus = {
@@ -100,100 +125,146 @@ export type ObsidianAgentsStatus = {
   readonly profile?: ObsidianAgentsProfile;
   readonly paths: {
     readonly vaultExists: boolean;
+    readonly sourceExists: boolean;
+    readonly sourceInsideVault: boolean;
     readonly agentsExists: boolean;
+    readonly skillsExists: boolean;
+    readonly stateExists: boolean;
   };
-  readonly git: {
-    readonly isRepository: boolean;
-    readonly branch?: string;
-    readonly head?: string;
-    readonly remote?: string;
-    readonly worktreeChanges: readonly string[];
-    readonly ahead?: number;
-    readonly behind?: number;
-    readonly comparisonAvailable: boolean;
+  readonly source: ObsidianAgentsPathState;
+  readonly link: {
+    readonly status: ObsidianAgentsLinkStatus;
+    readonly kind: ObsidianAgentsPathKind;
+    readonly type?: ObsidianAgentsLinkType;
+    readonly target?: string;
+    readonly resolvedTarget?: string;
+    readonly expectedTarget?: string;
   };
-  readonly sync: {
-    readonly state:
-      | 'not_configured'
-      | 'missing_path'
-      | 'not_repository'
-      | 'no_remote'
-      | 'dirty'
-      | 'ahead'
-      | 'behind'
-      | 'diverged'
-      | 'up_to_date'
-      | 'unavailable';
-    readonly refreshed: boolean;
-    readonly refreshError?: string;
+  readonly legacy: {
+    readonly gitMetadata: boolean;
   };
-  readonly hook: ObsidianAgentsHookReadiness;
+  readonly consistency: {
+    readonly provider: 'obsidian_sync';
+    readonly model: 'eventual';
+  };
+  readonly warnings: readonly string[];
 };
 
 export async function createObsidianAgentsSetupPlan(
   _paths: ObsidianAgentsDataPaths,
   input: ObsidianAgentsSetupInput,
+  options: { readonly platform?: NodeJS.Platform } = {},
 ): Promise<ObsidianAgentsSetupPlan> {
   const profile = normalizeObsidianAgentsProfile(input);
+  const platform = options.platform ?? process.platform;
   if (!(await isDirectory(profile.vaultPath))) {
     throw new ObsidianAgentsServiceError(
       'invalid_configuration',
       `Obsidian vault does not exist or is not a directory: ${profile.vaultPath}`,
     );
   }
-
-  const agentsPathExists = await pathExists(profile.agentsPath);
-  if (agentsPathExists && !(await isDirectory(profile.agentsPath))) {
+  if (!(await isCanonicalSourceInsideVault(profile))) {
     throw new ObsidianAgentsServiceError(
       'invalid_configuration',
-      `The configured agents path is not a directory: ${profile.agentsPath}`,
+      `The visible source must resolve to a directory inside the Obsidian vault: ${profile.sourcePath}`,
     );
   }
-  const agentsExists = agentsPathExists;
-  const agentsEmpty = agentsExists
-    ? (await readdir(profile.agentsPath)).length === 0
-    : true;
-  const initialFiles =
-    agentsExists && agentsEmpty === false
-      ? await listRelativeFiles(profile.agentsPath)
-      : [];
-  const snapshot = agentsExists
-    ? await readGitSnapshot(profile.agentsPath)
-    : emptyGitSnapshot();
-  const remote = input.remote?.trim() || snapshot.remote;
-  if (!remote) {
+
+  const topology = await inspectObsidianAgentsTopology(profile, { platform });
+  if (
+    topology.source.kind !== 'absent' &&
+    topology.source.kind !== 'directory'
+  ) {
     throw new ObsidianAgentsServiceError(
-      'setup_required',
-      'A private Git remote is required. Re-run setup with a remote URL or configure origin in the .agents repository.',
+      'invalid_configuration',
+      `The visible source path must be a real directory, not ${topology.source.kind}: ${profile.sourcePath}`,
     );
   }
-  const branch = snapshot.branch || input.branch?.trim() || 'main';
-  assertBranchName(branch);
+  await assertContentDirectory(profile.sourcePath, 'skills');
+  await assertContentDirectory(profile.sourcePath, 'state');
 
+  let transition: ObsidianAgentsSetupTransition;
   const actions: string[] = [];
-  const shouldClone = !snapshot.isRepository && agentsEmpty;
-  if (shouldClone) {
-    actions.push(`clone ${redactRemote(remote)} into ${profile.agentsPath}`);
-  } else if (!snapshot.isRepository) {
-    actions.push(`initialize Git in ${profile.agentsPath}`);
+  switch (topology.agents.kind) {
+    case 'absent':
+      transition =
+        topology.source.kind === 'absent' ? 'create' : 'link_existing_source';
+      actions.push(
+        topology.source.kind === 'absent'
+          ? `create visible source ${profile.sourcePath}`
+          : `preserve visible source ${profile.sourcePath}`,
+        `ensure ${join(profile.sourcePath, 'skills')} and ${join(profile.sourcePath, 'state')}`,
+        `create ${getObsidianAgentsLinkType(platform)} ${profile.agentsPath} -> ${profile.sourcePath}`,
+      );
+      break;
+    case 'directory':
+      if (topology.source.kind === 'absent' || topology.source.empty === true) {
+        transition = 'adopt_existing_agents';
+        actions.push(
+          `move existing directory ${profile.agentsPath} to ${profile.sourcePath}`,
+          `ensure ${join(profile.sourcePath, 'skills')} and ${join(profile.sourcePath, 'state')}`,
+          `create ${getObsidianAgentsLinkType(platform)} ${profile.agentsPath} -> ${profile.sourcePath}`,
+        );
+      } else if (topology.agents.empty === true) {
+        transition = 'replace_empty_agents';
+        actions.push(
+          `remove empty directory ${profile.agentsPath}`,
+          `preserve visible source ${profile.sourcePath}`,
+          `create ${getObsidianAgentsLinkType(platform)} ${profile.agentsPath} -> ${profile.sourcePath}`,
+        );
+      } else {
+        throw new ObsidianAgentsServiceError(
+          'conflict',
+          `Both agents directories contain data. Reconcile them manually before setup: ${profile.agentsPath} and ${profile.sourcePath}`,
+        );
+      }
+      break;
+    case 'link':
+      if (topology.linkStatus === 'correct') {
+        transition = 'reuse';
+        actions.push(`validate existing link ${profile.agentsPath}`);
+        if (!(await isDirectory(join(profile.sourcePath, 'skills')))) {
+          actions.push(`create ${join(profile.sourcePath, 'skills')}`);
+        }
+        if (!(await isDirectory(join(profile.sourcePath, 'state')))) {
+          actions.push(`create ${join(profile.sourcePath, 'state')}`);
+        }
+      } else {
+        transition = 'repair_link';
+        actions.push(
+          `replace only link ${profile.agentsPath} (current target: ${topology.agents.resolvedTarget ?? topology.agents.target ?? 'unavailable'})`,
+          `preserve the old link target`,
+          `ensure ${profile.sourcePath} with skills/ and state/`,
+          `create ${getObsidianAgentsLinkType(platform)} ${profile.agentsPath} -> ${profile.sourcePath}`,
+        );
+      }
+      break;
+    case 'broken_link':
+      transition = 'repair_link';
+      actions.push(
+        `replace broken link ${profile.agentsPath}`,
+        `ensure ${profile.sourcePath} with skills/ and state/`,
+        `create ${getObsidianAgentsLinkType(platform)} ${profile.agentsPath} -> ${profile.sourcePath}`,
+      );
+      break;
+    case 'file':
+    case 'other':
+      throw new ObsidianAgentsServiceError(
+        'invalid_configuration',
+        `The compatibility path is an unsupported ${topology.agents.kind}: ${profile.agentsPath}`,
+      );
   }
-  if (snapshot.isRepository && snapshot.remote !== remote) {
-    actions.push(`set origin to ${redactRemote(remote)}`);
-  }
-  if (!snapshot.hasHead && !shouldClone && !agentsEmpty) {
-    actions.push('create the initial commit and push it to origin');
-  }
-  if (actions.length === 0) actions.push('validate the existing repository');
 
+  const requiresConfirmation =
+    transition !== 'reuse' ||
+    actions.some((action) => action.startsWith('create '));
   return {
     profile,
-    remote,
-    branch,
-    agentsExists,
-    agentsEmpty,
-    initialFiles,
-    snapshot,
+    platform,
+    transition,
+    topology,
     actions,
+    requiresConfirmation,
   };
 }
 
@@ -201,48 +272,103 @@ export async function applyObsidianAgentsSetup(
   paths: ObsidianAgentsDataPaths,
   plan: ObsidianAgentsSetupPlan,
 ): Promise<ObsidianAgentsSetupResult> {
-  let initialCommit: string | undefined;
-  const shouldClone = !plan.snapshot.isRepository && plan.agentsEmpty;
-  if (shouldClone) {
-    await mkdir(dirname(plan.profile.agentsPath), { recursive: true });
-    await cloneGitRepository(
-      plan.remote,
-      plan.profile.agentsPath,
-      dirname(plan.profile.agentsPath),
+  const current = await createObsidianAgentsSetupPlan(paths, plan.profile, {
+    platform: plan.platform,
+  });
+  if (
+    current.transition !== plan.transition ||
+    !sameSetupTopology(current.topology, plan.topology)
+  ) {
+    throw new ObsidianAgentsServiceError(
+      'conflict',
+      `Obsidian agents topology changed after preview. Run setup again before modifying ${plan.profile.vaultPath}.`,
     );
-  } else {
-    await mkdir(plan.profile.agentsPath, { recursive: true });
-    if (!plan.snapshot.isRepository) {
-      await initializeGitRepository(plan.profile.agentsPath, plan.branch);
-    }
-    await configureGitRemote(plan.profile.agentsPath, plan.remote);
-
-    if (!plan.snapshot.hasHead && !plan.agentsEmpty) {
-      const commit = await commitAll(
-        plan.profile.agentsPath,
-        'chc: initialize Obsidian agents',
-      );
-      if (commit.commit) {
-        initialCommit = commit.commit;
-        await pushGitBranch(plan.profile.agentsPath, plan.branch);
-      }
-    }
   }
 
-  const existing =
-    (await readObsidianAgentsConfig(paths)) ??
-    createEmptyObsidianAgentsConfig();
-  const next = upsertObsidianAgentsProfile(existing, plan.profile);
-  await writeObsidianAgentsConfig(paths, next);
+  try {
+    switch (plan.transition) {
+      case 'create':
+      case 'link_existing_source':
+        await ensureSourceDirectories(plan.profile.sourcePath);
+        await createObsidianAgentsDirectoryLink(
+          plan.profile.agentsPath,
+          plan.profile.sourcePath,
+          { platform: plan.platform },
+        );
+        break;
+      case 'adopt_existing_agents':
+        await mkdir(dirname(plan.profile.sourcePath), { recursive: true });
+        if (current.topology.source.kind === 'directory') {
+          await rmdir(plan.profile.sourcePath);
+        }
+        await rename(plan.profile.agentsPath, plan.profile.sourcePath);
+        await ensureSourceDirectories(plan.profile.sourcePath);
+        await createObsidianAgentsDirectoryLink(
+          plan.profile.agentsPath,
+          plan.profile.sourcePath,
+          { platform: plan.platform },
+        );
+        break;
+      case 'replace_empty_agents':
+        await rmdir(plan.profile.agentsPath);
+        await ensureSourceDirectories(plan.profile.sourcePath);
+        await createObsidianAgentsDirectoryLink(
+          plan.profile.agentsPath,
+          plan.profile.sourcePath,
+          { platform: plan.platform },
+        );
+        break;
+      case 'repair_link':
+        await ensureSourceDirectories(plan.profile.sourcePath);
+        await unlink(plan.profile.agentsPath);
+        await createObsidianAgentsDirectoryLink(
+          plan.profile.agentsPath,
+          plan.profile.sourcePath,
+          { platform: plan.platform },
+        );
+        break;
+      case 'reuse':
+        await ensureSourceDirectories(plan.profile.sourcePath);
+        break;
+    }
 
-  const snapshot = await readGitSnapshot(plan.profile.agentsPath);
-  return {
-    profile: plan.profile,
-    remote: snapshot.remote ?? plan.remote,
-    branch: snapshot.branch ?? plan.branch,
-    actions: plan.actions,
-    initialCommit,
-  };
+    const topology = await inspectObsidianAgentsTopology(plan.profile, {
+      platform: plan.platform,
+    });
+    if (topology.linkStatus !== 'correct') {
+      throw new Error(
+        `Created compatibility link did not resolve to ${plan.profile.sourcePath}.`,
+      );
+    }
+
+    const existing =
+      (await readObsidianAgentsConfig(paths)) ??
+      createEmptyObsidianAgentsConfig();
+    await writeObsidianAgentsConfig(
+      paths,
+      upsertObsidianAgentsProfile(existing, plan.profile),
+    );
+
+    return {
+      profile: plan.profile,
+      transition: plan.transition,
+      actions: plan.actions,
+      link: {
+        status: topology.linkStatus,
+        type: topology.agents.linkType,
+        target: topology.agents.target,
+        resolvedTarget: topology.agents.resolvedTarget,
+      },
+    };
+  } catch (error) {
+    if (error instanceof ObsidianAgentsServiceError) throw error;
+    const state = await describeCurrentState(plan.profile, plan.platform);
+    throw new ObsidianAgentsServiceError(
+      'filesystem_failed',
+      `Unable to apply Obsidian agents topology. ${state}`,
+      { cause: error },
+    );
+  }
 }
 
 export async function getObsidianAgentsProfile(
@@ -266,353 +392,364 @@ export async function getObsidianAgentsProfile(
   return profile;
 }
 
-export async function synchronizeObsidianAgents(options: {
-  readonly paths: ObsidianAgentsDataPaths;
-  readonly profile: ObsidianAgentsProfile;
-  readonly phase: ObsidianAgentsPhase;
-}): Promise<ObsidianAgentsSyncResult> {
-  return withObsidianAgentsLock(options.paths, options.profile.id, async () => {
-    const initial = await readGitSnapshot(options.profile.agentsPath);
-    assertSyncRepository(initial, options.profile);
-
-    if (options.phase === 'after') {
-      return finalizeAfterPhase(options.profile, initial);
-    }
-    return prepareBeforePhase(options.profile, initial);
-  }).catch((error) => {
-    if (error instanceof ObsidianAgentsLockError) throw error;
-    if (error instanceof ObsidianAgentsServiceError) throw error;
-    throw new ObsidianAgentsServiceError(
-      classifySyncError(error),
-      `Obsidian agents before/after synchronization failed for ${options.profile.agentsPath}: ${safeErrorMessage(error)}`,
-      { cause: error },
-    );
-  });
-}
-
 export async function inspectObsidianAgentsStatus(options: {
   readonly paths: ObsidianAgentsDataPaths;
   readonly profileId?: string;
-  readonly refresh?: boolean;
-  readonly hook?: ObsidianAgentsHookReadiness;
+  readonly platform?: NodeJS.Platform;
 }): Promise<ObsidianAgentsStatus> {
-  const hook = options.hook ?? {
-    source: false,
-    installed: false,
-    ready: false,
-  };
+  const platform = options.platform ?? process.platform;
   const config = await readObsidianAgentsConfig(options.paths);
-  if (!config) {
-    return {
-      configured: false,
-      healthy: false,
-      paths: { vaultExists: false, agentsExists: false },
-      git: {
-        isRepository: false,
-        worktreeChanges: [],
-        comparisonAvailable: false,
-      },
-      sync: { state: 'not_configured', refreshed: false },
-      hook,
-    };
-  }
+  const profile = config
+    ? selectObsidianAgentsProfile(config, options.profileId)
+    : undefined;
+  if (!profile) return createMissingStatus();
 
-  const profile = selectObsidianAgentsProfile(config, options.profileId);
-  if (!profile) {
-    return {
-      configured: false,
-      healthy: false,
-      paths: { vaultExists: false, agentsExists: false },
-      git: {
-        isRepository: false,
-        worktreeChanges: [],
-        comparisonAvailable: false,
-      },
-      sync: { state: 'not_configured', refreshed: false },
-      hook,
-    };
-  }
-
+  const topology = await inspectObsidianAgentsTopology(profile, { platform });
   const vaultExists = await isDirectory(profile.vaultPath);
-  const agentsExists = await isDirectory(profile.agentsPath);
-  if (!agentsExists) {
-    return {
-      configured: true,
-      healthy: false,
-      profile,
-      paths: { vaultExists, agentsExists },
-      git: {
-        isRepository: false,
-        worktreeChanges: [],
-        comparisonAvailable: false,
-      },
-      sync: { state: 'missing_path', refreshed: false },
-      hook,
-    };
+  const sourceInsideVault =
+    vaultExists && (await isCanonicalSourceInsideVault(profile));
+  const sourceExists = topology.source.kind === 'directory';
+  const skillsExists = sourceExists
+    ? await isDirectory(join(profile.sourcePath, 'skills'))
+    : false;
+  const stateExists = sourceExists
+    ? await isDirectory(join(profile.sourcePath, 'state'))
+    : false;
+  const gitMetadata = sourceExists
+    ? await pathExists(join(profile.sourcePath, '.git'))
+    : false;
+  const warnings: string[] = [];
+  if (!vaultExists) warnings.push('The configured Obsidian vault is missing.');
+  if (!sourceExists) warnings.push('The visible Agent source is missing.');
+  if (vaultExists && !sourceInsideVault) {
+    warnings.push(
+      'The visible Agent source resolves outside the configured Obsidian vault.',
+    );
   }
-
-  let refreshed = false;
-  let refreshError: string | undefined;
-  if (options.refresh) {
-    try {
-      await withObsidianAgentsLock(options.paths, profile.id, async () => {
-        const snapshot = await readGitSnapshot(profile.agentsPath);
-        if (snapshot.isRepository && snapshot.remote) {
-          await fetchGitRemote(profile.agentsPath);
-        }
-      });
-      refreshed = true;
-    } catch (error) {
-      refreshError = safeErrorMessage(error);
-    }
+  if (topology.linkStatus !== 'correct') {
+    warnings.push(
+      `The .agents compatibility link is ${topology.linkStatus}; run chc obsidian agents setup to repair it.`,
+    );
   }
+  if (!skillsExists) warnings.push('The visible source is missing skills/.');
+  if (!stateExists) warnings.push('The visible source is missing state/.');
+  if (gitMetadata) {
+    warnings.push(
+      'Legacy .git metadata is preserved in the visible source and is not managed by this feature.',
+    );
+  }
+  warnings.push(
+    'Obsidian Sync is eventually consistent; avoid concurrent writes to one non-Markdown state file.',
+  );
 
-  const snapshot = await readGitSnapshot(profile.agentsPath);
-  const syncState = resolveSyncState(snapshot);
-  const healthy =
-    vaultExists &&
-    agentsExists &&
-    snapshot.isRepository &&
-    snapshot.remote !== undefined &&
-    snapshot.worktree.length === 0 &&
-    syncState === 'up_to_date' &&
-    hook.ready;
   return {
     configured: true,
-    healthy,
+    healthy:
+      vaultExists &&
+      sourceExists &&
+      sourceInsideVault &&
+      topology.linkStatus === 'correct' &&
+      skillsExists &&
+      stateExists,
     profile,
-    paths: { vaultExists, agentsExists },
-    git: {
-      isRepository: snapshot.isRepository,
-      branch: snapshot.branch,
-      head: snapshot.head,
-      remote: redactRemote(snapshot.remote),
-      worktreeChanges: snapshot.worktree,
-      ahead: snapshot.ahead,
-      behind: snapshot.behind,
-      comparisonAvailable: snapshot.comparisonAvailable,
+    paths: {
+      vaultExists,
+      sourceExists,
+      sourceInsideVault,
+      agentsExists: topology.agents.kind !== 'absent',
+      skillsExists,
+      stateExists,
     },
-    sync: {
-      state: refreshError ? 'unavailable' : syncState,
-      refreshed,
-      ...(refreshError ? { refreshError } : {}),
+    source: topology.source,
+    link: {
+      status: topology.linkStatus,
+      kind: topology.agents.kind,
+      type: topology.agents.linkType,
+      target: topology.agents.target,
+      resolvedTarget: topology.agents.resolvedTarget,
+      expectedTarget: topology.expectedTarget,
     },
-    hook,
+    legacy: { gitMetadata },
+    consistency: { provider: 'obsidian_sync', model: 'eventual' },
+    warnings,
   };
 }
 
-export async function inspectObsidianAgentsHookReadiness(options: {
-  readonly sourcePath: string;
-  readonly cacheRoot: string;
-}): Promise<ObsidianAgentsHookReadiness> {
-  const source = await pathExists(options.sourcePath);
-  let installed = false;
-  const pluginCacheRoot = join(options.cacheRoot, 'cthu-codex');
-  if (await isDirectory(pluginCacheRoot)) {
-    const versions = await readdir(pluginCacheRoot, { withFileTypes: true });
-    installed = await hasCachedHook(pluginCacheRoot, versions);
+export async function inspectObsidianAgentsTopology(
+  profile: ObsidianAgentsProfile,
+  options: { readonly platform?: NodeJS.Platform } = {},
+): Promise<ObsidianAgentsTopology> {
+  const platform = options.platform ?? process.platform;
+  const [source, agents] = await Promise.all([
+    inspectObsidianAgentsPath(profile.sourcePath, platform),
+    inspectObsidianAgentsPath(profile.agentsPath, platform),
+  ]);
+  let linkStatus: ObsidianAgentsLinkStatus;
+  if (agents.kind === 'absent') {
+    linkStatus = 'missing';
+  } else if (agents.kind === 'broken_link') {
+    linkStatus = 'broken';
+  } else if (agents.kind === 'link') {
+    linkStatus =
+      source.kind === 'directory' &&
+      agents.resolvedTarget !== undefined &&
+      (await sameCanonicalPath(
+        agents.resolvedTarget,
+        profile.sourcePath,
+        platform,
+      ))
+        ? 'correct'
+        : 'mismatched';
+  } else if (agents.kind === 'directory') {
+    linkStatus = 'not_link';
+  } else {
+    linkStatus = 'unsupported';
   }
-  return { source, installed, ready: source && installed };
+  return {
+    source,
+    agents,
+    linkStatus,
+    expectedTarget: profile.sourcePath,
+  };
 }
 
-async function prepareBeforePhase(
-  profile: ObsidianAgentsProfile,
-  initial: GitSnapshot,
-): Promise<ObsidianAgentsSyncResult> {
-  let changed = false;
-  let committed = false;
-  let commit: string | undefined;
-  if (initial.worktree.length > 0) {
-    const result = await commitAll(
-      profile.agentsPath,
-      'chc: sync Obsidian agents',
-    );
-    changed = result.changed;
-    committed = result.changed;
-    commit = result.commit;
+export async function inspectObsidianAgentsPath(
+  path: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<ObsidianAgentsPathState> {
+  let details: Awaited<ReturnType<typeof lstat>>;
+  try {
+    details = await lstat(path);
+  } catch (error) {
+    if (isMissingFileError(error)) return { path, kind: 'absent' };
+    throw error;
   }
 
-  await fetchGitRemote(profile.agentsPath);
-  let snapshot = await readGitSnapshot(profile.agentsPath);
-  assertSyncRepository(snapshot, profile);
-  const branch = snapshot.branch;
-  if (await remoteBranchExists(profile.agentsPath, branch)) {
-    const ahead = snapshot.ahead ?? 0;
-    const behind = snapshot.behind ?? 0;
-    if (ahead > 0 && behind > 0) {
-      throw new ObsidianAgentsServiceError(
-        'conflict',
-        `Obsidian agents history diverged: local is ahead ${ahead} and behind ${behind}. Reconcile ${profile.agentsPath} manually before invoking a Skill.`,
-      );
-    }
-    if (behind > 0) {
-      await mergeFastForward(profile.agentsPath, branch);
-      snapshot = await readGitSnapshot(profile.agentsPath);
-    }
-    if (ahead > 0) {
-      await pushGitBranch(profile.agentsPath, branch);
+  if (details.isSymbolicLink()) {
+    const rawTarget = await readlink(path);
+    const target = resolve(dirname(path), rawTarget);
+    try {
+      const resolvedTarget = await realpath(path);
       return {
-        phase: 'before',
-        changed,
-        committed,
-        pushed: true,
-        branch,
-        commit,
-        ahead: 0,
-        behind: 0,
+        path,
+        kind: 'link',
+        linkType: getObsidianAgentsLinkType(platform),
+        target,
+        resolvedTarget,
       };
+    } catch (error) {
+      if (isMissingFileError(error)) {
+        return {
+          path,
+          kind: 'broken_link',
+          linkType: getObsidianAgentsLinkType(platform),
+          target,
+        };
+      }
+      throw error;
     }
-  } else if (snapshot.hasHead) {
-    await pushGitBranch(profile.agentsPath, branch);
+  }
+  if (details.isDirectory()) {
     return {
-      phase: 'before',
-      changed,
-      committed,
-      pushed: true,
-      branch,
-      commit,
+      path,
+      kind: 'directory',
+      empty: (await readdir(path)).length === 0,
     };
   }
-
-  return {
-    phase: 'before',
-    changed,
-    committed,
-    pushed: false,
-    branch,
-    commit,
-    ahead: snapshot.ahead,
-    behind: snapshot.behind,
-  };
+  if (details.isFile()) return { path, kind: 'file' };
+  return { path, kind: 'other' };
 }
 
-async function finalizeAfterPhase(
-  profile: ObsidianAgentsProfile,
-  initial: GitSnapshot,
-): Promise<ObsidianAgentsSyncResult> {
-  assertSyncRepository(initial, profile);
-  const branch = initial.branch;
-  const result = await commitAll(
-    profile.agentsPath,
-    'chc: sync Obsidian agents',
-  );
-  if (!result.changed) {
-    return {
-      phase: 'after',
-      changed: false,
-      committed: false,
-      pushed: false,
-      branch,
-      ahead: initial.ahead,
-      behind: initial.behind,
-    };
-  }
-  await pushGitBranch(profile.agentsPath, branch);
-  return {
-    phase: 'after',
-    changed: true,
-    committed: true,
-    pushed: true,
-    branch,
-    commit: result.commit,
-  };
+export function getObsidianAgentsLinkType(
+  platform: NodeJS.Platform = process.platform,
+): ObsidianAgentsLinkType {
+  return platform === 'win32' ? 'junction' : 'symbolic_link';
 }
 
-function assertSyncRepository(
-  snapshot: GitSnapshot,
-  profile: ObsidianAgentsProfile,
-): asserts snapshot is GitSnapshot & {
-  readonly isRepository: true;
-  readonly branch: string;
-  readonly remote: string;
-} {
-  if (!snapshot.isRepository || !snapshot.branch || !snapshot.remote) {
+export async function createObsidianAgentsDirectoryLink(
+  linkPath: string,
+  sourcePath: string,
+  options: { readonly platform?: NodeJS.Platform } = {},
+): Promise<void> {
+  const platform = options.platform ?? process.platform;
+  if (!(await isDirectory(sourcePath))) {
     throw new ObsidianAgentsServiceError(
-      'setup_required',
-      `The configured agents path is not a complete Git repository: ${profile.agentsPath}. Run "chc obsidian agents setup" first.`,
+      'invalid_configuration',
+      `Cannot create the .agents link because its source is not a directory: ${sourcePath}`,
+    );
+  }
+  await symlink(
+    sourcePath,
+    linkPath,
+    platform === 'win32' ? 'junction' : 'dir',
+  );
+  const state = await inspectObsidianAgentsPath(linkPath, platform);
+  if (
+    state.kind !== 'link' ||
+    !state.resolvedTarget ||
+    !(await sameCanonicalPath(state.resolvedTarget, sourcePath, platform))
+  ) {
+    throw new ObsidianAgentsServiceError(
+      'filesystem_failed',
+      `The .agents link does not resolve to its configured source: ${linkPath}`,
     );
   }
 }
 
-function resolveSyncState(
-  snapshot: GitSnapshot,
-): ObsidianAgentsStatus['sync']['state'] {
-  if (!snapshot.isRepository) return 'not_repository';
-  if (!snapshot.remote) return 'no_remote';
-  if (snapshot.worktree.length > 0) return 'dirty';
-  if (!snapshot.comparisonAvailable) return 'unavailable';
-  if ((snapshot.ahead ?? 0) > 0 && (snapshot.behind ?? 0) > 0) {
-    return 'diverged';
-  }
-  if ((snapshot.ahead ?? 0) > 0) return 'ahead';
-  if ((snapshot.behind ?? 0) > 0) return 'behind';
-  return 'up_to_date';
+export async function sameCanonicalPath(
+  left: string,
+  right: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<boolean> {
+  const [leftCanonical, rightCanonical] = await Promise.all([
+    canonicalPath(left),
+    canonicalPath(right),
+  ]);
+  return (
+    normalizeComparablePath(leftCanonical, platform) ===
+    normalizeComparablePath(rightCanonical, platform)
+  );
 }
 
-function classifySyncError(error: unknown): ObsidianAgentsErrorCode {
-  if (error instanceof ObsidianAgentsGitError) {
-    if (error.kind === 'conflict' || error.kind === 'non_fast_forward') {
-      return 'conflict';
-    }
-  }
-  return 'sync_failed';
-}
-
-function safeErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function redactRemote(value: string | undefined): string | undefined {
-  return value?.replace(/:\/\/[^/\s]+@/gu, '://***@');
-}
-
-function emptyGitSnapshot(): GitSnapshot {
+function createMissingStatus(): ObsidianAgentsStatus {
+  const source: ObsidianAgentsPathState = { path: '', kind: 'absent' };
   return {
-    isRepository: false,
-    hasHead: false,
-    worktree: [],
-    comparisonAvailable: false,
+    configured: false,
+    healthy: false,
+    paths: {
+      vaultExists: false,
+      sourceExists: false,
+      sourceInsideVault: false,
+      agentsExists: false,
+      skillsExists: false,
+      stateExists: false,
+    },
+    source,
+    link: { status: 'missing', kind: 'absent' },
+    legacy: { gitMetadata: false },
+    consistency: { provider: 'obsidian_sync', model: 'eventual' },
+    warnings: [
+      'Obsidian agents is not configured. Run chc obsidian agents setup.',
+    ],
   };
 }
 
-async function hasCachedHook(
-  root: string,
-  entries: readonly import('node:fs').Dirent[],
-): Promise<boolean> {
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (await pathExists(join(root, entry.name, 'hooks', 'hooks.json'))) {
-      return true;
-    }
-  }
-  return false;
+async function ensureSourceDirectories(sourcePath: string): Promise<void> {
+  await mkdir(join(sourcePath, 'skills'), { recursive: true });
+  await mkdir(join(sourcePath, 'state'), { recursive: true });
 }
 
-async function listRelativeFiles(root: string): Promise<string[]> {
-  const files: string[] = [];
-  await collectRelativeFiles(root, root, files);
-  return files.sort((left, right) => left.localeCompare(right));
-}
-
-async function collectRelativeFiles(
-  root: string,
-  current: string,
-  files: string[],
+async function assertContentDirectory(
+  sourcePath: string,
+  name: 'skills' | 'state',
 ): Promise<void> {
-  for (const entry of await readdir(current, { withFileTypes: true })) {
-    if (entry.name === '.git' && current === root) continue;
-    const absolute = join(current, entry.name);
-    if (entry.isDirectory()) {
-      await collectRelativeFiles(root, absolute, files);
-      continue;
-    }
-    files.push(absolute.slice(root.length + 1));
+  const state = await inspectObsidianAgentsPath(join(sourcePath, name));
+  if (state.kind !== 'absent' && state.kind !== 'directory') {
+    throw new ObsidianAgentsServiceError(
+      'invalid_configuration',
+      `The visible source ${name}/ path is not a real directory: ${state.path}`,
+    );
   }
+}
+
+async function describeCurrentState(
+  profile: ObsidianAgentsProfile,
+  platform: NodeJS.Platform,
+): Promise<string> {
+  try {
+    const topology = await inspectObsidianAgentsTopology(profile, { platform });
+    return `Current state: source=${topology.source.kind} at ${profile.sourcePath}; .agents=${topology.agents.kind} at ${profile.agentsPath}.`;
+  } catch {
+    return `Inspect ${profile.sourcePath} and ${profile.agentsPath} before retrying setup.`;
+  }
+}
+
+async function canonicalPath(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch (error) {
+    if (isMissingFileError(error)) return resolve(path);
+    throw error;
+  }
+}
+
+async function canonicalDestinationPath(path: string): Promise<string> {
+  const missingSegments: string[] = [];
+  let current = resolve(path);
+  while (true) {
+    try {
+      const existing = await realpath(current);
+      return resolve(existing, ...missingSegments.reverse());
+    } catch (error) {
+      if (!isMissingFileError(error)) throw error;
+      const parent = dirname(current);
+      if (parent === current) return resolve(path);
+      missingSegments.push(basename(current));
+      current = parent;
+    }
+  }
+}
+
+async function isCanonicalSourceInsideVault(
+  profile: ObsidianAgentsProfile,
+): Promise<boolean> {
+  const [vaultCanonical, sourceCanonical] = await Promise.all([
+    canonicalPath(profile.vaultPath),
+    canonicalDestinationPath(profile.sourcePath),
+  ]);
+  const sourceRelative = relative(vaultCanonical, sourceCanonical);
+  return (
+    sourceRelative.length > 0 &&
+    sourceRelative !== '..' &&
+    !sourceRelative.startsWith(`..${sep}`) &&
+    !isAbsolute(sourceRelative)
+  );
+}
+
+function sameSetupTopology(
+  left: ObsidianAgentsTopology,
+  right: ObsidianAgentsTopology,
+): boolean {
+  return (
+    left.linkStatus === right.linkStatus &&
+    samePathState(left.source, right.source) &&
+    samePathState(left.agents, right.agents)
+  );
+}
+
+function samePathState(
+  left: ObsidianAgentsPathState,
+  right: ObsidianAgentsPathState,
+): boolean {
+  return (
+    left.path === right.path &&
+    left.kind === right.kind &&
+    left.empty === right.empty &&
+    left.linkType === right.linkType &&
+    left.target === right.target &&
+    left.resolvedTarget === right.resolvedTarget
+  );
+}
+
+function normalizeComparablePath(
+  value: string,
+  platform: NodeJS.Platform,
+): string {
+  let comparable = value;
+  if (platform === 'win32') {
+    if (comparable.startsWith('\\\\?\\UNC\\')) {
+      comparable = `\\\\${comparable.slice(8)}`;
+    } else if (comparable.startsWith('\\\\?\\')) {
+      comparable = comparable.slice(4);
+    }
+  }
+  comparable = normalize(comparable).replace(/[\\/]+$/u, '');
+  return platform === 'win32' ? comparable.toLowerCase() : comparable;
 }
 
 async function pathExists(path: string): Promise<boolean> {
   try {
-    await stat(path);
+    await lstat(path);
     return true;
   } catch (error) {
     if (isMissingFileError(error)) return false;
@@ -635,19 +772,4 @@ function isMissingFileError(error: unknown): boolean {
     'code' in error &&
     (error as NodeJS.ErrnoException).code === 'ENOENT'
   );
-}
-
-function assertBranchName(branch: string): void {
-  if (
-    !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(branch) ||
-    branch.includes('..') ||
-    branch.includes('//') ||
-    branch.endsWith('/') ||
-    branch.endsWith('.')
-  ) {
-    throw new ObsidianAgentsServiceError(
-      'invalid_configuration',
-      `Invalid Git branch name: ${branch}`,
-    );
-  }
 }
