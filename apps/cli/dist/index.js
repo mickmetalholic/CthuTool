@@ -5025,7 +5025,7 @@ var require_smoke = __commonJS((exports) => {
       if (await (0, promises_1.realpath)(record.executablePath) !== nodePath || await (0, promises_1.realpath)(record.entryPoint) !== agentPath || record.pid !== child.pid) {
         throw new Error("Agent smoke process did not use the bundled entry points");
       }
-      const healthResult = requireSuccess(await requestControl(record, "health"), "health");
+      const healthResult = await waitForControl(record, child, timeoutMs, stderr);
       if (healthResult.applicationVersion !== layout.releaseVersion || typeof healthResult.bridge?.endpoint !== "string") {
         throw new Error("Agent health did not report the release version and bridge");
       }
@@ -5128,6 +5128,29 @@ ${detail}` : ""}`, { cause: error });
         rejectPromise(error);
       });
     });
+  }
+  async function waitForControl(record, child, timeoutMs, stderr) {
+    const deadline = Date.now() + timeoutMs;
+    let lastError;
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null) {
+        throw new Error(`Agent exited before control readiness with code ${child.exitCode}: ${Buffer.concat(stderr).toString("utf8")}`);
+      }
+      try {
+        return requireSuccess(await requestControl(record, "health", undefined, Math.max(1, Math.min(500, deadline - Date.now()))), "health");
+      } catch (error) {
+        if (!isControlNotReadyError(error)) {
+          throw error;
+        }
+        lastError = error;
+        await delay(50);
+      }
+    }
+    throw new Error(`Timed out waiting for Agent control readiness${lastError instanceof Error ? `: ${lastError.message}` : ""}`);
+  }
+  function isControlNotReadyError(error) {
+    const code = error?.code;
+    return code === "ENOENT" || code === "ECONNREFUSED";
   }
   function requireSuccess(value, operation) {
     if (!value || typeof value !== "object" || value.ok !== true || !("result" in value)) {

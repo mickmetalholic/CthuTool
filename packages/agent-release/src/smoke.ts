@@ -89,10 +89,12 @@ export async function smokeExtractedAgentBundle(input: {
         'Agent smoke process did not use the bundled entry points',
       );
     }
-    const healthResult = requireSuccess(
-      await requestControl(record, 'health'),
-      'health',
-    ) as {
+    const healthResult = (await waitForControl(
+      record,
+      child,
+      timeoutMs,
+      stderr,
+    )) as {
       readonly applicationVersion?: string;
       readonly bridge?: { readonly endpoint?: string };
     };
@@ -269,6 +271,50 @@ async function requestControl(
       rejectPromise(error);
     });
   });
+}
+
+async function waitForControl(
+  record: InstanceRecord,
+  child: ChildProcess,
+  timeoutMs: number,
+  stderr: readonly Buffer[],
+): Promise<unknown> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      throw new Error(
+        `Agent exited before control readiness with code ${child.exitCode}: ${Buffer.concat(stderr).toString('utf8')}`,
+      );
+    }
+    try {
+      return requireSuccess(
+        await requestControl(
+          record,
+          'health',
+          undefined,
+          Math.max(1, Math.min(500, deadline - Date.now())),
+        ),
+        'health',
+      );
+    } catch (error) {
+      if (!isControlNotReadyError(error)) {
+        throw error;
+      }
+      lastError = error;
+      await delay(50);
+    }
+  }
+  throw new Error(
+    `Timed out waiting for Agent control readiness${
+      lastError instanceof Error ? `: ${lastError.message}` : ''
+    }`,
+  );
+}
+
+function isControlNotReadyError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return code === 'ENOENT' || code === 'ECONNREFUSED';
 }
 
 function requireSuccess(value: unknown, operation: string): unknown {
