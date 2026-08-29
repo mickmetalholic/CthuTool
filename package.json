@@ -18,6 +18,8 @@
     "test:cov": "vitest run --coverage && turbo run test:cov",
     "typecheck": "turbo run typecheck",
     "check:cli-dist": "node scripts/check-cli-dist.mjs",
+    "setup:ai-tooling": "node scripts/setup-ai-tooling.mjs",
+    "check:ai-tooling": "node scripts/setup-ai-tooling.mjs --check",
     "lint": "turbo run lint",
     "lint:fix": "biome check --write .",
     "precommit:cli-dist": "node scripts/precommit-refresh-cli-dist.mjs",

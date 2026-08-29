@@ -1,36 +1,47 @@
-# Repository Codex Config
+# Repository Codex Config Notes
 
-This directory is the repository source for low-risk, reproducible Codex configuration.
+This directory holds low-risk, portable Codex-facing notes for the repository.
 
-Managed entries:
+## What belongs here
 
-- `prompts/`
-- `rules/`
-- `skills.manifest.json`
-- `plugins.manifest.json`
-- `README.md`
+- `README.md` (this file)
+- Intentionally shared, portable Codex instructions when they are not generated adapters
 
-The repository plugin directories under `../codex/plugins` are also the source
-for the OpenCode adapters. Run `chc opencode skills` and `chc opencode mcp` to
-reference the same skill and MCP assets from OpenCode; do not duplicate them
-under an agent-specific directory.
+Generated OpenSpec workflow skills for Codex live under the shared surface:
 
-Do not commit Codex runtime state here. Keep these local to `C:\Users\yuans\.codex` or other personal backup tooling:
+```text
+.agents/skills/openspec-*
+```
 
-- `auth.json`
-- `cap_sid`
-- `*.sqlite`, `*.sqlite-shm`, `*.sqlite-wal`
-- `cache/`
-- `plugins/cache/`
-- `logs/` or `log/`
-- `tmp/` or `.tmp/`
-- `sessions/`
-- `archived_sessions/`
-- `memories/`
-- `config.toml`
-
-Use the CLI guardrail before committing Codex config changes:
+Regenerate them with:
 
 ```bash
-chc codex doctor
+pnpm setup:ai-tooling
 ```
+
+Do not hand-edit generated `openspec-*` skills. Do not recreate a parallel OpenSpec tree under `.codex/skills`.
+
+## Related ownership
+
+| Path | Role |
+| --- | --- |
+| `../skills/` | Canonical project-authored baseline skills |
+| `../docs/ai-tooling.md` | Full AI tooling ownership and invocation reference |
+| `../codex/skills.manifest.json` | `chc codex skills` user-scope GitHub skill lifecycle |
+| `../codex/plugins/cthu-codex` | Business plugin (protected; out of AI tooling setup scope) |
+
+## Explicit Git workflows
+
+Commit and pull-request actions remain explicit workflows. Baseline skills `repo-orientation`, `project-verify`, and `review-diff` are read-only or validation-only and must not commit or open PRs.
+
+## Local runtime state (do not commit)
+
+Keep personal Codex runtime state outside the repository (or untracked), for example:
+
+- `auth.json`
+- session databases / caches / logs
+- personal `config.toml`
+
+Use `chc codex skills --json` for a read-only snapshot of the Codex
+user-scope skill manifest before committing intentionally tracked Codex config
+changes under `codex/`.
