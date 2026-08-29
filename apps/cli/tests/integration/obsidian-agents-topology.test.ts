@@ -23,7 +23,7 @@ import { createObsidianAgentsDataPaths } from '../../src/infra/obsidian-agents-p
 async function createFixture(name = 'cthutool-obsidian-topology-') {
   const root = await mkdtemp(join(tmpdir(), name));
   const vaultPath = join(root, 'vault');
-  const sourcePath = join(vaultPath, 'Agent');
+  const sourcePath = join(vaultPath, 'Agents');
   const agentsPath = join(vaultPath, '.agents');
   const paths = createObsidianAgentsDataPaths({
     dataRoot: join(root, 'chc-data'),
@@ -73,7 +73,7 @@ describe('Obsidian agents vault topology', () => {
     await applyObsidianAgentsSetup(fixture.paths, repeated);
   });
 
-  test('links an existing visible Agent source without changing its files', async () => {
+  test('links an existing visible Agents source without changing its files', async () => {
     const fixture = await createFixture();
     await mkdir(join(fixture.sourcePath, 'skills'), { recursive: true });
     await writeFile(
@@ -201,8 +201,8 @@ describe('Obsidian agents vault topology', () => {
     const fixture = await createFixture();
     const outside = join(fixture.root, 'outside');
     const linkedParent = join(fixture.vaultPath, 'Visible');
-    const escapedSource = join(linkedParent, 'Agent');
-    await mkdir(join(outside, 'Agent'), { recursive: true });
+    const escapedSource = join(linkedParent, 'Agents');
+    await mkdir(join(outside, 'Agents'), { recursive: true });
     await createObsidianAgentsDirectoryLink(linkedParent, outside);
 
     await expect(

@@ -8,10 +8,10 @@ link can use Obsidian Sync directly and remove most synchronization machinery.
 ## What Changes
 
 - Replace the unmerged Git-backed `.agents` synchronization design with a
-  visible `<vault>/Agent` directory that contains shared `skills/`, `state/`,
+  visible `<vault>/Agents` directory that contains shared `skills/`, `state/`,
   and related files.
 - Create a machine-local `<vault>/.agents` directory link that targets
-  `<vault>/Agent`, allowing agents to discover `<vault>/.agents/skills` while
+  `<vault>/Agents`, allowing agents to discover `<vault>/.agents/skills` while
   Obsidian Sync synchronizes the visible source directory.
 - Keep interactive `chc obsidian agents setup` for selecting or changing the
   vault, safely migrating existing content, and creating or repairing the
@@ -31,7 +31,7 @@ link can use Obsidian Sync directly and remove most synchronization machinery.
 
 - `apps-cli-obsidian-agents-link`: Interactive setup, safe migration,
   machine-local vault link management, and read-only status for an
-  Obsidian-synchronized Agent directory.
+  Obsidian-synchronized Agents directory.
 
 ### Modified Capabilities
 
@@ -47,4 +47,4 @@ None.
 - `openspec/changes/add-obsidian-agents-auto-sync`: remains historical context;
   this change supersedes its unmerged design and implementation.
 - User machines: each machine keeps its own `<vault>/.agents` link, while
-  Obsidian Sync transports only the real `<vault>/Agent` contents.
+  Obsidian Sync transports only the real `<vault>/Agents` contents.

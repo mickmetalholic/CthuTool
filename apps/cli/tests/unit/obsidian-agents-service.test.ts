@@ -12,7 +12,7 @@ describe('Obsidian agents filesystem inspection', () => {
   test('classifies absent paths, directories, files, links, and broken links', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-path-'));
     const absentPath = join(root, 'absent');
-    const directoryPath = join(root, 'Agent');
+    const directoryPath = join(root, 'Agents');
     const filePath = join(root, 'file.txt');
     const linkPath = join(root, '.agents');
     await mkdir(directoryPath);
@@ -42,7 +42,7 @@ describe('Obsidian agents filesystem inspection', () => {
 
   test('compares canonical aliases using platform path semantics', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-canonical-'));
-    const targetPath = join(root, 'Agent');
+    const targetPath = join(root, 'Agents');
     const linkPath = join(root, '.agents');
     await mkdir(targetPath);
     await createObsidianAgentsDirectoryLink(linkPath, targetPath);

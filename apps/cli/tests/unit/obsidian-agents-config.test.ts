@@ -13,7 +13,7 @@ import {
 import { createObsidianAgentsDataPaths } from '../../src/infra/obsidian-agents-paths';
 
 describe('Obsidian agents configuration', () => {
-  test('resolves the Windows data root outside the shared Agent source', async () => {
+  test('resolves the Windows data root outside the shared Agents source', async () => {
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
     const paths = createObsidianAgentsDataPaths({
       homeRoot,
@@ -28,14 +28,14 @@ describe('Obsidian agents configuration', () => {
     expect(Object.keys(paths)).toEqual(['dataRoot', 'configPath']);
   });
 
-  test('derives .agents, defaults to Agent, and rejects unsafe sources', () => {
+  test('derives .agents, defaults to Agents, and rejects unsafe sources', () => {
     const vaultPath = resolve('vault');
     const profile = normalizeObsidianAgentsProfile({
       id: 'obsidian-main',
       vaultPath,
     });
 
-    expect(profile.sourcePath).toBe(resolve(vaultPath, 'Agent'));
+    expect(profile.sourcePath).toBe(resolve(vaultPath, 'Agents'));
     expect(profile.agentsPath).toBe(resolve(vaultPath, '.agents'));
     expect(() =>
       normalizeObsidianAgentsProfile({ id: 'Obsidian', vaultPath }),
@@ -57,7 +57,7 @@ describe('Obsidian agents configuration', () => {
       normalizeObsidianAgentsProfile({
         id: 'obsidian-main',
         vaultPath,
-        sourcePath: resolve(vaultPath, '.hidden', 'Agent'),
+        sourcePath: resolve(vaultPath, '.hidden', 'Agents'),
       }),
     ).toThrow(/hidden/);
     expect(() =>
@@ -93,7 +93,7 @@ describe('Obsidian agents configuration', () => {
     if (!migrated) throw new Error('Expected the legacy config to load.');
     expect(migrated?.version).toBe(2);
     expect(migrated?.profiles['obsidian-main']).toMatchObject({
-      sourcePath: resolve(vaultPath, 'Agent'),
+      sourcePath: resolve(vaultPath, 'Agents'),
       agentsPath: resolve(vaultPath, '.agents'),
     });
     await writeObsidianAgentsConfig(paths, migrated);
@@ -103,7 +103,7 @@ describe('Obsidian agents configuration', () => {
       profiles: {
         'obsidian-main': {
           vaultPath,
-          sourcePath: resolve(vaultPath, 'Agent'),
+          sourcePath: resolve(vaultPath, 'Agents'),
         },
       },
     });

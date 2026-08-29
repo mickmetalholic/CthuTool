@@ -45,7 +45,7 @@ const commonArgs = {
   },
   sourcePath: {
     type: 'string',
-    description: 'Visible Agent source directory inside the vault',
+    description: 'Visible Agents source directory inside the vault',
   },
   dataRoot: {
     type: 'string',
@@ -234,7 +234,7 @@ async function collectSetupInput(
       id: suppliedProfile ?? current?.id ?? 'obsidian-main',
       vaultPath,
       sourcePath:
-        suppliedSource ?? current?.sourcePath ?? join(vaultPath, 'Agent'),
+        suppliedSource ?? current?.sourcePath ?? join(vaultPath, 'Agents'),
     };
   }
 
@@ -276,8 +276,8 @@ async function collectSetupInput(
   const sourcePath =
     suppliedSource ??
     (await promptString(
-      'Visible Agent source path',
-      current?.sourcePath ?? join(vaultPath, 'Agent'),
+      'Visible Agents source path',
+      current?.sourcePath ?? join(vaultPath, 'Agents'),
       (value) => (value.trim() ? undefined : 'A source path is required.'),
     ));
   if (!sourcePath) return undefined;
@@ -434,7 +434,7 @@ export const obsidianCommand = defineCommand({
     agents: defineCommand({
       meta: {
         name: 'agents',
-        description: 'Manage the vault Agent source and .agents link.',
+        description: 'Manage the vault Agents source and .agents link.',
       },
       subCommands: {
         setup: defineCommand({
@@ -457,7 +457,7 @@ export const obsidianCommand = defineCommand({
         status: defineCommand({
           meta: {
             name: 'status',
-            description: 'Show local Agent source and .agents link health.',
+            description: 'Show local Agents source and .agents link health.',
           },
           args: commonArgs,
           async run({ args }) {
