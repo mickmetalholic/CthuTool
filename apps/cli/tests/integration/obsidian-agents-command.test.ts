@@ -10,7 +10,11 @@ const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 async function runCli(args: string[]) {
   const proc = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
     cwd: cliRoot,
-    env: process.env,
+    env: {
+      ...process.env,
+      FORCE_COLOR: '0',
+      NO_COLOR: '1',
+    },
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',

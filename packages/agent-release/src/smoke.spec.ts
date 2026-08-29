@@ -23,7 +23,7 @@ describe('clean-host Agent bundle smoke', () => {
     }
   });
 
-  test('uses the bundled Node and waits for environment switching within the smoke timeout', async () => {
+  test('uses the bundled Node and waits for control and environment switching within the smoke timeout', async () => {
     root = await mkdtemp('/tmp/ct-smoke-');
     const bundleRoot = join(root, 'bundle');
     const layout = createBundleLayout('darwin-arm64', '1.2.3');
@@ -63,7 +63,10 @@ describe('clean-host Agent bundle smoke', () => {
     await chmod(bundledNode, 0o755);
     const result = await smokeExtractedAgentBundle({
       bundleRoot: relative(process.cwd(), bundleRoot),
-      environment: { CTHUTOOL_SMOKE_SWITCH_DELAY_MS: '5100' },
+      environment: {
+        CTHUTOOL_SMOKE_CONTROL_DELAY_MS: '250',
+        CTHUTOOL_SMOKE_SWITCH_DELAY_MS: '5100',
+      },
       timeoutMs: 10_000,
       userDataDir: relative(process.cwd(), join(root, 'user-data')),
     });
@@ -90,6 +93,7 @@ const endpoint = path.join(runtimeDir, 'control.sock');
 const catalog = JSON.parse(fs.readFileSync(process.env.CTHUTOOL_AGENT_ENVIRONMENTS_PATH, 'utf8'));
 const environment = catalog.profiles[0];
 const switchDelayMs = Number(process.env.CTHUTOOL_SMOKE_SWITCH_DELAY_MS || 0);
+const controlDelayMs = Number(process.env.CTHUTOOL_SMOKE_CONTROL_DELAY_MS || 0);
 const nonce = crypto.randomUUID();
 const instanceId = crypto.randomUUID();
 
@@ -147,7 +151,7 @@ bridge.listen(0, '127.0.0.1', () => {
       socket.end(JSON.stringify({ ok: true, protocolVersion: 1, result }) + '\n');
     });
   });
-  control.listen(endpoint, () => {
+  const writeInstanceRecord = () => {
     fs.writeFileSync(instancePath, JSON.stringify({
       controlEndpoint: endpoint,
       entryPoint: path.resolve(process.argv[1]),
@@ -157,6 +161,12 @@ bridge.listen(0, '127.0.0.1', () => {
       protocolVersion: 1,
       startedAt: new Date().toISOString()
     }));
-  });
+  };
+  if (controlDelayMs > 0) {
+    writeInstanceRecord();
+    setTimeout(() => control.listen(endpoint), controlDelayMs);
+  } else {
+    control.listen(endpoint, writeInstanceRecord);
+  }
 });
 `;
