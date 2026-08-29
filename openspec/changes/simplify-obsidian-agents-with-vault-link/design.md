@@ -43,13 +43,13 @@ The default topology is:
 
 ```text
 <vault>/
-├─ Agent/          real Obsidian-synchronized source
+├─ Agents/         real Obsidian-synchronized source
 │  ├─ skills/
 │  └─ state/
-└─ .agents -> Agent
+└─ .agents -> Agents
 ```
 
-`Agent` is the default visible source name, while setup may select another
+`Agents` is the default visible source name, while setup may select another
 visible directory inside the same vault. `.agents` is fixed at the vault root
 because agent discovery depends on that convention. The command rejects a
 source outside the vault, a hidden source, and any topology in which the source
@@ -57,12 +57,12 @@ contains or equals `.agents`.
 
 This is preferred over linking `$HOME/.agents` because the requested content is
 vault-scoped and the user-level directory also contains machine-local plugin and
-lock data. It is preferred over copying `Agent` into `.agents` because copies
+lock data. It is preferred over copying `Agents` into `.agents` because copies
 would immediately reintroduce synchronization and conflict handling.
 
 ### 2. Treat the link as machine-local setup, never shared data
 
-Obsidian Sync transports `Agent/`; it is not expected to transport the hidden
+Obsidian Sync transports `Agents/`; it is not expected to transport the hidden
 `.agents` link. Every machine runs setup once after connecting the vault.
 Machine-local configuration stores `vaultPath` and `sourcePath`; `linkPath` is
 always derived as `<vault>/.agents` to prevent drift. Configuration remains
@@ -92,7 +92,7 @@ changes.
 
 The safe common transitions are:
 
-1. Both absent: create `Agent/skills`, `Agent/state`, then create the link.
+1. Both absent: create `Agents/skills`, `Agents/state`, then create the link.
 2. Source present and link absent: preserve the source and create the link.
 3. Real `.agents` present and source absent or empty: rename/adopt the whole
    directory as the source, preserving hidden files such as legacy `.git`, then
@@ -165,16 +165,16 @@ remove.
 2. Replace Git-specific CLI options, services, status fields, and tests with the
    topology profile, setup state machine, link adapter, and local status model.
 3. Upgrade an existing local profile by retaining its `vaultPath`, defaulting
-   the visible source to `<vault>/Agent`, and discarding Git-only configuration
+   the visible source to `<vault>/Agents`, and discarding Git-only configuration
    only after the new topology succeeds.
-4. If `<vault>/.agents` is a real directory and `<vault>/Agent` is absent or
-   empty, preview and rename the complete directory to `Agent`; preserve any
+4. If `<vault>/.agents` is a real directory and `<vault>/Agents` is absent or
+   empty, preview and rename the complete directory to `Agents`; preserve any
    `.git` metadata and then create the compatibility link.
 5. If both directories contain data, stop and require manual reconciliation.
 6. Run setup independently on each machine after Obsidian has downloaded the
-   visible `Agent` directory, then verify with status.
+   visible `Agents` directory, then verify with status.
 
-Rollback removes only the machine-local `.agents` link and leaves `Agent`
-untouched. A user may then rename `Agent` back to `.agents` manually if they
+Rollback removes only the machine-local `.agents` link and leaves `Agents`
+untouched. A user may then rename `Agents` back to `.agents` manually if they
 accept losing Obsidian Sync coverage; no automated rollback deletes shared
 content.

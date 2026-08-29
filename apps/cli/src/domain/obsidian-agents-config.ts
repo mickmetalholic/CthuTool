@@ -50,7 +50,7 @@ export function normalizeObsidianAgentsProfile(
 
   const vaultPath = normalizeAbsolutePath(input.vaultPath, 'vault path');
   const sourcePath = normalizeAbsolutePath(
-    input.sourcePath?.trim() || join(vaultPath, 'Agent'),
+    input.sourcePath?.trim() || join(vaultPath, 'Agents'),
     'visible source path',
   );
   const agentsPath = join(vaultPath, '.agents');

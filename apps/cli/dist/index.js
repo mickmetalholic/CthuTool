@@ -12010,7 +12010,7 @@ function normalizeObsidianAgentsProfile(input) {
     throw new ObsidianAgentsConfigError("Profile id must start with a lowercase letter or number and contain only lowercase letters, numbers, hyphens, or underscores.");
   }
   const vaultPath = normalizeAbsolutePath(input.vaultPath, "vault path");
-  const sourcePath = normalizeAbsolutePath(input.sourcePath?.trim() || join14(vaultPath, "Agent"), "visible source path");
+  const sourcePath = normalizeAbsolutePath(input.sourcePath?.trim() || join14(vaultPath, "Agents"), "visible source path");
   const agentsPath = join14(vaultPath, ".agents");
   const sourceRelative = relative3(vaultPath, sourcePath);
   if (sourceRelative.length === 0 || sourceRelative === ".." || sourceRelative.startsWith(`..${sep4}`) || isAbsolute3(sourceRelative)) {
@@ -12300,9 +12300,9 @@ async function inspectObsidianAgentsStatus(options) {
   if (!vaultExists)
     warnings.push("The configured Obsidian vault is missing.");
   if (!sourceExists)
-    warnings.push("The visible Agent source is missing.");
+    warnings.push("The visible Agents source is missing.");
   if (vaultExists && !sourceInsideVault) {
-    warnings.push("The visible Agent source resolves outside the configured Obsidian vault.");
+    warnings.push("The visible Agents source resolves outside the configured Obsidian vault.");
   }
   if (topology.linkStatus !== "correct") {
     warnings.push(`The .agents compatibility link is ${topology.linkStatus}; run chc obsidian agents setup to repair it.`);
@@ -12586,7 +12586,7 @@ var commonArgs2 = {
   },
   sourcePath: {
     type: "string",
-    description: "Visible Agent source directory inside the vault"
+    description: "Visible Agents source directory inside the vault"
   },
   dataRoot: {
     type: "string",
@@ -12701,7 +12701,7 @@ async function collectSetupInput(args, current, interactive) {
     return {
       id: suppliedProfile ?? current?.id ?? "obsidian-main",
       vaultPath: vaultPath2,
-      sourcePath: suppliedSource ?? current?.sourcePath ?? join17(vaultPath2, "Agent")
+      sourcePath: suppliedSource ?? current?.sourcePath ?? join17(vaultPath2, "Agents")
     };
   }
   if (current) {
@@ -12725,7 +12725,7 @@ async function collectSetupInput(args, current, interactive) {
   const vaultPath = suppliedVault ?? await promptString("Obsidian vault path", current?.vaultPath, (value) => value.trim() ? undefined : "A vault path is required.");
   if (!vaultPath)
     return;
-  const sourcePath = suppliedSource ?? await promptString("Visible Agent source path", current?.sourcePath ?? join17(vaultPath, "Agent"), (value) => value.trim() ? undefined : "A source path is required.");
+  const sourcePath = suppliedSource ?? await promptString("Visible Agents source path", current?.sourcePath ?? join17(vaultPath, "Agents"), (value) => value.trim() ? undefined : "A source path is required.");
   if (!sourcePath)
     return;
   return { id, vaultPath, sourcePath };
@@ -12812,7 +12812,7 @@ var obsidianCommand = defineCommand({
     agents: defineCommand({
       meta: {
         name: "agents",
-        description: "Manage the vault Agent source and .agents link."
+        description: "Manage the vault Agents source and .agents link."
       },
       subCommands: {
         setup: defineCommand({
@@ -12831,7 +12831,7 @@ var obsidianCommand = defineCommand({
         status: defineCommand({
           meta: {
             name: "status",
-            description: "Show local Agent source and .agents link health."
+            description: "Show local Agents source and .agents link health."
           },
           args: commonArgs2,
           async run({ args }) {

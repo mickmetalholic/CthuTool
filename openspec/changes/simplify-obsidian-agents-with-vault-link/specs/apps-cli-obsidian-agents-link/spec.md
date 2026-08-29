@@ -14,7 +14,7 @@ requiring hand-edited configuration.
 #### Scenario: First-time setup uses the visible vault directory
 - **WHEN** no valid profile exists and the user runs `chc obsidian agents setup`
 - **THEN** the command prompts for the Obsidian vault path
-- **AND** it proposes `<vault>/Agent` as the visible source directory
+- **AND** it proposes `<vault>/Agents` as the visible source directory
 - **AND** it derives `<vault>/.agents` as the agent compatibility path
 - **AND** it previews filesystem changes before requesting confirmation
 
@@ -44,7 +44,7 @@ source directory.
 #### Scenario: A different machine uses a different absolute vault path
 - **WHEN** another machine configures the same synced vault at a different absolute path
 - **THEN** setup stores that machine's local paths independently
-- **AND** no absolute path file is written under `<vault>/Agent`
+- **AND** no absolute path file is written under `<vault>/Agents`
 
 ### Requirement: Visible source and vault-local compatibility link
 The configured topology SHALL keep real shared content in a visible directory

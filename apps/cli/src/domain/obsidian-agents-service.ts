@@ -420,10 +420,10 @@ export async function inspectObsidianAgentsStatus(options: {
     : false;
   const warnings: string[] = [];
   if (!vaultExists) warnings.push('The configured Obsidian vault is missing.');
-  if (!sourceExists) warnings.push('The visible Agent source is missing.');
+  if (!sourceExists) warnings.push('The visible Agents source is missing.');
   if (vaultExists && !sourceInsideVault) {
     warnings.push(
-      'The visible Agent source resolves outside the configured Obsidian vault.',
+      'The visible Agents source resolves outside the configured Obsidian vault.',
     );
   }
   if (topology.linkStatus !== 'correct') {

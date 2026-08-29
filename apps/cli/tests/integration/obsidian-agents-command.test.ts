@@ -23,10 +23,10 @@ async function runCli(args: string[]) {
 }
 
 describe('obsidian agents CLI', () => {
-  test('configures and reports the vault-local Agent topology through JSON', async () => {
+  test('configures and reports the vault-local Agents topology through JSON', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
     const vaultPath = join(root, 'vault');
-    const sourcePath = join(vaultPath, 'Agent');
+    const sourcePath = join(vaultPath, 'Agents');
     const agentsPath = join(vaultPath, '.agents');
     const dataRoot = join(root, 'chc-data');
     await mkdir(vaultPath, { recursive: true });
@@ -163,7 +163,7 @@ describe('obsidian agents CLI', () => {
   test('reports mismatched, broken, and legacy-Git topologies without mutation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
     const vaultPath = join(root, 'vault');
-    const sourcePath = join(vaultPath, 'Agent');
+    const sourcePath = join(vaultPath, 'Agents');
     const agentsPath = join(vaultPath, '.agents');
     const oldTarget = join(vaultPath, 'OldAgent');
     const dataRoot = join(root, 'chc-data');

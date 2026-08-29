@@ -16,7 +16,7 @@
 
 ## 3. Rework setup and status commands
 
-- [x] 3.1 Update interactive setup to default the source to `<vault>/Agent`, display the vault-local topology and scope, preview exact filesystem mutations, and require confirmation.
+- [x] 3.1 Update interactive setup to default the source to `<vault>/Agents`, display the vault-local topology and scope, preview exact filesystem mutations, and require confirmation.
 - [x] 3.2 Update non-interactive and JSON setup behavior to require explicit missing decisions and return stable topology or validation results without prompting.
 - [x] 3.3 Replace Git-oriented status with local-only human and JSON output for configuration, vault, source, compatibility link, resolved target, `skills/`, `state/`, legacy metadata, and overall health.
 - [x] 3.4 Ensure status never creates or repairs paths, invokes Obsidian, performs Git operations, or makes network requests.
@@ -25,7 +25,7 @@
 ## 4. Verify migration and cross-platform behavior
 
 - [x] 4.1 Add unit tests for profile migration, path containment, hidden-source rejection, topology classification, and canonical link-target comparison.
-- [x] 4.2 Add integration tests for fresh setup, idempotent setup, existing `Agent` linking, real `.agents` adoption including hidden metadata, wrong-link repair, broken-link reporting, and ambiguous dual-directory refusal.
+- [x] 4.2 Add integration tests for fresh setup, idempotent setup, existing `Agents` linking, real `.agents` adoption including hidden metadata, wrong-link repair, broken-link reporting, and ambiguous dual-directory refusal.
 - [x] 4.3 Add platform-focused tests or adapters covering Windows junction behavior and Unix directory symlink behavior without requiring privileged global filesystem changes.
 - [x] 4.4 Verify human and JSON status output for healthy, missing, broken, mismatched, and legacy-Git topologies, including proof that status is non-mutating.
 - [x] 4.5 Run affected CLI unit and integration suites, type checking, linting, and the repository build that regenerates the committed CLI distribution artifact.

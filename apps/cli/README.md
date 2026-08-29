@@ -278,13 +278,13 @@ Use the interactive setup once on each machine that has the Obsidian vault:
 chc obsidian agents setup
 ```
 
-Setup creates a visible `<vault>/Agent/` source containing `skills/` and
+Setup creates a visible `<vault>/Agents/` source containing `skills/` and
 `state/`, then creates `<vault>/.agents` as a machine-local compatibility link
 to it. Windows uses a directory junction; macOS and Linux use a directory
 symlink. The source path is configurable during setup and the machine-specific
 choice is stored under the local CthuTool `chc` data directory.
 
-Obsidian Sync synchronizes the visible `Agent/` contents between machines. Run
+Obsidian Sync synchronizes the visible `Agents/` contents between machines. Run
 setup once on every machine so its local `.agents` link is created. The link is
 not shared, and no Git repository, Codex Hook, or explicit push/pull command is
 required. Obsidian Sync is eventually consistent, so wait for it to finish
@@ -298,7 +298,7 @@ chc obsidian agents status
 chc obsidian agents status --json
 ```
 
-If both `Agent/` and a real `.agents/` directory already contain files, setup
+If both `Agents/` and a real `.agents/` directory already contain files, setup
 stops without merging or deleting either tree. Reconcile them manually, then
 run setup again. An existing real `.agents/` directory is otherwise adopted as
 the visible source, preserving any legacy `.git` metadata for manual cleanup.
