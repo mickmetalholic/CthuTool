@@ -23,7 +23,7 @@ describe('clean-host Agent bundle smoke', () => {
     }
   });
 
-  test('uses the bundled Node and waits for control and environment switching within the smoke timeout', async () => {
+  test('uses the bundled Node and retries control health and environment switching within the smoke timeout', async () => {
     root = await mkdtemp('/tmp/ct-smoke-');
     const bundleRoot = join(root, 'bundle');
     const layout = createBundleLayout('darwin-arm64', '1.2.3');
@@ -65,6 +65,7 @@ describe('clean-host Agent bundle smoke', () => {
       bundleRoot: relative(process.cwd(), bundleRoot),
       environment: {
         CTHUTOOL_SMOKE_CONTROL_DELAY_MS: '250',
+        CTHUTOOL_SMOKE_HEALTH_DELAY_MS: '750',
         CTHUTOOL_SMOKE_SWITCH_DELAY_MS: '5100',
       },
       timeoutMs: 10_000,
@@ -94,6 +95,8 @@ const catalog = JSON.parse(fs.readFileSync(process.env.CTHUTOOL_AGENT_ENVIRONMEN
 const environment = catalog.profiles[0];
 const switchDelayMs = Number(process.env.CTHUTOOL_SMOKE_SWITCH_DELAY_MS || 0);
 const controlDelayMs = Number(process.env.CTHUTOOL_SMOKE_CONTROL_DELAY_MS || 0);
+const healthDelayMs = Number(process.env.CTHUTOOL_SMOKE_HEALTH_DELAY_MS || 0);
+let healthRequestCount = 0;
 const nonce = crypto.randomUUID();
 const instanceId = crypto.randomUUID();
 
@@ -126,6 +129,12 @@ bridge.listen(0, '127.0.0.1', () => {
       }
       if (request.operation === 'health') {
         result = { applicationVersion: process.env.CTHUTOOL_AGENT_VERSION, bridge: { endpoint: bridgeEndpoint } };
+        if (healthDelayMs > 0 && healthRequestCount++ === 0) {
+          setTimeout(() => {
+            socket.end(JSON.stringify({ ok: true, protocolVersion: 1, result }) + '\\n');
+          }, healthDelayMs);
+          return;
+        }
       } else if (request.operation === 'environment.list') {
         result = { environments: [{ active: true, id: environment.environmentId, label: environment.label }] };
       } else if (request.operation === 'environment.switch') {

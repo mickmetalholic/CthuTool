@@ -239,7 +239,11 @@ async function requestControl(
     const socket = createConnection(record.controlEndpoint);
     const timer = setTimeout(() => {
       socket.destroy();
-      rejectPromise(new Error(`Agent ${operation} request timed out`));
+      const error: NodeJS.ErrnoException = new Error(
+        `Agent ${operation} request timed out`,
+      );
+      error.code = 'ETIMEDOUT';
+      rejectPromise(error);
     }, timeoutMs);
     let payload = '';
     socket.setEncoding('utf8');
@@ -314,7 +318,12 @@ async function waitForControl(
 
 function isControlNotReadyError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
-  return code === 'ENOENT' || code === 'ECONNREFUSED';
+  return (
+    code === 'ENOENT' ||
+    code === 'ECONNREFUSED' ||
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT'
+  );
 }
 
 function requireSuccess(value: unknown, operation: string): unknown {
