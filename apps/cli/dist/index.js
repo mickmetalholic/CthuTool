@@ -5077,7 +5077,9 @@ ${detail}` : ""}`, { cause: error });
       const socket = (0, node_net_1.createConnection)(record.controlEndpoint);
       const timer = setTimeout(() => {
         socket.destroy();
-        rejectPromise(new Error(`Agent ${operation} request timed out`));
+        const error = new Error(`Agent ${operation} request timed out`);
+        error.code = "ETIMEDOUT";
+        rejectPromise(error);
       }, timeoutMs);
       let payload = "";
       socket.setEncoding("utf8");
@@ -5131,7 +5133,7 @@ ${detail}` : ""}`, { cause: error });
   }
   function isControlNotReadyError(error) {
     const code = error?.code;
-    return code === "ENOENT" || code === "ECONNREFUSED";
+    return code === "ENOENT" || code === "ECONNREFUSED" || code === "ECONNRESET" || code === "ETIMEDOUT";
   }
   function requireSuccess(value, operation) {
     if (!value || typeof value !== "object" || value.ok !== true || !("result" in value)) {
