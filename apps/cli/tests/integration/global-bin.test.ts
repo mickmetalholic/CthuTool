@@ -307,7 +307,6 @@ describe('global bin', () => {
       [[], ['--help']],
       [['agent'], ['agent', '--help']],
       [['codex'], ['codex', '--help']],
-      [['opencode'], ['opencode', '--help']],
       [['scripts'], ['scripts', '--help']],
       [['completion'], ['completion', '--help']],
     ] as const) {
@@ -356,13 +355,6 @@ describe('global bin', () => {
           '\n  status      Show chc CLI installation status.',
         );
         expect(plain).not.toContain('\n    codex');
-      } else if (args[0] === 'opencode') {
-        expect(plain).toContain(
-          '\n  skills  Expose repository plugin skills to OpenCode.',
-        );
-        expect(plain).toContain(
-          '\n  mcp     Sync repository plugin MCP servers to OpenCode.',
-        );
       } else if (args[0] === 'agent') {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain('install');
@@ -372,7 +364,7 @@ describe('global bin', () => {
       } else if (args[0] === 'codex') {
         expect(out).toContain('COMMANDS');
         expect(plain).toContain(
-          '\n  skills   Reconcile manifest-tracked and eligible local GitHub skills.',
+          '\n  skills   Reconcile manifest-tracked GitHub skills.',
         );
         expect(plain).toContain(
           '\n  install  Install repository-owned Codex plugins locally.',

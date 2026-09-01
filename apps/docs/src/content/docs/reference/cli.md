@@ -163,41 +163,50 @@ chc codex install
 ```
 
 `chc codex skills` interactively reconciles third-party GitHub skills declared
-in the version 2 `codex/skills.manifest.json` with eligible local installations.
-The table includes a local installation only when the pinned `skills` backend
-can provide supported GitHub repository and selector metadata. Such an entry is
-shown as `local_only`; selecting Track records a reviewed branch or pinned ref
-in the manifest without reinstalling the skill or copying its directory.
+in the version 2 `codex/skills.manifest.json` with eligible local
+installations. The table includes a local installation only when the pinned
+`skills` backend can provide supported GitHub repository and selector metadata.
+Such an entry is shown as `local_only`; selecting Track records a reviewed
+branch or pinned ref in the manifest without reinstalling the skill or copying
+its directory.
 
-Use Add skills from GitHub when the skill is not installed locally. Space cycles
-through the actions valid for a row, Enter previews the resulting local and
-manifest changes, and confirmation defaults to No. Self-authored, manually
-copied, well-known, plugin-provided, system, non-GitHub, and
-provenance-incomplete local skills are ignored. `--json` returns the same
-eligible inventory without writing, and the bare command fails safely when no
-interactive terminal is available.
+Use Add when the skill is not installed locally. It accepts `owner/repo`, a
+full GitHub repository URL, or a direct GitHub tree URL. Local paths, GitLab,
+and arbitrary Git URLs are rejected; use `$codex-skill-promoter` for a locally
+authored or Hermes-absorbed skill. Space cycles through the actions valid for a
+row, Enter previews the resulting local and manifest changes, and confirmation
+defaults to No. Self-authored, manually copied, well-known, plugin-provided,
+system, non-GitHub, and provenance-incomplete local skills are ignored.
+`--json` returns the same eligible inventory without writing, and the bare
+command fails safely when no interactive terminal is available.
 
 Skill discovery, installation, updates, and removal use the reviewed
 `npx --yes skills@1.5.19` Codex user-scope backend. The repository does not vendor
 skill directories or infer sources from local installations.
+
+The repository-owned `$codex-skill-promoter` skill is the single local
+development workflow. It accepts explicit local Codex selections and eligible
+Evolution-created Hermes skills. A Hermes source is adapted into Codex-local
+staging first; both modes preserve a Codex/Hermes-compatible shared core. The
+skill scans both local trees read-only and then lets the user choose which
+candidates to promote and which exact local copies to clean after verification;
+rows default to Skip and every copy defaults to Keep. A Hermes candidate's
+original Evolution source and adapted Codex staging path are independent
+cleanup targets. It validates the clean feature checkout prepared by the user,
+installs that checkout for verification, and deletes only confirmed unchanged
+targets after final path, provenance, and fingerprint checks. It never creates
+or switches a branch/worktree and does not write the third-party skills
+manifest, edit or update Hermes, commit, or push; final deletion of an
+explicitly selected eligible Hermes source is its only permitted Hermes
+mutation. Bundled, Hub-managed, protected,
+external, organization-managed, opted-out, and unprovenanced Hermes skills are
+excluded. Hermes-side management remains in the Hermes skill repository/local
+skill directory.
 
 `chc codex install` installs repository-owned plugins only. It reads
 `codex/plugins.manifest.json`, discovers `codex/plugins`, registers and enables
 enabled plugins, and synchronizes their cache. It does not manage standalone
 skills, prompts, or rules. The retired `codex status`, `export`, and `apply`
 subcommands are rejected as unknown commands.
-
-OpenCode consumes the same repository plugin assets through two explicit
-adapter commands:
-
-```bash
-chc opencode skills
-chc opencode mcp
-```
-
-The first adds enabled plugin skill directories to OpenCode's `skills.paths`;
-the second converts plugin `.mcp.json` declarations into OpenCode's `mcp`
-configuration. Both preserve unrelated configuration and leave `install`
-reserved for plugin installation.
 
 Source reference: `apps/cli/README.md`.

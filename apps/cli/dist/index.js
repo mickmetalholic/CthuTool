@@ -6837,7 +6837,7 @@ async function runMain(cmd, opts = {}) {
 }
 
 // src/index.ts
-var import_picocolors10 = __toESM(require_picocolors(), 1);
+var import_picocolors9 = __toESM(require_picocolors(), 1);
 
 // src/command/command-discovery.ts
 function stripAnsi3(value) {
@@ -10342,23 +10342,15 @@ function createCodexConfigPaths(options = {}) {
   const repoRoot = resolve3(options.repoRoot ?? getDefaultRepoRoot());
   const homeRoot = resolve3(options.homeRoot ?? homedir5());
   const localCodexRoot = resolve3(options.codexHome ?? join9(homeRoot, ".codex"));
-  const localOpenCodeRoot = resolve3(options.openCodeHome ?? join9(homeRoot, ".config", "opencode"));
-  const openCodeConfigPath = resolve3(options.openCodeConfig ?? getDefaultOpenCodeConfigPath(localOpenCodeRoot));
   return {
     repoRoot,
     repoCodexRoot: resolve3(repoRoot, "codex"),
     homeRoot,
     localCodexRoot,
-    localOpenCodeRoot,
-    openCodeConfigPath,
     marketplacePath: resolve3(options.marketplace ?? join9(homeRoot, ".agents", "plugins", "marketplace.json")),
     pluginsRoot: resolve3(options.pluginsRoot ?? join9(repoRoot, "codex", "plugins")),
     cacheRoot: resolve3(options.cacheRoot ?? join9(homeRoot, ".codex", "plugins", "cache", "personal"))
   };
-}
-function getDefaultOpenCodeConfigPath(openCodeRoot) {
-  const jsoncPath = join9(openCodeRoot, "opencode.jsonc");
-  return existsSync3(jsoncPath) ? jsoncPath : join9(openCodeRoot, "opencode.json");
 }
 function assertPathInside(parent, child) {
   const parentPath = resolve3(parent);
@@ -10800,15 +10792,15 @@ function createNpxSkillsBackend(options) {
         };
       });
     },
-    async discover(repository) {
-      const result = await run(["add", repository, "--list"], env2);
+    async discover(source) {
+      const result = await run(["add", resolveDiscoverySource(source), "--list"], env2);
       return parseDiscoveredSkills(result.stdout);
     },
     async validate(skill) {
       const result = await run(["add", resolveSkillSource(skill), "--list"], env2);
       const discovered = parseDiscoveredSkills(result.stdout);
       if (!discovered.some((candidate) => candidate.name === skill.selector || candidate.name === skill.name)) {
-        throw new SkillsBackendError("contract_mismatch", `Skill ${skill.selector} was not found in ${skill.repository}@${skill.tracking.ref}.`);
+        throw new SkillsBackendError("contract_mismatch", `Skill ${skill.selector} was not found in ${describeSkillSource(skill)}.`);
       }
     },
     async checkUpdates(skills) {
@@ -10946,8 +10938,14 @@ function readLocalGitHubCandidate(name, lock, repository) {
     ...ref ? { ref } : {}
   };
 }
+function resolveDiscoverySource(source) {
+  return source.locator;
+}
 function resolveSkillSource(skill) {
   return `${skill.repository}#${encodeURIComponent(skill.tracking.ref)}`;
+}
+function describeSkillSource(skill) {
+  return `${skill.repository}@${skill.tracking.ref}`;
 }
 async function checkGitHubUpdates(skills, lock, fetchRemoteTree, env2) {
   const updates = new Set;
@@ -11109,6 +11107,9 @@ function removeManagedSkill(manifest, name) {
     skills: manifest.skills.filter((skill) => skill.name !== name)
   };
 }
+function isManagedGitHubSkill(skill) {
+  return skill.source === "github";
+}
 function getManifestPath(repoCodexRoot) {
   const path = resolve6(repoCodexRoot, "skills.manifest.json");
   assertPathInside(repoCodexRoot, path);
@@ -11122,35 +11123,35 @@ function validateManagedSkill(value, index) {
   if (!/^[a-z0-9][a-z0-9-]*$/u.test(name)) {
     throw new Error(`Invalid Codex skill name: ${name}`);
   }
-  if (value.source !== "github") {
-    throw new Error(`Codex skill ${name} must use source "github".`);
-  }
-  const repository = readNonEmptyString(value.repository, `skills[${index}].repository`);
-  if (!/^[^/\s]+\/[^/\s]+$/u.test(repository) || repository.includes("..")) {
-    throw new Error(`Invalid GitHub repository for ${name}: ${repository}`);
-  }
   const selector = readNonEmptyString(value.selector, `skills[${index}].selector`);
   if (selector.includes("\\") || selector.split("/").includes("..")) {
     throw new Error(`Invalid skill selector for ${name}: ${selector}`);
   }
-  if (!isRecord4(value.tracking)) {
-    throw new Error(`Codex skill ${name} must declare tracking.`);
-  }
-  if (value.tracking.type !== "branch" && value.tracking.type !== "pin") {
-    throw new Error(`Invalid tracking type for ${name}.`);
-  }
-  const ref = readNonEmptyString(value.tracking.ref, `skills[${index}].tracking.ref`);
   if (typeof value.enabled !== "boolean") {
     throw new Error(`Codex skill ${name} must declare enabled as a boolean.`);
   }
-  return {
-    name,
-    source: "github",
-    repository,
-    selector,
-    tracking: { type: value.tracking.type, ref },
-    enabled: value.enabled
-  };
+  if (value.source === "github") {
+    const repository = readNonEmptyString(value.repository, `skills[${index}].repository`);
+    if (!/^[^/\s]+\/[^/\s]+$/u.test(repository) || repository.includes("..")) {
+      throw new Error(`Invalid GitHub repository for ${name}: ${repository}`);
+    }
+    if (!isRecord4(value.tracking)) {
+      throw new Error(`Codex skill ${name} must declare tracking.`);
+    }
+    if (value.tracking.type !== "branch" && value.tracking.type !== "pin") {
+      throw new Error(`Invalid tracking type for ${name}.`);
+    }
+    const ref = readNonEmptyString(value.tracking.ref, `skills[${index}].tracking.ref`);
+    return {
+      name,
+      source: "github",
+      repository,
+      selector,
+      tracking: { type: value.tracking.type, ref },
+      enabled: value.enabled
+    };
+  }
+  throw new Error(`Codex skill ${name} must use source "github".`);
 }
 function readNonEmptyString(value, label) {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -11167,7 +11168,7 @@ function isMissingFileError3(error) {
 
 // src/domain/codex-skills-manager.ts
 async function buildManagedSkillInventory(input) {
-  const installed = await input.backend.listInstalled({
+  const installed = input.installedSkills ? [...input.installedSkills] : await input.backend.listInstalled({
     trackableOnly: input.manifest.skills.length === 0
   });
   const installedByName = new Map(installed.map((skill) => [skill.name, skill]));
@@ -11176,7 +11177,7 @@ async function buildManagedSkillInventory(input) {
     return skill.enabled && skill.tracking.type === "branch" && local?.managed === true && local.repository === skill.repository;
   });
   const updates = await input.backend.checkUpdates(trackedSkills);
-  const rows = input.manifest.skills.map((skill) => classifyManagedSkill(skill, installedByName.get(skill.name), updates));
+  const rows = await Promise.all(input.manifest.skills.map((skill) => classifyManagedSkill(skill, installedByName.get(skill.name), updates)));
   const reservedNames = new Set([
     ...input.manifest.skills.map((skill) => skill.name),
     ...input.legacyEntries
@@ -11209,7 +11210,7 @@ async function buildManagedSkillInventory(input) {
 function classifyManagedSkill(skill, installed, updates) {
   const source = `${skill.repository}:${skill.selector}@${skill.tracking.ref}`;
   if (!skill.enabled) {
-    return {
+    return Promise.resolve({
       name: skill.name,
       source,
       state: "disabled",
@@ -11217,19 +11218,19 @@ function classifyManagedSkill(skill, installed, updates) {
       installedManaged: installed?.managed === true && installed.repository === skill.repository,
       availableActions: ["none", "enable", "remove"],
       skill
-    };
+    });
   }
   if (!installed) {
-    return {
+    return Promise.resolve({
       name: skill.name,
       source,
       state: "missing",
       availableActions: ["none", "install", "remove"],
       skill
-    };
+    });
   }
   if (!installed.managed || installed.repository !== skill.repository) {
-    return {
+    return Promise.resolve({
       name: skill.name,
       source,
       state: "unmanaged_collision",
@@ -11237,10 +11238,10 @@ function classifyManagedSkill(skill, installed, updates) {
       installedManaged: false,
       availableActions: ["none", "replace", "remove"],
       skill
-    };
+    });
   }
   if (skill.tracking.type === "branch" && updates.has(skill.name)) {
-    return {
+    return Promise.resolve({
       name: skill.name,
       source,
       state: "update_available",
@@ -11248,9 +11249,9 @@ function classifyManagedSkill(skill, installed, updates) {
       installedManaged: true,
       availableActions: ["none", "update", "remove"],
       skill
-    };
+    });
   }
-  return {
+  return Promise.resolve({
     name: skill.name,
     source,
     state: "installed",
@@ -11258,7 +11259,7 @@ function classifyManagedSkill(skill, installed, updates) {
     installedManaged: true,
     availableActions: ["none", "remove"],
     skill
-  };
+  });
 }
 async function executeSkillPlan(input) {
   let manifest = input.manifest;
@@ -11335,6 +11336,115 @@ async function replaceSkillWithRollback(item, backend) {
   }
 }
 
+// src/domain/codex-skills-source.ts
+class SkillSourceError extends Error {
+  code = "unsupported-source";
+  constructor(message) {
+    super(message);
+    this.name = "SkillSourceError";
+  }
+}
+function parseSkillSource(input) {
+  const value = input.trim();
+  if (value.length === 0) {
+    throw new SkillSourceError("A skill source is required.");
+  }
+  if (isGitHubShorthand(value)) {
+    return {
+      kind: "github",
+      repository: normalizeRepository(value),
+      locator: normalizeRepository(value)
+    };
+  }
+  if (looksLikeUrl(value)) {
+    return parseGitHubUrl(value);
+  }
+  if (looksLikeGitTransport(value)) {
+    throw unsupportedSource(value);
+  }
+  throw unsupportedSource(value);
+}
+function parseGitHubUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw unsupportedSource(value);
+  }
+  if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "github.com" || url.username || url.password || url.search || url.hash) {
+    throw unsupportedSource(value);
+  }
+  const segments = url.pathname.split("/").filter((segment) => segment.length > 0).map((segment) => decodeSegment(segment, value));
+  if (segments.length < 2) {
+    throw unsupportedSource(value);
+  }
+  const owner = segments[0];
+  const repositoryName = segments[1].replace(/\.git$/u, "");
+  const repository = normalizeRepository(`${owner}/${repositoryName}`);
+  if (segments.length === 2) {
+    return {
+      kind: "github",
+      repository,
+      locator: repository
+    };
+  }
+  if (segments[2] !== "tree" || segments.length < 4) {
+    throw unsupportedSource(value);
+  }
+  const ref = validatePathSegment(segments[3], "GitHub ref", value);
+  const subpath = segments.slice(4).join("/");
+  if (subpath.length > 0) {
+    validateRelativePath(subpath, "GitHub tree path", value);
+  }
+  const encodedRef = encodeURIComponent(ref);
+  const locator = subpath ? `https://github.com/${repository}/tree/${encodedRef}/${subpath.split("/").map((segment) => encodeURIComponent(segment)).join("/")}` : `https://github.com/${repository}/tree/${encodedRef}`;
+  return {
+    kind: "github",
+    repository,
+    ref,
+    ...subpath ? { subpath } : {},
+    locator
+  };
+}
+function isGitHubShorthand(value) {
+  return /^[^/\s]+\/[^/\s]+$/u.test(value) && !value.includes("..") && !value.includes(":") && !value.includes("@") && !value.startsWith(".") && !value.startsWith("/");
+}
+function normalizeRepository(value) {
+  const repository = value.replace(/\.git$/u, "").trim();
+  if (!/^[^/\s]+\/[^/\s]+$/u.test(repository) || repository.includes("..")) {
+    throw unsupportedSource(value);
+  }
+  return repository;
+}
+function validatePathSegment(value, label, original) {
+  if (!value || value === "." || value === ".." || value.includes("\\")) {
+    throw new SkillSourceError(`${label} is invalid in source: ${original}`);
+  }
+  return value;
+}
+function validateRelativePath(value, label, original) {
+  const segments = value.split("/");
+  if (value.startsWith("/") || segments.some((segment) => segment.length === 0 || segment === "." || segment === "..") || value.includes("\\")) {
+    throw new SkillSourceError(`${label} is invalid in source: ${original}`);
+  }
+}
+function decodeSegment(value, original) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new SkillSourceError(`Invalid URL encoding in source: ${original}`);
+  }
+}
+function looksLikeUrl(value) {
+  return /^[a-z][a-z\d+.-]*:\/\//iu.test(value);
+}
+function looksLikeGitTransport(value) {
+  return /^(?:git@|git\+|git:|ssh:|file:|[^/\s]+@[^/\s]+:)/iu.test(value);
+}
+function unsupportedSource(value) {
+  return new SkillSourceError(`Unsupported skill source "${value}". Supported forms are GitHub owner/repo, a GitHub repository URL, or a GitHub tree URL. Local paths, GitLab, and arbitrary Git URLs are not supported. Use the repository-owned codex-skill-promoter skill for locally authored or Hermes-absorbed skills.`);
+}
+
 // src/command/codex.command.ts
 var commonArgs = {
   ...cliContractArgs,
@@ -11393,9 +11503,11 @@ async function runSkills(args, scope, dependencies = {}) {
     homeRoot: paths.homeRoot,
     localCodexRoot: paths.localCodexRoot
   });
+  const installedSkills = await backend.listInstalled();
   const inventory = await buildManagedSkillInventory({
     ...manifestResult,
-    backend
+    backend,
+    installedSkills
   });
   if (scope.context.json) {
     writeJsonValue(processOutput, {
@@ -11421,8 +11533,8 @@ async function runSkills(args, scope, dependencies = {}) {
     return;
   }
   if (mode === "manage" && inventory.length === 0) {
-    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("No tracked or trackable GitHub skills were found."));
-    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("Choose Add skills from GitHub to install and track one."));
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("No tracked or trackable supported skills were found."));
+    writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("Choose Add to install and track a GitHub skill."));
     return;
   }
   const plan = mode === "add" ? await createAddPlan(manifestResult.manifest, backend, interaction) : await createManagePlan(inventory, backend, interaction);
@@ -11525,8 +11637,8 @@ async function createAddPlan(manifest, backend, interaction) {
   if (!repositoryAnswer) {
     return;
   }
-  const repository = repositoryAnswer.trim();
-  const discovered = await backend.discover(repository);
+  const source = parseSkillSource(repositoryAnswer);
+  const discovered = await backend.discover(source);
   const selectedNames = await interaction.chooseDiscoveredNames(discovered);
   if (!selectedNames) {
     return;
@@ -11535,14 +11647,14 @@ async function createAddPlan(manifest, backend, interaction) {
   if (!trackingType) {
     return;
   }
-  const refAnswer = await interaction.requestTrackingRef(trackingType);
+  const refAnswer = await interaction.requestTrackingRef(trackingType, source.ref);
   if (!refAnswer) {
     return;
   }
   const selectedSkills = selectedNames.map((name) => ({
     name,
     source: "github",
-    repository,
+    repository: source.repository,
     selector: name,
     tracking: { type: trackingType, ref: refAnswer.trim() },
     enabled: true
@@ -11580,7 +11692,7 @@ var defaultSkillsInteraction = {
     const answer = await le2({
       message: "Codex skills",
       options: [
-        { value: "manage", label: "Manage tracked and local skills" },
+        { value: "manage", label: "Manage tracked GitHub skills" },
         { value: "add", label: "Add skills from GitHub" }
       ]
     });
@@ -11591,16 +11703,16 @@ var defaultSkillsInteraction = {
   },
   async requestRepository() {
     const answer = await ae({
-      message: "GitHub repository (owner/repo)",
+      message: "Skill source (owner/repo or GitHub URL)",
       validate(value) {
-        return /^[^/\s]+\/[^/\s]+$/u.test(value.trim()) ? undefined : "Use owner/repo format.";
+        return value.trim().length > 0 ? undefined : "A source is required.";
       }
     });
     return lD2(answer) ? undefined : answer.trim();
   },
   async chooseDiscoveredNames(skills) {
     const answer = await $e({
-      message: "Select skills to track (Space toggles)",
+      message: "Select skills to add (Space toggles)",
       required: true,
       options: skills.map((skill) => ({
         value: skill.name,
@@ -11716,7 +11828,7 @@ function writePlan(scope, plan) {
   }
 }
 function describePlanEffect(item) {
-  if (item.action === "track" && item.skill) {
+  if (item.action === "track" && item.skill && isManagedGitHubSkill(item.skill)) {
     return `(manifest only; ${item.skill.repository}:${item.skill.selector}@${item.skill.tracking.ref} ${item.skill.tracking.type}; keep local installation unchanged)`;
   }
   if (item.action === "add" || item.action === "install") {
@@ -11732,7 +11844,7 @@ function describePlanEffect(item) {
     return "(enable manifest entry)";
   }
   if (item.action === "update") {
-    return "(update local installation; preserve manifest source)";
+    return "(update local GitHub installation; preserve manifest source)";
   }
   return "";
 }
@@ -11745,7 +11857,7 @@ var codexCommand = defineCommand({
     skills: defineCommand({
       meta: {
         name: "skills",
-        description: "Reconcile manifest-tracked and eligible local GitHub skills."
+        description: "Reconcile manifest-tracked GitHub skills."
       },
       args: commonArgs,
       async run({ args }) {
@@ -13036,468 +13148,8 @@ var obsidianCommand = defineCommand({
   }
 });
 
-// src/command/opencode.command.ts
-var import_picocolors5 = __toESM(require_picocolors(), 1);
-
-// src/domain/opencode-config-manager.ts
-import { mkdir as mkdir11, readFile as readFile13, rename as rename6, rm as rm8, writeFile as writeFile8 } from "node:fs/promises";
-import { dirname as dirname11, isAbsolute as isAbsolute5, resolve as resolve10 } from "node:path";
-async function syncOpenCodeSkillPaths(input) {
-  const plugins = [];
-  const paths = [];
-  for (const plugin of input.plugins) {
-    const pluginPaths = await readPluginSkillPaths(plugin);
-    if (pluginPaths.length === 0) {
-      continue;
-    }
-    plugins.push({ name: plugin.name, paths: pluginPaths });
-    paths.push(...pluginPaths);
-  }
-  const config = await readOpenCodeConfig(input.configPath);
-  const currentSkills = readOptionalRecord(config.skills, "skills");
-  const currentPaths = readOptionalStringArray(currentSkills?.paths, "skills.paths");
-  const nextPaths = uniqueStrings([...currentPaths, ...paths]);
-  const changed = !sameStringArray(currentPaths, nextPaths);
-  if (changed) {
-    config.skills = { ...currentSkills ?? {}, paths: nextPaths };
-    await writeOpenCodeConfig(input.configPath, config);
-  }
-  return {
-    configPath: input.configPath,
-    paths: nextPaths,
-    plugins,
-    changed
-  };
-}
-async function syncOpenCodeMcpServers(input) {
-  const servers = new Map;
-  for (const plugin of input.plugins) {
-    const pluginServers = await readPluginMcpServers(plugin);
-    for (const [name, value] of Object.entries(pluginServers)) {
-      const previous = servers.get(name);
-      if (previous && JSON.stringify(previous.value) !== JSON.stringify(value)) {
-        throw new Error(`MCP server name collision for "${name}" between ${previous.plugin} and ${plugin.name}.`);
-      }
-      servers.set(name, { plugin: plugin.name, value });
-    }
-  }
-  const config = await readOpenCodeConfig(input.configPath);
-  const currentMcp = readOptionalRecord(config.mcp, "mcp");
-  const nextMcp = { ...currentMcp ?? {} };
-  let changed = false;
-  const resultServers = [];
-  for (const [name, entry] of servers) {
-    resultServers.push({ name, plugin: entry.plugin });
-    if (JSON.stringify(nextMcp[name]) !== JSON.stringify(entry.value)) {
-      nextMcp[name] = entry.value;
-      changed = true;
-    }
-  }
-  if (changed) {
-    config.mcp = nextMcp;
-    await writeOpenCodeConfig(input.configPath, config);
-  }
-  return {
-    configPath: input.configPath,
-    servers: resultServers,
-    changed
-  };
-}
-async function readOpenCodeConfig(configPath) {
-  let raw;
-  try {
-    raw = await readFile13(configPath, "utf8");
-  } catch (error) {
-    if (isMissingFileError6(error)) {
-      return {};
-    }
-    throw error;
-  }
-  try {
-    const value = JSON.parse(parseJsonc(raw));
-    if (!isRecord6(value)) {
-      throw new Error("expected a JSON object");
-    }
-    return value;
-  } catch (error) {
-    throw new Error(`Invalid OpenCode config JSON: ${configPath}`, {
-      cause: error
-    });
-  }
-}
-async function writeOpenCodeConfig(configPath, config) {
-  const path = resolve10(configPath);
-  const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`;
-  await mkdir11(dirname11(path), { recursive: true });
-  try {
-    await writeFile8(temporaryPath, `${JSON.stringify(config, null, 2)}
-`, "utf8");
-    await rename6(temporaryPath, path);
-  } finally {
-    await rm8(temporaryPath, { force: true });
-  }
-}
-async function readPluginSkillPaths(plugin) {
-  const manifest = await readPluginJson(plugin);
-  const declared = manifest.skills;
-  const candidates = typeof declared === "string" ? [declared] : Array.isArray(declared) ? declared.filter((value) => typeof value === "string") : [];
-  return candidates.map((candidate) => {
-    const path = resolve10(plugin.root, candidate);
-    assertPathInside(plugin.root, path);
-    return path;
-  });
-}
-async function readPluginMcpServers(plugin) {
-  const path = resolve10(plugin.root, ".mcp.json");
-  let parsed;
-  try {
-    parsed = JSON.parse(await readFile13(path, "utf8"));
-  } catch (error) {
-    if (isMissingFileError6(error)) {
-      return {};
-    }
-    throw new Error(`Invalid plugin MCP config JSON: ${path}`, {
-      cause: error
-    });
-  }
-  if (!isRecord6(parsed) || parsed.mcpServers === undefined) {
-    return {};
-  }
-  const sourceServers = readRecord(parsed.mcpServers, "mcpServers");
-  return Object.fromEntries(Object.entries(sourceServers).map(([name, value]) => [
-    name,
-    renderOpenCodeMcpServer(plugin, name, readRecord(value, `mcpServers.${name}`))
-  ]));
-}
-function renderOpenCodeMcpServer(plugin, name, source) {
-  if (typeof source.url === "string" && source.url.trim().length > 0) {
-    return {
-      type: "remote",
-      url: source.url,
-      ...isRecord6(source.headers) ? { headers: source.headers } : {},
-      enabled: source.enabled !== false
-    };
-  }
-  const command = readCommand(source.command, name).map((entry) => entry.replaceAll("<PLUGIN_ROOT>", plugin.root));
-  const args = (source.args === undefined ? [] : readStringArray(source.args, `mcpServers.${name}.args`)).map((entry) => entry.replaceAll("<PLUGIN_ROOT>", plugin.root));
-  const environment = readEnvironment(source.env, name);
-  const cwd = resolveMcpCwd(plugin, source.cwd);
-  const timeout = readTimeout(source.tool_timeout_sec, name);
-  return {
-    type: "local",
-    command: [...command, ...args],
-    ...environment ? { environment } : {},
-    ...cwd ? { cwd } : {},
-    ...timeout ? { timeout } : {},
-    enabled: source.enabled !== false
-  };
-}
-function readCommand(value, name) {
-  if (typeof value === "string" && value.trim().length > 0) {
-    return [value];
-  }
-  if (Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
-    if (value.length > 0) {
-      return value;
-    }
-  }
-  throw new Error(`MCP server ${name} must declare a command or URL.`);
-}
-function readEnvironment(value, name) {
-  if (value === undefined) {
-    return;
-  }
-  const source = readRecord(value, `mcpServers.${name}.env`);
-  return Object.fromEntries(Object.entries(source).map(([key, entry]) => {
-    if (typeof entry !== "string" && typeof entry !== "number" && typeof entry !== "boolean") {
-      throw new Error(`MCP environment value must be scalar: mcpServers.${name}.env.${key}`);
-    }
-    return [key, String(entry)];
-  }));
-}
-function readTimeout(value, name) {
-  if (value === undefined) {
-    return;
-  }
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-    throw new Error(`Invalid MCP timeout for ${name}.`);
-  }
-  return Math.round(value * 1000);
-}
-function resolveMcpCwd(plugin, value) {
-  if (value === undefined) {
-    return plugin.root;
-  }
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`Invalid MCP cwd for ${plugin.name}.`);
-  }
-  const replaced = value.replaceAll("<PLUGIN_ROOT>", plugin.root);
-  return isAbsolute5(replaced) ? resolve10(replaced) : resolve10(plugin.root, replaced);
-}
-async function readPluginJson(plugin) {
-  const path = resolve10(plugin.root, ".codex-plugin", "plugin.json");
-  try {
-    const value = JSON.parse(await readFile13(path, "utf8"));
-    if (!isRecord6(value)) {
-      throw new Error("expected a JSON object");
-    }
-    return value;
-  } catch (error) {
-    throw new Error(`Invalid plugin manifest JSON: ${path}`, { cause: error });
-  }
-}
-function readOptionalRecord(value, label) {
-  if (value === undefined) {
-    return;
-  }
-  return readRecord(value, label);
-}
-function readRecord(value, label) {
-  if (!isRecord6(value)) {
-    throw new Error(`${label} must be an object.`);
-  }
-  return value;
-}
-function readOptionalStringArray(value, label) {
-  if (value === undefined) {
-    return [];
-  }
-  return readStringArray(value, label);
-}
-function readStringArray(value, label) {
-  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
-    throw new Error(`${label} must be an array of strings.`);
-  }
-  return [...value];
-}
-function uniqueStrings(values) {
-  return [...new Set(values)];
-}
-function sameStringArray(left, right) {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-function parseJsonc(value) {
-  const withoutComments = stripJsonComments(value);
-  return stripTrailingCommas(withoutComments);
-}
-function stripJsonComments(value) {
-  let output = "";
-  let inString = false;
-  let escaped = false;
-  let lineComment = false;
-  let blockComment = false;
-  for (let index = 0;index < value.length; index += 1) {
-    const current = value[index] ?? "";
-    const next = value[index + 1] ?? "";
-    if (lineComment) {
-      if (current === `
-` || current === "\r") {
-        lineComment = false;
-        output += current;
-      } else {
-        output += " ";
-      }
-      continue;
-    }
-    if (blockComment) {
-      if (current === "*" && next === "/") {
-        blockComment = false;
-        output += "  ";
-        index += 1;
-      } else {
-        output += current === `
-` || current === "\r" ? current : " ";
-      }
-      continue;
-    }
-    if (inString) {
-      output += current;
-      if (escaped) {
-        escaped = false;
-      } else if (current === "\\") {
-        escaped = true;
-      } else if (current === '"') {
-        inString = false;
-      }
-      continue;
-    }
-    if (current === '"') {
-      inString = true;
-      output += current;
-    } else if (current === "/" && next === "/") {
-      lineComment = true;
-      output += "  ";
-      index += 1;
-    } else if (current === "/" && next === "*") {
-      blockComment = true;
-      output += "  ";
-      index += 1;
-    } else {
-      output += current;
-    }
-  }
-  return output;
-}
-function stripTrailingCommas(value) {
-  let output = "";
-  let inString = false;
-  let escaped = false;
-  for (let index = 0;index < value.length; index += 1) {
-    const current = value[index] ?? "";
-    if (inString) {
-      output += current;
-      if (escaped) {
-        escaped = false;
-      } else if (current === "\\") {
-        escaped = true;
-      } else if (current === '"') {
-        inString = false;
-      }
-      continue;
-    }
-    if (current === '"') {
-      inString = true;
-      output += current;
-      continue;
-    }
-    if (current === ",") {
-      let lookahead = index + 1;
-      while (/\s/u.test(value[lookahead] ?? "")) {
-        lookahead += 1;
-      }
-      if (value[lookahead] === "}" || value[lookahead] === "]") {
-        continue;
-      }
-    }
-    output += current;
-  }
-  return output;
-}
-function isRecord6(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function isMissingFileError6(error) {
-  return error instanceof Error && "code" in error && error.code === "ENOENT";
-}
-
-// src/command/opencode.command.ts
-var commonArgs3 = {
-  ...cliContractArgs,
-  repoRoot: { type: "string", description: "Override the repository root" },
-  home: { type: "string", description: "Override the home directory" },
-  pluginsRoot: {
-    type: "string",
-    description: "Override the repository-managed codex/plugins directory"
-  },
-  openCodeHome: {
-    type: "string",
-    description: "Override the OpenCode configuration directory"
-  },
-  openCodeConfig: {
-    type: "string",
-    description: "Override the OpenCode JSON or JSONC config path"
-  }
-};
-function getStringArg3(value) {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
-}
-function createPaths2(args) {
-  return createCodexConfigPaths({
-    repoRoot: getStringArg3(args.repoRoot),
-    homeRoot: getStringArg3(args.home),
-    pluginsRoot: getStringArg3(args.pluginsRoot),
-    openCodeHome: getStringArg3(args.openCodeHome),
-    openCodeConfig: getStringArg3(args.openCodeConfig)
-  });
-}
-async function runObservedOpenCodeSubcommand(subcommand, args, run) {
-  await runObservedCliCommand(args, { command: "opencode", subcommand }, run);
-}
-async function runSkills2(args, scope) {
-  const paths = createPaths2(args);
-  const plugins = await discoverEnabledRepositoryCodexPlugins(paths);
-  const result = await syncOpenCodeSkillPaths({
-    configPath: paths.openCodeConfigPath,
-    plugins
-  });
-  if (scope.context.json) {
-    writeJsonValue(processOutput, {
-      ok: true,
-      command: "opencode skills",
-      result
-    });
-  } else {
-    writeHumanStatus(scope.context, processOutput, import_picocolors5.default.cyan("OpenCode skills"));
-    writeHumanStatus(scope.context, processOutput, `${result.changed ? "updated" : "unchanged"} ${result.configPath}`);
-    for (const plugin of result.plugins) {
-      writeHumanStatus(scope.context, processOutput, `${plugin.name}: ${plugin.paths.join(", ")}`);
-    }
-    if (result.plugins.length === 0) {
-      writeHumanStatus(scope.context, processOutput, import_picocolors5.default.dim("(no plugin skills)"));
-    }
-  }
-  process.exitCode = 0;
-}
-async function runMcp(args, scope) {
-  const paths = createPaths2(args);
-  const plugins = await discoverEnabledRepositoryCodexPlugins(paths);
-  const result = await syncOpenCodeMcpServers({
-    configPath: paths.openCodeConfigPath,
-    plugins
-  });
-  if (scope.context.json) {
-    writeJsonValue(processOutput, {
-      ok: true,
-      command: "opencode mcp",
-      result
-    });
-  } else {
-    writeHumanStatus(scope.context, processOutput, import_picocolors5.default.cyan("OpenCode MCP"));
-    writeHumanStatus(scope.context, processOutput, `${result.changed ? "updated" : "unchanged"} ${result.configPath}`);
-    for (const server of result.servers) {
-      writeHumanStatus(scope.context, processOutput, `${server.name} <- ${server.plugin}`);
-    }
-    if (result.servers.length === 0) {
-      writeHumanStatus(scope.context, processOutput, import_picocolors5.default.dim("(no plugin MCP servers)"));
-    }
-  }
-  process.exitCode = 0;
-}
-var opencodeCommand = defineCommand({
-  meta: {
-    name: "opencode",
-    description: "Sync shared CthuCodex skills and MCP servers to OpenCode."
-  },
-  subCommands: {
-    skills: defineCommand({
-      meta: {
-        name: "skills",
-        description: "Expose repository plugin skills to OpenCode."
-      },
-      args: commonArgs3,
-      async run({ args }) {
-        await runObservedOpenCodeSubcommand("skills", args, async (scope) => {
-          await runSkills2(args, scope);
-        });
-      }
-    }),
-    mcp: defineCommand({
-      meta: {
-        name: "mcp",
-        description: "Sync repository plugin MCP servers to OpenCode."
-      },
-      args: commonArgs3,
-      async run({ args }) {
-        await runObservedOpenCodeSubcommand("mcp", args, async (scope) => {
-          await runMcp(args, scope);
-        });
-      }
-    })
-  }
-});
-
 // src/command/run-scripts.command.ts
-var import_picocolors7 = __toESM(require_picocolors(), 1);
+var import_picocolors6 = __toESM(require_picocolors(), 1);
 
 // ../../node_modules/.pnpm/neverthrow@8.2.0/node_modules/neverthrow/dist/index.cjs.js
 var defaultErrorConfig = {
@@ -13514,11 +13166,11 @@ var createNeverThrowError = (message, result, config = defaultErrorConfig) => {
 };
 function __awaiter(thisArg, _arguments, P5, generator) {
   function adopt(value) {
-    return value instanceof P5 ? value : new P5(function(resolve11) {
-      resolve11(value);
+    return value instanceof P5 ? value : new P5(function(resolve10) {
+      resolve10(value);
     });
   }
-  return new (P5 || (P5 = Promise))(function(resolve11, reject) {
+  return new (P5 || (P5 = Promise))(function(resolve10, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -13534,7 +13186,7 @@ function __awaiter(thisArg, _arguments, P5, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve11(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve10(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -13622,14 +13274,14 @@ function __asyncValues(o3) {
   }, i3);
   function verb(n2) {
     i3[n2] = o3[n2] && function(v3) {
-      return new Promise(function(resolve11, reject) {
-        v3 = o3[n2](v3), settle(resolve11, reject, v3.done, v3.value);
+      return new Promise(function(resolve10, reject) {
+        v3 = o3[n2](v3), settle(resolve10, reject, v3.done, v3.value);
       });
     };
   }
-  function settle(resolve11, reject, d3, v3) {
+  function settle(resolve10, reject, d3, v3) {
     Promise.resolve(v3).then(function(v4) {
-      resolve11({ value: v4, done: d3 });
+      resolve10({ value: v4, done: d3 });
     }, reject);
   }
 }
@@ -14056,14 +13708,14 @@ function runBundledScript(pkg, args, context) {
 }
 
 // src/infra/bundled-script-catalog.ts
-var import_picocolors6 = __toESM(require_picocolors(), 1);
+var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
 import { existsSync as existsSync4 } from "node:fs";
-import { dirname as dirname12, join as join20 } from "node:path";
+import { dirname as dirname11, join as join20 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 function getBundledScriptsRoot() {
-  const moduleDir = dirname12(fileURLToPath2(import.meta.url));
+  const moduleDir = dirname11(fileURLToPath2(import.meta.url));
   const candidates = [
     join20(moduleDir, "scripts"),
     join20(moduleDir, "../scripts"),
@@ -14073,7 +13725,7 @@ function getBundledScriptsRoot() {
 }
 
 // src/infra/discover-scripts.ts
-import { readdir as readdir5, readFile as readFile14, stat as stat6 } from "node:fs/promises";
+import { readdir as readdir5, readFile as readFile13, stat as stat6 } from "node:fs/promises";
 import { join as join21 } from "node:path";
 
 // src/domain/script-id.ts
@@ -14460,7 +14112,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let rawJson;
     try {
-      rawJson = await readFile14(manifestPath, "utf8");
+      rawJson = await readFile13(manifestPath, "utf8");
     } catch (e3) {
       const msg = e3 instanceof Error ? e3.message : String(e3);
       pushWarning(warnings, manifestPath, `cannot read manifest: ${msg}`);
@@ -14534,7 +14186,7 @@ function formatBundledScriptCatalog(catalog, heading = "AVAILABLE SCRIPTS") {
   } else {
     for (const row of rows) {
       const detail = row.description ? `${row.title} — ${row.description}` : row.title;
-      lines.push(`  ${import_picocolors6.default.cyan(row.id.padEnd(width + 2))}${detail}`);
+      lines.push(`  ${import_picocolors5.default.cyan(row.id.padEnd(width + 2))}${detail}`);
     }
   }
   if (catalog.warnings.length > 0) {
@@ -14567,7 +14219,7 @@ async function renderBundledScriptHelpAppendix() {
 var defaultDeps = {
   isInteractive: () => process.stdin.isTTY === true,
   pickScriptId: async (rows) => {
-    pe(import_picocolors7.default.cyan("▶ Script Selection"));
+    pe(import_picocolors6.default.cyan("▶ Script Selection"));
     const choice = await le2({
       message: "Choose a bundled script to run",
       options: rows.map((o3) => ({
@@ -14663,7 +14315,7 @@ async function executeBundledScript(args, deps) {
     }
   });
   for (const warning of catalog.warnings) {
-    writeWarning(processOutput, import_picocolors7.default.yellow(`${warning.path}: ${warning.message}`));
+    writeWarning(processOutput, import_picocolors6.default.yellow(`${warning.path}: ${warning.message}`));
     diagnostics.emit({
       level: "warn",
       event: "cli.script_discovery_warning",
@@ -14829,7 +14481,7 @@ var createScriptsCommand = (deps = defaultDeps) => {
 var scriptsCommand = createScriptsCommand();
 
 // src/command/self-update-output.ts
-var import_picocolors8 = __toESM(require_picocolors(), 1);
+var import_picocolors7 = __toESM(require_picocolors(), 1);
 var defaultDeps2 = {
   output: processOutput,
   isOutputTty: () => process.stdout.isTTY === true,
@@ -14850,7 +14502,7 @@ function identity(value) {
 function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
   const human = !context.json && !context.quiet;
   const interactiveOutput = human && context.isTty && deps.isOutputTty();
-  const colors2 = import_picocolors8.default.createColors(interactiveOutput);
+  const colors2 = import_picocolors7.default.createColors(interactiveOutput);
   let activeSpinner;
   let activePhase;
   let headerWritten = false;
@@ -14992,11 +14644,11 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
 }
 
 // src/command/self-update-status-output.ts
-var import_picocolors9 = __toESM(require_picocolors(), 1);
+var import_picocolors8 = __toESM(require_picocolors(), 1);
 var defaultDeps3 = {
   output: processOutput,
   isOutputTty: () => process.stdout.isTTY === true,
-  isColorSupported: () => import_picocolors9.default.isColorSupported
+  isColorSupported: () => import_picocolors8.default.isColorSupported
 };
 var statusMessageLength = 120;
 function formatCommitTime(value) {
@@ -15011,7 +14663,7 @@ function boundStatusMessage(value) {
 function renderCliInstallationStatus(context, status, deps = defaultDeps3) {
   if (context.json || context.quiet)
     return;
-  const colors2 = import_picocolors9.default.createColors(deps.isOutputTty() && deps.isColorSupported());
+  const colors2 = import_picocolors8.default.createColors(deps.isOutputTty() && deps.isColorSupported());
   const mode = status.mode === "local" ? colors2.magenta("● LOCAL") : colors2.blue("● REMOTE");
   const commit = colors2.yellow(status.commit ?? "unavailable");
   const commitIdentity = status.commitTime ? `${commit} ${colors2.dim(`· ${formatCommitTime(status.commitTime)}`)}` : commit;
@@ -15062,7 +14714,7 @@ var selfUpdateArgs = {
     description: "Show bounded Git and npm command details"
   }
 };
-function getStringArg4(value) {
+function getStringArg3(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 function toUpdateCliError(error) {
@@ -15094,9 +14746,9 @@ function createUpdateCommand() {
     args: selfUpdateArgs,
     async run({ args }) {
       await runObservedCliCommand(args, { command: "update" }, async ({ context, fail }) => {
-        const repo = getStringArg4(args.repo);
-        const ref = getStringArg4(args.ref);
-        const installDir = getStringArg4(args["install-dir"]);
+        const repo = getStringArg3(args.repo);
+        const ref = getStringArg3(args.ref);
+        const installDir = getStringArg3(args["install-dir"]);
         const renderer = createSelfUpdateRenderer(context, {
           verbose: args.verbose === true
         });
@@ -15178,9 +14830,9 @@ var statusCommand = defineCommand({
     await runObservedCliCommand(args, { command: "status" }, async ({ context, fail }) => {
       try {
         const status = await getCliInstallationStatus({
-          repo: getStringArg4(args.repo),
-          ref: getStringArg4(args.ref),
-          installDir: getStringArg4(args["install-dir"])
+          repo: getStringArg3(args.repo),
+          ref: getStringArg3(args.ref),
+          installDir: getStringArg3(args["install-dir"])
         });
         if (context.json) {
           writeJsonValue(processOutput, {
@@ -15214,12 +14866,6 @@ var rootCommandRegistrations = [
   {
     name: "codex",
     command: codexCommand,
-    visibility: "public",
-    bareBehavior: "help"
-  },
-  {
-    name: "opencode",
-    command: opencodeCommand,
     visibility: "public",
     bareBehavior: "help"
   },
@@ -15296,7 +14942,7 @@ function normalizeCommandRows(value, hiddenCommands) {
     }
     const width = Math.max(...visibleRows.map((row) => row.name.length));
     for (const row of visibleRows) {
-      normalized.push(`  ${import_picocolors10.default.bold(import_picocolors10.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
+      normalized.push(`  ${import_picocolors9.default.bold(import_picocolors9.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
     }
     pendingRows = [];
   };

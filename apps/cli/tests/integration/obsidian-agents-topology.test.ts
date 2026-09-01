@@ -17,6 +17,7 @@ import {
   getObsidianAgentsLinkType,
   inspectObsidianAgentsStatus,
   inspectObsidianAgentsTopology,
+  sameCanonicalPath,
 } from '../../src/domain/obsidian-agents-service';
 import { createObsidianAgentsDataPaths } from '../../src/infra/obsidian-agents-paths';
 
@@ -236,10 +237,11 @@ describe('Obsidian agents vault topology', () => {
     expect(await readFile(join(secondTarget, 'keep.txt'), 'utf8')).toBe(
       'keep\n',
     );
-    expect(
-      (await inspectObsidianAgentsTopology(setupProfile(fixture))).agents
-        .resolvedTarget,
-    ).toBe(secondTarget);
+    const topology = await inspectObsidianAgentsTopology(setupProfile(fixture));
+    expect(topology.agents.resolvedTarget).toBeDefined();
+    await expect(
+      sameCanonicalPath(topology.agents.resolvedTarget ?? '', secondTarget),
+    ).resolves.toBe(true);
   });
 
   test('selects junctions on Windows and directory symlinks elsewhere', () => {

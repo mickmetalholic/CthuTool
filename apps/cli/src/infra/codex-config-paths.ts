@@ -7,8 +7,6 @@ export type CodexConfigPaths = {
   readonly repoCodexRoot: string;
   readonly homeRoot: string;
   readonly localCodexRoot: string;
-  readonly localOpenCodeRoot: string;
-  readonly openCodeConfigPath: string;
   readonly marketplacePath: string;
   readonly pluginsRoot: string;
   readonly cacheRoot: string;
@@ -18,8 +16,6 @@ export type CodexConfigPathOptions = {
   readonly repoRoot?: string;
   readonly homeRoot?: string;
   readonly codexHome?: string;
-  readonly openCodeHome?: string;
-  readonly openCodeConfig?: string;
   readonly marketplace?: string;
   readonly pluginsRoot?: string;
   readonly cacheRoot?: string;
@@ -31,19 +27,11 @@ export function createCodexConfigPaths(
   const repoRoot = resolve(options.repoRoot ?? getDefaultRepoRoot());
   const homeRoot = resolve(options.homeRoot ?? homedir());
   const localCodexRoot = resolve(options.codexHome ?? join(homeRoot, '.codex'));
-  const localOpenCodeRoot = resolve(
-    options.openCodeHome ?? join(homeRoot, '.config', 'opencode'),
-  );
-  const openCodeConfigPath = resolve(
-    options.openCodeConfig ?? getDefaultOpenCodeConfigPath(localOpenCodeRoot),
-  );
   return {
     repoRoot,
     repoCodexRoot: resolve(repoRoot, 'codex'),
     homeRoot,
     localCodexRoot,
-    localOpenCodeRoot,
-    openCodeConfigPath,
     marketplacePath: resolve(
       options.marketplace ??
         join(homeRoot, '.agents', 'plugins', 'marketplace.json'),
@@ -56,13 +44,6 @@ export function createCodexConfigPaths(
         join(homeRoot, '.codex', 'plugins', 'cache', 'personal'),
     ),
   };
-}
-
-function getDefaultOpenCodeConfigPath(openCodeRoot: string): string {
-  const jsoncPath = join(openCodeRoot, 'opencode.jsonc');
-  return existsSync(jsoncPath)
-    ? jsoncPath
-    : join(openCodeRoot, 'opencode.json');
 }
 
 export function assertPathInside(parent: string, child: string): void {

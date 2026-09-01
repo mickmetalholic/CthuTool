@@ -8,7 +8,7 @@
     "dist"
   ],
   "scripts": {
-    "build:deps": "pnpm --filter @cthutool/agent-protocol build",
+    "build:deps": "node ../../scripts/build-workspace-dependencies.mjs @cthutool/agent-protocol",
     "build": "pnpm run build:deps && tsc -p tsconfig.json",
     "test": "pnpm run build:deps && vitest run",
     "test:cov": "pnpm run build:deps && vitest run --coverage",

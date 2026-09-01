@@ -6,7 +6,7 @@ export type SkillTracking =
   | { readonly type: 'branch'; readonly ref: string }
   | { readonly type: 'pin'; readonly ref: string };
 
-export type ManagedCodexSkill = {
+export type ManagedGitHubSkill = {
   readonly name: string;
   readonly source: 'github';
   readonly repository: string;
@@ -14,6 +14,8 @@ export type ManagedCodexSkill = {
   readonly tracking: SkillTracking;
   readonly enabled: boolean;
 };
+
+export type ManagedCodexSkill = ManagedGitHubSkill;
 
 export type CodexSkillsManifest = {
   readonly version: 2;
@@ -139,6 +141,12 @@ export function removeManagedSkill(
   };
 }
 
+export function isManagedGitHubSkill(
+  skill: ManagedCodexSkill,
+): skill is ManagedGitHubSkill {
+  return skill.source === 'github';
+}
+
 function getManifestPath(repoCodexRoot: string): string {
   const path = resolve(repoCodexRoot, 'skills.manifest.json');
   assertPathInside(repoCodexRoot, path);
@@ -156,16 +164,6 @@ function validateManagedSkill(
   if (!/^[a-z0-9][a-z0-9-]*$/u.test(name)) {
     throw new Error(`Invalid Codex skill name: ${name}`);
   }
-  if (value.source !== 'github') {
-    throw new Error(`Codex skill ${name} must use source "github".`);
-  }
-  const repository = readNonEmptyString(
-    value.repository,
-    `skills[${index}].repository`,
-  );
-  if (!/^[^/\s]+\/[^/\s]+$/u.test(repository) || repository.includes('..')) {
-    throw new Error(`Invalid GitHub repository for ${name}: ${repository}`);
-  }
   const selector = readNonEmptyString(
     value.selector,
     `skills[${index}].selector`,
@@ -173,27 +171,39 @@ function validateManagedSkill(
   if (selector.includes('\\') || selector.split('/').includes('..')) {
     throw new Error(`Invalid skill selector for ${name}: ${selector}`);
   }
-  if (!isRecord(value.tracking)) {
-    throw new Error(`Codex skill ${name} must declare tracking.`);
-  }
-  if (value.tracking.type !== 'branch' && value.tracking.type !== 'pin') {
-    throw new Error(`Invalid tracking type for ${name}.`);
-  }
-  const ref = readNonEmptyString(
-    value.tracking.ref,
-    `skills[${index}].tracking.ref`,
-  );
   if (typeof value.enabled !== 'boolean') {
     throw new Error(`Codex skill ${name} must declare enabled as a boolean.`);
   }
-  return {
-    name,
-    source: 'github',
-    repository,
-    selector,
-    tracking: { type: value.tracking.type, ref },
-    enabled: value.enabled,
-  };
+
+  if (value.source === 'github') {
+    const repository = readNonEmptyString(
+      value.repository,
+      `skills[${index}].repository`,
+    );
+    if (!/^[^/\s]+\/[^/\s]+$/u.test(repository) || repository.includes('..')) {
+      throw new Error(`Invalid GitHub repository for ${name}: ${repository}`);
+    }
+    if (!isRecord(value.tracking)) {
+      throw new Error(`Codex skill ${name} must declare tracking.`);
+    }
+    if (value.tracking.type !== 'branch' && value.tracking.type !== 'pin') {
+      throw new Error(`Invalid tracking type for ${name}.`);
+    }
+    const ref = readNonEmptyString(
+      value.tracking.ref,
+      `skills[${index}].tracking.ref`,
+    );
+    return {
+      name,
+      source: 'github',
+      repository,
+      selector,
+      tracking: { type: value.tracking.type, ref },
+      enabled: value.enabled,
+    };
+  }
+
+  throw new Error(`Codex skill ${name} must use source "github".`);
 }
 
 function readNonEmptyString(value: unknown, label: string): string {

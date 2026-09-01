@@ -144,7 +144,6 @@ describe('shell completion command', () => {
       'codex',
       'completion',
       'obsidian',
-      'opencode',
       'scripts',
       'status',
       'update',
@@ -153,10 +152,9 @@ describe('shell completion command', () => {
       'codex',
       'completion',
     ]);
-    expect(lines((await runCli(['__complete', 'opencode', ''])).out)).toEqual([
-      'mcp',
-      'skills',
-    ]);
+    expect(lines((await runCli(['__complete', 'opencode', ''])).out)).toEqual(
+      [],
+    );
     expect(lines((await runCli(['__complete', 'codex', ''])).out)).toEqual([
       'install',
       'skills',

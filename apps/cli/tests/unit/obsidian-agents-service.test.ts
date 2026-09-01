@@ -28,10 +28,12 @@ describe('Obsidian agents filesystem inspection', () => {
     await expect(inspectObsidianAgentsPath(filePath)).resolves.toMatchObject({
       kind: 'file',
     });
-    await expect(inspectObsidianAgentsPath(linkPath)).resolves.toMatchObject({
-      kind: 'link',
-      resolvedTarget: directoryPath,
-    });
+    const linkState = await inspectObsidianAgentsPath(linkPath);
+    expect(linkState).toMatchObject({ kind: 'link', target: directoryPath });
+    expect(linkState.resolvedTarget).toBeDefined();
+    await expect(
+      sameCanonicalPath(linkState.resolvedTarget ?? '', directoryPath),
+    ).resolves.toBe(true);
 
     await rm(directoryPath, { recursive: true });
     await expect(inspectObsidianAgentsPath(linkPath)).resolves.toMatchObject({

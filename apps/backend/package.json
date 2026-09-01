@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build:deps": "pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/browser-runtime-protocol build && pnpm --filter @cthutool/config build",
+    "build:deps": "node ../../scripts/build-workspace-dependencies.mjs @cthutool/agent-protocol @cthutool/browser-runtime-protocol @cthutool/config",
     "dev": "pnpm run build:deps && nest start --watch",
     "start": "pnpm run build:deps && nest start",
     "start:debug": "pnpm run build:deps && nest start --debug --watch",

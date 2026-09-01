@@ -253,16 +253,37 @@ explicit plan, and confirm before anything changes.
 
 A GitHub skill that exists only locally appears as `local_only`; Track records
 its reviewed repository, selector, and branch or pinned ref in the version 2
-manifest without reinstalling the skill or copying its directory. Use Add
-skills from GitHub for a skill that is not installed locally. Self-authored,
-manually copied, well-known, plugin-provided, system, non-GitHub, and
-provenance-incomplete local skills remain ignored. `--json` emits the same
-eligible inventory without writing, and a non-interactive bare invocation fails
-instead of choosing actions automatically.
+manifest without reinstalling the skill or copying its directory. Add accepts
+GitHub shorthand (`owner/repo`), full GitHub repository URLs, and direct
+GitHub tree URLs. Local paths, GitLab URLs, and arbitrary Git URLs are rejected;
+use `$codex-skill-promoter` for a locally authored or Hermes-absorbed skill.
+Self-authored, manually copied, well-known, plugin-provided, system,
+non-GitHub, and provenance-incomplete local skills remain ignored. `--json`
+emits the same eligible inventory without writing, and a non-interactive bare
+invocation fails instead of choosing actions automatically.
 
 Skill discovery and local operations use the pinned
 `npx --yes skills@1.5.19` backend at Codex user scope. Updates are offered only
 for branch-tracked entries; pinned refs remain fixed until the manifest changes.
+
+The repository-owned `$codex-skill-promoter` skill is the single local
+development workflow. It considers explicitly selected Codex-local skills and
+eligible Evolution-created Hermes skills. A Hermes source is adapted into
+Codex-local staging first; both modes preserve a Codex/Hermes-compatible shared
+core and then use the clean feature checkout prepared by the user. The skill
+scans both local trees read-only, then lets the user choose which candidates to
+promote and which exact local copies to clean after verification. Every row
+defaults to Skip and every copy defaults to Keep. A Hermes candidate presents
+its original Evolution source and adapted Codex staging path independently.
+The skill never creates or switches a branch/worktree, installs the selected
+checkout for verification, and deletes only confirmed unchanged targets after
+a final path, provenance, and fingerprint check. It does not write
+`codex/skills.manifest.json`, edit or update Hermes, commit, or push; final
+deletion of an explicitly selected eligible Hermes source is its only permitted
+Hermes mutation.
+Hermes built-in, Hub-managed, external,
+organization-managed, opted-out, and unprovenanced skills are excluded; the
+Hermes-side workflow remains owned by Hermes.
 
 `chc codex install` is plugin-only. It installs enabled repository plugins from
 `codex/plugins.manifest.json` (and discovered repository plugin directories),
@@ -302,24 +323,6 @@ If both `Agents/` and a real `.agents/` directory already contain files, setup
 stops without merging or deleting either tree. Reconcile them manually, then
 run setup again. An existing real `.agents/` directory is otherwise adopted as
 the visible source, preserving any legacy `.git` metadata for manual cleanup.
-
-## OpenCode Shared Assets
-
-```bash
-chc opencode skills
-chc opencode mcp
-```
-
-These commands use the same repository plugin sources as `chc codex install`.
-`chc opencode skills` adds enabled plugin skill directories to OpenCode's
-`skills.paths`; `chc opencode mcp` translates each plugin `.mcp.json` into
-OpenCode's `mcp` configuration. Existing unrelated OpenCode configuration is
-preserved, and these commands do not create an OpenCode plugin or `install`
-command.
-
-The default target is `~/.config/opencode/opencode.json` (or an existing
-`opencode.jsonc`). Use `--open-code-config`, `--open-code-home`, or
-`--plugins-root` to override the target and source paths.
 
 ## Local Development
 

@@ -12,7 +12,6 @@ import {
   createInternalCompleteCommand,
 } from './completion.command';
 import { obsidianCommand } from './obsidian.command';
-import { opencodeCommand } from './opencode.command';
 import { normalizeScriptsArgs, scriptsCommand } from './run-scripts.command';
 import {
   statusCommand,
@@ -32,12 +31,6 @@ const rootCommandRegistrations: readonly CliCommandRegistration[] = [
   {
     name: 'codex',
     command: codexCommand,
-    visibility: 'public',
-    bareBehavior: 'help',
-  },
-  {
-    name: 'opencode',
-    command: opencodeCommand,
     visibility: 'public',
     bareBehavior: 'help',
   },
