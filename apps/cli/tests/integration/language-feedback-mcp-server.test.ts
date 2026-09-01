@@ -1,11 +1,16 @@
 /// <reference lib="dom" />
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
 import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import type { Browser, Page } from 'playwright';
+import {
+  type Browser,
+  chromium as defaultChromium,
+  type Page,
+} from 'playwright';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const pluginRoot = join(repoRoot, 'codex', 'plugins', 'cthu-codex');
@@ -15,6 +20,12 @@ const serverPath = join(
   'language-feedback-mcp-server.mjs',
 );
 const resourcePath = join(pluginRoot, 'ui', 'language-feedback', 'v1.html');
+const browserExecutablePath =
+  process.env.CTHUTOOL_PLAYWRIGHT_EXECUTABLE ??
+  defaultChromium.executablePath();
+const describeBrowser = existsSync(browserExecutablePath)
+  ? describe
+  : describe.skip;
 
 const validFeedback = {
   version: 1,
@@ -315,7 +326,7 @@ describe('CthuCodex language-feedback MCP server', () => {
   });
 });
 
-describe('CthuCodex language-feedback component', () => {
+describeBrowser('CthuCodex language-feedback component', () => {
   let browser: Browser;
   let resourceHtml: string;
 
@@ -323,8 +334,7 @@ describe('CthuCodex language-feedback component', () => {
     const { chromium } = await loadPlaywright();
     browser = await chromium.launch({
       headless: true,
-      executablePath:
-        process.env.CTHUTOOL_PLAYWRIGHT_EXECUTABLE ?? chromium.executablePath(),
+      executablePath: browserExecutablePath,
     });
     resourceHtml = await readFile(resourcePath, 'utf8');
   });
