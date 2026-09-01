@@ -45,9 +45,9 @@ The repository does not use the legacy `reasonix.toml`. Reasonix 0.53.2
 discovers project skills from the shared `.agents/skills` surface, which is
 generated and refreshed by the repository setup command.
 
-Canonical project-authored skills live in `skills/`. OpenSpec workflow skills
-are generated under `.agents/skills`, `.cursor/skills`, and `.opencode/skills`;
-these generated directories are ignored and must not be hand-edited.
+OpenSpec workflow skills are generated under `.agents/skills`,
+`.cursor/skills`, and `.opencode/skills`; these generated directories are
+ignored and must not be hand-edited.
 
 From the repository root, install and verify the selected toolchain with:
 

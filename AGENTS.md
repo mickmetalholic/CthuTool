@@ -3,7 +3,6 @@
 - Keep intentionally shared, portable project instructions (for example `AGENTS.md` and authored Cursor skills such as `commit` / `create-pull-request`).
 - Treat OpenSpec-generated adapters under `.agents/skills`, `.cursor/skills`, and `.opencode/skills` as reproducible outputs. Do not hand-edit them for project policy; regenerate with `pnpm setup:ai-tooling`.
 - Do not commit generated `openspec-*` adapter trees; they remain ignored and are recreated by setup.
-- Canonical project-authored skills live in `skills/` and are linked into agent skill trees by setup.
 - See `docs/ai-tooling.md` for ownership, invocation forms, and third-party skill lifecycle.
 
 ## OpenSpec Naming
@@ -14,7 +13,7 @@
 ## Protected Business Plugin
 
 - `codex/plugins/cthu-codex` is a business plugin outside project-level AI tooling standardization.
-- Do not modify it when regenerating OpenSpec adapters or linking baseline skills.
+- Do not modify it when regenerating OpenSpec adapters.
 
 ## Worktree Policy
 

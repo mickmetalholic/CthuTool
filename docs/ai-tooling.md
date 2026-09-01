@@ -29,7 +29,6 @@ Generated skill folder names for the core set:
 | --- | --- | --- |
 | OpenSpec | Workflow skills (`openspec-*`) | `openspec/` + `openspec init` / `openspec update` via `pnpm setup:ai-tooling` |
 | `npx skills` | Third-party reusable skills | Explicit package + `--skill` selector (not committed as copies) |
-| Project-authored skills | Baseline repo skills | `skills/<name>/SKILL.md` linked by `pnpm setup:ai-tooling` |
 | `chc codex skills` | Codex user-scope GitHub skills | `codex/skills.manifest.json` lifecycle only |
 | Business plugin | CthuCodex product skills/MCP | `codex/plugins/cthu-codex` — **out of scope** for this tooling |
 
@@ -42,7 +41,6 @@ Do not copy OpenSpec workflows into the third-party skills manifest. Do not trea
 Committed durable inputs:
 
 - `openspec/config.yaml` and OpenSpec specs/changes
-- `skills/` (project-authored baseline skills)
 - `AGENTS.md`, this reference, and intentionally authored Cursor skills such as `commit` / `create-pull-request`
 
 Ignored reproducible outputs (after setup):
@@ -50,7 +48,6 @@ Ignored reproducible outputs (after setup):
 - `.agents/skills/openspec-*`
 - `.cursor/skills/openspec-*`
 - `.opencode/skills/openspec-*`
-- Linked copies of baseline skills under those agent skill trees
 
 Regenerate with:
 
@@ -58,28 +55,13 @@ Regenerate with:
 pnpm setup:ai-tooling
 ```
 
-Never hand-edit generated `openspec-*` skill files for project policy. Change `openspec/config.yaml` or `skills/` instead, then rerun setup.
-
-## Canonical project skills
-
-Source tree: `skills/`
-
-| Skill | Purpose | Mutation boundary |
-| --- | --- | --- |
-| `repo-orientation` | Read-only map of source boundaries, OpenSpec layout, worktrees, and excluded plugin scope | Read-only |
-| `project-verify` | Select targeted validation for changed files; respects protected-service rules | May run targeted checks after confirmation; never starts protected local services or unrequested builds |
-| `review-diff` | Inspect current diff, generated-file drift, and scope | Read-only; never commit/push/PR |
-
-Setup links (default) or copies (`--copy`) these into `.agents/skills`, `.cursor/skills`, and `.opencode/skills`.
+Never hand-edit generated `openspec-*` skill files for project policy. Change the durable OpenSpec inputs instead, then rerun setup.
 
 ## Setup and check
 
 ```bash
-# Install/refresh OpenSpec adapters + link baseline skills (idempotent)
+# Install/refresh OpenSpec adapters (idempotent)
 pnpm setup:ai-tooling
-
-# Copy instead of symlink when symlinks are inconvenient
-pnpm setup:ai-tooling -- --copy
 
 # Read-only verification
 pnpm check:ai-tooling
@@ -103,12 +85,12 @@ drift.
 
 Do not present one tool's syntax as universal.
 
-| Tool | OpenSpec example | Baseline skill example |
-| --- | --- | --- |
-| Codex | `$openspec-propose "idea"` | `$repo-orientation` |
-| Cursor | `/openspec-propose` or attach the skill | `/repo-orientation` or attach the skill |
-| OpenCode | `/openspec-propose` or skill picker | skill picker / `/repo-orientation` |
-| Reasonix 0.53.2 | `/skill openspec-propose` | `/skill repo-orientation` |
+| Tool | OpenSpec example |
+| --- | --- |
+| Codex | `$openspec-propose "idea"` |
+| Cursor | `/openspec-propose` or attach the skill |
+| OpenCode | `/openspec-propose` or skill picker |
+| Reasonix 0.53.2 | `/skill openspec-propose` |
 
 Reasonix discovers shared skills from `.agents/skills` (and other convention roots). Prefer that shared surface; do not maintain a second manually copied OpenSpec tree for Reasonix.
 
@@ -116,7 +98,7 @@ Reasonix discovers shared skills from `.agents/skills` (and other convention roo
 
 ## Third-party skills (`npx skills`)
 
-UI/UX Pro Max is **not** part of the default baseline. Opt in explicitly:
+UI/UX Pro Max is **not** installed by default. Opt in explicitly:
 
 ```bash
 npx skills add nextlevelbuilder/ui-ux-pro-max-skill --skill ui-ux-pro-max -a codex -a cursor -a opencode
@@ -124,7 +106,7 @@ npx skills add nextlevelbuilder/ui-ux-pro-max-skill --skill ui-ux-pro-max -a cod
 
 Use `-a '*'` only when you intentionally want every detected agent. Review the source before upgrading.
 
-`chc codex skills` continues to manage only Codex user-scope, manifest-backed GitHub skills. It does not install or remove OpenSpec adapters or `skills/` baseline entries.
+`chc codex skills` continues to manage only Codex user-scope, manifest-backed GitHub skills. It does not install or remove OpenSpec adapters.
 
 ## Reasonix project configuration
 
@@ -140,8 +122,6 @@ Installed Reasonix: **0.53.2**.
 
 Commit and pull-request actions remain **explicit** workflows (for example Cursor `/commit` and `/create-pull-request`).
 
-`repo-orientation`, `project-verify`, and `review-diff` must not commit, push, or open a pull request on their own.
-
 ## Verification checklist
 
 ```bash
@@ -156,7 +136,7 @@ git diff --check
 Confirm:
 
 - Core `openspec-*` workflows exist under `.agents`, `.cursor`, and `.opencode`
-- Baseline skills `repo-orientation`, `project-verify`, `review-diff` are discoverable
+- Removed project skill links are absent from all generated agent skill trees
 - No repository-local `ui-ux-pro-max` copies under agent skill trees
 - No `reasonix.toml`
 - No changes under `codex/plugins/cthu-codex` from setup

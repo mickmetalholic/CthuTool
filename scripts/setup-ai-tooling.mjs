@@ -3,20 +3,16 @@
  * Idempotent AI tooling setup and check for CthuTool.
  *
  * - Ensures OpenSpec core adapters for agents/codex, cursor, and opencode
- * - Links (default) or copies project skills from skills/ into agent skill trees
  * - Never modifies codex/plugins/cthu-codex
  */
 
 import { spawn } from 'node:child_process';
 import {
-  cp,
   lstat,
-  mkdir,
   readFile,
   readdir,
   realpath,
   rm,
-  symlink,
   writeFile,
 } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -35,7 +31,6 @@ const CORE_SKILLS = [
   'openspec-sync-specs',
   'openspec-archive-change',
 ];
-const BASELINE_SKILLS = ['repo-orientation', 'project-verify', 'review-diff'];
 const AGENT_SKILL_ROOTS = [
   join(repoRoot, '.agents', 'skills'),
   join(repoRoot, '.cursor', 'skills'),
@@ -43,17 +38,20 @@ const AGENT_SKILL_ROOTS = [
 ];
 const PROTECTED_PLUGIN = join(repoRoot, 'codex', 'plugins', 'cthu-codex');
 const CONFIG_PATH = join(repoRoot, 'openspec', 'config.yaml');
-const SKILLS_SOURCE = join(repoRoot, 'skills');
 const LEGACY_OPENSPEC_NAMES = [
   'openspec-continue-change',
   'openspec-ff-change',
   'openspec-new-change',
   'openspec-verify-change',
 ];
+const REMOVED_PROJECT_SKILL_NAMES = [
+  'repo-orientation',
+  'project-verify',
+  'review-diff',
+];
 
 const args = new Set(process.argv.slice(2));
 const checkOnly = args.has('--check');
-const copyMode = args.has('--copy');
 
 const run = (command, commandArgs, options = {}) =>
   new Promise((resolvePromise, reject) => {
@@ -185,32 +183,7 @@ const validateSkillEntry = async (skillName, root) => {
   }
 };
 
-const linkOrCopySkill = async (skillName, targetRoot) => {
-  const source = join(SKILLS_SOURCE, skillName);
-  const target = join(targetRoot, skillName);
-  if (!(await pathExists(source))) {
-    throw new Error(`Missing canonical skill source: ${relative(repoRoot, source)}`);
-  }
-  await mkdir(targetRoot, { recursive: true });
-  if (await pathExists(target)) {
-    await rm(target, { recursive: true, force: true });
-  }
-  if (copyMode) {
-    await cp(source, target, { recursive: true });
-  } else {
-    await symlink(source, target, 'dir');
-  }
-};
-
-const installBaselineSkills = async () => {
-  for (const root of AGENT_SKILL_ROOTS) {
-    for (const skill of BASELINE_SKILLS) {
-      await linkOrCopySkill(skill, root);
-    }
-  }
-};
-
-const removeLegacyOpenSpecCopies = async () => {
+const removeObsoleteGeneratedSkills = async () => {
   const legacyRoots = [
     join(repoRoot, '.codex', 'skills'),
     join(repoRoot, '.claude', 'skills'),
@@ -220,6 +193,14 @@ const removeLegacyOpenSpecCopies = async () => {
   ];
   for (const root of legacyRoots) {
     for (const name of LEGACY_OPENSPEC_NAMES) {
+      const path = join(root, name);
+      if (await pathExists(path)) {
+        await rm(path, { recursive: true, force: true });
+      }
+    }
+  }
+  for (const root of AGENT_SKILL_ROOTS) {
+    for (const name of REMOVED_PROJECT_SKILL_NAMES) {
       const path = join(root, name);
       if (await pathExists(path)) {
         await rm(path, { recursive: true, force: true });
@@ -280,17 +261,14 @@ const collectIssues = async () => {
         if (skillIssue) issues.push(skillIssue);
       }
     }
-    for (const skill of BASELINE_SKILLS) {
-      if (!names.includes(skill)) {
-        issues.push(`Missing baseline skill ${skill} under ${label}`);
-      } else {
-        const skillIssue = await validateSkillEntry(skill, root);
-        if (skillIssue) issues.push(skillIssue);
-      }
-    }
     for (const name of LEGACY_OPENSPEC_NAMES) {
       if (names.includes(name)) {
         issues.push(`Obsolete OpenSpec skill under ${label}/${name}; use the core workflow set instead`);
+      }
+    }
+    for (const name of REMOVED_PROJECT_SKILL_NAMES) {
+      if (names.includes(name)) {
+        issues.push(`Removed project skill still exists under ${label}/${name}; rerun pnpm setup:ai-tooling`);
       }
     }
   }
@@ -344,14 +322,8 @@ const main = async () => {
   if (!checkOnly) {
     console.log(`OpenSpec ${version}; regenerating adapters for ${OPENSPEC_TOOLS}`);
     await regenerateOpenSpec();
-    await removeLegacyOpenSpecCopies();
-    await installBaselineSkills();
+    await removeObsoleteGeneratedSkills();
     await assertNoProtectedPluginChanges();
-    console.log(
-      copyMode
-        ? 'Baseline skills copied into agent skill trees.'
-        : 'Baseline skills symlinked into agent skill trees.',
-    );
   }
 
   const issues = await collectIssues();
