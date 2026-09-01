@@ -151,7 +151,7 @@ export function createSelfUpdateRenderer(
       if (!human) return;
       if (plan.status === 'up_to_date' && plan.relinkRequired && plan.target) {
         deps.output.stdout.write(
-          `${colors.yellow('Global relink required')} · run chc update · ${identity(plan.target)}\n`,
+          `${colors.yellow('Global relink required')} · run chc source update · ${identity(plan.target)}\n`,
         );
       } else if (plan.status === 'up_to_date' && plan.target) {
         deps.output.stdout.write(
@@ -163,7 +163,7 @@ export function createSelfUpdateRenderer(
         );
       } else if (plan.status === 'install_required') {
         deps.output.stdout.write(
-          `${colors.yellow('Managed installation required')} · run chc update\n`,
+          `${colors.yellow('Managed installation required')} · run chc source update\n`,
         );
       }
     },

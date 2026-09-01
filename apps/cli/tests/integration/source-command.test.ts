@@ -3,11 +3,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const repoRoot = join(cliRoot, '../..');
 
-async function runCli(args: string[]) {
-  const proc = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
+async function runCli(
+  args: string[],
+  env: Record<string, string | undefined> = {},
+) {
+  const proc = Bun.spawn([process.execPath, 'run', 'src/index.ts', ...args], {
     cwd: cliRoot,
-    env: process.env,
+    env: { ...process.env, ...env },
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'ignore',
@@ -26,7 +30,7 @@ describe('source command', () => {
     expect(bare).toEqual(explicit);
     expect(bare.code).toBe(0);
     expect(bare.err).toBe('');
-    for (const operation of ['list', 'use', 'register']) {
+    for (const operation of ['list', 'status', 'use', 'update', 'register']) {
       expect(bare.out).toContain(operation);
     }
     expect(bare.out).not.toContain('current');
@@ -74,8 +78,15 @@ describe('source command', () => {
     expect(`${bootstrap.out}\n${bootstrap.err}`).toContain('bootstrap');
   });
 
-  test('extends lifecycle status with compatible source identity fields', async () => {
-    const result = await runCli(['status', '--json']);
+  test('keeps source inventory separate from canonical lifecycle status', async () => {
+    const list = await runCli(['source', 'list', '--json']);
+    const result = await runCli([
+      'source',
+      'status',
+      '--install-dir',
+      repoRoot,
+      '--json',
+    ]);
 
     expect(result.code).toBe(0);
     expect(result.err).toBe('');
@@ -87,17 +98,52 @@ describe('source command', () => {
     };
     expect(output).toMatchObject({
       ok: true,
-      command: 'status',
+      command: 'source status',
       status: {
         mode: 'local',
+        installDir: repoRoot,
       },
     });
+    expect(output).not.toHaveProperty('candidates');
+    expect(JSON.parse(list.out)).toHaveProperty('candidates');
     expect(['main', 'worktree']).toContain(output.status.sourceKind);
     if (output.status.sourceKind === 'main') {
       expect(output.status.sourceId).toBe('local');
     } else {
       expect(output.status.sourceId).toMatch(/^worktree:/);
     }
+  });
+
+  test('preserves legacy status JSON and canonical human, quiet, and error behavior', async () => {
+    const canonical = await runCli(['source', 'status', '--json']);
+    const legacy = await runCli(['status', '--json']);
+    const human = await runCli(['source', 'status']);
+    const quiet = await runCli(['source', 'status', '--quiet']);
+    const failure = await runCli(
+      ['source', 'status', '--install-dir', repoRoot, '--json'],
+      { PATH: '' },
+    );
+
+    expect(canonical.code).toBe(0);
+    expect(legacy.code).toBe(0);
+    expect(JSON.parse(canonical.out)).toMatchObject({
+      ok: true,
+      command: 'source status',
+    });
+    expect(JSON.parse(legacy.out)).toMatchObject({
+      ok: true,
+      command: 'status',
+      status: JSON.parse(canonical.out).status,
+    });
+    expect(human.code).toBe(0);
+    expect(human.out).toContain('CthuTool');
+    expect(human.out).not.toContain('CthuTool sources');
+    expect(quiet).toMatchObject({ code: 0, out: '', err: '' });
+    expect(failure.code).not.toBe(0);
+    expect(JSON.parse(failure.out)).toMatchObject({
+      ok: false,
+      error: { code: 'update_failed' },
+    });
   });
 
   test('requires explicit use and register arguments without a TTY', async () => {

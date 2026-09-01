@@ -14645,7 +14645,7 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
       if (!human)
         return;
       if (plan.status === "up_to_date" && plan.relinkRequired && plan.target) {
-        deps.output.stdout.write(`${colors2.yellow("Global relink required")} · run chc update · ${identity(plan.target)}
+        deps.output.stdout.write(`${colors2.yellow("Global relink required")} · run chc source update · ${identity(plan.target)}
 `);
       } else if (plan.status === "up_to_date" && plan.target) {
         deps.output.stdout.write(`${colors2.green("✓")} chc is already up to date · ${identity(plan.target)}
@@ -14654,7 +14654,7 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
         deps.output.stdout.write(`${colors2.cyan("Update available")} · ${identity(plan.target)}
 `);
       } else if (plan.status === "install_required") {
-        deps.output.stdout.write(`${colors2.yellow("Managed installation required")} · run chc update
+        deps.output.stdout.write(`${colors2.yellow("Managed installation required")} · run chc source update
 `);
       }
     },
@@ -14782,7 +14782,7 @@ function writeFailure(context, cliError, error) {
   }
   process.exitCode = cliError.exitCode;
 }
-function createUpdateCommand() {
+function createUpdateCommand(route) {
   return defineCommand({
     meta: {
       name: "update",
@@ -14790,7 +14790,7 @@ function createUpdateCommand() {
     },
     args: selfUpdateArgs,
     async run({ args }) {
-      await runObservedCliCommand(args, { command: "update" }, async ({ context, fail }) => {
+      await runObservedCliCommand(args, route.diagnostic, async ({ context, fail }) => {
         const repo = getStringArg3(args.repo);
         const ref = getStringArg3(args.ref);
         const installDir = getStringArg3(args["install-dir"]);
@@ -14805,7 +14805,7 @@ function createUpdateCommand() {
             if (context.json) {
               writeJsonValue(processOutput, {
                 ok: true,
-                command: "update",
+                command: route.jsonCommand,
                 result: result2
               });
             } else {
@@ -14818,7 +14818,7 @@ function createUpdateCommand() {
           if (context.json) {
             writeJsonValue(processOutput, {
               ok: true,
-              command: "update",
+              command: route.jsonCommand,
               result
             });
           } else {
@@ -14865,39 +14865,56 @@ var versionCommand = defineCommand({
     });
   }
 });
-var statusCommand = defineCommand({
-  meta: {
-    name: "status",
-    description: "Show chc CLI installation status."
-  },
-  args: { ...cliContractArgs, ...selfUpdateSourceArgs },
-  async run({ args }) {
-    await runObservedCliCommand(args, { command: "status" }, async ({ context, fail }) => {
-      try {
-        const status = await getCliInstallationStatus({
-          repo: getStringArg3(args.repo),
-          ref: getStringArg3(args.ref),
-          installDir: getStringArg3(args["install-dir"])
-        });
-        if (context.json) {
-          writeJsonValue(processOutput, {
-            ok: true,
-            command: "status",
-            status
+function createStatusCommand(route) {
+  return defineCommand({
+    meta: {
+      name: "status",
+      description: "Show chc CLI installation status."
+    },
+    args: { ...cliContractArgs, ...selfUpdateSourceArgs },
+    async run({ args }) {
+      await runObservedCliCommand(args, route.diagnostic, async ({ context, fail }) => {
+        try {
+          const status = await getCliInstallationStatus({
+            repo: getStringArg3(args.repo),
+            ref: getStringArg3(args.ref),
+            installDir: getStringArg3(args["install-dir"])
           });
-        } else {
-          renderCliInstallationStatus(context, status);
+          if (context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: route.jsonCommand,
+              status
+            });
+          } else {
+            renderCliInstallationStatus(context, status);
+          }
+          process.exitCode = 0;
+        } catch (error) {
+          const cliError = toUpdateCliError(error);
+          fail(cliError);
+          writeFailure(context, cliError, error);
         }
-        process.exitCode = 0;
-      } catch (error) {
-        const cliError = toUpdateCliError(error);
-        fail(cliError);
-        writeFailure(context, cliError, error);
-      }
-    });
-  }
+      });
+    }
+  });
+}
+var statusCommand = createStatusCommand({
+  diagnostic: { command: "status" },
+  jsonCommand: "status"
 });
-var updateCommand = createUpdateCommand();
+var updateCommand = createUpdateCommand({
+  diagnostic: { command: "update" },
+  jsonCommand: "update"
+});
+var sourceStatusCommand = createStatusCommand({
+  diagnostic: { command: "source", subcommand: "status" },
+  jsonCommand: "source status"
+});
+var sourceUpdateCommand = createUpdateCommand({
+  diagnostic: { command: "source", subcommand: "update" },
+  jsonCommand: "source update"
+});
 
 // src/command/source.command.ts
 var import_picocolors9 = __toESM(require_picocolors(), 1);
@@ -15448,7 +15465,7 @@ function requiredCandidate(candidate, selector) {
 function assertAvailableSource(candidate) {
   if (candidate.available)
     return;
-  const hint = candidate.kind === "managed" ? "Repair or move the existing managed path, then retry; use `chc update` only for a valid checkout." : "Refresh apps/cli/dist/index.js or select another checkout.";
+  const hint = candidate.kind === "managed" ? "Repair or move the existing managed path, then retry; use `chc source update` only for a valid checkout." : "Refresh apps/cli/dist/index.js or select another checkout.";
   throw new CliSourceError({
     code: "source_unavailable",
     message: `Source is unavailable: ${candidate.path}`,
@@ -15774,7 +15791,7 @@ function createSourceUseCommand(deps) {
     async run({ args, rawArgs }) {
       await runObservedCliCommand(args, { command: "source", subcommand: "use" }, async (scope) => {
         if (rawArgs.some((argument) => argument === "--bootstrap" || argument.startsWith("--bootstrap="))) {
-          failSourceCommand(scope, createCliError("invalid_option", "Unknown option: --bootstrap. Select remote directly; use `chc update` to update an existing managed checkout."), { phase: "validation" });
+          failSourceCommand(scope, createCliError("invalid_option", "Unknown option: --bootstrap. Select remote directly; use `chc source update` to update an existing managed checkout."), { phase: "validation" });
           return;
         }
         let selector = getStringArg4(args.selector);
@@ -15870,8 +15887,20 @@ function createSourceCommand(overrides = {}) {
       bareBehavior: "run"
     },
     {
+      name: "status",
+      command: sourceStatusCommand,
+      visibility: "public",
+      bareBehavior: "run"
+    },
+    {
       name: "use",
       command: createSourceUseCommand(deps),
+      visibility: "public",
+      bareBehavior: "run"
+    },
+    {
+      name: "update",
+      command: sourceUpdateCommand,
       visibility: "public",
       bareBehavior: "run"
     },
@@ -15885,7 +15914,7 @@ function createSourceCommand(overrides = {}) {
   return registerCommandGroup(defineCommand({
     meta: {
       name: "source",
-      description: "Discover and switch the source used by global chc."
+      description: "Discover, inspect, switch, and update the source used by global chc."
     },
     subCommands: buildRegisteredSubCommands(registrations)
   }), registrations);
@@ -15922,13 +15951,13 @@ var rootCommandRegistrations = [
   {
     name: "status",
     command: statusCommand,
-    visibility: "public",
+    visibility: "compat",
     bareBehavior: "run"
   },
   {
     name: "update",
     command: updateCommand,
-    visibility: "public",
+    visibility: "compat",
     bareBehavior: "run"
   },
   {

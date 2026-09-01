@@ -104,6 +104,36 @@ describe('CLI command diagnostics coverage', () => {
     );
   });
 
+  test('identifies canonical and compatibility lifecycle routes independently', async () => {
+    const canonical = await runCli(['source', 'status', '--json'], {
+      CHC_CLI_DIAGNOSTICS: '1',
+    });
+    const compatibility = await runCli(['status', '--json'], {
+      CHC_CLI_DIAGNOSTICS: '1',
+    });
+
+    expect(canonical.code).toBe(0);
+    expect(JSON.parse(canonical.out).command).toBe('source status');
+    expect(parseDiagnostics(canonical.err).at(-1)).toEqual(
+      expect.objectContaining({
+        command: 'source',
+        subcommand: 'status',
+        exitCode: 0,
+      }),
+    );
+    expect(compatibility.code).toBe(0);
+    expect(JSON.parse(compatibility.out).command).toBe('status');
+    expect(parseDiagnostics(compatibility.err).at(-1)).toEqual(
+      expect.objectContaining({
+        command: 'status',
+        exitCode: 0,
+      }),
+    );
+    expect(parseDiagnostics(compatibility.err).at(-1)).not.toHaveProperty(
+      'subcommand',
+    );
+  });
+
   test('does not emit diagnostics for the internal completion protocol command', async () => {
     const result = await runCli(['__complete', 'co'], {
       CHC_CLI_DIAGNOSTICS: '1',

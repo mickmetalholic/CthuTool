@@ -11,7 +11,7 @@ Commands derive `CliContext` at the boundary, reserve stdout for JSON in `--json
 
 ## Install and Update
 
-The GitHub installer keeps a source checkout, verifies the committed CLI bundle, and installs the root package globally. `chc update --check` inspects the selected target without changing checkout files or the global command. `chc update` safely updates that checkout and reinstalls only when its commit changes.
+The GitHub installer keeps a source checkout, verifies the committed CLI bundle, and installs the root package globally. `chc source update --check` inspects the selected target without changing checkout files or the global command. `chc source update` safely updates that checkout and reinstalls only when its commit changes.
 
 ## Requirements Sources
 

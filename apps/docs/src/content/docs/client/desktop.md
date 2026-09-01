@@ -64,7 +64,7 @@ chc agent update
 chc agent uninstall
 ```
 
-Agent update is independent of `chc update`. A failed Agent readiness check
+Agent update is independent of `chc source update`. A failed Agent readiness check
 restores the previous active Agent version. Uninstall removes binaries and
 autostart but preserves settings, profiles, and logs unless
 `--purge --yes` is explicitly confirmed.

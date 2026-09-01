@@ -828,7 +828,7 @@ function assertAvailableSource(candidate: CliSourceCandidate): void {
   if (candidate.available) return;
   const hint =
     candidate.kind === 'managed'
-      ? 'Repair or move the existing managed path, then retry; use `chc update` only for a valid checkout.'
+      ? 'Repair or move the existing managed path, then retry; use `chc source update` only for a valid checkout.'
       : 'Refresh apps/cli/dist/index.js or select another checkout.';
   throw new CliSourceError({
     code: 'source_unavailable',

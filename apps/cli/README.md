@@ -70,13 +70,13 @@ Update an installed CLI in place:
 
 ```bash
 chc --version
-chc status
-chc update --check
-chc update
-chc update --ref v0.1.0
+chc source status
+chc source update --check
+chc source update
+chc source update --ref v0.1.0
 ```
 
-Use `chc --version` for the lightweight version-only check. `chc status`
+Use `chc --version` for the lightweight version-only check. `chc source status`
 includes that version, automatically detects whether the running command is
 linked to a local checkout or the default remote managed checkout, and reports
 that source as `mode: local` or `mode: remote`. Human output groups source and
@@ -85,7 +85,7 @@ also shows the checked-out commit's absolute committer time and bounded subject;
 `--json` exposes them as optional `commitTime` and `commitMessage` fields. Use
 `--install-dir` only to inspect a different checkout explicitly.
 
-`chc update --check` resolves the selected remote ref and reports
+`chc source update --check` resolves the selected remote ref and reports
 `install_required`, `update_available`, or `up_to_date` without changing
 checkout files or the global installation. For the default managed source, the
 repository and ref default to the checkout's existing origin and symbolic
@@ -108,10 +108,10 @@ automatically stashes, resets, cleans, or rebases local work. Use output modes
 as needed:
 
 ```bash
-chc update --quiet
-chc update --verbose
-chc update --json
-chc update --check --json
+chc source update --quiet
+chc source update --verbose
+chc source update --json
+chc source update --check --json
 ```
 
 `--verbose` writes bounded Git and npm diagnostics to stderr. JSON mode keeps
@@ -125,16 +125,20 @@ List and switch the checkout that supplies the global `chc` runtime bundle:
 
 ```bash
 chc source list
+chc source status
 chc source use local
 chc source use .
 chc source use worktree:<id>
 chc source use remote
+chc source update
 chc source register /path/to/CthuTool
 ```
 
 `mode` remains `local` or `remote` for compatibility. Source output additionally
 reports `sourceKind: main`, `worktree`, or `managed`; `source list` supplies the
 current `worktree:<id>` selectors from `git worktree list --porcelain`.
+`source status` instead reports detailed diagnostics for the active or
+explicitly selected installation.
 
 Switching to a main checkout or worktree validates `package.json` and
 `apps/cli/dist/index.js`, then runs `npm install -g --ignore-scripts` for the
@@ -144,11 +148,16 @@ with `pnpm --filter @cthutool/cli dev` before testing source changes.
 
 `chc source use remote` automatically installs the managed checkout through the
 safe managed flow when its path is absent. An existing valid checkout is only
-relinked and is updated separately with `chc update`; an existing invalid path
-is not overwritten, so repair or move it before retrying. Switch to `local` or
-`remote` before deleting an active worktree. If the worktree is already gone and
-`chc` cannot start, recover with the public Bash or PowerShell remote installer
-from the Installation Contract section.
+relinked and is updated separately with `chc source update`; an existing invalid
+path is not overwritten, so repair or move it before retrying. Switch to `local`
+or `remote` before deleting an active worktree. If the worktree is already gone
+and `chc` cannot start, recover with the public Bash or PowerShell remote
+installer from the Installation Contract section.
+
+The older `chc status` and `chc update` forms remain accepted as undiscoverable
+compatibility aliases during migration. They preserve their existing flags and
+JSON `command` values; new usage should prefer `chc source status` and `chc
+source update`.
 
 ## Shell Completion
 
@@ -182,7 +191,7 @@ changing a shell profile.
 ## Local Agent Lifecycle
 
 `chc agent` installs and controls the tray-owned local Agent. This is separate
-from `chc update`: the latter updates this CLI checkout, while
+from `chc source update`: the latter updates this CLI checkout, while
 `chc agent update` verifies and activates an Agent runtime release.
 
 ```bash

@@ -140,7 +140,7 @@ describe('self-update output', () => {
     harness.renderer.renderCheckResult(relinkPlan);
 
     expect(harness.stdout()).toContain('Global relink required');
-    expect(harness.stdout()).toContain('run chc update');
+    expect(harness.stdout()).toContain('run chc source update');
   });
 
   test('writes bounded verbose command details only to stderr', () => {

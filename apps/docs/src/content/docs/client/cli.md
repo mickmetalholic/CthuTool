@@ -90,10 +90,12 @@ Inspect and switch the checkout that provides the global CLI bundle:
 
 ```bash
 chc source list
+chc source status
 chc source use local
 chc source use .
 chc source use worktree:<id>
 chc source use remote
+chc source update
 chc source register /path/to/CthuTool
 ```
 
@@ -110,25 +112,29 @@ checkout when its bundle needs refreshing.
 
 `chc source use remote` creates the managed checkout through the safe managed
 install flow when its path is absent. An existing valid checkout is only
-relinked and remains updateable through `chc update`. An existing invalid path
-is not overwritten automatically; repair or move it before retrying. Switch
-away before deleting an active worktree. If its deletion already made `chc`
-unavailable, rerun the public Bash or PowerShell remote installer from the
-previous section.
+relinked and remains updateable through `chc source update`. An existing invalid
+path is not overwritten automatically; repair or move it before retrying.
+`source list` remains the candidate inventory, while `source status` diagnoses
+the active or explicitly selected installation. Switch away before deleting an
+active worktree. If its deletion already made `chc` unavailable, rerun the
+public Bash or PowerShell remote installer from the previous section.
 
 ## Update
 
 ```bash
 chc --version
-chc status
-chc update --check
-chc update
-chc update --ref v0.1.0
+chc source status
+chc source update --check
+chc source update
+chc source update --ref v0.1.0
 ```
 
-Use `chc --version` for the lightweight version-only check. `chc status` includes that version and detects the source checkout used by the running global command. Its human output groups source identity and installation health with TTY-aware color and a plain-text fallback. It reports `mode: local` for a linked development checkout and `mode: remote` for the default managed checkout, together with that checkout's Git and bundle state. Local status also shows the checked-out commit's absolute committer time and bounded subject; JSON status exposes them as optional `commitTime` and `commitMessage` fields. Pass `--install-dir <path>` to inspect a different checkout explicitly.
+Use `chc --version` for the lightweight version-only check. `chc source status` includes that version and detects the source checkout used by the running global command. Its human output groups source identity and installation health with TTY-aware color and a plain-text fallback. It reports `mode: local` for a linked development checkout and `mode: remote` for the default managed checkout, together with that checkout's Git and bundle state. Local status also shows the checked-out commit's absolute committer time and bounded subject; JSON status exposes them as optional `commitTime` and `commitMessage` fields. Pass `--install-dir <path>` to inspect a different checkout explicitly.
 
-For the default managed source, `chc update --check` and `chc update` use the checkout's existing origin and preserve its symbolic branch, exact tag, or detached commit unless an override is supplied. Checks do not change checkout files or the global command. A clean managed update validates the target bundle before checkout, applies the exact planned commit, shows current-to-target progress, and skips global reinstallation when already current.
+For the default managed source, `chc source update --check` and `chc source update` use the checkout's existing origin and preserve its symbolic branch, exact tag, or detached commit unless an override is supplied. Checks do not change checkout files or the global command. A clean managed update validates the target bundle before checkout, applies the exact planned commit, shows current-to-target progress, and skips global reinstallation when already current.
+
+The older `chc status` and `chc update` forms remain accepted as undiscoverable
+compatibility aliases; new commands and examples should use the source group.
 
 When status reports `mode: local`, default update and check commands do not mutate the linked development checkout or `~/.cthutool/source/CthuTool`. Update the linked repository through its normal Git workflow and refresh the committed bundle with `pnpm --filter @cthutool/cli dev`. Run either installer with `CHC_INSTALL_MODE=remote` to restore the global command to managed mode.
 
@@ -168,7 +174,7 @@ signature, digest, protocol, endpoint, or platform check fails. The Agent
 connects with the selected environment id; there is no static Agent secret to
 configure.
 
-Use `chc update` to update the CLI itself and `chc agent update` to update only
+Use `chc source update` to update the CLI itself and `chc agent update` to update only
 the Agent. See [CLI Commands](/reference/cli/#local-agent) for all lifecycle,
 environment, autostart, diagnostic, and uninstall operations.
 
