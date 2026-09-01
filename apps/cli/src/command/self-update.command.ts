@@ -1,5 +1,4 @@
 import { defineCommand } from 'citty';
-import pc from 'picocolors';
 import {
   assertSelfUpdatePlanReady,
   createSelfUpdateDeps,
@@ -16,10 +15,10 @@ import { runObservedCliCommand } from '../runtime/command-diagnostics';
 import {
   processOutput,
   writeCommandError,
-  writeHumanStatus,
   writeJsonValue,
 } from '../runtime/output';
 import { createSelfUpdateRenderer } from './self-update-output';
+import { renderCliInstallationStatus } from './self-update-status-output';
 
 const selfUpdateSourceArgs = {
   repo: {
@@ -207,46 +206,7 @@ export const statusCommand = defineCommand({
               status,
             });
           } else {
-            writeHumanStatus(
-              context,
-              processOutput,
-              pc.cyan('CthuTool status'),
-            );
-            writeHumanStatus(
-              context,
-              processOutput,
-              `version:     ${status.version}`,
-            );
-            writeHumanStatus(
-              context,
-              processOutput,
-              `mode:        ${status.mode}`,
-            );
-            writeHumanStatus(
-              context,
-              processOutput,
-              `install dir: ${status.installDir}`,
-            );
-            writeHumanStatus(
-              context,
-              processOutput,
-              `repo:        ${status.repo}`,
-            );
-            writeHumanStatus(
-              context,
-              processOutput,
-              `ref:         ${status.ref}`,
-            );
-            writeHumanStatus(
-              context,
-              processOutput,
-              `commit:      ${status.commit ?? 'unavailable'}`,
-            );
-            writeHumanStatus(
-              context,
-              processOutput,
-              `bundle:      ${status.bundlePresent ? 'present' : 'missing'} (${status.bundlePath})`,
-            );
+            renderCliInstallationStatus(context, status);
           }
           process.exitCode = 0;
         } catch (error) {

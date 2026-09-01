@@ -15,6 +15,8 @@ import {
 
 const currentCommit = '1111111111111111111111111111111111111111';
 const targetCommit = '2222222222222222222222222222222222222222';
+const currentCommitTime = '2026-09-01T12:08:45+08:00';
+const currentCommitMessage = 'feat(cli): modernize status output';
 
 type FakeOptions = {
   readonly installDir?: string;
@@ -37,6 +39,7 @@ type FakeOptions = {
   readonly targetBundlePresent?: boolean;
   readonly env?: Record<string, string | undefined>;
   readonly advanceTargetOnApply?: string;
+  readonly commitMetadata?: string | null;
 };
 
 function createDeps(options: FakeOptions = {}) {
@@ -131,6 +134,12 @@ function createDeps(options: FakeOptions = {}) {
           { length: Math.min(changeCount, 5) },
           (_, index) => `c${index + 1}\tCommit subject ${index + 1}`,
         ).join('\n');
+      } else if (command === 'git' && args[0] === 'show') {
+        if (options.commitMetadata === null) {
+          code = 1;
+        } else {
+          stdout = `${options.commitMetadata ?? `${currentCommitTime}\0${currentCommitMessage}`}\n`;
+        }
       } else if (command === 'git' && args[0] === 'clone') {
         checkoutExists = true;
         head = remoteTarget;
@@ -624,17 +633,55 @@ describe('self-update manager', () => {
       repo,
       ref: 'main',
       commit: currentCommit.slice(0, 7),
+      commitTime: currentCommitTime,
+      commitMessage: currentCommitMessage,
       bundlePath: join(installDir, committedCliBundlePath),
       bundlePresent: true,
     });
   });
 
-  test('reports remote mode for the default managed checkout', async () => {
-    const { deps } = createDeps({ existingCheckout: false });
-    const installDir = '/home/tester/.cthutool/source/CthuTool';
+  test('bounds and sanitizes malformed local commit metadata', async () => {
+    const unsafeMessage = `  feat(cli): alert\u0007  ${'x'.repeat(140)}  `;
+    const { deps, installDir } = createDeps({
+      commitMetadata: `not-an-iso-date\0${unsafeMessage}`,
+    });
 
-    await expect(
-      getCliInstallationStatus({ installDir }, deps),
-    ).resolves.toMatchObject({ mode: 'remote', installDir });
+    const status = await getCliInstallationStatus({ installDir }, deps);
+
+    expect(status.commitTime).toBeUndefined();
+    expect(status.commitMessage).not.toContain('\u0007');
+    expect(status.commitMessage).not.toMatch(/\s{2,}/);
+    expect(Array.from(status.commitMessage ?? '')).toHaveLength(120);
+    expect(status.commitMessage).toEndWith('…');
+  });
+
+  test('keeps local status successful when commit metadata is unavailable', async () => {
+    const { commands, deps, installDir } = createDeps({
+      commitMetadata: null,
+    });
+
+    const status = await getCliInstallationStatus({ installDir }, deps);
+
+    expect(status).toMatchObject({
+      mode: 'local',
+      commit: currentCommit.slice(0, 7),
+    });
+    expect(status.commitTime).toBeUndefined();
+    expect(status.commitMessage).toBeUndefined();
+    expect(signatures(commands)).toContain(
+      'git show -s --format=%cI%x00%s HEAD',
+    );
+  });
+
+  test('reports remote mode for the default managed checkout', async () => {
+    const installDir = '/home/tester/.cthutool/source/CthuTool';
+    const { commands, deps } = createDeps({ installDir });
+
+    const status = await getCliInstallationStatus({ installDir }, deps);
+
+    expect(status).toMatchObject({ mode: 'remote', installDir });
+    expect(status.commitTime).toBeUndefined();
+    expect(status.commitMessage).toBeUndefined();
+    expect(signatures(commands).join('\n')).not.toContain('git show');
   });
 });

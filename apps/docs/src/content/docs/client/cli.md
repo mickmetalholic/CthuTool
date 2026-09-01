@@ -94,7 +94,7 @@ chc update
 chc update --ref v0.1.0
 ```
 
-Use `chc --version` for the lightweight version-only check. `chc status` includes that version and detects the source checkout used by the running global command. It reports `mode: local` for a linked development checkout and `mode: remote` for the default managed checkout, together with that checkout's Git and bundle state. Pass `--install-dir <path>` to inspect a different checkout explicitly.
+Use `chc --version` for the lightweight version-only check. `chc status` includes that version and detects the source checkout used by the running global command. Its human output groups source identity and installation health with TTY-aware color and a plain-text fallback. It reports `mode: local` for a linked development checkout and `mode: remote` for the default managed checkout, together with that checkout's Git and bundle state. Local status also shows the checked-out commit's absolute committer time and bounded subject; JSON status exposes them as optional `commitTime` and `commitMessage` fields. Pass `--install-dir <path>` to inspect a different checkout explicitly.
 
 For the default managed source, `chc update --check` and `chc update` use the checkout's existing origin and preserve its symbolic branch, exact tag, or detached commit unless an override is supplied. Checks do not change checkout files or the global command. A clean managed update validates the target bundle before checkout, applies the exact planned commit, shows current-to-target progress, and skips global reinstallation when already current.
 

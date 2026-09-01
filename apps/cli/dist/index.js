@@ -8039,23 +8039,54 @@ async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDep
   const resolved = await resolveSelfUpdateSource(options, deps);
   const bundlePath = join(resolved.installDir, committedCliBundlePath);
   const gitRoot = join(resolved.installDir, ".git");
-  const repo = deps.exists(gitRoot) ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
+  const canInspectCheckout = deps.exists(gitRoot);
+  const mode = resolve(resolved.installDir) === resolve(resolved.managedRoot) ? "remote" : "local";
+  const repo = canInspectCheckout ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
     cwd: resolved.installDir
   }) ?? resolved.repo : resolved.repo;
-  const ref = deps.exists(gitRoot) ? await readInstalledRef(deps, resolved.installDir) ?? resolved.ref : resolved.ref;
-  const commit = deps.exists(gitRoot) ? await runOptional(deps, "git", ["rev-parse", "--short", "HEAD"], {
+  const ref = canInspectCheckout ? await readInstalledRef(deps, resolved.installDir) ?? resolved.ref : resolved.ref;
+  const commit = canInspectCheckout ? await runOptional(deps, "git", ["rev-parse", "--short", "HEAD"], {
     cwd: resolved.installDir
   }) : undefined;
+  const commitMetadata = mode === "local" && canInspectCheckout ? parseStatusCommitMetadata(await runOptional(deps, "git", ["show", "-s", "--format=%cI%x00%s", "HEAD"], { cwd: resolved.installDir })) : {};
   return {
     version: getCliVersion(),
-    mode: resolve(resolved.installDir) === resolve(resolved.managedRoot) ? "remote" : "local",
+    mode,
     installDir: resolved.installDir,
     repo,
     ref,
     commit,
+    ...commitMetadata,
     bundlePath,
     bundlePresent: deps.exists(bundlePath)
   };
+}
+function parseStatusCommitMetadata(value) {
+  if (!value)
+    return {};
+  const separatorIndex = value.indexOf("\x00");
+  if (separatorIndex < 0)
+    return {};
+  const time = value.slice(0, separatorIndex).trim();
+  const message = sanitizeCommitSubject(value.slice(separatorIndex + 1));
+  const commitTime = isStrictIsoDateTime(time) ? time : undefined;
+  return {
+    ...commitTime ? { commitTime } : {},
+    ...message ? { commitMessage: message } : {}
+  };
+}
+function isStrictIsoDateTime(value) {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !Number.isNaN(Date.parse(value));
+}
+function sanitizeCommitSubject(value) {
+  const safe = Array.from(value, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint < 32 || codePoint >= 127 && codePoint <= 159 ? " " : character;
+  }).join("").replaceAll(/\s+/g, " ").trim();
+  if (!safe)
+    return;
+  const characters = Array.from(safe);
+  return characters.length <= maxSubjectLength ? safe : `${characters.slice(0, maxSubjectLength - 1).join("")}…`;
 }
 async function runOptional(deps, command, args, options) {
   const result = await deps.run(command, args, {
@@ -14797,9 +14828,6 @@ var createScriptsCommand = (deps = defaultDeps) => {
 };
 var scriptsCommand = createScriptsCommand();
 
-// src/command/self-update.command.ts
-var import_picocolors9 = __toESM(require_picocolors(), 1);
-
 // src/command/self-update-output.ts
 var import_picocolors8 = __toESM(require_picocolors(), 1);
 var defaultDeps2 = {
@@ -14963,6 +14991,50 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
   };
 }
 
+// src/command/self-update-status-output.ts
+var import_picocolors9 = __toESM(require_picocolors(), 1);
+var defaultDeps3 = {
+  output: processOutput,
+  isOutputTty: () => process.stdout.isTTY === true,
+  isColorSupported: () => import_picocolors9.default.isColorSupported
+};
+var statusMessageLength = 120;
+function formatCommitTime(value) {
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(Z|[+-]\d{2}:\d{2})$/);
+  return match ? `${match[1]} ${match[2]} ${match[3]}` : value;
+}
+function boundStatusMessage(value) {
+  const normalized = value.replaceAll(/\s+/g, " ").trim();
+  const characters = Array.from(normalized);
+  return characters.length <= statusMessageLength ? normalized : `${characters.slice(0, statusMessageLength - 1).join("")}…`;
+}
+function renderCliInstallationStatus(context, status, deps = defaultDeps3) {
+  if (context.json || context.quiet)
+    return;
+  const colors2 = import_picocolors9.default.createColors(deps.isOutputTty() && deps.isColorSupported());
+  const mode = status.mode === "local" ? colors2.magenta("● LOCAL") : colors2.blue("● REMOTE");
+  const commit = colors2.yellow(status.commit ?? "unavailable");
+  const commitIdentity = status.commitTime ? `${commit} ${colors2.dim(`· ${formatCommitTime(status.commitTime)}`)}` : commit;
+  const bundle = status.bundlePresent ? `${colors2.green("✓ present")} ${colors2.dim(`· ${status.bundlePath}`)}` : `${colors2.yellow("! missing")} ${colors2.dim(`· ${status.bundlePath}`)}`;
+  const sourceRow = (label, value) => `│  ${colors2.dim(label.padEnd(12))}${value}`;
+  const installationRow = (label, value) => `   ${colors2.dim(label.padEnd(12))}${value}`;
+  const lines = [
+    `${colors2.bold(colors2.cyan("◆ CthuTool"))}  ${colors2.dim(`v${status.version}`)}  ${mode}`,
+    "│",
+    `├─ ${colors2.bold("Source")}`,
+    sourceRow("Repository", status.repo),
+    sourceRow("Ref", status.ref),
+    sourceRow("Commit", commitIdentity)
+  ];
+  if (status.commitMessage) {
+    lines.push(sourceRow("Message", boundStatusMessage(status.commitMessage)));
+  }
+  lines.push("│", `└─ ${colors2.bold("Installation")}`, installationRow("Directory", status.installDir), installationRow("Bundle", bundle));
+  deps.output.stdout.write(`${lines.join(`
+`)}
+`);
+}
+
 // src/command/self-update.command.ts
 var selfUpdateSourceArgs = {
   repo: {
@@ -15117,14 +15189,7 @@ var statusCommand = defineCommand({
             status
           });
         } else {
-          writeHumanStatus(context, processOutput, import_picocolors9.default.cyan("CthuTool status"));
-          writeHumanStatus(context, processOutput, `version:     ${status.version}`);
-          writeHumanStatus(context, processOutput, `mode:        ${status.mode}`);
-          writeHumanStatus(context, processOutput, `install dir: ${status.installDir}`);
-          writeHumanStatus(context, processOutput, `repo:        ${status.repo}`);
-          writeHumanStatus(context, processOutput, `ref:         ${status.ref}`);
-          writeHumanStatus(context, processOutput, `commit:      ${status.commit ?? "unavailable"}`);
-          writeHumanStatus(context, processOutput, `bundle:      ${status.bundlePresent ? "present" : "missing"} (${status.bundlePath})`);
+          renderCliInstallationStatus(context, status);
         }
         process.exitCode = 0;
       } catch (error) {

@@ -173,7 +173,8 @@ describe('global bin', () => {
 
     expect(statusCode).toBe(0);
     expect(statusErr).toBe('');
-    expect(JSON.parse(statusOut)).toMatchObject({
+    const parsedStatus = JSON.parse(statusOut);
+    expect(parsedStatus).toMatchObject({
       ok: true,
       command: 'status',
       status: {
@@ -183,6 +184,8 @@ describe('global bin', () => {
         bundlePresent: false,
       },
     });
+    expect(parsedStatus.status).not.toHaveProperty('commitTime');
+    expect(parsedStatus.status).not.toHaveProperty('commitMessage');
 
     const detectedStatus = Bun.spawn(
       ['node', 'bin/chc.mjs', 'status', '--json'],
@@ -199,15 +202,80 @@ describe('global bin', () => {
 
     expect(detectedStatusCode).toBe(0);
     expect(detectedStatusErr).toBe('');
-    expect(JSON.parse(detectedStatusOut)).toMatchObject({
+    const parsedDetectedStatus = JSON.parse(detectedStatusOut);
+    expect(parsedDetectedStatus).toMatchObject({
       ok: true,
       command: 'status',
       status: {
         mode: 'local',
         installDir: repoRoot,
+        commitTime: expect.stringMatching(
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/,
+        ),
+        commitMessage: expect.any(String),
         bundlePresent: true,
       },
     });
+
+    const humanStatus = Bun.spawn(['node', 'bin/chc.mjs', 'status'], {
+      cwd: cliRoot,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      stdin: 'ignore',
+    });
+    const humanStatusOut = await new Response(humanStatus.stdout).text();
+    const humanStatusErr = await new Response(humanStatus.stderr).text();
+    const humanStatusCode = await humanStatus.exited;
+
+    expect(humanStatusCode).toBe(0);
+    expect(humanStatusErr).toBe('');
+    expect(humanStatusOut).toContain('◆ CthuTool');
+    expect(humanStatusOut).toContain('├─ Source');
+    expect(humanStatusOut).toContain('Message');
+    expect(humanStatusOut).toContain('└─ Installation');
+    expect(humanStatusOut).not.toContain(ESC);
+
+    const managedHome = await mkdtemp(join(tmpdir(), 'cthutool-status-home-'));
+    const managedInstallDir = join(
+      managedHome,
+      '.cthutool',
+      'source',
+      'CthuTool',
+    );
+    const remoteStatus = Bun.spawn(
+      [
+        'node',
+        'bin/chc.mjs',
+        'status',
+        '--install-dir',
+        managedInstallDir,
+        '--json',
+      ],
+      {
+        cwd: cliRoot,
+        env: { ...process.env, HOME: managedHome, USERPROFILE: managedHome },
+        stdout: 'pipe',
+        stderr: 'pipe',
+        stdin: 'ignore',
+      },
+    );
+    const remoteStatusOut = await new Response(remoteStatus.stdout).text();
+    const remoteStatusErr = await new Response(remoteStatus.stderr).text();
+    const remoteStatusCode = await remoteStatus.exited;
+    const parsedRemoteStatus = JSON.parse(remoteStatusOut);
+
+    expect(remoteStatusCode).toBe(0);
+    expect(remoteStatusErr).toBe('');
+    expect(parsedRemoteStatus).toMatchObject({
+      ok: true,
+      command: 'status',
+      status: {
+        mode: 'remote',
+        installDir: managedInstallDir,
+      },
+    });
+    expect(parsedRemoteStatus.status).not.toHaveProperty('commitTime');
+    expect(parsedRemoteStatus.status).not.toHaveProperty('commitMessage');
   });
 
   test('bin shim discovers bundled scripts from the source scripts directory', async () => {
