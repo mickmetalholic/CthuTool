@@ -145,6 +145,7 @@ describe('shell completion command', () => {
       'completion',
       'obsidian',
       'scripts',
+      'source',
       'status',
       'update',
     ]);
@@ -192,6 +193,15 @@ describe('shell completion command', () => {
       'uninstall',
       'update',
     ]);
+    expect(lines((await runCli(['__complete', 'source', ''])).out)).toEqual([
+      'current',
+      'list',
+      'register',
+      'use',
+    ]);
+    expect(
+      lines((await runCli(['__complete', 'source', 'use', ''])).out),
+    ).toEqual(expect.arrayContaining(['.', 'local', 'remote']));
     expect(lines((await runCli(['__complete', 'completion', ''])).out)).toEqual(
       ['disable', 'enable', 'powershell', 'status', 'zsh'],
     );

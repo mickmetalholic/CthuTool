@@ -6837,7 +6837,7 @@ async function runMain(cmd, opts = {}) {
 }
 
 // src/index.ts
-var import_picocolors9 = __toESM(require_picocolors(), 1);
+var import_picocolors10 = __toESM(require_picocolors(), 1);
 
 // src/command/command-discovery.ts
 function stripAnsi3(value) {
@@ -7545,11 +7545,28 @@ import { join as join8 } from "node:path";
 
 // src/domain/self-update-manager.ts
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve as resolve2 } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// src/domain/cli-source-id.ts
+import { createHash } from "node:crypto";
+import { resolve } from "node:path";
+function createWorktreeSourceId(path) {
+  const digest = createHash("sha256").update(normalizeSourcePath(path)).digest("hex").slice(0, 12);
+  return `worktree:${digest}`;
+}
+function normalizeSourcePath(path) {
+  const normalized = resolve(path);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+function sameSourcePath(left, right) {
+  return normalizeSourcePath(left) === normalizeSourcePath(right);
+}
+
+// src/domain/self-update-manager.ts
 var defaultSelfUpdateRepo = "https://github.com/mickmetalholic/CthuTool.git";
 var defaultSelfUpdateRef = "main";
 var committedCliBundlePath = "apps/cli/dist/index.js";
@@ -7599,13 +7616,16 @@ function createSelfUpdateDeps(onEvent) {
 function getCliVersion() {
   return readPackageVersion(findRepoRootFromModule());
 }
+function getCliRuntimeRoot() {
+  return findRepoRootFromModule();
+}
 async function resolveSelfUpdateSource(options, deps) {
   const runtimeRoot = deps.runtimeRoot();
   const managedRoot = getDefaultSelfUpdateInstallDir(deps.home());
   const envInstallDir = nonEmpty(deps.env.CHC_INSTALL_DIR);
   const explicitInstallDir = options.installDir !== undefined || envInstallDir !== undefined;
   const installDir = options.installDir ?? envInstallDir ?? runtimeRoot;
-  const mode = resolve(runtimeRoot) === resolve(managedRoot) ? "remote" : "local";
+  const mode = resolve2(runtimeRoot) === resolve2(managedRoot) ? "remote" : "local";
   const gitRoot = join(installDir, ".git");
   const canInspectCheckout = deps.exists(gitRoot);
   const repoOverride = options.repo ?? nonEmpty(deps.env.CHC_REPO_URL) ?? nonEmpty(deps.env.CHC_REPO);
@@ -7835,7 +7855,7 @@ async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
       before: initial,
       target: remote.target,
       targetKind: remote.isBranch ? "branch" : "detached",
-      relinkRequired: resolve(resolved.installDir) !== resolve(resolved.runtimeRoot),
+      relinkRequired: resolve2(resolved.installDir) !== resolve2(resolved.runtimeRoot),
       phases
     });
   }
@@ -8040,7 +8060,7 @@ async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDep
   const bundlePath = join(resolved.installDir, committedCliBundlePath);
   const gitRoot = join(resolved.installDir, ".git");
   const canInspectCheckout = deps.exists(gitRoot);
-  const mode = resolve(resolved.installDir) === resolve(resolved.managedRoot) ? "remote" : "local";
+  const mode = resolve2(resolved.installDir) === resolve2(resolved.managedRoot) ? "remote" : "local";
   const repo = canInspectCheckout ? await runOptional(deps, "git", ["remote", "get-url", "origin"], {
     cwd: resolved.installDir
   }) ?? resolved.repo : resolved.repo;
@@ -8049,16 +8069,23 @@ async function getCliInstallationStatus(options = {}, deps = createSelfUpdateDep
     cwd: resolved.installDir
   }) : undefined;
   const commitMetadata = mode === "local" && canInspectCheckout ? parseStatusCommitMetadata(await runOptional(deps, "git", ["show", "-s", "--format=%cI%x00%s", "HEAD"], { cwd: resolved.installDir })) : {};
+  const sourceKind = classifyCliSourceKind(resolved.installDir, resolved.managedRoot, gitRoot);
+  const worktreeBranch = deps.exists(gitRoot) && sourceKind === "worktree" ? await runOptional(deps, "git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: resolved.installDir }) : undefined;
+  const dirty = deps.exists(gitRoot) ? await readCheckoutDirtyState(deps, resolved.installDir) : undefined;
   return {
     version: getCliVersion(),
     mode,
+    sourceKind,
+    sourceId: sourceKind === "managed" ? "remote" : sourceKind === "main" ? "local" : createWorktreeSourceId(resolved.installDir),
     installDir: resolved.installDir,
     repo,
     ref,
     commit,
     ...commitMetadata,
     bundlePath,
-    bundlePresent: deps.exists(bundlePath)
+    bundlePresent: deps.exists(bundlePath),
+    dirty,
+    detached: sourceKind === "worktree" ? worktreeBranch === undefined : undefined
   };
 }
 function parseStatusCommitMetadata(value) {
@@ -8087,6 +8114,19 @@ function sanitizeCommitSubject(value) {
     return;
   const characters = Array.from(safe);
   return characters.length <= maxSubjectLength ? safe : `${characters.slice(0, maxSubjectLength - 1).join("")}…`;
+}
+function classifyCliSourceKind(installDir, managedRoot, gitRoot) {
+  if (resolve2(installDir) === resolve2(managedRoot))
+    return "managed";
+  try {
+    return statSync(gitRoot).isFile() ? "worktree" : "main";
+  } catch {
+    return "main";
+  }
+}
+async function readCheckoutDirtyState(deps, cwd) {
+  const result = await deps.run("git", ["status", "--porcelain", "--untracked-files=normal"], { cwd, allowFailure: true });
+  return result.code === 0 ? result.stdout.trim().length > 0 : undefined;
 }
 async function runOptional(deps, command, args, options) {
   const result = await deps.run(command, args, {
@@ -8227,7 +8267,7 @@ async function requestAgentHealth(record, timeoutMs) {
   return result;
 }
 async function requestAgent(record, operation, environmentId, timeoutMs = 2000) {
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve3, reject) => {
     const socket = createConnection(record.controlEndpoint);
     const timer = setTimeout(() => {
       socket.destroy();
@@ -8261,7 +8301,7 @@ async function requestAgent(record, operation, environmentId, timeoutMs = 2000) 
           const response = JSON.parse(payload.slice(0, newline));
           if (!response.ok)
             throw new Error(response.error?.message ?? response.error?.code ?? "Agent rejected control request");
-          resolve2(response.result);
+          resolve3(response.result);
         } catch (error) {
           reject(error);
         }
@@ -8362,7 +8402,7 @@ async function waitForTrayExit(input) {
     if (!current || !sameInstance(current, input.record)) {
       return;
     }
-    await new Promise((resolve2) => setTimeout(resolve2, input.pollMs ?? 50));
+    await new Promise((resolve3) => setTimeout(resolve3, input.pollMs ?? 50));
   }
   throw new Error("Timed out waiting for tray-owned Agent shutdown");
 }
@@ -8382,7 +8422,7 @@ async function stopTrayOwnedAgent(input) {
   return "stopped";
 }
 async function requestTrayControl(input) {
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve3, reject) => {
     const socket = createConnection2(input.endpoint);
     const timeout = setTimeout(() => {
       socket.destroy();
@@ -8426,7 +8466,7 @@ async function requestTrayControl(input) {
           if (typeof response.ok !== "boolean" || response.protocolVersion !== TRAY_CONTROL_PROTOCOL_VERSION) {
             throw new Error("Tray control response is invalid");
           }
-          resolve2(response);
+          resolve3(response);
         } catch (error) {
           reject(error);
         }
@@ -8679,14 +8719,14 @@ function createLaunchAgentPlist(executable, userDataDir) {
 `;
 }
 async function runProcess(command, args) {
-  return new Promise((resolve2) => {
+  return new Promise((resolve3) => {
     const child = spawn2(command, args, { stdio: "ignore", windowsHide: true });
-    child.once("error", () => resolve2(null));
-    child.once("exit", (code) => resolve2(code));
+    child.once("error", () => resolve3(null));
+    child.once("exit", (code) => resolve3(code));
   });
 }
 function delay(ms) {
-  return new Promise((resolve2) => setTimeout(resolve2, ms));
+  return new Promise((resolve3) => setTimeout(resolve3, ms));
 }
 
 // src/infra/agent-release-installer.ts
@@ -8702,7 +8742,7 @@ import {
   writeFile as writeFile3
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join as join6, resolve as resolve2, sep as sep2 } from "node:path";
+import { join as join6, resolve as resolve3, sep as sep2 } from "node:path";
 
 // ../../node_modules/.pnpm/fflate@0.8.2/node_modules/fflate/esm/index.mjs
 import { createRequire as createRequire2 } from "module";
@@ -9232,7 +9272,7 @@ async function extractVerifiedArchive(bytes, destination, target) {
     extractedBytes += fileBytes.byteLength;
     if (extractedBytes > MAX_EXTRACTED_BYTES)
       throw new Error("Agent archive exceeds the extracted size limit");
-    const path = resolve2(destination, rawPath.replaceAll("\\", "/"));
+    const path = resolve3(destination, rawPath.replaceAll("\\", "/"));
     if (path !== destination && !path.startsWith(`${destination}${sep2}`))
       throw new Error(`Unsafe Agent archive path: ${rawPath}`);
     await mkdir4(join6(path, ".."), { mode: 448, recursive: true });
@@ -10311,7 +10351,7 @@ async function followLogs(service, initialLines) {
   process.once("SIGTERM", stop);
   try {
     while (!stopped) {
-      await new Promise((resolve3) => setTimeout(resolve3, 500));
+      await new Promise((resolve4) => setTimeout(resolve4, 500));
       const lines = await service.logs({ lines: 1e4 });
       if (lines.length < seen)
         seen = 0;
@@ -10332,36 +10372,36 @@ var import_picocolors3 = __toESM(require_picocolors(), 1);
 
 // src/domain/codex-plugin-install-manager.ts
 import { readFile as readFile8 } from "node:fs/promises";
-import { basename as basename2, join as join10, resolve as resolve5 } from "node:path";
+import { basename as basename2, join as join10, resolve as resolve6 } from "node:path";
 
 // src/infra/codex-config-paths.ts
 import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
 import { homedir as homedir5 } from "node:os";
-import { dirname as dirname5, isAbsolute, join as join9, relative, resolve as resolve3 } from "node:path";
+import { dirname as dirname5, isAbsolute, join as join9, relative, resolve as resolve4 } from "node:path";
 function createCodexConfigPaths(options = {}) {
-  const repoRoot = resolve3(options.repoRoot ?? getDefaultRepoRoot());
-  const homeRoot = resolve3(options.homeRoot ?? homedir5());
-  const localCodexRoot = resolve3(options.codexHome ?? join9(homeRoot, ".codex"));
+  const repoRoot = resolve4(options.repoRoot ?? getDefaultRepoRoot());
+  const homeRoot = resolve4(options.homeRoot ?? homedir5());
+  const localCodexRoot = resolve4(options.codexHome ?? join9(homeRoot, ".codex"));
   return {
     repoRoot,
-    repoCodexRoot: resolve3(repoRoot, "codex"),
+    repoCodexRoot: resolve4(repoRoot, "codex"),
     homeRoot,
     localCodexRoot,
-    marketplacePath: resolve3(options.marketplace ?? join9(homeRoot, ".agents", "plugins", "marketplace.json")),
-    pluginsRoot: resolve3(options.pluginsRoot ?? join9(repoRoot, "codex", "plugins")),
-    cacheRoot: resolve3(options.cacheRoot ?? join9(homeRoot, ".codex", "plugins", "cache", "personal"))
+    marketplacePath: resolve4(options.marketplace ?? join9(homeRoot, ".agents", "plugins", "marketplace.json")),
+    pluginsRoot: resolve4(options.pluginsRoot ?? join9(repoRoot, "codex", "plugins")),
+    cacheRoot: resolve4(options.cacheRoot ?? join9(homeRoot, ".codex", "plugins", "cache", "personal"))
   };
 }
 function assertPathInside(parent, child) {
-  const parentPath = resolve3(parent);
-  const childPath = resolve3(child);
+  const parentPath = resolve4(parent);
+  const childPath = resolve4(child);
   const childRelative = relative(parentPath, childPath);
   if (childRelative.startsWith("..") || isAbsolute(childRelative)) {
     throw new Error(`Refusing to write outside ${parentPath}: ${childPath}`);
   }
 }
 function getDefaultRepoRoot() {
-  const start = resolve3(process.cwd());
+  const start = resolve4(process.cwd());
   let current = start;
   while (true) {
     if (isWorkspaceRoot(current)) {
@@ -10388,7 +10428,7 @@ function isWorkspaceRoot(path) {
 
 // src/domain/codex-plugin-manager.ts
 import { cp, mkdir as mkdir5, readdir as readdir3, readFile as readFile7, rm as rm5, writeFile as writeFile4 } from "node:fs/promises";
-import { dirname as dirname6, isAbsolute as isAbsolute2, relative as relative2, resolve as resolve4 } from "node:path";
+import { dirname as dirname6, isAbsolute as isAbsolute2, relative as relative2, resolve as resolve5 } from "node:path";
 async function discoverCodexPlugins(pluginsRoot) {
   let entries;
   try {
@@ -10401,7 +10441,7 @@ async function discoverCodexPlugins(pluginsRoot) {
     if (!entry.isDirectory()) {
       continue;
     }
-    const root = resolve4(pluginsRoot, entry.name);
+    const root = resolve5(pluginsRoot, entry.name);
     const manifest = await readPluginManifest(root);
     if (!manifest?.name) {
       continue;
@@ -10463,9 +10503,9 @@ async function installCodexPlugins(options) {
 }
 async function syncCodexPluginCache(options) {
   const version = options.bumpPatch ? await bumpPluginPatchVersion(options.plugin.root) : await readPluginVersion(options.plugin.root);
-  const cacheRoot = resolve4(options.cacheRoot);
-  const pluginCacheRoot = resolve4(cacheRoot, options.plugin.name);
-  const versionCacheRoot = resolve4(pluginCacheRoot, version);
+  const cacheRoot = resolve5(options.cacheRoot);
+  const pluginCacheRoot = resolve5(cacheRoot, options.plugin.name);
+  const versionCacheRoot = resolve5(pluginCacheRoot, version);
   assertPathInside2(cacheRoot, pluginCacheRoot);
   assertPathInside2(pluginCacheRoot, versionCacheRoot);
   await mkdir5(cacheRoot, { recursive: true });
@@ -10498,8 +10538,8 @@ function createMarketplaceEntry(plugin) {
   };
 }
 function toHomeRelativeMarketplacePath(pluginRoot, homeRoot) {
-  const absolutePluginRoot = resolve4(pluginRoot);
-  const absoluteHomeRoot = resolve4(homeRoot);
+  const absolutePluginRoot = resolve5(pluginRoot);
+  const absoluteHomeRoot = resolve5(homeRoot);
   const homeRelative = relative2(absoluteHomeRoot, absolutePluginRoot);
   if (!homeRelative.startsWith("..") && !isAbsolute2(homeRelative)) {
     return `./${homeRelative.replaceAll("\\", "/")}`;
@@ -10507,12 +10547,12 @@ function toHomeRelativeMarketplacePath(pluginRoot, homeRoot) {
   return absolutePluginRoot.replaceAll("\\", "/");
 }
 async function bumpPluginPatchVersion(pluginRoot) {
-  const manifestPath = resolve4(pluginRoot, ".codex-plugin", "plugin.json");
+  const manifestPath = resolve5(pluginRoot, ".codex-plugin", "plugin.json");
   const manifest = JSON.parse(await readFile7(manifestPath, "utf8"));
   const nextVersion = incrementPatchVersion(typeof manifest.version === "string" ? manifest.version : "0.0.0");
   manifest.version = nextVersion;
   await writeJsonFile(manifestPath, manifest);
-  const packageJsonPath = resolve4(pluginRoot, "package.json");
+  const packageJsonPath = resolve5(pluginRoot, "package.json");
   try {
     const packageJson = JSON.parse(await readFile7(packageJsonPath, "utf8"));
     packageJson.version = nextVersion;
@@ -10531,7 +10571,7 @@ function incrementPatchVersion(version) {
   return `${major}.${minor}.${patch}`;
 }
 async function readPluginVersion(pluginRoot) {
-  const raw = await readFile7(resolve4(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
+  const raw = await readFile7(resolve5(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
   const parsed = JSON.parse(raw);
   if (typeof parsed.version !== "string" || parsed.version.trim() === "") {
     throw new Error(`Plugin manifest is missing a version: ${pluginRoot}`);
@@ -10595,18 +10635,18 @@ function escapeTomlString(value) {
   return value.replaceAll("\\", "\\\\").replaceAll('"', "\\\"");
 }
 async function normalizePluginHookCommands(runtimePluginRoot, sourcePluginRoot) {
-  const hooksPath = resolve4(runtimePluginRoot, "hooks", "hooks.json");
+  const hooksPath = resolve5(runtimePluginRoot, "hooks", "hooks.json");
   let raw;
   try {
     raw = await readFile7(hooksPath, "utf8");
   } catch {
     return;
   }
-  const normalizedRoot = resolve4(sourcePluginRoot).replaceAll("\\", "/");
+  const normalizedRoot = resolve5(sourcePluginRoot).replaceAll("\\", "/");
   await writeFile4(hooksPath, raw.replaceAll("<PLUGIN_ROOT>", normalizedRoot), "utf8");
 }
 async function normalizePluginMcpServers(runtimePluginRoot) {
-  const mcpPath = resolve4(runtimePluginRoot, ".mcp.json");
+  const mcpPath = resolve5(runtimePluginRoot, ".mcp.json");
   let raw;
   try {
     raw = await readFile7(mcpPath, "utf8");
@@ -10617,7 +10657,7 @@ async function normalizePluginMcpServers(runtimePluginRoot) {
   if (!parsed.mcpServers || typeof parsed.mcpServers !== "object") {
     return;
   }
-  const normalizedRoot = resolve4(runtimePluginRoot).replaceAll("\\", "/");
+  const normalizedRoot = resolve5(runtimePluginRoot).replaceAll("\\", "/");
   let changed = false;
   for (const [name, server] of Object.entries(parsed.mcpServers)) {
     if (!server || typeof server !== "object" || Array.isArray(server)) {
@@ -10638,8 +10678,8 @@ async function normalizePluginMcpServers(runtimePluginRoot) {
   }
 }
 function assertPathInside2(parent, child) {
-  const parentPath = resolve4(parent);
-  const childPath = resolve4(child);
+  const parentPath = resolve5(parent);
+  const childPath = resolve5(child);
   const childRelative = relative2(parentPath, childPath);
   if (childRelative.startsWith("..") || isAbsolute2(childRelative)) {
     throw new Error(`Refusing to write outside ${parentPath}: ${childPath}`);
@@ -10647,7 +10687,7 @@ function assertPathInside2(parent, child) {
 }
 async function readPluginManifest(pluginRoot) {
   try {
-    const raw = await readFile7(resolve4(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
+    const raw = await readFile7(resolve5(pluginRoot, ".codex-plugin", "plugin.json"), "utf8");
     const parsed = JSON.parse(raw);
     if (typeof parsed.name !== "string" || parsed.name.trim().length === 0) {
       return;
@@ -10684,7 +10724,7 @@ async function discoverEnabledRepositoryCodexPlugins(paths) {
   const configuredNames = new Set(configured.map((plugin) => plugin.name));
   return Promise.all([
     ...configured.map(async (entry) => {
-      const root = resolve5(paths.repoRoot, entry.path);
+      const root = resolve6(paths.repoRoot, entry.path);
       assertPathInside(paths.repoCodexRoot, root);
       return {
         name: entry.name,
@@ -11032,7 +11072,7 @@ import { dirname as dirname8, join as join13 } from "node:path";
 
 // src/domain/codex-skills-manifest.ts
 import { mkdir as mkdir6, readFile as readFile10, rename as rename2, rm as rm6, writeFile as writeFile5 } from "node:fs/promises";
-import { dirname as dirname7, join as join12, resolve as resolve6 } from "node:path";
+import { dirname as dirname7, join as join12, resolve as resolve7 } from "node:path";
 var emptyCodexSkillsManifest = () => ({
   version: 2,
   skills: []
@@ -11111,7 +11151,7 @@ function isManagedGitHubSkill(skill) {
   return skill.source === "github";
 }
 function getManifestPath(repoCodexRoot) {
-  const path = resolve6(repoCodexRoot, "skills.manifest.json");
+  const path = resolve7(repoCodexRoot, "skills.manifest.json");
   assertPathInside(repoCodexRoot, path);
   return path;
 }
@@ -11775,7 +11815,7 @@ async function promptManagedActionTable(rows) {
 `);
     renderedLines = lines.length;
   }
-  return await new Promise((resolve7) => {
+  return await new Promise((resolve8) => {
     const wasRaw = input.isRaw;
     const finish = (cancelled) => {
       input.off("keypress", onKeypress);
@@ -11785,10 +11825,10 @@ async function promptManagedActionTable(rows) {
       }
       process.stdout.write(`${control}[?25h`);
       if (cancelled) {
-        resolve7(undefined);
+        resolve8(undefined);
         return;
       }
-      resolve7(rows.flatMap((row, index) => {
+      resolve8(rows.flatMap((row, index) => {
         const action = row.availableActions[indexes[index] ?? 0] ?? "none";
         return action === "none" ? [] : [{ name: row.name, action }];
       }));
@@ -12291,7 +12331,7 @@ var import_picocolors4 = __toESM(require_picocolors(), 1);
 // src/domain/obsidian-agents-config.ts
 import { randomUUID } from "node:crypto";
 import { mkdir as mkdir9, readFile as readFile12, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
-import { isAbsolute as isAbsolute3, join as join15, relative as relative3, resolve as resolve7, sep as sep4 } from "node:path";
+import { isAbsolute as isAbsolute3, join as join15, relative as relative3, resolve as resolve8, sep as sep4 } from "node:path";
 var OBSIDIAN_AGENTS_CONFIG_VERSION = 2;
 
 class ObsidianAgentsConfigError extends Error {
@@ -12409,7 +12449,7 @@ function normalizeAbsolutePath(value, label) {
   if (!trimmed || !isAbsolute3(trimmed)) {
     throw new ObsidianAgentsConfigError(`${label} must be an absolute path.`);
   }
-  return resolve7(trimmed);
+  return resolve8(trimmed);
 }
 function readString(value, label) {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -12444,7 +12484,7 @@ import {
   join as join16,
   normalize,
   relative as relative4,
-  resolve as resolve8,
+  resolve as resolve9,
   sep as sep5
 } from "node:path";
 class ObsidianAgentsServiceError extends Error {
@@ -12679,7 +12719,7 @@ async function inspectObsidianAgentsPath(path, platform3 = process.platform) {
   }
   if (details.isSymbolicLink()) {
     const rawTarget = await readlink(path);
-    const target = resolve8(dirname10(path), rawTarget);
+    const target = resolve9(dirname10(path), rawTarget);
     try {
       const resolvedTarget = await realpath2(path);
       return {
@@ -12778,23 +12818,23 @@ async function canonicalPath(path) {
     return await realpath2(path);
   } catch (error) {
     if (isMissingFileError5(error))
-      return resolve8(path);
+      return resolve9(path);
     throw error;
   }
 }
 async function canonicalDestinationPath(path) {
   const missingSegments = [];
-  let current = resolve8(path);
+  let current = resolve9(path);
   while (true) {
     try {
       const existing = await realpath2(current);
-      return resolve8(existing, ...missingSegments.reverse());
+      return resolve9(existing, ...missingSegments.reverse());
     } catch (error) {
       if (!isMissingFileError5(error))
         throw error;
       const parent = dirname10(current);
       if (parent === current)
-        return resolve8(path);
+        return resolve9(path);
       missingSegments.push(basename3(current));
       current = parent;
     }
@@ -12851,21 +12891,21 @@ function isMissingFileError5(error) {
 
 // src/infra/obsidian-agents-paths.ts
 import { homedir as homedir7 } from "node:os";
-import { join as join17, resolve as resolve9 } from "node:path";
+import { join as join17, resolve as resolve10 } from "node:path";
 function resolveCthuToolChcDataRoot(options = {}) {
   const env2 = options.env ?? process.env;
   const explicit = options.dataRoot?.trim() || env2.CTHUTOOL_CHC_DATA_DIR;
   if (explicit?.trim())
-    return resolve9(explicit);
+    return resolve10(explicit);
   const homeRoot = options.homeRoot ?? homedir7();
   const platform3 = options.platform ?? process.platform;
   if (platform3 === "win32") {
-    return resolve9(join17(env2.APPDATA ?? join17(homeRoot, "AppData", "Roaming"), "CthuTool", "chc"));
+    return resolve10(join17(env2.APPDATA ?? join17(homeRoot, "AppData", "Roaming"), "CthuTool", "chc"));
   }
   if (platform3 === "darwin") {
-    return resolve9(join17(homeRoot, "Library", "Application Support", "CthuTool", "chc"));
+    return resolve10(join17(homeRoot, "Library", "Application Support", "CthuTool", "chc"));
   }
-  return resolve9(join17(env2.XDG_STATE_HOME ?? join17(homeRoot, ".local", "state"), "cthutool", "chc"));
+  return resolve10(join17(env2.XDG_STATE_HOME ?? join17(homeRoot, ".local", "state"), "cthutool", "chc"));
 }
 function createObsidianAgentsDataPaths(options = {}) {
   const dataRoot = resolveCthuToolChcDataRoot(options);
@@ -13166,11 +13206,11 @@ var createNeverThrowError = (message, result, config = defaultErrorConfig) => {
 };
 function __awaiter(thisArg, _arguments, P5, generator) {
   function adopt(value) {
-    return value instanceof P5 ? value : new P5(function(resolve10) {
-      resolve10(value);
+    return value instanceof P5 ? value : new P5(function(resolve11) {
+      resolve11(value);
     });
   }
-  return new (P5 || (P5 = Promise))(function(resolve10, reject) {
+  return new (P5 || (P5 = Promise))(function(resolve11, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -13186,7 +13226,7 @@ function __awaiter(thisArg, _arguments, P5, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve10(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve11(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -13274,14 +13314,14 @@ function __asyncValues(o3) {
   }, i3);
   function verb(n2) {
     i3[n2] = o3[n2] && function(v3) {
-      return new Promise(function(resolve10, reject) {
-        v3 = o3[n2](v3), settle(resolve10, reject, v3.done, v3.value);
+      return new Promise(function(resolve11, reject) {
+        v3 = o3[n2](v3), settle(resolve11, reject, v3.done, v3.value);
       });
     };
   }
-  function settle(resolve10, reject, d3, v3) {
+  function settle(resolve11, reject, d3, v3) {
     Promise.resolve(v3).then(function(v4) {
-      resolve10({ value: v4, done: d3 });
+      resolve11({ value: v4, done: d3 });
     }, reject);
   }
 }
@@ -14674,12 +14714,17 @@ function renderCliInstallationStatus(context, status, deps = defaultDeps3) {
     `${colors2.bold(colors2.cyan("◆ CthuTool"))}  ${colors2.dim(`v${status.version}`)}  ${mode}`,
     "│",
     `├─ ${colors2.bold("Source")}`,
+    sourceRow("Kind", status.sourceKind),
+    sourceRow("Selector", status.sourceId),
     sourceRow("Repository", status.repo),
     sourceRow("Ref", status.ref),
     sourceRow("Commit", commitIdentity)
   ];
   if (status.commitMessage) {
     lines.push(sourceRow("Message", boundStatusMessage(status.commitMessage)));
+  }
+  if (status.dirty !== undefined) {
+    lines.push(sourceRow("Checkout", `${status.dirty ? "dirty" : "clean"}${status.detached ? " · detached" : ""}`));
   }
   lines.push("│", `└─ ${colors2.bold("Installation")}`, installationRow("Directory", status.installDir), installationRow("Bundle", bundle));
   deps.output.stdout.write(`${lines.join(`
@@ -14854,6 +14899,995 @@ var statusCommand = defineCommand({
 });
 var updateCommand = createUpdateCommand();
 
+// src/command/source.command.ts
+var import_picocolors9 = __toESM(require_picocolors(), 1);
+
+// src/domain/cli-source-manager.ts
+import { spawn as spawn3 } from "node:child_process";
+import { randomUUID as randomUUID2 } from "node:crypto";
+import { existsSync as existsSync5, readFileSync as readFileSync4 } from "node:fs";
+import {
+  mkdir as mkdir11,
+  readFile as readFile14,
+  realpath as realpath3,
+  rename as rename6,
+  rm as rm8,
+  writeFile as writeFile8
+} from "node:fs/promises";
+import { homedir as homedir8 } from "node:os";
+import { dirname as dirname12, isAbsolute as isAbsolute5, join as join22, resolve as resolve11 } from "node:path";
+var sourceRegistryVersion = 1;
+var sourceSwitchWaitMs = 2000;
+var sourceSwitchPollMs = 50;
+var maxCommandDetailLength = 600;
+
+class CliSourceError extends Error {
+  code;
+  hint;
+  causeText;
+  constructor(options) {
+    const causeText = options.cause ? boundedCommandDetail(options.cause) : undefined;
+    super([
+      options.message,
+      causeText ? `Cause: ${causeText}` : undefined,
+      options.hint ? `Next: ${options.hint}` : undefined
+    ].filter(Boolean).join(`
+`));
+    this.name = "CliSourceError";
+    this.code = options.code;
+    this.hint = options.hint;
+    this.causeText = causeText;
+  }
+}
+var defaultDeps4 = {
+  home: homedir8,
+  cwd: () => process.cwd(),
+  runtimeRoot: getCliRuntimeRoot,
+  now: Date.now,
+  sleep: (milliseconds) => new Promise((resolvePromise) => {
+    setTimeout(resolvePromise, milliseconds);
+  }),
+  runGit: (cwd, args) => runProcess2("git", ["-C", cwd, ...args]),
+  async relinkGlobal(target) {
+    const result = await runProcess2("npm", [
+      "install",
+      "-g",
+      "--ignore-scripts",
+      target
+    ]);
+    if (result.code !== 0) {
+      throw new CliSourceError({
+        code: "source_switch_failed",
+        message: `Failed to relink the global chc command to ${target}.`,
+        cause: result.stderr || result.stdout,
+        hint: remoteInstallerRecoveryHint()
+      });
+    }
+  },
+  async resolveGlobalPackageTarget() {
+    const result = await runProcess2("npm", ["root", "-g"]);
+    if (result.code !== 0 || result.stdout.trim().length === 0) {
+      return;
+    }
+    const packagePath = join22(result.stdout.trim(), "cthutool");
+    if (!existsSync5(packagePath)) {
+      return;
+    }
+    return realpath3(packagePath);
+  },
+  async bootstrapManaged(target) {
+    await runSelfUpdate({ installDir: target });
+  }
+};
+function createCliSourceManagerDeps(overrides = {}) {
+  return { ...defaultDeps4, ...overrides };
+}
+function getCliSourceRegistryPath(home = homedir8()) {
+  return join22(home, ".cthutool", "cli", "source-registry.json");
+}
+function getCliSourceSwitchLockPath(home = homedir8()) {
+  return join22(home, ".cthutool", "locks", "cli-source-switch.lock");
+}
+function parseGitWorktreeList(value) {
+  const records = [];
+  let current = null;
+  const finish = () => {
+    if (current?.path) {
+      records.push({
+        path: current.path,
+        head: current.head,
+        branch: current.branch,
+        detached: current.detached,
+        locked: current.locked,
+        prunable: current.prunable
+      });
+    }
+    current = null;
+  };
+  for (const line of `${value}
+`.split(/\r?\n/)) {
+    if (line.length === 0) {
+      finish();
+      continue;
+    }
+    const separator = line.indexOf(" ");
+    const key = separator === -1 ? line : line.slice(0, separator);
+    const detail = separator === -1 ? "" : line.slice(separator + 1);
+    if (key === "worktree") {
+      finish();
+      current = {
+        path: detail,
+        detached: false,
+        locked: false,
+        prunable: false
+      };
+      continue;
+    }
+    if (!current)
+      continue;
+    if (key === "HEAD")
+      current.head = detail;
+    if (key === "branch")
+      current.branch = detail.replace(/^refs\/heads\//, "");
+    if (key === "detached")
+      current.detached = true;
+    if (key === "locked")
+      current.locked = true;
+    if (key === "prunable")
+      current.prunable = true;
+  }
+  return records;
+}
+async function discoverCliSources(deps = createCliSourceManagerDeps()) {
+  const runtimeRoot = await canonicalExistingPath(deps.runtimeRoot());
+  const managedRoot = await canonicalPath2(getDefaultSelfUpdateInstallDir(deps.home()));
+  const warnings = [];
+  const candidates = [];
+  const registryResult = await readSourceRegistry(deps.home());
+  if (registryResult.warning)
+    warnings.push(registryResult.warning);
+  let development;
+  if (!sameSourcePath(runtimeRoot, managedRoot)) {
+    development = await tryResolveDevelopmentCheckout(runtimeRoot, deps);
+  }
+  if (!development) {
+    const cwdCheckout = await tryResolveDevelopmentCheckout(deps.cwd(), deps);
+    if (cwdCheckout && !sameSourcePath(cwdCheckout.mainRoot, managedRoot)) {
+      development = cwdCheckout;
+    }
+  }
+  if (!development && registryResult.registry) {
+    const registered = await tryResolveDevelopmentCheckout(registryResult.registry.mainRoot, deps);
+    if (registered && sameSourcePath(registered.commonDir, registryResult.registry.commonDir)) {
+      development = registered;
+    } else {
+      candidates.push(unavailableCandidate({
+        id: "local",
+        kind: "main",
+        path: registryResult.registry.mainRoot,
+        active: sameSourcePath(runtimeRoot, registryResult.registry.mainRoot),
+        reason: "The registered development checkout is missing or no longer matches its Git identity."
+      }));
+      warnings.push("Registered development checkout is unavailable; run `chc source register <path>` from a valid CthuTool checkout.");
+    }
+  }
+  if (development) {
+    for (const [index, record] of development.worktrees.entries()) {
+      candidates.push(await inspectWorktreeCandidate(record, index === 0 ? "main" : "worktree", development.mainRoot, runtimeRoot, deps));
+    }
+  } else if (!sameSourcePath(runtimeRoot, managedRoot)) {
+    candidates.push(await inspectFallbackRuntimeCandidate(runtimeRoot, deps));
+  }
+  const managed = await inspectManagedCandidate(managedRoot, runtimeRoot, deps);
+  candidates.push(managed);
+  const deduplicated = deduplicateCandidates(candidates);
+  const active = deduplicated.find((candidate) => candidate.active);
+  if (!active) {
+    const fallback = unavailableCandidate({
+      id: "current",
+      kind: sameSourcePath(runtimeRoot, managedRoot) ? "managed" : "main",
+      path: runtimeRoot,
+      active: true,
+      reason: "The running source could not be classified as a valid checkout."
+    });
+    return {
+      active: fallback,
+      candidates: [fallback, ...deduplicated],
+      warnings
+    };
+  }
+  return { active, candidates: deduplicated, warnings };
+}
+async function registerCliSource(path, deps = createCliSourceManagerDeps()) {
+  const checkout = await resolveDevelopmentCheckout(path, deps);
+  const managedRoot = await canonicalPath2(getDefaultSelfUpdateInstallDir(deps.home()));
+  if (sameSourcePath(checkout.mainRoot, managedRoot)) {
+    throw new CliSourceError({
+      code: "source_invalid",
+      message: "The managed checkout cannot be registered as the local development source.",
+      hint: "Register a separate development clone or one of its linked worktrees."
+    });
+  }
+  const registry = {
+    version: sourceRegistryVersion,
+    mainRoot: checkout.mainRoot,
+    commonDir: checkout.commonDir
+  };
+  await writeSourceRegistry(registry, deps.home());
+  return {
+    mainRoot: registry.mainRoot,
+    commonDir: registry.commonDir
+  };
+}
+async function switchCliSource(selector, options = {}, deps = createCliSourceManagerDeps()) {
+  const inventory = await discoverCliSources(deps);
+  const selected = await resolveCliSourceSelector(selector, inventory, deps);
+  const previous = inventory.active;
+  if (selected.kind === "managed" && options.bootstrap === true) {
+    await rememberDevelopmentSource(previous, deps);
+    return withSourceSwitchLock(deps, async () => {
+      try {
+        await deps.bootstrapManaged(selected.path);
+      } catch (error) {
+        throw toSwitchError(error, `Failed to bootstrap the managed source at ${selected.path}.`);
+      }
+      const refreshed = await inspectManagedCandidate(selected.path, selected.path, deps);
+      assertAvailableSource(refreshed);
+      await assertGlobalTarget(refreshed.path, deps);
+      return {
+        status: "bootstrapped",
+        previous,
+        selected: { ...refreshed, active: true }
+      };
+    });
+  }
+  assertAvailableSource(selected);
+  if (selected.kind === "managed") {
+    await rememberDevelopmentSource(previous, deps);
+  }
+  if (sameSourcePath(selected.path, previous.path)) {
+    if (selected.kind !== "managed") {
+      await registerCliSource(selected.path, deps);
+    }
+    return {
+      status: "already_active",
+      previous,
+      selected: { ...selected, active: true }
+    };
+  }
+  return withSourceSwitchLock(deps, async () => {
+    if (selected.kind !== "managed") {
+      await registerCliSource(selected.path, deps);
+    }
+    try {
+      await deps.relinkGlobal(selected.path);
+      await assertGlobalTarget(selected.path, deps);
+    } catch (error) {
+      throw toSwitchError(error, `Failed to switch chc from ${previous.path} to ${selected.path}.`);
+    }
+    return {
+      status: "switched",
+      previous,
+      selected: { ...selected, active: true }
+    };
+  });
+}
+async function getCliSourceSelectorCandidates(deps = createCliSourceManagerDeps()) {
+  try {
+    const inventory = await discoverCliSources(deps);
+    return [
+      ".",
+      "local",
+      "remote",
+      ...inventory.candidates.filter((candidate) => candidate.kind === "worktree" && candidate.available).map((candidate) => candidate.id)
+    ];
+  } catch {
+    return [".", "local", "remote"];
+  }
+}
+async function resolveCliSourceSelector(rawSelector, inventory, deps) {
+  const selector = rawSelector.trim();
+  if (!selector) {
+    throw new CliSourceError({
+      code: "source_invalid",
+      message: "A source selector is required."
+    });
+  }
+  if (selector === "remote") {
+    return requiredCandidate(inventory.candidates.find((candidate) => candidate.kind === "managed"), selector);
+  }
+  if (selector === "local") {
+    return requiredCandidate(inventory.candidates.find((candidate) => candidate.kind === "main"), selector);
+  }
+  if (selector === ".") {
+    return candidateFromExplicitPath(deps.cwd(), inventory.active.path, deps);
+  }
+  const discovered = inventory.candidates.find((candidate) => candidate.id === selector);
+  if (discovered)
+    return discovered;
+  const explicitPath = resolve11(deps.cwd(), selector);
+  if (existsSync5(explicitPath) || isAbsolute5(selector)) {
+    return candidateFromExplicitPath(explicitPath, inventory.active.path, deps);
+  }
+  throw new CliSourceError({
+    code: "source_unavailable",
+    message: `Unknown source selector: ${selector}`,
+    hint: "Run `chc source list` to inspect available selectors."
+  });
+}
+async function candidateFromExplicitPath(path, runtimeRoot, deps) {
+  const managedRoot = await canonicalPath2(getDefaultSelfUpdateInstallDir(deps.home()));
+  const checkout = await resolveDevelopmentCheckout(path, deps);
+  const record = checkout.worktrees.find((item) => sameSourcePath(item.path, checkout.root));
+  if (!record) {
+    throw new CliSourceError({
+      code: "source_invalid",
+      message: `Git did not report the selected checkout at ${checkout.root}.`
+    });
+  }
+  if (sameSourcePath(checkout.root, managedRoot)) {
+    return inspectManagedCandidate(managedRoot, runtimeRoot, deps);
+  }
+  return inspectWorktreeCandidate(record, sameSourcePath(checkout.root, checkout.mainRoot) ? "main" : "worktree", checkout.mainRoot, runtimeRoot, deps);
+}
+async function resolveDevelopmentCheckout(path, deps) {
+  const requested = resolve11(path);
+  const rootResult = await deps.runGit(requested, [
+    "rev-parse",
+    "--show-toplevel"
+  ]);
+  if (rootResult.code !== 0 || rootResult.stdout.trim().length === 0) {
+    throw new CliSourceError({
+      code: "source_invalid",
+      message: `The selected path is not a Git checkout: ${requested}`,
+      cause: rootResult.stderr
+    });
+  }
+  const root = await canonicalExistingPath(rootResult.stdout.trim());
+  assertCthuToolPackage(root);
+  const commonResult = await deps.runGit(root, [
+    "rev-parse",
+    "--git-common-dir"
+  ]);
+  if (commonResult.code !== 0 || commonResult.stdout.trim().length === 0) {
+    throw new CliSourceError({
+      code: "source_invalid",
+      message: `Unable to resolve the Git common directory for ${root}.`,
+      cause: commonResult.stderr
+    });
+  }
+  const rawCommonDir = commonResult.stdout.trim();
+  const commonDir = await canonicalExistingPath(isAbsolute5(rawCommonDir) ? rawCommonDir : resolve11(root, rawCommonDir));
+  const listResult = await deps.runGit(root, [
+    "worktree",
+    "list",
+    "--porcelain"
+  ]);
+  if (listResult.code !== 0) {
+    throw new CliSourceError({
+      code: "source_invalid",
+      message: `Unable to enumerate Git worktrees for ${root}.`,
+      cause: listResult.stderr
+    });
+  }
+  const parsed = parseGitWorktreeList(listResult.stdout);
+  if (parsed.length === 0) {
+    throw new CliSourceError({
+      code: "source_invalid",
+      message: `Git reported no worktrees for ${root}.`
+    });
+  }
+  const worktrees = await Promise.all(parsed.map(async (record) => ({
+    ...record,
+    path: existsSync5(record.path) ? await canonicalExistingPath(record.path) : resolve11(record.path)
+  })));
+  const mainRoot = worktrees[0]?.path;
+  if (!mainRoot) {
+    throw new CliSourceError({
+      code: "source_invalid",
+      message: `Unable to identify the main worktree for ${root}.`
+    });
+  }
+  return { root, mainRoot, commonDir, worktrees };
+}
+async function tryResolveDevelopmentCheckout(path, deps) {
+  try {
+    return await resolveDevelopmentCheckout(path, deps);
+  } catch {
+    return;
+  }
+}
+async function inspectWorktreeCandidate(record, kind, mainRoot, runtimeRoot, deps) {
+  const path = record.path;
+  const active = sameSourcePath(path, runtimeRoot);
+  const bundlePresent = existsSync5(join22(path, committedCliBundlePath));
+  const packageValid = isCthuToolPackage(path);
+  const exists = existsSync5(path);
+  const available = exists && packageValid && bundlePresent && !record.prunable;
+  let dirty;
+  if (exists && packageValid) {
+    const status = await deps.runGit(path, [
+      "status",
+      "--porcelain",
+      "--untracked-files=normal"
+    ]);
+    if (status.code === 0)
+      dirty = status.stdout.trim().length > 0;
+  }
+  return {
+    id: kind === "main" ? "local" : createWorktreeSourceId(path),
+    kind,
+    mode: "local",
+    path,
+    active,
+    available,
+    bundlePresent,
+    branch: record.branch,
+    commit: record.head,
+    detached: record.detached,
+    dirty,
+    locked: record.locked,
+    prunable: record.prunable,
+    reason: available ? undefined : sourceUnavailableReason({
+      exists,
+      packageValid,
+      bundlePresent,
+      prunable: record.prunable,
+      mainRoot
+    })
+  };
+}
+async function inspectManagedCandidate(path, runtimeRoot, deps) {
+  const active = sameSourcePath(path, runtimeRoot);
+  const bundlePresent = existsSync5(join22(path, committedCliBundlePath));
+  if (!existsSync5(path)) {
+    return unavailableCandidate({
+      id: "remote",
+      kind: "managed",
+      path,
+      active,
+      reason: "The managed source checkout does not exist."
+    });
+  }
+  const checkout = await tryResolveDevelopmentCheckout(path, deps);
+  if (!checkout) {
+    return unavailableCandidate({
+      id: "remote",
+      kind: "managed",
+      path,
+      active,
+      bundlePresent,
+      reason: "The managed source path is not a valid CthuTool Git checkout."
+    });
+  }
+  const record = checkout.worktrees.find((item) => sameSourcePath(item.path, checkout.root));
+  let dirty;
+  const status = await deps.runGit(path, [
+    "status",
+    "--porcelain",
+    "--untracked-files=normal"
+  ]);
+  if (status.code === 0)
+    dirty = status.stdout.trim().length > 0;
+  return {
+    id: "remote",
+    kind: "managed",
+    mode: "remote",
+    path,
+    active,
+    available: bundlePresent,
+    bundlePresent,
+    branch: record?.branch,
+    commit: record?.head,
+    detached: record?.detached,
+    dirty,
+    locked: record?.locked,
+    prunable: record?.prunable,
+    reason: bundlePresent ? undefined : `Missing committed CLI bundle: ${join22(path, committedCliBundlePath)}`
+  };
+}
+async function inspectFallbackRuntimeCandidate(path, deps) {
+  const bundlePresent = existsSync5(join22(path, committedCliBundlePath));
+  const status = await deps.runGit(path, [
+    "status",
+    "--porcelain",
+    "--untracked-files=normal"
+  ]);
+  return {
+    id: "local",
+    kind: "main",
+    mode: "local",
+    path,
+    active: true,
+    available: isCthuToolPackage(path) && bundlePresent,
+    bundlePresent,
+    dirty: status.code === 0 ? status.stdout.trim().length > 0 : undefined,
+    reason: bundlePresent ? "The running source is not part of a discoverable Git worktree topology." : `Missing committed CLI bundle: ${join22(path, committedCliBundlePath)}`
+  };
+}
+function unavailableCandidate(input) {
+  return {
+    id: input.id,
+    kind: input.kind,
+    mode: input.kind === "managed" ? "remote" : "local",
+    path: input.path,
+    active: input.active,
+    available: false,
+    bundlePresent: input.bundlePresent ?? false,
+    reason: input.reason
+  };
+}
+function sourceUnavailableReason(input) {
+  if (!input.exists || input.prunable)
+    return "The worktree path is unavailable.";
+  if (!input.packageValid)
+    return `The worktree does not contain the expected CthuTool root package from ${input.mainRoot}.`;
+  if (!input.bundlePresent)
+    return `Missing committed CLI bundle: ${committedCliBundlePath}`;
+  return "The source is unavailable.";
+}
+function requiredCandidate(candidate, selector) {
+  if (candidate)
+    return candidate;
+  throw new CliSourceError({
+    code: "source_unavailable",
+    message: `Source selector is unavailable: ${selector}`,
+    hint: "Run `chc source list` or register a development checkout."
+  });
+}
+function assertAvailableSource(candidate) {
+  if (candidate.available)
+    return;
+  const hint = candidate.kind === "managed" ? "Run `chc source use remote --bootstrap` or use the public remote installer." : "Refresh apps/cli/dist/index.js or select another checkout.";
+  throw new CliSourceError({
+    code: "source_unavailable",
+    message: `Source is unavailable: ${candidate.path}`,
+    cause: candidate.reason,
+    hint
+  });
+}
+async function rememberDevelopmentSource(candidate, deps) {
+  if (candidate.kind === "managed")
+    return;
+  await registerCliSource(candidate.path, deps);
+}
+async function assertGlobalTarget(target, deps) {
+  const installed = await deps.resolveGlobalPackageTarget();
+  if (installed && sameSourcePath(installed, target))
+    return;
+  throw new CliSourceError({
+    code: "source_switch_failed",
+    message: "The global cthutool package did not resolve to the selected source.",
+    cause: `Expected ${target}; found ${installed ?? "unavailable"}.`,
+    hint: remoteInstallerRecoveryHint()
+  });
+}
+async function withSourceSwitchLock(deps, run) {
+  const lockPath = getCliSourceSwitchLockPath(deps.home());
+  await mkdir11(dirname12(lockPath), { mode: 448, recursive: true });
+  const deadline = deps.now() + sourceSwitchWaitMs;
+  while (true) {
+    try {
+      await mkdir11(lockPath, { mode: 448 });
+      break;
+    } catch (error) {
+      if (!isNodeError(error, "EEXIST"))
+        throw error;
+      if (deps.now() >= deadline) {
+        throw new CliSourceError({
+          code: "source_busy",
+          message: "Another chc source switch is in progress.",
+          hint: `Wait for it to finish, then retry. Lock: ${lockPath}`
+        });
+      }
+      await deps.sleep(sourceSwitchPollMs);
+    }
+  }
+  try {
+    return await run();
+  } finally {
+    await rm8(lockPath, { force: true, recursive: true });
+  }
+}
+async function readSourceRegistry(home) {
+  const path = getCliSourceRegistryPath(home);
+  if (!existsSync5(path))
+    return {};
+  try {
+    const value = JSON.parse(await readFile14(path, "utf8"));
+    if (value.version !== sourceRegistryVersion || typeof value.mainRoot !== "string" || !isAbsolute5(value.mainRoot) || typeof value.commonDir !== "string" || !isAbsolute5(value.commonDir)) {
+      throw new Error("unsupported or invalid registry fields");
+    }
+    return {
+      registry: {
+        version: sourceRegistryVersion,
+        mainRoot: value.mainRoot,
+        commonDir: value.commonDir
+      }
+    };
+  } catch (error) {
+    return {
+      warning: `Unable to read ${path}: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+async function writeSourceRegistry(registry, home) {
+  const path = getCliSourceRegistryPath(home);
+  const temporary = `${path}.${process.pid}.${randomUUID2()}.tmp`;
+  await mkdir11(dirname12(path), { mode: 448, recursive: true });
+  try {
+    await writeFile8(temporary, `${JSON.stringify(registry, null, 2)}
+`, {
+      mode: 384
+    });
+    await rename6(temporary, path);
+  } finally {
+    await rm8(temporary, { force: true });
+  }
+}
+function assertCthuToolPackage(path) {
+  if (isCthuToolPackage(path))
+    return;
+  throw new CliSourceError({
+    code: "source_invalid",
+    message: `The selected checkout is not a CthuTool root package: ${path}`
+  });
+}
+function isCthuToolPackage(path) {
+  try {
+    const pkg = JSON.parse(readFileSync4(join22(path, "package.json"), "utf8"));
+    return pkg.name === "cthutool";
+  } catch {
+    return false;
+  }
+}
+async function canonicalExistingPath(path) {
+  return realpath3(resolve11(path));
+}
+async function canonicalPath2(path) {
+  return existsSync5(path) ? canonicalExistingPath(path) : resolve11(path);
+}
+function deduplicateCandidates(candidates) {
+  const seen = new Set;
+  return candidates.filter((candidate) => {
+    const key = `${candidate.kind}:${candidate.path}`;
+    if (seen.has(key))
+      return false;
+    seen.add(key);
+    return true;
+  });
+}
+function isNodeError(error, code) {
+  return error instanceof Error && "code" in error && error.code === code;
+}
+function toSwitchError(error, message) {
+  if (error instanceof CliSourceError)
+    return error;
+  return new CliSourceError({
+    code: "source_switch_failed",
+    message,
+    cause: error instanceof Error ? error.message : String(error),
+    hint: remoteInstallerRecoveryHint()
+  });
+}
+function boundedCommandDetail(value) {
+  const normalized = value.replaceAll(/\s+/g, " ").trim();
+  return normalized.length <= maxCommandDetailLength ? normalized : `${normalized.slice(0, maxCommandDetailLength - 1)}…`;
+}
+function remoteInstallerRecoveryHint() {
+  return "Use the public Bash or PowerShell remote installer to restore chc if the global command is unavailable.";
+}
+function runProcess2(command, args) {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn3(command, [...args], {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout2 = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout2 += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolvePromise({ code: code ?? 1, stdout: stdout2, stderr });
+    });
+  });
+}
+
+// src/command/source.command.ts
+var defaultInteraction = {
+  async chooseSource(candidates) {
+    const answer = await le2({
+      message: "Choose the source for global chc",
+      options: candidates.map((candidate) => ({
+        value: candidate.id,
+        label: sourceChoiceLabel(candidate)
+      }))
+    });
+    return lD2(answer) ? undefined : answer;
+  }
+};
+var defaultDeps5 = {
+  manager: createCliSourceManagerDeps(),
+  interaction: defaultInteraction
+};
+var useArgs = {
+  ...cliContractArgs,
+  selector: {
+    type: "positional",
+    description: "local, remote, ., a worktree id, or a checkout path",
+    required: false
+  },
+  bootstrap: {
+    type: "boolean",
+    description: "Create or safely refresh the managed source explicitly"
+  }
+};
+var registerArgs = {
+  ...cliContractArgs,
+  path: {
+    type: "positional",
+    description: "CthuTool main checkout or linked worktree path",
+    required: false
+  }
+};
+function getStringArg4(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+function sourceChoiceLabel(candidate) {
+  const ref = candidate.branch ?? (candidate.detached ? "detached" : "unknown");
+  return `${candidate.kind} · ${ref} · ${candidate.path}`;
+}
+function sourceStatusLabel(candidate) {
+  const parts = [candidate.kind];
+  if (candidate.branch)
+    parts.push(candidate.branch);
+  else if (candidate.detached)
+    parts.push("detached");
+  if (candidate.dirty === true)
+    parts.push("dirty");
+  if (!candidate.bundlePresent)
+    parts.push("bundle missing");
+  if (!candidate.available)
+    parts.push("unavailable");
+  return parts.join(", ");
+}
+function writeSourceCandidate(candidate) {
+  const marker = candidate.active ? import_picocolors9.default.green("●") : " ";
+  processOutput.stdout.write(`${marker} ${candidate.id.padEnd(23)} ${sourceStatusLabel(candidate)}
+`);
+  processOutput.stdout.write(`  ${candidate.path}
+`);
+  if (candidate.reason) {
+    processOutput.stdout.write(`  ${import_picocolors9.default.yellow(candidate.reason)}
+`);
+  }
+}
+function toCliSourceError(error) {
+  if (isCliCommandError(error))
+    return error;
+  if (error instanceof CliSourceError) {
+    return createCliError(error.code, error.message);
+  }
+  return createCliError("source_switch_failed", error instanceof Error ? error.message : "Source operation failed.");
+}
+function failSourceCommand(scope, error, details = {}) {
+  const cliError = toCliSourceError(error);
+  scope.fail(cliError, { details });
+  writeCommandError(scope.context, processOutput, cliError);
+  process.exitCode = cliError.exitCode;
+}
+function createSourceListCommand(deps) {
+  return defineCommand({
+    meta: {
+      name: "list",
+      description: "List the active, local worktree, and managed sources."
+    },
+    args: cliContractArgs,
+    async run({ args }) {
+      await runObservedCliCommand(args, { command: "source", subcommand: "list" }, async (scope) => {
+        try {
+          const inventory = await discoverCliSources(deps.manager);
+          if (scope.context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: "source list",
+              active: inventory.active,
+              candidates: inventory.candidates,
+              warnings: inventory.warnings
+            });
+          } else if (!scope.context.quiet) {
+            writeHumanStatus(scope.context, processOutput, import_picocolors9.default.cyan("CthuTool sources"));
+            for (const candidate of inventory.candidates) {
+              writeSourceCandidate(candidate);
+            }
+          }
+          if (!scope.context.quiet) {
+            for (const warning of inventory.warnings) {
+              writeWarning(processOutput, import_picocolors9.default.yellow(warning));
+            }
+          }
+          process.exitCode = 0;
+        } catch (error) {
+          failSourceCommand(scope, error, { phase: "discovery" });
+        }
+      });
+    }
+  });
+}
+function createSourceCurrentCommand(deps) {
+  return defineCommand({
+    meta: {
+      name: "current",
+      description: "Show the source that provides the running chc command."
+    },
+    args: cliContractArgs,
+    async run({ args }) {
+      await runObservedCliCommand(args, { command: "source", subcommand: "current" }, async (scope) => {
+        try {
+          const inventory = await discoverCliSources(deps.manager);
+          if (scope.context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: "source current",
+              source: inventory.active
+            });
+          } else {
+            writeHumanStatus(scope.context, processOutput, import_picocolors9.default.cyan("CthuTool source"));
+            if (!scope.context.quiet)
+              writeSourceCandidate(inventory.active);
+          }
+          process.exitCode = 0;
+        } catch (error) {
+          failSourceCommand(scope, error, { phase: "discovery" });
+        }
+      });
+    }
+  });
+}
+function shouldOfferSourceSelectors({
+  completedWords,
+  path
+}) {
+  const tail = completedWords.slice(path.length);
+  return !tail.some((word) => !word.startsWith("-"));
+}
+function createSourceUseCommand(deps) {
+  const command = defineCommand({
+    meta: {
+      name: "use",
+      description: "Switch global chc to a local, worktree, or managed source."
+    },
+    args: useArgs,
+    async run({ args }) {
+      await runObservedCliCommand(args, { command: "source", subcommand: "use" }, async (scope) => {
+        let selector = getStringArg4(args.selector);
+        if (!selector) {
+          if (!scope.context.interactive || scope.context.json) {
+            failSourceCommand(scope, createCliError("missing_required_argument", "source selector is required in non-interactive mode (use: chc source use <selector>)"), { phase: "selection" });
+            return;
+          }
+          try {
+            const inventory = await discoverCliSources(deps.manager);
+            selector = await deps.interaction.chooseSource(inventory.candidates.filter((candidate) => candidate.available || args.bootstrap === true && candidate.kind === "managed"));
+          } catch (error) {
+            failSourceCommand(scope, error, { phase: "discovery" });
+            return;
+          }
+          if (!selector) {
+            failSourceCommand(scope, createCliError("invalid_option", "source selection cancelled"), { phase: "selection" });
+            return;
+          }
+        }
+        try {
+          const result = await switchCliSource(selector, { bootstrap: args.bootstrap === true }, deps.manager);
+          if (scope.context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: "source use",
+              result
+            });
+          } else {
+            const verb = result.status === "already_active" ? "Already using" : result.status === "bootstrapped" ? "Bootstrapped and switched to" : "Switched to";
+            writeHumanStatus(scope.context, processOutput, `${import_picocolors9.default.green("✓")} ${verb} ${result.selected.id}`);
+            writeHumanStatus(scope.context, processOutput, `  ${result.selected.path}`);
+            if (result.selected.kind === "worktree") {
+              writeHumanStatus(scope.context, processOutput, import_picocolors9.default.yellow("  Switch away before deleting this worktree; otherwise restore chc with the public remote installer."));
+            }
+          }
+          process.exitCode = 0;
+        } catch (error) {
+          failSourceCommand(scope, error, {
+            phase: "switch",
+            selector,
+            bootstrap: args.bootstrap === true
+          });
+        }
+      });
+    }
+  });
+  return registerPositionalCandidates(command, (context) => shouldOfferSourceSelectors(context) ? getCliSourceSelectorCandidates(deps.manager) : []);
+}
+function createSourceRegisterCommand(deps) {
+  return defineCommand({
+    meta: {
+      name: "register",
+      description: "Remember a development checkout for local discovery."
+    },
+    args: registerArgs,
+    async run({ args }) {
+      await runObservedCliCommand(args, { command: "source", subcommand: "register" }, async (scope) => {
+        const path = getStringArg4(args.path);
+        if (!path) {
+          failSourceCommand(scope, createCliError("missing_required_argument", "checkout path is required (use: chc source register <path>)"), { phase: "registration" });
+          return;
+        }
+        try {
+          const result = await registerCliSource(path, deps.manager);
+          if (scope.context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: "source register",
+              result
+            });
+          } else {
+            writeHumanStatus(scope.context, processOutput, `${import_picocolors9.default.green("✓")} Registered local source`);
+            writeHumanStatus(scope.context, processOutput, `  ${result.mainRoot}`);
+          }
+          process.exitCode = 0;
+        } catch (error) {
+          failSourceCommand(scope, error, {
+            phase: "registration",
+            path
+          });
+        }
+      });
+    }
+  });
+}
+function createSourceCommand(overrides = {}) {
+  const deps = { ...defaultDeps5, ...overrides };
+  const registrations = [
+    {
+      name: "list",
+      command: createSourceListCommand(deps),
+      visibility: "public",
+      bareBehavior: "run"
+    },
+    {
+      name: "current",
+      command: createSourceCurrentCommand(deps),
+      visibility: "public",
+      bareBehavior: "run"
+    },
+    {
+      name: "use",
+      command: createSourceUseCommand(deps),
+      visibility: "public",
+      bareBehavior: "run"
+    },
+    {
+      name: "register",
+      command: createSourceRegisterCommand(deps),
+      visibility: "public",
+      bareBehavior: "run"
+    }
+  ];
+  return registerCommandGroup(defineCommand({
+    meta: {
+      name: "source",
+      description: "Discover and switch the source used by global chc."
+    },
+    subCommands: buildRegisteredSubCommands(registrations)
+  }), registrations);
+}
+var sourceCommand = createSourceCommand();
+
 // src/command/root.command.ts
 var rootCommand;
 var rootCommandRegistrations = [
@@ -14892,6 +15926,12 @@ var rootCommandRegistrations = [
     command: updateCommand,
     visibility: "public",
     bareBehavior: "run"
+  },
+  {
+    name: "source",
+    command: sourceCommand,
+    visibility: "public",
+    bareBehavior: "help"
   },
   {
     name: "completion",
@@ -14942,7 +15982,7 @@ function normalizeCommandRows(value, hiddenCommands) {
     }
     const width = Math.max(...visibleRows.map((row) => row.name.length));
     for (const row of visibleRows) {
-      normalized.push(`  ${import_picocolors9.default.bold(import_picocolors9.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
+      normalized.push(`  ${import_picocolors10.default.bold(import_picocolors10.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
     }
     pendingRows = [];
   };

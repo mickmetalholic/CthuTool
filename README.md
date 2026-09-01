@@ -156,6 +156,28 @@ global command to that directory. Dirty, diverged, or invalid-bundle targets are
 blocked without automatic stash, reset, clean, or rebase. Update checks are
 explicit; the CLI does not run a periodic background checker.
 
+Switch between an existing local checkout, its Git worktrees, and the managed
+remote checkout without updating Git state:
+
+```bash
+chc source list
+chc source current
+chc source use local
+chc source use .
+chc source use worktree:<id>
+chc source use remote
+```
+
+`source list` reports the stable selector for each currently registered
+worktree. Source switching validates the committed CLI bundle and relinks the
+global npm package, but it does not build, fetch, check out, or require a clean
+development worktree. Use `chc source register <path>` to remember a development
+clone while running from managed mode. If the managed checkout is absent,
+`chc source use remote --bootstrap` creates it through the safe managed update
+flow. Switch away before removing an active worktree; if `chc` can no longer
+start after its linked worktree was removed, rerun the public Bash or PowerShell
+remote installer above.
+
 Discover command groups and bundled scripts directly from the CLI:
 
 ```bash

@@ -18,6 +18,7 @@ import {
   updateCommand,
   versionCommand,
 } from './self-update.command';
+import { sourceCommand } from './source.command';
 
 let rootCommand: AnyCommandDef;
 
@@ -57,6 +58,12 @@ const rootCommandRegistrations: readonly CliCommandRegistration[] = [
     command: updateCommand,
     visibility: 'public',
     bareBehavior: 'run',
+  },
+  {
+    name: 'source',
+    command: sourceCommand,
+    visibility: 'public',
+    bareBehavior: 'help',
   },
   {
     name: 'completion',

@@ -119,6 +119,37 @@ one result value on stdout with stable status, commit identities, phases, and
 bounded change or failure metadata. Update checks only run when requested; the
 CLI does not install a periodic or shell-startup background checker.
 
+## Source Switching
+
+List and switch the checkout that supplies the global `chc` runtime bundle:
+
+```bash
+chc source list
+chc source current
+chc source use local
+chc source use .
+chc source use worktree:<id>
+chc source use remote
+chc source register /path/to/CthuTool
+```
+
+`mode` remains `local` or `remote` for compatibility. Source output additionally
+reports `sourceKind: main`, `worktree`, or `managed`; `source list` supplies the
+current `worktree:<id>` selectors from `git worktree list --porcelain`.
+
+Switching to a main checkout or worktree validates `package.json` and
+`apps/cli/dist/index.js`, then runs `npm install -g --ignore-scripts` for the
+selected path. It deliberately does not fetch, pull, checkout, stash, reset, or
+build, and an explicitly selected dirty worktree is allowed. Refresh the bundle
+with `pnpm --filter @cthutool/cli dev` before testing source changes.
+
+`chc source use remote` only relinks an existing valid managed checkout and does
+not update it. Use `chc source use remote --bootstrap` when that checkout is
+missing or when an explicit safe managed refresh is intended. Switch to `local`
+or `remote` before deleting an active worktree. If the worktree is already gone
+and `chc` cannot start, recover with the public Bash or PowerShell remote
+installer from the Installation Contract section.
+
 ## Shell Completion
 
 The installer enables persistent zsh completion automatically when the user's

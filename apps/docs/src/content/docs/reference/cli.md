@@ -11,12 +11,43 @@ Install `chc` from [CLI Tool](/client/cli/) before using these commands.
 chc --help
 chc --version
 chc status
+chc source list
+chc source current
 chc update --check
 chc update
 chc update --ref v0.1.0
 ```
 
 Use `chc --version` for the lightweight version-only check. `chc status` includes that version, reports the detected `local` or `remote` installation mode, and presents source and installation details in a grouped, TTY-aware summary. Local mode includes the checked-out commit's absolute committer time and bounded subject. In `--json` mode these are optional `commitTime` and `commitMessage` fields. `chc status --install-dir <path>` overrides automatic source detection.
+
+## Source
+
+```bash
+chc source list
+chc source current
+chc source use local
+chc source use .
+chc source use worktree:<id>
+chc source use remote
+chc source use remote --bootstrap
+chc source register /path/to/CthuTool
+```
+
+`source list` marks the active runtime and reports `main`, `worktree`, and
+`managed` source kinds while retaining the compatible `local` and `remote`
+installation modes. The `local` selector means the registered main checkout;
+`remote` means `~/.cthutool/source/CthuTool`; `.` selects the checkout containing
+the current directory; worktree ids come from the live Git worktree catalog.
+
+Local/worktree switches only validate the CthuTool package and committed bundle
+before relinking global npm state. They allow dirty worktrees and never mutate
+Git or build the bundle. Managed selection also avoids an implicit update;
+`--bootstrap` is required to create a missing managed checkout or explicitly run
+the managed refresh path.
+
+Switch away before deleting the active worktree. If the linked worktree is
+already gone and `chc` cannot start, recover by rerunning the public Bash or
+PowerShell remote installer documented in [CLI Tool](/client/cli/).
 
 ## Update
 

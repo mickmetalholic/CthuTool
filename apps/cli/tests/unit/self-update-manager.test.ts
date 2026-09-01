@@ -629,6 +629,8 @@ describe('self-update manager', () => {
     ).resolves.toMatchObject({
       version: '0.0.0',
       mode: 'local',
+      sourceKind: 'main',
+      sourceId: 'local',
       installDir,
       repo,
       ref: 'main',
@@ -679,7 +681,12 @@ describe('self-update manager', () => {
 
     const status = await getCliInstallationStatus({ installDir }, deps);
 
-    expect(status).toMatchObject({ mode: 'remote', installDir });
+    expect(status).toMatchObject({
+      mode: 'remote',
+      sourceKind: 'managed',
+      sourceId: 'remote',
+      installDir,
+    });
     expect(status.commitTime).toBeUndefined();
     expect(status.commitMessage).toBeUndefined();
     expect(signatures(commands).join('\n')).not.toContain('git show');

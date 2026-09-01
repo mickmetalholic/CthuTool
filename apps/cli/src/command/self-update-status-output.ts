@@ -59,12 +59,22 @@ export function renderCliInstallationStatus(
     `${colors.bold(colors.cyan('◆ CthuTool'))}  ${colors.dim(`v${status.version}`)}  ${mode}`,
     '│',
     `├─ ${colors.bold('Source')}`,
+    sourceRow('Kind', status.sourceKind),
+    sourceRow('Selector', status.sourceId),
     sourceRow('Repository', status.repo),
     sourceRow('Ref', status.ref),
     sourceRow('Commit', commitIdentity),
   ];
   if (status.commitMessage) {
     lines.push(sourceRow('Message', boundStatusMessage(status.commitMessage)));
+  }
+  if (status.dirty !== undefined) {
+    lines.push(
+      sourceRow(
+        'Checkout',
+        `${status.dirty ? 'dirty' : 'clean'}${status.detached ? ' · detached' : ''}`,
+      ),
+    );
   }
   lines.push(
     '│',

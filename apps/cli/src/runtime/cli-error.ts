@@ -21,6 +21,10 @@ export type CliErrorCode =
   | 'obsidian_agents_setup_required'
   | 'obsidian_agents_conflict'
   | 'obsidian_agents_link_failed'
+  | 'source_invalid'
+  | 'source_unavailable'
+  | 'source_busy'
+  | 'source_switch_failed'
   | 'update_failed';
 
 export type CliError = {

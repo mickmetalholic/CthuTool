@@ -54,6 +54,7 @@ describe('command discovery registry', () => {
       'completion',
       'obsidian',
       'scripts',
+      'source',
     ]);
   });
 
