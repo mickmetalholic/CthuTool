@@ -236,8 +236,26 @@ describe('codex plugin manager', () => {
             command: 'node',
             args: ['./scripts/anki-mcp-server.mjs'],
           },
+          'language-feedback': {
+            command: 'node',
+            args: ['./scripts/language-feedback-mcp-server.mjs'],
+          },
         },
       },
+    );
+    await mkdir(join(pluginRoot, 'scripts'), { recursive: true });
+    await writeFile(
+      join(pluginRoot, 'scripts', 'language-feedback-mcp-server.mjs'),
+      'export const resourceUri = "ui://cthu-language-feedback/v1.html";\n',
+      'utf8',
+    );
+    await mkdir(join(pluginRoot, 'ui', 'language-feedback'), {
+      recursive: true,
+    });
+    await writeFile(
+      join(pluginRoot, 'ui', 'language-feedback', 'v1.html'),
+      '<!doctype html><title>English polish</title>',
+      'utf8',
     );
     const marketplacePath = join(
       homeRoot,
@@ -273,6 +291,9 @@ describe('codex plugin manager', () => {
       await readFile(join(pluginRoot, '.mcp.json'), 'utf8'),
     );
     expect(sourceMcpConfig.mcpServers.anki.command).toBe('node');
+    expect(sourceMcpConfig.mcpServers['language-feedback'].args).toEqual([
+      './scripts/language-feedback-mcp-server.mjs',
+    ]);
 
     await syncCodexPluginCache({
       cacheRoot: join(homeRoot, '.codex', 'plugins', 'cache', 'personal'),
@@ -330,5 +351,22 @@ describe('codex plugin manager', () => {
       args: ['./scripts/anki-mcp-server.mjs'],
       cwd: resolve(cachedPluginRoot).replaceAll('\\', '/'),
     });
+    expect(cachedMcpConfig.mcpServers['language-feedback']).toEqual({
+      command: 'node',
+      args: ['./scripts/language-feedback-mcp-server.mjs'],
+      cwd: resolve(cachedPluginRoot).replaceAll('\\', '/'),
+    });
+    expect(
+      await readFile(
+        join(cachedPluginRoot, 'scripts', 'language-feedback-mcp-server.mjs'),
+        'utf8',
+      ),
+    ).toContain('ui://cthu-language-feedback/v1.html');
+    expect(
+      await readFile(
+        join(cachedPluginRoot, 'ui', 'language-feedback', 'v1.html'),
+        'utf8',
+      ),
+    ).toContain('English polish');
   });
 });

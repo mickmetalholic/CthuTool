@@ -545,7 +545,7 @@ describe('CthuCodex Anki MCP server tools', () => {
     expect(response.result.tools[0].name).toBe('cthu_anki_status');
   });
 
-  test('plugin manifest declares the Anki MCP server', async () => {
+  test('plugin manifest declares separate Anki and language-feedback MCP servers', async () => {
     const pluginRoot = join(repoRoot, 'codex', 'plugins', 'cthu-codex');
     const manifest = JSON.parse(
       await readFile(join(pluginRoot, '.codex-plugin', 'plugin.json'), 'utf8'),
@@ -561,5 +561,11 @@ describe('CthuCodex Anki MCP server tools', () => {
     expect(mcpConfig.mcpServers.anki.args).toEqual([
       './scripts/anki-mcp-server.mjs',
     ]);
+    expect(mcpConfig.mcpServers['language-feedback']).toEqual({
+      command: 'node',
+      args: ['./scripts/language-feedback-mcp-server.mjs'],
+      startup_timeout_sec: 10,
+      tool_timeout_sec: 30,
+    });
   });
 });

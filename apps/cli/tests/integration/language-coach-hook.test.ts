@@ -51,6 +51,21 @@ async function expectCoaching(input: unknown) {
   expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
     'CthuCodex language coach',
   );
+  expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
+    'cthu_language_feedback_present',
+  );
+  expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
+    'version 1, variant "compact"',
+  );
+  expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
+    "continue with and fully answer the user's actual request",
+  );
+  expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
+    '## English polish',
+  );
+  expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
+    'unavailable or its call fails',
+  );
 }
 
 const longChinesePaste =
@@ -64,6 +79,24 @@ describe('language coach hook', () => {
     await expectCoaching({
       user_prompt: 'Can you help me write this?',
     });
+  });
+
+  test('keeps progressive UI and Markdown fallback instructions together', async () => {
+    const result = await runHook({
+      user_prompt: 'Please make these corrections easier to notice.',
+    });
+    const context = result.parsed.hookSpecificOutput.additionalContext;
+
+    expect(context).toContain('original');
+    expect(context).toContain('bestVersion');
+    expect(context).toContain('ordered notes array');
+    expect(context).toContain(
+      'grammar, naturalness, tone, idiom, clarity, or other',
+    );
+    expect(context).toContain('do not let the presentation failure block');
+    expect(context.indexOf('cthu_language_feedback_present')).toBeLessThan(
+      context.indexOf('## English polish'),
+    );
   });
 
   test('injects language coaching for English-dominant mixed prose', async () => {

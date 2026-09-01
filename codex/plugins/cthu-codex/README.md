@@ -20,8 +20,30 @@ chc codex install
 ```
 
 After install, start a new Codex thread or restart Codex so the bundled MCP
-server is loaded. In a fresh thread, use `/mcp` to verify the `anki` server and
-its tools are available.
+servers are loaded. In a fresh thread, use `/mcp` to verify the `anki` and
+`language-feedback` servers are available.
+
+## Language Feedback UI
+
+The language coach still uses deterministic local filtering to decide whether
+the latest prompt contains English prose. When coaching is active, the current
+Codex model writes the correction and calls the read-only
+`cthu_language_feedback_present` tool. MCP Apps-compatible hosts can render the
+result as a prominent inline card with the original prose, an emphasized best
+version, categorized notes, and a local copy control.
+
+Version `1` uses the `compact` variant and the resource URI
+`ui://cthu-language-feedback/v1.html`. The versioned payload leaves room for
+future presentation variants without moving correction generation into the
+hook or MCP server. Clients that do not render MCP Apps still receive complete
+standard text content. If the tool is unavailable or fails, the model is
+instructed to put the same feedback in a prominent Markdown section before
+continuing the user's requested task.
+
+The presentation server and component are local and read-only. They do not
+call a model, load remote assets, send feedback over the network, persist
+history or preferences, record telemetry, or mutate Anki. Copying uses only the
+host's local clipboard capability when the user activates the control.
 
 ## Mature Japanese Sentence Conversion
 
