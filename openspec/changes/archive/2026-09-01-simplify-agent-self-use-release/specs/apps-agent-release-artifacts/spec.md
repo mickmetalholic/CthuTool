@@ -45,6 +45,16 @@ The self-use release SHALL include a schema-versioned, repository-managed catalo
 - **WHEN** release inventory and fixtures are checked
 - **THEN** no per-environment Agent secret or operator session credential is present in immutable version contents
 
+#### Scenario: Self-use archive is inspected
+
+- **WHEN** release inventory checks inspect immutable version contents
+- **THEN** the repository-managed deployment catalog contains no Agent Secret, operator credential, or session credential
+
+#### Scenario: User configuration is loaded
+
+- **WHEN** the installed self-use Agent starts
+- **THEN** it loads mutable user credentials separately from the immutable non-secret deployment catalog
+
 ### Requirement: Versioned release manifest
 
 The self-use release SHALL publish a schema-versioned manifest at the single latest-release endpoint describing compatible platform archives. The latest endpoint MAY be mutable, but every archive referenced by a manifest SHALL use a versioned asset identity so the manifest and archive bytes can be validated as one set.
@@ -73,6 +83,11 @@ Self-use manifests SHALL identify unsigned self-use provenance and SHALL require
 - **WHEN** a consumer fetches a supported self-use manifest over HTTPS and its schema, provenance, compatibility, catalog binding, URL, size, and digest metadata validate
 - **THEN** it may download and validate the selected archive
 
+#### Scenario: Manifest signature is valid
+
+- **WHEN** a self-use manifest is otherwise valid without a detached signature or pinned release key
+- **THEN** the consumer validates its unsigned self-use provenance, HTTPS URL, declared size, SHA-256 digest, catalog binding, and layout metadata
+
 #### Scenario: Manifest or archive integrity fails
 
 - **WHEN** a declared size, SHA-256 digest, catalog binding, safe-extraction, or layout check fails
@@ -82,6 +97,11 @@ Self-use manifests SHALL identify unsigned self-use provenance and SHALL require
 
 - **WHEN** a supported target completes self-use assembly and smoke validation without platform certificates or notarization
 - **THEN** CI may publish the target as self-use and records that platform signing was intentionally not performed
+
+#### Scenario: macOS production artifact is published
+
+- **WHEN** a macOS self-use artifact completes assembly and smoke validation without production signing or notarization
+- **THEN** CI may publish it to the self-use release and records that those production gates were intentionally not applied
 
 ### Requirement: Unsigned validation isolation
 
@@ -96,6 +116,11 @@ Pull-request workflows MAY produce unsigned validation archives but MUST keep th
 
 - **WHEN** a `main` or manual self-use run has no platform or release signing material
 - **THEN** the self-use path continues through archive, checksum, manifest, and publication validation rather than failing because signatures are absent
+
+#### Scenario: Production publish lacks signing material
+
+- **WHEN** the self-use publication workflow has no protected signing material
+- **THEN** it continues through unsigned archive, checksum, manifest, and publication validation instead of failing closed
 
 ### Requirement: Cross-platform release validation
 

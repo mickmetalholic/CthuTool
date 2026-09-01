@@ -33,7 +33,7 @@ confirmation.
 - **AND** it reports the blocking finding and leaves Hermes, Codex staging,
   and repository skill trees unchanged
 
-### Requirement: Hermes absorption remains local and one-way
+### Requirement: Codex bridge remains local and one-way
 
 The promoter's Hermes absorption stage SHALL operate on local skill trees
 only. It SHALL not mirror directories, synchronize changes between machines,

@@ -12,6 +12,30 @@ The docs site SHALL document Kubernetes/GitOps as the official user-facing deplo
 - **THEN** the documentation identifies the external deployment platform as the owner of cluster observability
 - **AND** it documents the retained backend `/metrics` scrape contract, structured stdout/stderr log contract, and optional OTLP trace export without requiring a specific log storage, collector, or trace backend
 
+#### Scenario: Reader configures Backend access
+- **WHEN** a reader reviews Backend deployment configuration
+- **THEN** the documentation states that no operator access mode, trusted proxy
+  IP, gateway identity header, private-development flag, or Agent Secret is
+  configured in CthuTool
+- **AND** it identifies `CTHUTOOL_ENVIRONMENT_ID` as environment-routing
+  metadata rather than a credential
+
+#### Scenario: Reader reviews external access
+- **WHEN** a reader needs to access the Web or Backend from outside the
+  homelab
+- **THEN** the documentation requires Cloudflare Access/Tunnel to protect the
+  external Web and Backend HTTP routes
+- **AND** it states that the Agent `/ws/agents` path remains private-network
+  only and must be reachable privately from Agent hosts
+- **AND** it warns that a direct public Backend port or unprotected ingress
+  bypass is unsupported
+
+#### Scenario: Reader reviews retained runtime diagnostics
+- **WHEN** a reader follows deployment or operations documentation
+- **THEN** the documentation identifies retained health, metrics, and
+  structured stdout/stderr diagnostics without requiring removed authentication
+  configuration
+
 ### Requirement: Architecture documentation with OpenSpec references
 The docs site SHALL explain the implementation architecture while preserving OpenSpec specs as the authoritative requirements source.
 
