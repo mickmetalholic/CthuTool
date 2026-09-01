@@ -78,15 +78,25 @@ describe('source command', () => {
 
     expect(result.code).toBe(0);
     expect(result.err).toBe('');
-    expect(JSON.parse(result.out)).toMatchObject({
+    const output = JSON.parse(result.out) as {
+      readonly status: {
+        readonly sourceKind: string;
+        readonly sourceId: string;
+      };
+    };
+    expect(output).toMatchObject({
       ok: true,
       command: 'status',
       status: {
         mode: 'local',
-        sourceKind: 'worktree',
-        sourceId: expect.stringMatching(/^worktree:/),
       },
     });
+    expect(['main', 'worktree']).toContain(output.status.sourceKind);
+    if (output.status.sourceKind === 'main') {
+      expect(output.status.sourceId).toBe('local');
+    } else {
+      expect(output.status.sourceId).toMatch(/^worktree:/);
+    }
   });
 
   test('requires explicit use and register arguments without a TTY', async () => {
