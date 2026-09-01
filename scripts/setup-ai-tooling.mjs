@@ -52,6 +52,7 @@ const REMOVED_PROJECT_SKILL_NAMES = [
 
 const args = new Set(process.argv.slice(2));
 const checkOnly = args.has('--check');
+const prerequisitesOnly = args.has('--check-prerequisites');
 
 const run = (command, commandArgs, options = {}) =>
   new Promise((resolvePromise, reject) => {
@@ -309,6 +310,19 @@ const main = async () => {
   process.chdir(repoRoot);
   const version = await ensureOpenspecVersion();
   const configIssues = await getOpenspecConfigIssues();
+
+  if (prerequisitesOnly) {
+    if (configIssues.length) {
+      console.error('AI tooling prerequisites are incomplete:');
+      for (const issue of configIssues) {
+        console.error(`- ${issue}`);
+      }
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`AI tooling prerequisites passed (OpenSpec ${version}).`);
+    return;
+  }
 
   if (!checkOnly && configIssues.length) {
     console.error('AI tooling setup blocked by OpenSpec configuration:');

@@ -67,6 +67,33 @@ pnpm setup:ai-tooling
 pnpm check:ai-tooling
 ```
 
+Normal root dependency installation after a clone also runs
+`pnpm setup:git-hooks` through the package `prepare` lifecycle. This configures
+the shared repository setting `core.hooksPath=.githooks` and verifies or repairs
+the current checkout's generated OpenSpec adapters. The tracked `post-checkout`
+hook applies the same check-then-repair flow to later standard branch checkouts
+and `git worktree add` operations, regardless of which AI host initiated Git.
+
+The hook runs only the dependency-free repository scripts and the documented
+global OpenSpec CLI. It does not install worktree dependencies, build apps,
+start services, install third-party skills, or modify
+`codex/plugins/cthu-codex`. Set `CTHUTOOL_DISABLE_GIT_HOOKS=1` when repository
+hooks must remain disabled; CI skips installation automatically.
+
+Automatic setup is intentionally bypassed in these cases:
+
+- `pnpm install --ignore-scripts` skips `prepare`, so run
+  `pnpm setup:git-hooks` afterward.
+- `git worktree add --no-checkout` does not complete a checkout, so finish the
+  checkout and run `pnpm setup:ai-tooling` in that worktree.
+- Disabled Git hooks do not run `post-checkout`; repair the affected checkout
+  with `pnpm setup:ai-tooling`.
+
+If automatic initialization reports that checkout files already exist, fix the
+OpenSpec prerequisite below and rerun `pnpm setup:ai-tooling`. Git populates a
+worktree before invoking `post-checkout`, so a failed hook leaves a recoverable
+checkout rather than rolling back its files.
+
 A second setup run must not create duplicate skill entries or touch `codex/plugins/cthu-codex`.
 
 Prerequisite:

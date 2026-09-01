@@ -19,6 +19,15 @@ Regenerate them with:
 pnpm setup:ai-tooling
 ```
 
+Normal root dependency installation configures the tracked `.githooks`
+directory and initializes the current checkout. Standard Git branch/worktree
+checkouts then verify and repair these generated adapters through
+`post-checkout`, independently of Codex. If package scripts were suppressed,
+run `pnpm setup:git-hooks`; if checkout hooks were suppressed (for example
+`git worktree add --no-checkout`), finish checkout and run
+`pnpm setup:ai-tooling` in the affected worktree. The required global OpenSpec
+version/profile/delivery commands are documented in `docs/ai-tooling.md`.
+
 Do not hand-edit generated `openspec-*` skills. Do not recreate a parallel OpenSpec tree under `.codex/skills`.
 
 ## Related ownership

@@ -116,6 +116,19 @@ function hasSourceAlias(pkg: { dir: string }, dependencyName: string): boolean {
 }
 
 describe("root package.json scripts contract", () => {
+  it("installs tracked Git hooks through the package lifecycle", () => {
+    const pkg = readJson(join(root, "package.json")) as {
+      scripts?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+
+    expect(pkg.scripts?.prepare).toBe("node scripts/install-git-hooks.mjs");
+    expect(pkg.scripts?.["setup:git-hooks"]).toBe(
+      "node scripts/install-git-hooks.mjs",
+    );
+    expect(pkg.devDependencies?.husky).toBeUndefined();
+  });
+
   it("exposes build that delegates to turbo run build", () => {
     const pkg = readJson(join(root, "package.json")) as {
       scripts?: { build?: string };

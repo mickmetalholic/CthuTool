@@ -133,7 +133,7 @@ describe("precommit CLI dist refresh", () => {
   });
 
   it("wires the hook before lint-staged and tolerates ignored generated files", () => {
-    const hook = readFileSync(join(root, ".husky", "pre-commit"), "utf8");
+    const hook = readFileSync(join(root, ".githooks", "pre-commit"), "utf8");
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       readonly scripts?: Record<string, string>;
       readonly "lint-staged"?: Record<string, string>;

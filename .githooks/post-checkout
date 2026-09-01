@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+set -e
+
+if [ "${3:-0}" != "1" ]; then
+  exit 0
+fi
+
+repository_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+node "$repository_root/scripts/ensure-ai-tooling.mjs" --post-checkout
