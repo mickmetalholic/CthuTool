@@ -3,6 +3,7 @@
 - Keep intentionally shared, portable project instructions (for example `AGENTS.md` and authored Cursor skills such as `commit` / `create-pull-request`).
 - Treat OpenSpec-generated adapters under `.agents/skills`, `.cursor/skills`, and `.opencode/skills` as reproducible outputs. Do not hand-edit them for project policy; regenerate with `pnpm setup:ai-tooling`.
 - Do not commit generated `openspec-*` adapter trees; they remain ignored and are recreated by setup.
+- Standard Git checkouts repair generated adapters through tracked `.githooks`; after `--ignore-scripts` run `pnpm setup:git-hooks`, and after `git worktree add --no-checkout` run `pnpm setup:ai-tooling` in the completed checkout.
 - See `docs/ai-tooling.md` for ownership, invocation forms, and third-party skill lifecycle.
 
 ## OpenSpec Naming
