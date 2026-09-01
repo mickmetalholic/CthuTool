@@ -30,25 +30,6 @@ The CLI SHALL expose `chc agent` as a public static group containing install, st
 - **WHEN** integrity, platform, safe-extraction, native setup inventory, or compatibility validation fails
 - **THEN** installation stops before activation and preserves the prior active version and mutable configuration
 
-### Requirement: Native self-use configuration
-
-The CLI SHALL open the native Agent Settings window for first-run setup and subsequent deployment configuration, and SHALL not expose static Agent Secret configuration or accept raw Secret values as command-line arguments.
-
-#### Scenario: Settings runs before configuration
-
-- **WHEN** the user runs `chc agent settings` without a valid deployment Origin
-- **THEN** the CLI starts or contacts the tray and opens the native first-run wizard
-
-#### Scenario: Settings runs after configuration
-
-- **WHEN** the user runs `chc agent settings` with a valid deployment configuration
-- **THEN** the CLI opens the native settings mode, where the user can view status, update Origin, reconnect, and open the deployed Web console
-
-#### Scenario: Raw Secret argument is attempted
-
-- **WHEN** a user attempts to pass a Secret value through a positional or command-line option
-- **THEN** the CLI rejects the invocation without persisting or echoing the value
-
 ### Requirement: Redacted Agent status
 
 `chc agent status` SHALL distinguish installation, active version, tray/process health, SetupRequired/configured state, backend connectivity, autostart, and browser readiness.
@@ -67,20 +48,6 @@ The CLI SHALL open the native Agent Settings window for first-run setup and subs
 
 - **WHEN** status runs with `--json`
 - **THEN** it returns a versioned object containing derived endpoint metadata only as safe non-secret values and no Secret, bridge ticket, bearer token, or raw profile data
-
-### Requirement: Native settings and Web console access
-
-The CLI SHALL use the native settings window as the configuration entry point and SHALL retain a separate one-time bridge launch path for the deployed Web console.
-
-#### Scenario: Native settings opens
-
-- **WHEN** the tray is installed or running and the user invokes `chc agent settings`
-- **THEN** the CLI opens or foregrounds the native setup/settings window through authenticated same-user control
-
-#### Scenario: Web console is opened from native settings
-
-- **WHEN** the user has a verified deployment configuration and selects Open Web Console
-- **THEN** the Agent creates a fresh single-use bridge launch and opens the exact derived `/agent` URL
 
 ### Requirement: Verified Agent update and rollback
 
@@ -138,6 +105,41 @@ The CLI SHALL use the native settings window as the configuration entry point an
 
 - **WHEN** destructive purge lacks required interactive or automation confirmation
 - **THEN** the CLI aborts deletion and preserves mutable data
+
+## ADDED Requirements
+
+### Requirement: Native settings and Web console access
+
+The CLI SHALL use the native settings window as the configuration entry point and SHALL retain a separate one-time bridge launch path for the deployed Web console.
+
+#### Scenario: Native settings opens
+
+- **WHEN** the tray is installed or running and the user invokes `chc agent settings`
+- **THEN** the CLI opens or foregrounds the native setup/settings window through authenticated same-user control
+
+#### Scenario: Web console is opened from native settings
+
+- **WHEN** the user has a verified deployment configuration and selects Open Web Console
+- **THEN** the Agent creates a fresh single-use bridge launch and opens the exact derived `/agent` URL
+
+### Requirement: Native self-use configuration
+
+The CLI SHALL open the native Agent Settings window for first-run setup and subsequent deployment configuration, and SHALL not expose static Agent Secret configuration or accept raw Secret values as command-line arguments.
+
+#### Scenario: Settings runs before configuration
+
+- **WHEN** the user runs `chc agent settings` without a valid deployment Origin
+- **THEN** the CLI starts or contacts the tray and opens the native first-run wizard
+
+#### Scenario: Settings runs after configuration
+
+- **WHEN** the user runs `chc agent settings` with a valid deployment configuration
+- **THEN** the CLI opens the native settings mode, where the user can view status, update Origin, reconnect, and open the deployed Web console
+
+#### Scenario: Raw Secret argument is attempted
+
+- **WHEN** a user attempts to pass a Secret value through a positional or command-line option
+- **THEN** the CLI rejects the invocation without persisting or echoing the value
 
 ## REMOVED Requirements
 
