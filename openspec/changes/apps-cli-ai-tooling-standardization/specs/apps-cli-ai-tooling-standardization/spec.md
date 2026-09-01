@@ -2,12 +2,12 @@
 
 ### Requirement: AI tooling ownership is explicit
 
-The repository SHALL document and enforce separate ownership for OpenSpec workflow artifacts, third-party skills installed through `npx skills`, project-authored baseline skills, and repository-owned business plugins.
+The repository SHALL document and enforce separate ownership for OpenSpec workflow artifacts, third-party skills installed through `npx skills`, and repository-owned business plugins.
 
 #### Scenario: A developer identifies a skill source
 
 - **WHEN** a developer inspects the AI tooling documentation or setup instructions
-- **THEN** the documentation identifies whether the skill is OpenSpec-generated, third-party, project-authored, or business-plugin-owned
+- **THEN** the documentation identifies whether the skill is OpenSpec-generated, third-party, or business-plugin-owned
 - **AND** it identifies the canonical source and the command responsible for updating that source
 
 #### Scenario: OpenSpec workflow skills are managed
@@ -50,7 +50,7 @@ The repository SHALL provide a reproducible OpenSpec setup for Codex, Cursor, Op
 #### Scenario: Generated files are regenerated rather than hand-edited
 
 - **WHEN** a project policy or tool invocation needs to change
-- **THEN** the durable policy is updated in OpenSpec configuration or canonical skill sources
+- **THEN** the durable policy is updated in OpenSpec configuration or other repository-owned policy sources
 - **AND** the affected OpenSpec adapter files are regenerated
 - **AND** unrelated custom skills and instructions are preserved
 
@@ -58,11 +58,11 @@ The repository SHALL provide a reproducible OpenSpec setup for Codex, Cursor, Op
 
 Third-party skills SHALL be installed from an explicit source and skill selector through `npx skills`; the repository SHALL NOT treat manually copied third-party skill directories as its source of truth.
 
-#### Scenario: The UI/UX skill is removed from the repository baseline
+#### Scenario: The UI/UX skill is removed from the repository
 
 - **WHEN** this change is implemented
 - **THEN** the repository contains no project-local `ui-ux-pro-max` copies under `.codex/skills`, `.cursor/skills`, or `.claude/skills`
-- **AND** `ui-ux-pro-max` is not included in the default project baseline skills
+- **AND** `ui-ux-pro-max` is not installed by default
 
 #### Scenario: A developer explicitly installs UI/UX Pro Max
 
@@ -75,7 +75,7 @@ Third-party skills SHALL be installed from an explicit source and skill selector
 
 - **WHEN** a developer runs `chc codex skills`
 - **THEN** the command continues to manage only its existing Codex user-scope, manifest-backed GitHub skill lifecycle
-- **AND** it does not import or remove OpenSpec-generated project adapters or project-authored baseline skills
+- **AND** it does not import or remove OpenSpec-generated project adapters
 
 ### Requirement: Reasonix configuration matches the installed runtime
 
@@ -100,35 +100,6 @@ The repository SHALL use the configuration and project skill-discovery paths sup
 - **THEN** local desktop topic/session metadata is either removed from version control or explicitly classified as generated local state
 - **AND** it is not described as part of the portable AI tooling contract
 
-### Requirement: Project baseline skills are tool-neutral
-
-The repository SHALL provide canonical project-authored skills for `repo-orientation`, `project-verify`, and `review-diff`, with minimal shared frontmatter and instructions that do not depend on a single agent's special tool names.
-
-#### Scenario: Repository orientation is available
-
-- **WHEN** a developer starts an unfamiliar task in any supported agent
-- **THEN** `repo-orientation` explains the source boundaries, OpenSpec layout, worktree policy, and excluded business plugin scope
-- **AND** it performs read-only discovery before recommending changes
-
-#### Scenario: Project verification follows repository policy
-
-- **WHEN** a developer invokes `project-verify` after a change
-- **THEN** it selects targeted validation commands appropriate to the changed files
-- **AND** it respects the repository's protected service and no-unrequested-build rules
-- **AND** it reports commands and results without silently mutating unrelated state
-
-#### Scenario: Diff review is read-only
-
-- **WHEN** a developer invokes `review-diff`
-- **THEN** it inspects the current diff, generated-file drift, and scope boundaries
-- **AND** it does not commit, push, create a pull request, or modify files
-
-#### Scenario: Git mutations remain explicit
-
-- **WHEN** a developer needs to commit or create a pull request
-- **THEN** the action is exposed as a separately documented explicit workflow
-- **AND** the read-only baseline skills never invoke it automatically
-
 ### Requirement: AI tooling documentation matches the repository
 
 The repository SHALL document the actual AI tooling directories, installation commands, invocation forms, generated-file policy, and validation checks for Codex, Cursor, OpenCode, and Reasonix.
@@ -148,7 +119,7 @@ The repository SHALL document the actual AI tooling directories, installation co
 #### Scenario: Setup is repeatable
 
 - **WHEN** a developer clones the repository or changes the selected tools
-- **THEN** the documentation provides an idempotent setup path for installing OpenSpec and linking or copying the canonical project skills
+- **THEN** the documentation provides an idempotent setup path for installing the selected OpenSpec adapters
 - **AND** a second run does not create duplicate skill entries or unrelated configuration changes
 
 ### Requirement: AI tooling setup is verifiable

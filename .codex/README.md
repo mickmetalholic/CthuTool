@@ -25,14 +25,13 @@ Do not hand-edit generated `openspec-*` skills. Do not recreate a parallel OpenS
 
 | Path | Role |
 | --- | --- |
-| `../skills/` | Canonical project-authored baseline skills |
 | `../docs/ai-tooling.md` | Full AI tooling ownership and invocation reference |
 | `../codex/skills.manifest.json` | `chc codex skills` user-scope GitHub skill lifecycle |
 | `../codex/plugins/cthu-codex` | Business plugin (protected; out of AI tooling setup scope) |
 
 ## Explicit Git workflows
 
-Commit and pull-request actions remain explicit workflows. Baseline skills `repo-orientation`, `project-verify`, and `review-diff` are read-only or validation-only and must not commit or open PRs.
+Commit and pull-request actions remain explicit workflows.
 
 ## Local runtime state (do not commit)
 

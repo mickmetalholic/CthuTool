@@ -13,7 +13,6 @@ context: |
   AI tooling ownership:
   - OpenSpec owns openspec-* workflow adapters. Regenerate with
     `pnpm setup:ai-tooling` (openspec init/update for agents,codex,cursor,opencode).
-  - Canonical project skills live in skills/ and are linked by setup.
   - Third-party skills use `npx skills`; do not commit manual copies as source.
   - `chc codex skills` manages only Codex user-scope manifest-backed GitHub skills.
   - `codex/plugins/cthu-codex` is a protected business plugin and is out of scope.
@@ -22,7 +21,7 @@ context: |
   - Generated OpenSpec skills under .agents/skills, .cursor/skills, and
     .opencode/skills are reproducible outputs. Do not hand-edit them for project
     policy and do not commit openspec-* adapter trees.
-  - Update durable policy here or in skills/, then regenerate adapters.
+  - Update durable policy here, then regenerate adapters.
 
 rules:
   proposal:
@@ -34,7 +33,7 @@ rules:
     - Preserve existing clear prefixes unless a rename is explicitly requested.
     - Do not sync unrelated neighboring changes or specs into the current change.
   design:
-    - Describe why project policy belongs in OpenSpec config or skills/ instead of generated adapter files when relevant.
+    - Describe why project policy belongs in OpenSpec config or other durable repository sources instead of generated adapter files when relevant.
     - Keep generated agent adapter files out of the implementation plan unless regeneration is the explicit change.
     - Keep codex/plugins/cthu-codex unchanged unless the change is explicitly about that business plugin.
   tasks:

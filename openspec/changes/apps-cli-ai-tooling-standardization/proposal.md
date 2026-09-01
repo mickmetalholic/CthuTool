@@ -10,16 +10,15 @@ The repository needs one explicit ownership and generation model before adding m
 - **BREAKING** Configure OpenSpec for Codex, Cursor, OpenCode, and the vendor-neutral `agents` target; migrate or remove obsolete OpenSpec-generated files under legacy agent directories.
 - Define `.agents/skills` as the shared OpenSpec skill surface consumed by Codex and Reasonix, while retaining native generated surfaces for Cursor and OpenCode.
 - Establish the ownership boundary between OpenSpec-generated workflows, third-party skills installed with `npx skills`, and repository-owned business plugins.
-- Remove the repository-local `ui-ux-pro-max` copies instead of treating them as a repository-managed baseline skill. Do not change `codex/plugins/cthu-codex`.
+- Remove the repository-local `ui-ux-pro-max` copies instead of treating them as a repository-managed skill. Do not change `codex/plugins/cthu-codex`.
 - Replace the stale Reasonix project configuration with the configuration and skill-discovery model supported by the installed Reasonix release; remove machine-specific paths from project configuration.
-- Update repository policy and developer documentation to describe the actual directory layout, installation commands, generated-file policy, four-tool invocation model, and the recommended baseline skills.
-- Add a small, tool-neutral baseline for repository orientation, validation, and diff review so the four agents have a consistent project workflow beyond OpenSpec.
+- Update repository policy and developer documentation to describe the actual directory layout, installation commands, generated-file policy, and four-tool invocation model.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `apps-cli-ai-tooling-standardization`: Defines the repository-owned AI tooling topology, OpenSpec adapter generation, third-party skill ownership, Reasonix compatibility, and cross-tool baseline workflow.
+- `apps-cli-ai-tooling-standardization`: Defines the repository-owned AI tooling topology, OpenSpec adapter generation, third-party skill ownership, and Reasonix compatibility.
 
 ### Modified Capabilities
 
@@ -30,5 +29,6 @@ The repository needs one explicit ownership and generation model before adding m
 - Project configuration and generated adapter locations under `.agents/`, `.codex/`, `.cursor/`, `.opencode/`, `.claude/`, and `.reasonix/`.
 - `openspec/config.yaml`, repository agent policy, AI-tooling documentation, and Reasonix configuration.
 - Removal of the tracked `ui-ux-pro-max` skill copies.
+- Removal of the generic project baseline skill sources and their setup wiring.
 - OpenSpec CLI version and generated workflow files; no product APIs or runtime business behavior.
 - Developer onboarding and local verification commands for Codex, Cursor, OpenCode, and Reasonix.
