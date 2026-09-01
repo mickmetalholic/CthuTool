@@ -21,6 +21,36 @@ export async function startInstalledAgent(
   paths: AgentPaths,
   timeoutMs = 20_000,
 ): Promise<'started' | 'already-running'> {
+  const result = await startInstalledTray(paths, timeoutMs);
+  const tray = await readTrayInstanceRecord(
+    resolveTrayInstancePath(paths.userDataDir),
+  );
+  if (!tray) throw new Error('Agent tray instance record is not ready');
+  const snapshot = await requestTrayHealth({ record: tray, timeoutMs: 500 });
+  if (snapshot.setupRequired || snapshot.state === 'SetupRequired') {
+    return 'started';
+  }
+
+  const bundle = await readInstalledBundle(paths);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const agent = await readAgentInstance(paths.userDataDir);
+      if (!agent) throw new Error('Agent instance record is not ready');
+      await assertExactAgentRuntime(bundle, agent);
+      return result === 'already-running' ? 'already-running' : 'started';
+    } catch {
+      /* still starting */
+    }
+    await delay(100);
+  }
+  throw new Error('Timed out waiting for the tray-owned Agent to become ready');
+}
+
+export async function startInstalledTray(
+  paths: AgentPaths,
+  timeoutMs = 20_000,
+): Promise<'started' | 'already-running'> {
   const bundle = await readInstalledBundle(paths);
   const executable = join(
     bundle.root,
@@ -37,12 +67,7 @@ export async function startInstalledAgent(
       /* stale record is owned and recovered by the tray. */
     }
     if (healthy) {
-      await assertExactRuntime(
-        paths,
-        bundle,
-        executable,
-        current.executablePath,
-      );
+      await assertExactTrayRuntime(executable, current.executablePath);
       return 'already-running';
     }
   }
@@ -62,34 +87,7 @@ export async function startInstalledAgent(
     if (record) {
       try {
         await requestTrayHealth({ record, timeoutMs: 500 });
-        await assertExactRuntime(
-          paths,
-          bundle,
-          executable,
-          record.executablePath,
-        );
-        const agent = await readAgentInstance(paths.userDataDir);
-        if (!agent) throw new Error('Agent instance record is not ready');
-        const health = await requestAgentHealth(agent, 1_000);
-        const expectedNode = join(
-          bundle.root,
-          ...bundle.layout.entryPoints.node.split('/'),
-        );
-        const expectedAgent = join(
-          bundle.root,
-          ...bundle.layout.entryPoints.agent.split('/'),
-        );
-        if (
-          (await realpath(agent.executablePath)) !==
-            (await realpath(expectedNode)) ||
-          (await realpath(agent.entryPoint)) !==
-            (await realpath(expectedAgent)) ||
-          health.applicationVersion !== bundle.pointer.version
-        ) {
-          throw new Error(
-            'Agent process identity does not match the active bundle',
-          );
-        }
+        await assertExactTrayRuntime(executable, record.executablePath);
         return 'started';
       } catch {
         /* still starting */
@@ -97,19 +95,22 @@ export async function startInstalledAgent(
     }
     await delay(100);
   }
-  throw new Error('Timed out waiting for the tray-owned Agent to become ready');
+  throw new Error('Timed out waiting for the Agent tray to become ready');
 }
 
-async function assertExactRuntime(
-  paths: AgentPaths,
-  bundle: Awaited<ReturnType<typeof readInstalledBundle>>,
+async function assertExactTrayRuntime(
   expectedTray: string,
   actualTray: string,
 ): Promise<void> {
   if ((await realpath(actualTray)) !== (await realpath(expectedTray))) {
     throw new Error('Running tray identity does not match the active bundle');
   }
-  const agent = await readAgentInstance(paths.userDataDir);
+}
+
+async function assertExactAgentRuntime(
+  bundle: Awaited<ReturnType<typeof readInstalledBundle>>,
+  agent: Awaited<ReturnType<typeof readAgentInstance>>,
+): Promise<void> {
   if (!agent) throw new Error('Running tray has no exact Agent instance');
   const health = await requestAgentHealth(agent, 1_000);
   const expectedNode = join(

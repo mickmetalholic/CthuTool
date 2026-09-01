@@ -6,9 +6,10 @@ import {
   verify,
 } from 'node:crypto';
 
-export const AGENT_RELEASE_MANIFEST_SCHEMA_VERSION = 1;
+export const AGENT_RELEASE_MANIFEST_SCHEMA_VERSION = 3;
 export const AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION = 1;
 export const AGENT_BUNDLE_LAYOUT_VERSION = 1;
+export const AGENT_LATEST_RELEASE_TAG = 'agent-latest';
 export const SUPPORTED_AGENT_TARGETS = [
   'darwin-arm64',
   'darwin-x64',
@@ -39,15 +40,13 @@ export type AgentReleaseArtifact = {
   readonly archiveUrl: string;
   readonly archiveSize: number;
   readonly archiveSha256: string;
-  readonly archiveSignatureUrl: string;
   readonly trayEntryPoint: string;
+  readonly setupEntryPoint: string;
   readonly nodeEntryPoint: string;
   readonly agentEntryPoint: string;
-  readonly platformSignature: {
-    readonly required: true;
-    readonly notarizationRequired: boolean;
-  };
 };
+
+export type AgentReleaseProvenanceKind = 'self-use' | 'pull-request-validation';
 
 export type AgentReleaseManifest = {
   readonly schemaVersion: number;
@@ -60,23 +59,11 @@ export type AgentReleaseManifest = {
     readonly localBridge: number;
     readonly trayControl: number;
   };
-  readonly environmentCatalog: {
-    readonly schemaVersion: number;
-    readonly sha256: string;
-  };
   readonly provenance: {
-    readonly kind: 'production' | 'pull-request-validation';
-    readonly signed: boolean;
+    readonly kind: AgentReleaseProvenanceKind;
+    readonly signed: false;
   };
   readonly artifacts: readonly AgentReleaseArtifact[];
-};
-
-export type AgentReleaseChannelPointer = {
-  readonly schemaVersion: number;
-  readonly channel: 'stable' | 'beta';
-  readonly releaseVersion: string;
-  readonly manifestUrl: string;
-  readonly manifestSha256: string;
 };
 
 export class AgentReleaseValidationError extends Error {
@@ -84,7 +71,6 @@ export class AgentReleaseValidationError extends Error {
     readonly code:
       | 'INVALID_CATALOG'
       | 'INVALID_MANIFEST'
-      | 'INVALID_CHANNEL_POINTER'
       | 'UNSUPPORTED_TARGET'
       | 'INCOMPATIBLE_CLI'
       | 'INCOMPATIBLE_SCHEMA'
@@ -180,11 +166,42 @@ export function validateEnvironmentCatalog(
   };
 }
 
+export function assertSelfUseCatalogConfigured(
+  catalog: ReleaseEnvironmentCatalog,
+): void {
+  const hasPlaceholder = catalog.profiles.some((profile) =>
+    [
+      profile.webOrigin,
+      profile.webAgentUrl,
+      profile.backendHttpUrl,
+      profile.backendAgentWsUrl,
+    ].some((value) => {
+      const hostname = new URL(value).hostname;
+      return hostname === 'example.com' || hostname.endsWith('.example.com');
+    }),
+  );
+  if (hasPlaceholder) {
+    throw new AgentReleaseValidationError(
+      'INVALID_CATALOG',
+      'Self-use release catalog must use deployed Web and backend origins; example.com placeholders are not publishable',
+    );
+  }
+}
+
 export function validateReleaseManifest(
   input: unknown,
-  options: { readonly requireProductionMatrix?: boolean } = {},
+  options: { readonly requireSelfUseMatrix?: boolean } = {},
 ): AgentReleaseManifest {
   const manifest = requireObject(input, 'release manifest');
+  if (
+    typeof manifest.schemaVersion !== 'number' ||
+    manifest.schemaVersion !== AGENT_RELEASE_MANIFEST_SCHEMA_VERSION
+  ) {
+    throw new AgentReleaseValidationError(
+      'INCOMPATIBLE_SCHEMA',
+      'Release manifest schema is unsupported',
+    );
+  }
   requireExactKeys(
     manifest,
     [
@@ -193,22 +210,20 @@ export function validateReleaseManifest(
       'minimumCliVersion',
       'layoutVersion',
       'protocols',
-      'environmentCatalog',
       'provenance',
       'artifacts',
     ],
     'manifest',
   );
-  if (manifest.schemaVersion !== AGENT_RELEASE_MANIFEST_SCHEMA_VERSION) {
-    throw new AgentReleaseValidationError(
-      'INCOMPATIBLE_SCHEMA',
-      'Release manifest schema is unsupported',
-    );
-  }
   if (manifest.layoutVersion !== AGENT_BUNDLE_LAYOUT_VERSION) {
     invalidManifest('Bundle layout version is unsupported');
   }
-  const releaseVersion = requireSemver(
+  if ('environmentCatalog' in manifest) {
+    invalidManifest(
+      'Self-use manifests must not bind a deployment URL catalog digest',
+    );
+  }
+  const releaseVersion = requireGeneratedReleaseVersion(
     manifest.releaseVersion,
     'releaseVersion',
   );
@@ -217,43 +232,39 @@ export function validateReleaseManifest(
     'minimumCliVersion',
   );
   const protocols = validateProtocolObject(manifest.protocols);
-  const environmentCatalog = validateCatalogBinding(
-    manifest.environmentCatalog,
-  );
   const provenance = validateProvenance(manifest.provenance);
   if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) {
     invalidManifest('Release manifest must contain platform artifacts');
   }
-  const artifacts = manifest.artifacts.map(validateArtifact);
+  const artifacts = manifest.artifacts.map((artifact) =>
+    validateArtifact(artifact, provenance.kind),
+  );
   const targets = artifacts.map((artifact) => artifact.target);
   if (new Set(targets).size !== targets.length) {
     invalidManifest('Release manifest target entries must be unique');
   }
   const requiresMatrix =
-    options.requireProductionMatrix ?? provenance.kind === 'production';
+    options.requireSelfUseMatrix ?? provenance.kind === 'self-use';
   if (
     requiresMatrix &&
     !SUPPORTED_AGENT_TARGETS.every((target) => targets.includes(target))
   ) {
-    invalidManifest('Production manifest must contain every supported target');
+    invalidManifest('Self-use manifest must contain every supported target');
   }
-  if (provenance.kind === 'production' && !provenance.signed) {
-    invalidManifest('Production manifest must be signed');
+  if (provenance.signed) {
+    invalidManifest('Self-use and pull-request manifests must be unsigned');
   }
   if (
-    provenance.kind === 'production' &&
+    provenance.kind === 'self-use' &&
     artifacts.some((artifact) => artifact.archiveUrl.includes('-unsigned-pr-'))
   ) {
     invalidManifest(
-      'Production manifest cannot reference pull-request artifacts',
+      'Self-use manifest cannot reference pull-request artifacts',
     );
   }
   if (
     provenance.kind === 'pull-request-validation' &&
-    (provenance.signed ||
-      artifacts.some(
-        (artifact) => !artifact.archiveUrl.includes('-unsigned-pr-'),
-      ))
+    artifacts.some((artifact) => !artifact.archiveUrl.includes('-unsigned-pr-'))
   ) {
     invalidManifest('Pull-request artifacts must be unsigned and marked');
   }
@@ -263,50 +274,8 @@ export function validateReleaseManifest(
     minimumCliVersion,
     layoutVersion: AGENT_BUNDLE_LAYOUT_VERSION,
     protocols,
-    environmentCatalog,
     provenance,
     artifacts,
-  };
-}
-
-export function validateChannelPointer(
-  input: unknown,
-): AgentReleaseChannelPointer {
-  const pointer = requireObject(input, 'channel pointer');
-  requireExactKeys(
-    pointer,
-    [
-      'schemaVersion',
-      'channel',
-      'releaseVersion',
-      'manifestUrl',
-      'manifestSha256',
-    ],
-    'channel pointer',
-  );
-  if (
-    pointer.schemaVersion !== 1 ||
-    (pointer.channel !== 'stable' && pointer.channel !== 'beta')
-  ) {
-    invalidChannel('Channel pointer schema or channel is invalid');
-  }
-  const releaseVersion = requireSemver(
-    pointer.releaseVersion,
-    'releaseVersion',
-  );
-  const manifestUrl = requireManifestHttpsUrl(
-    pointer.manifestUrl,
-    'manifestUrl',
-  );
-  if (!manifestUrl.pathname.includes(`/${releaseVersion}/`)) {
-    invalidChannel('Channel pointer must reference an immutable version URL');
-  }
-  return {
-    schemaVersion: 1,
-    channel: pointer.channel,
-    releaseVersion,
-    manifestUrl: manifestUrl.href,
-    manifestSha256: requireSha256(pointer.manifestSha256, 'manifestSha256'),
   };
 }
 
@@ -340,25 +309,6 @@ export function assertCliCompatibility(
   }
 }
 
-export function assertCatalogBinding(
-  manifest: AgentReleaseManifest,
-  catalogBytes: Uint8Array,
-): ReleaseEnvironmentCatalog {
-  const catalog = validateEnvironmentCatalog(
-    JSON.parse(Buffer.from(catalogBytes).toString('utf8')),
-  );
-  if (
-    catalog.schemaVersion !== manifest.environmentCatalog.schemaVersion ||
-    sha256(catalogBytes) !== manifest.environmentCatalog.sha256
-  ) {
-    throw new AgentReleaseValidationError(
-      'INTEGRITY_MISMATCH',
-      'Environment catalog does not match the release manifest',
-    );
-  }
-  return catalog;
-}
-
 export function assertArchiveBinding(
   artifact: AgentReleaseArtifact,
   archiveBytes: Uint8Array,
@@ -370,6 +320,15 @@ export function assertArchiveBinding(
     throw new AgentReleaseValidationError(
       'INTEGRITY_MISMATCH',
       'Agent archive size or digest does not match the release manifest',
+    );
+  }
+}
+
+export function assertSelfUseProvenance(manifest: AgentReleaseManifest): void {
+  if (manifest.provenance.kind !== 'self-use' || manifest.provenance.signed) {
+    throw new AgentReleaseValidationError(
+      'INCOMPATIBLE_SCHEMA',
+      'Agent install requires an unsigned self-use release manifest',
     );
   }
 }
@@ -439,7 +398,10 @@ export function sha256(bytes: Uint8Array | string): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function validateArtifact(input: unknown): AgentReleaseArtifact {
+function validateArtifact(
+  input: unknown,
+  provenance: AgentReleaseProvenanceKind,
+): AgentReleaseArtifact {
   const artifact = requireObject(input, 'artifact');
   requireExactKeys(
     artifact,
@@ -450,11 +412,10 @@ function validateArtifact(input: unknown): AgentReleaseArtifact {
       'archiveUrl',
       'archiveSize',
       'archiveSha256',
-      'archiveSignatureUrl',
       'trayEntryPoint',
+      'setupEntryPoint',
       'nodeEntryPoint',
       'agentEntryPoint',
-      'platformSignature',
     ],
     'artifact',
   );
@@ -472,26 +433,19 @@ function validateArtifact(input: unknown): AgentReleaseArtifact {
   ) {
     invalidManifest('Artifact platform, architecture, or size is invalid');
   }
-  const signature = requireObject(
-    artifact.platformSignature,
-    'platformSignature',
-  );
-  requireExactKeys(
-    signature,
-    ['required', 'notarizationRequired'],
-    'platformSignature',
-  );
-  if (
-    signature.required !== true ||
-    typeof signature.notarizationRequired !== 'boolean' ||
-    signature.notarizationRequired !== (expected.platform === 'darwin')
-  ) {
-    invalidManifest('Platform signing requirements are invalid');
+  if ('archiveSignatureUrl' in artifact || 'platformSignature' in artifact) {
+    invalidManifest(
+      'Self-use artifacts must not declare detached signatures or platform signing requirements',
+    );
   }
   const entryPoints = targetEntryPoints(artifact.target as AgentReleaseTarget);
   const trayEntryPoint = requireRelativePath(
     artifact.trayEntryPoint,
     'trayEntryPoint',
+  );
+  const setupEntryPoint = requireRelativePath(
+    artifact.setupEntryPoint,
+    'setupEntryPoint',
   );
   const nodeEntryPoint = requireRelativePath(
     artifact.nodeEntryPoint,
@@ -503,34 +457,51 @@ function validateArtifact(input: unknown): AgentReleaseArtifact {
   );
   if (
     trayEntryPoint !== entryPoints.tray ||
+    setupEntryPoint !== entryPoints.setup ||
     nodeEntryPoint !== entryPoints.node ||
     agentEntryPoint !== entryPoints.agent
   ) {
     invalidManifest('Artifact entry points do not match the target layout');
   }
+  const archiveUrl = requireManifestHttpsUrl(artifact.archiveUrl, 'archiveUrl');
+  if (provenance === 'self-use') {
+    assertSelfUseArchiveUrl(archiveUrl, artifact.target as AgentReleaseTarget);
+  }
   return {
     target: artifact.target as AgentReleaseTarget,
     platform: expected.platform,
     architecture: expected.architecture,
-    archiveUrl: requireManifestHttpsUrl(artifact.archiveUrl, 'archiveUrl').href,
+    archiveUrl: archiveUrl.href,
     archiveSize: artifact.archiveSize as number,
     archiveSha256: requireSha256(artifact.archiveSha256, 'archiveSha256'),
-    archiveSignatureUrl: requireManifestHttpsUrl(
-      artifact.archiveSignatureUrl,
-      'archiveSignatureUrl',
-    ).href,
     trayEntryPoint,
+    setupEntryPoint,
     nodeEntryPoint,
     agentEntryPoint,
-    platformSignature: {
-      required: true,
-      notarizationRequired: signature.notarizationRequired as boolean,
-    },
   };
+}
+
+function assertSelfUseArchiveUrl(url: URL, target: AgentReleaseTarget): void {
+  const name = url.pathname.split('/').at(-1) ?? '';
+  if (
+    !name.startsWith('cthutool-agent-') ||
+    !name.includes(`-${target}.zip`) ||
+    name.includes('-unsigned-pr-')
+  ) {
+    invalidManifest(
+      'Self-use archive URL must use a versioned target archive name',
+    );
+  }
+  if (!url.pathname.includes(`/${AGENT_LATEST_RELEASE_TAG}/`)) {
+    invalidManifest(
+      `Self-use archive URL must be published under ${AGENT_LATEST_RELEASE_TAG}`,
+    );
+  }
 }
 
 function targetEntryPoints(target: AgentReleaseTarget): {
   readonly tray: string;
+  readonly setup: string;
   readonly node: string;
   readonly agent: string;
 } {
@@ -539,6 +510,10 @@ function targetEntryPoints(target: AgentReleaseTarget): {
       target === 'windows-x64'
         ? 'bin/cthutool-agent-tray.exe'
         : 'bin/CthuTool Agent.app/Contents/MacOS/cthutool-agent-tray',
+    setup:
+      target === 'windows-x64'
+        ? 'bin/cthutool-agent-setup.exe'
+        : 'bin/cthutool-agent-setup',
     node:
       target === 'windows-x64'
         ? 'runtime/node/node.exe'
@@ -561,25 +536,13 @@ function validateProtocolObject(input: unknown) {
   return protocols as AgentReleaseManifest['protocols'];
 }
 
-function validateCatalogBinding(input: unknown) {
-  const binding = requireObject(input, 'environmentCatalog');
-  requireExactKeys(binding, ['schemaVersion', 'sha256'], 'environmentCatalog');
-  if (binding.schemaVersion !== AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION) {
-    invalidManifest('Environment catalog schema is unsupported');
-  }
-  return {
-    schemaVersion: AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION,
-    sha256: requireSha256(binding.sha256, 'environmentCatalog.sha256'),
-  };
-}
-
 function validateProvenance(input: unknown) {
   const provenance = requireObject(input, 'provenance');
   requireExactKeys(provenance, ['kind', 'signed'], 'provenance');
   if (
-    (provenance.kind !== 'production' &&
+    (provenance.kind !== 'self-use' &&
       provenance.kind !== 'pull-request-validation') ||
-    typeof provenance.signed !== 'boolean'
+    provenance.signed !== false
   ) {
     invalidManifest('Manifest provenance is invalid');
   }
@@ -706,6 +669,10 @@ function requireSemver(input: unknown, label: string): string {
   return input;
 }
 
+function requireGeneratedReleaseVersion(input: unknown, label: string): string {
+  return requireSemver(input, label);
+}
+
 function requireSha256(input: unknown, label: string): string {
   if (typeof input !== 'string' || !/^[a-f0-9]{64}$/.test(input)) {
     invalidManifest(`${label} must be a lowercase SHA-256 digest`);
@@ -769,8 +736,4 @@ function invalidCatalog(message: string): never {
 
 function invalidManifest(message: string): never {
   throw new AgentReleaseValidationError('INVALID_MANIFEST', message);
-}
-
-function invalidChannel(message: string): never {
-  throw new AgentReleaseValidationError('INVALID_CHANNEL_POINTER', message);
 }

@@ -6,6 +6,7 @@ import {
   readdir,
   readFile,
   rename,
+  rm,
   writeFile,
 } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -13,11 +14,9 @@ import { dirname, join } from 'node:path';
 import {
   type ActiveVersionPointer,
   type BundleLayout,
-  type ReleaseEnvironmentCatalog,
   readActiveVersion,
   validateBundleInventory,
   validateBundleLayout,
-  validateEnvironmentCatalog,
 } from '@cthutool/agent-release';
 import { resolveAgentUserDataDir } from './agent-tray-control';
 
@@ -68,7 +67,6 @@ export async function readInstalledBundle(paths: AgentPaths): Promise<{
   readonly pointer: ActiveVersionPointer;
   readonly root: string;
   readonly layout: BundleLayout;
-  readonly catalog: ReleaseEnvironmentCatalog;
 }> {
   const pointer = await readActiveVersion(paths.installRoot);
   if (!pointer) throw new Error('CthuTool Agent is not installed');
@@ -76,15 +74,7 @@ export async function readInstalledBundle(paths: AgentPaths): Promise<{
   const layout = validateBundleLayout(
     JSON.parse(await readFile(join(root, 'layout.json'), 'utf8')),
   );
-  const catalog = validateEnvironmentCatalog(
-    JSON.parse(
-      await readFile(
-        join(root, ...layout.entryPoints.environmentCatalog.split('/')),
-        'utf8',
-      ),
-    ),
-  );
-  return { pointer, root, layout, catalog };
+  return { pointer, root, layout };
 }
 
 export async function assertInstalledBundleInventory(
@@ -93,32 +83,6 @@ export async function assertInstalledBundleInventory(
   validateBundleInventory(
     bundle.layout.target,
     await listRelativeFiles(bundle.root),
-  );
-}
-
-export async function readEnvironmentSelection(
-  paths: AgentPaths,
-): Promise<string | undefined> {
-  try {
-    const value = JSON.parse(
-      await readFile(join(paths.userDataDir, 'environment.json'), 'utf8'),
-    ) as { readonly activeEnvironmentId?: unknown };
-    return typeof value.activeEnvironmentId === 'string'
-      ? value.activeEnvironmentId
-      : undefined;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw error;
-  }
-}
-
-export async function writeEnvironmentSelection(
-  paths: AgentPaths,
-  environmentId: string,
-): Promise<void> {
-  await atomicPrivateWrite(
-    join(paths.userDataDir, 'environment.json'),
-    `${JSON.stringify({ activeEnvironmentId: environmentId }, null, 2)}\n`,
   );
 }
 
@@ -131,7 +95,26 @@ export async function atomicPrivateWrite(
   await writeFile(temporary, value, { mode: 0o600 });
   if (process.platform !== 'win32') await chmod(temporary, 0o600);
   else await protectWindowsFile(temporary);
-  await rename(temporary, path);
+  try {
+    await rename(temporary, path);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (
+      process.platform === 'win32' &&
+      (code === 'EEXIST' || code === 'EPERM')
+    ) {
+      await rm(path, { force: true });
+      try {
+        await rename(temporary, path);
+      } catch (retryError) {
+        await rm(temporary, { force: true });
+        throw retryError;
+      }
+    } else {
+      await rm(temporary, { force: true });
+      throw error;
+    }
+  }
 }
 
 async function protectWindowsFile(path: string): Promise<void> {

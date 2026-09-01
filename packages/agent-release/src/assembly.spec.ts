@@ -25,7 +25,7 @@ describe('Agent bundle assembly', () => {
     const input = {
       ...fixture,
       target: 'darwin-arm64' as const,
-      releaseVersion: '1.2.3',
+      releaseVersion: '0.0.0-pr.123.1',
       pullRequestMarker: '123-1',
     };
 
@@ -41,9 +41,17 @@ describe('Agent bundle assembly', () => {
     expect(first.archiveSha256).toBe(second.archiveSha256);
     expect(firstBytes).toEqual(secondBytes);
     expect(Object.keys(unzipSync(firstBytes))).toEqual(first.inventory);
+    expect(first.inventory).toEqual(
+      expect.arrayContaining([
+        'bin/cthutool-agent-setup',
+        'licenses/LICENSE-SLINT.md',
+      ]),
+    );
     expect(first.inventory).not.toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/electron|renderer|\.html$|\.css$/i),
+        expect.stringMatching(
+          /electron|renderer|\.html$|\.css$|environments\.json/i,
+        ),
       ]),
     );
 
@@ -53,14 +61,29 @@ describe('Agent bundle assembly', () => {
       outputDir: join(root, 'staged-out'),
       stageDir,
     });
-    await writeFile(join(stageDir, 'agent/dist/index.js'), 'signed-agent();\n');
-    const signed = await archiveBundleDirectory({
-      outputDir: join(root, 'signed-out'),
+    await writeFile(
+      join(stageDir, 'agent/dist/index.js'),
+      'updated-agent();\n',
+    );
+    const republished = await archiveBundleDirectory({
+      outputDir: join(root, 'republished-out'),
       releaseVersion: input.releaseVersion,
       stageDir,
       target: input.target,
     });
-    expect(signed.archiveSha256).not.toBe(staged.archiveSha256);
+    expect(republished.archiveSha256).not.toBe(staged.archiveSha256);
+  });
+
+  test('assembles versioned self-use archives without unsigned-pr markers', async () => {
+    root = await mkdtemp(join(tmpdir(), 'cthutool-release-'));
+    const fixture = await createFixture(root);
+    const result = await assembleAgentBundle({
+      ...fixture,
+      target: 'darwin-arm64',
+      releaseVersion: '0.0.12',
+    });
+    expect(result.archiveName).toBe('cthutool-agent-0.0.12-darwin-arm64.zip');
+    expect(result.archiveName).not.toContain('-unsigned-pr-');
   });
 
   test('encodes only the supported release matrix', () => {
@@ -98,38 +121,25 @@ async function createFixture(root: string) {
     '{"name":"playwright-core"}\n',
   );
   const trayExecutablePath = join(root, 'tray');
+  const setupExecutablePath = join(root, 'setup');
   const nodeExecutablePath = join(root, 'node');
   const nodeLicensePath = join(root, 'NODE_LICENSE');
-  const environmentCatalogPath = join(root, 'environments.json');
   const thirdPartyNoticesPath = join(root, 'THIRD_PARTY_NOTICES.txt');
+  const slintLicensePath = join(root, 'LICENSE-SLINT.md');
   await writeFile(trayExecutablePath, 'tray');
+  await writeFile(setupExecutablePath, 'setup');
   await writeFile(nodeExecutablePath, 'node');
   await writeFile(nodeLicensePath, 'Node license');
   await writeFile(thirdPartyNoticesPath, 'Notices');
-  await writeFile(
-    environmentCatalogPath,
-    `${JSON.stringify({
-      schemaVersion: 1,
-      profiles: [
-        {
-          environmentId: 'production',
-          label: 'Production',
-          webOrigin: 'https://app.example.com',
-          webAgentUrl: 'https://app.example.com/agent',
-          backendHttpUrl: 'https://api.example.com',
-          backendAgentWsUrl: 'wss://api.example.com/ws/agents',
-          namespace: 'production',
-        },
-      ],
-    })}\n`,
-  );
+  await writeFile(slintLicensePath, 'Slint license');
   return {
     trayExecutablePath,
+    setupExecutablePath,
     nodeExecutablePath,
     nodeLicensePath,
     deployedAgentDir,
-    environmentCatalogPath,
     thirdPartyNoticesPath,
+    slintLicensePath,
     outputDir,
   };
 }

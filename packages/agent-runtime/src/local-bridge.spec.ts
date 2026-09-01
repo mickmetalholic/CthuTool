@@ -336,6 +336,45 @@ describe('AgentLocalBridge', () => {
     });
   });
 
+  test('rejects Origin and Secret trust-boundary mutations from Web', async () => {
+    const updateSettings = vi.fn(async () => ({
+      effect: 'none',
+    }));
+    const bridge = await createBridge({ updateSettings });
+    const { endpoint, sessionToken } = await openSession(bridge);
+
+    const forbidden = [
+      { webOrigin: 'https://evil.example.com' },
+      { deploymentOrigin: 'https://evil.example.com' },
+      { origin: 'https://evil.example.com' },
+      { secret: 'x'.repeat(32) },
+      { agentSecret: 'y'.repeat(32) },
+      { environmentId: 'other' },
+      { backendHttpUrl: 'https://evil.example.com' },
+      { backendAgentWsUrl: 'wss://evil.example.com/ws/agents' },
+      { connectionEnabled: true, secret: 'z'.repeat(32) },
+      { nested: { deploymentOrigin: 'https://evil.example.com' } },
+    ];
+
+    for (const params of forbidden) {
+      const response = await rpc(
+        endpoint,
+        sessionToken,
+        'settings.update',
+        params,
+      );
+      const body = await response.json();
+      expect(body).toMatchObject({
+        error: { code: 'INVALID_REQUEST' },
+      });
+      expect(body.error.message).toMatch(
+        /native Agent Settings|chc agent settings/i,
+      );
+    }
+
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
   test('expires bearer sessions independently from one-time tickets', async () => {
     const bridge = await createBridge({ sessionTtlMs: 5_000 });
     const { endpoint, sessionToken } = await openSession(bridge);

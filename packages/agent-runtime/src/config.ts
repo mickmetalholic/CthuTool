@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir, hostname } from 'node:os';
@@ -36,6 +37,14 @@ export type AgentConnectionConfig = {
 
 export type AgentConfig = AgentConnectionConfig & {
   readonly browserRuntime: AgentBrowserRuntime;
+  /**
+   * Self-use metadata is intentionally carried through the legacy runtime
+   * config port. The environment manager still uses this port for browser
+   * and process settings, so normalizing it must not erase the native setup
+   * configuration stored in the same file.
+   */
+  readonly schemaVersion?: number;
+  readonly deploymentOrigin?: string;
 };
 
 export type AgentConfigStorage = {
@@ -89,7 +98,26 @@ export class JsonAgentConfigStorage implements AgentConfigStorage {
       encoding: 'utf8',
       mode: 0o600,
     });
-    renameSync(temporaryPath, this.filePath);
+    try {
+      renameSync(temporaryPath, this.filePath);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (
+        process.platform === 'win32' &&
+        (code === 'EEXIST' || code === 'EPERM')
+      ) {
+        rmSync(this.filePath, { force: true });
+        try {
+          renameSync(temporaryPath, this.filePath);
+        } catch (retryError) {
+          rmSync(temporaryPath, { force: true });
+          throw retryError;
+        }
+      } else {
+        rmSync(temporaryPath, { force: true });
+        throw error;
+      }
+    }
   }
 }
 
@@ -125,6 +153,12 @@ export function normalizeAgentConfig(
       label: environmentLabel,
     },
     browserRuntime: normalizeBrowserRuntime(input?.browserRuntime),
+    ...(typeof input?.schemaVersion === 'number'
+      ? { schemaVersion: input.schemaVersion }
+      : {}),
+    ...(typeof input?.deploymentOrigin === 'string'
+      ? { deploymentOrigin: input.deploymentOrigin }
+      : {}),
   };
 }
 
@@ -157,12 +191,19 @@ function defaultAgentRoot(
   environment: Readonly<Record<string, string | undefined>>,
 ): string {
   if (platform === 'darwin') {
-    return join(userHome, 'Library', 'Application Support', 'CthuAgent');
+    return join(
+      userHome,
+      'Library',
+      'Application Support',
+      'CthuTool',
+      'agent',
+    );
   }
   if (platform === 'win32') {
     return join(
       environment.APPDATA ?? join(userHome, 'AppData', 'Roaming'),
-      'CthuAgent',
+      'CthuTool',
+      'agent',
     );
   }
   return join(

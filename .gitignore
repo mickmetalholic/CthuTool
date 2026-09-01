@@ -25,6 +25,7 @@ coverage
 .vercel
 
 # Build Outputs
+/target/
 .astro/
 .next/
 out/
@@ -88,4 +89,4 @@ Thumbs.db
 # Reasonix local desktop/session state and optional machine-local settings
 .reasonix/
 
-.superpowers
+.pnpm-store

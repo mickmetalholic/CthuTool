@@ -22,5 +22,7 @@ describe('Agent Web experience', () => {
     expect(html).toContain('<ol>');
     expect(html).toContain('href="/agent"');
     expect(html).toContain('不使用 WebSocket');
+    expect(html).toContain('chc agent settings');
+    expect(html).toContain('Origin');
   });
 });

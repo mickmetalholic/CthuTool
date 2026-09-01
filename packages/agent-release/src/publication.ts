@@ -1,33 +1,28 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import {
-  AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION,
+  AGENT_LATEST_RELEASE_TAG,
   AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
   type AgentReleaseArtifact,
-  type AgentReleaseChannelPointer,
   type AgentReleaseManifest,
+  type AgentReleaseProvenanceKind,
   type AgentReleaseTarget,
   assertArchiveBinding,
-  assertCatalogBinding,
-  canonicalJson,
   SUPPORTED_AGENT_TARGETS,
   sha256,
-  validateEnvironmentCatalog,
   validateReleaseManifest,
-  verifyManifestSignature,
-  verifyReleaseBlobSignature,
 } from './contracts';
 import { validateBundleInventory, validateBundleLayout } from './layout';
 
 export type AgentArtifactReceipt = {
   readonly schemaVersion: 1;
   readonly releaseVersion: string;
-  readonly provenance: 'production' | 'pull-request-validation';
+  readonly provenance: AgentReleaseProvenanceKind;
   readonly artifact: AgentReleaseArtifact;
   readonly validation: {
     readonly cleanHostSmoke: boolean;
-    readonly platformSigned: boolean;
-    readonly notarizationStapled: boolean;
+    readonly platformSigned: false;
+    readonly notarizationStapled: false;
   };
 };
 
@@ -36,11 +31,9 @@ export async function createArtifactReceipt(input: {
   readonly releaseVersion: string;
   readonly archivePath: string;
   readonly bundleRoot: string;
-  readonly immutableBaseUrl: string;
+  readonly artifactBaseUrl: string;
   readonly provenance: AgentArtifactReceipt['provenance'];
   readonly cleanHostSmoke: boolean;
-  readonly platformSigned: boolean;
-  readonly notarizationStapled: boolean;
 }): Promise<AgentArtifactReceipt> {
   const layout = validateBundleLayout(
     JSON.parse(await readFile(join(input.bundleRoot, 'layout.json'), 'utf8')),
@@ -61,8 +54,21 @@ export async function createArtifactReceipt(input: {
   ) {
     throw new Error('Agent archive name does not match its version and target');
   }
-  const baseUrl = requireImmutableBaseUrl(
-    input.immutableBaseUrl,
+  if (
+    input.provenance === 'pull-request-validation' &&
+    !archiveName.includes('-unsigned-pr-')
+  ) {
+    throw new Error('Pull-request archives must include an unsigned marker');
+  }
+  if (
+    input.provenance === 'self-use' &&
+    archiveName.includes('-unsigned-pr-')
+  ) {
+    throw new Error('Self-use archives must not include a pull-request marker');
+  }
+  const baseUrl = requireArtifactBaseUrl(
+    input.artifactBaseUrl,
+    input.provenance,
     input.releaseVersion,
   );
   const archiveUrl = new URL(archiveName, baseUrl).href;
@@ -78,19 +84,15 @@ export async function createArtifactReceipt(input: {
       archiveUrl,
       archiveSize: archiveBytes.byteLength,
       archiveSha256: sha256(archiveBytes),
-      archiveSignatureUrl: `${archiveUrl}.sig`,
       trayEntryPoint: layout.entryPoints.tray,
+      setupEntryPoint: layout.entryPoints.setup,
       nodeEntryPoint: layout.entryPoints.node,
       agentEntryPoint: layout.entryPoints.agent,
-      platformSignature: {
-        required: true,
-        notarizationRequired: !windows,
-      },
     },
     validation: {
       cleanHostSmoke: input.cleanHostSmoke,
-      platformSigned: input.platformSigned,
-      notarizationStapled: input.notarizationStapled,
+      platformSigned: false,
+      notarizationStapled: false,
     },
   };
   validateReceipt(receipt);
@@ -100,13 +102,9 @@ export async function createArtifactReceipt(input: {
 export function createReleaseManifest(input: {
   readonly releaseVersion: string;
   readonly minimumCliVersion: string;
-  readonly catalogBytes: Uint8Array;
   readonly receipts: readonly unknown[];
   readonly provenance: AgentArtifactReceipt['provenance'];
 }): AgentReleaseManifest {
-  const catalog = validateEnvironmentCatalog(
-    JSON.parse(Buffer.from(input.catalogBytes).toString('utf8')),
-  );
   const receipts = input.receipts.map(validateReceipt);
   if (
     new Set(receipts.map((receipt) => receipt.artifact.target)).size !==
@@ -124,27 +122,30 @@ export function createReleaseManifest(input: {
     throw new Error('Artifact receipts have mixed versions or provenance');
   }
   if (
-    input.provenance === 'production' &&
     receipts.some(
       (receipt) =>
-        !receipt.validation.cleanHostSmoke ||
-        !receipt.validation.platformSigned ||
-        (receipt.artifact.platform === 'darwin' &&
-          !receipt.validation.notarizationStapled),
+        receipt.validation.platformSigned ||
+        receipt.validation.notarizationStapled,
     )
   ) {
     throw new Error(
-      'Production artifacts require clean-host smoke, platform signing, and macOS stapling',
+      'Self-use and pull-request receipts must not claim platform signing or notarization',
     );
+  }
+  if (
+    input.provenance === 'self-use' &&
+    receipts.some((receipt) => !receipt.validation.cleanHostSmoke)
+  ) {
+    throw new Error('Self-use artifacts require clean-host smoke validation');
   }
   const receiptByTarget = new Map(
     receipts.map((receipt) => [receipt.artifact.target, receipt]),
   );
   if (
-    input.provenance === 'production' &&
+    input.provenance === 'self-use' &&
     !SUPPORTED_AGENT_TARGETS.every((target) => receiptByTarget.has(target))
   ) {
-    throw new Error('Production release is missing a supported target');
+    throw new Error('Self-use release is missing a supported target');
   }
   const manifest: AgentReleaseManifest = {
     schemaVersion: AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
@@ -157,13 +158,9 @@ export function createReleaseManifest(input: {
       localBridge: 1,
       trayControl: 1,
     },
-    environmentCatalog: {
-      schemaVersion: catalog.schemaVersion,
-      sha256: sha256(input.catalogBytes),
-    },
     provenance: {
       kind: input.provenance,
-      signed: input.provenance === 'production',
+      signed: false,
     },
     artifacts: SUPPORTED_AGENT_TARGETS.flatMap((target) => {
       const receipt = receiptByTarget.get(target);
@@ -171,54 +168,23 @@ export function createReleaseManifest(input: {
     }),
   };
   return validateReleaseManifest(manifest, {
-    requireProductionMatrix: input.provenance === 'production',
+    requireSelfUseMatrix: input.provenance === 'self-use',
   });
 }
 
-export function createChannelPointer(input: {
-  readonly channel: 'stable' | 'beta';
-  readonly manifest: AgentReleaseManifest;
-  readonly manifestUrl: string;
-}): AgentReleaseChannelPointer {
-  if (input.manifest.provenance.kind !== 'production') {
-    throw new Error('A channel cannot point to a pull-request manifest');
-  }
-  const url = new URL(input.manifestUrl);
-  if (
-    url.protocol !== 'https:' ||
-    !url.pathname.includes(`/${input.manifest.releaseVersion}/`)
-  ) {
-    throw new Error('Channel target must be an immutable HTTPS manifest URL');
-  }
-  return {
-    schemaVersion: 1,
-    channel: input.channel,
-    releaseVersion: input.manifest.releaseVersion,
-    manifestUrl: url.href,
-    manifestSha256: sha256(canonicalJson(input.manifest)),
-  };
-}
-
-export async function verifyProductionReleaseSet(input: {
+export async function verifySelfUseReleaseSet(input: {
   readonly manifestPath: string;
-  readonly manifestSignaturePath: string;
-  readonly publicKeyPem: string;
-  readonly catalogPath: string;
   readonly archivesDir: string;
 }): Promise<AgentReleaseManifest> {
   const manifest = validateReleaseManifest(
     JSON.parse(await readFile(input.manifestPath, 'utf8')),
-    { requireProductionMatrix: true },
+    { requireSelfUseMatrix: true },
   );
-  if (manifest.provenance.kind !== 'production') {
-    throw new Error('Production verification requires a production manifest');
+  if (manifest.provenance.kind !== 'self-use' || manifest.provenance.signed) {
+    throw new Error(
+      'Self-use verification requires an unsigned self-use manifest',
+    );
   }
-  verifyManifestSignature(
-    manifest,
-    (await readFile(input.manifestSignaturePath, 'utf8')).trim(),
-    input.publicKeyPem,
-  );
-  assertCatalogBinding(manifest, await readFile(input.catalogPath));
   for (const artifact of manifest.artifacts) {
     const archivePath = join(
       input.archivesDir,
@@ -226,11 +192,6 @@ export async function verifyProductionReleaseSet(input: {
     );
     const archiveBytes = await readFile(archivePath);
     assertArchiveBinding(artifact, archiveBytes);
-    verifyReleaseBlobSignature(
-      archiveBytes,
-      (await readFile(`${archivePath}.sig`, 'utf8')).trim(),
-      input.publicKeyPem,
-    );
   }
   return manifest;
 }
@@ -243,19 +204,19 @@ export function validateReceipt(input: unknown): AgentArtifactReceipt {
   if (
     receipt.schemaVersion !== 1 ||
     typeof receipt.releaseVersion !== 'string' ||
-    (receipt.provenance !== 'production' &&
+    (receipt.provenance !== 'self-use' &&
       receipt.provenance !== 'pull-request-validation') ||
     !receipt.artifact ||
     !receipt.validation ||
     typeof receipt.validation.cleanHostSmoke !== 'boolean' ||
-    typeof receipt.validation.platformSigned !== 'boolean' ||
-    typeof receipt.validation.notarizationStapled !== 'boolean'
+    receipt.validation.platformSigned !== false ||
+    receipt.validation.notarizationStapled !== false
   ) {
     throw new Error('Artifact receipt contract is invalid');
   }
   const validationManifest = validateReleaseManifest(
     {
-      schemaVersion: 1,
+      schemaVersion: AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
       releaseVersion: receipt.releaseVersion,
       minimumCliVersion: '0.0.0',
       layoutVersion: 1,
@@ -265,17 +226,13 @@ export function validateReceipt(input: unknown): AgentArtifactReceipt {
         localBridge: 1,
         trayControl: 1,
       },
-      environmentCatalog: {
-        schemaVersion: AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION,
-        sha256: '0'.repeat(64),
-      },
       provenance: {
         kind: receipt.provenance,
-        signed: receipt.provenance === 'production',
+        signed: false,
       },
       artifacts: [receipt.artifact],
     },
-    { requireProductionMatrix: false },
+    { requireSelfUseMatrix: false },
   );
   return {
     schemaVersion: 1,
@@ -299,16 +256,28 @@ async function listFiles(root: string, directory = root): Promise<string[]> {
   return output;
 }
 
-function requireImmutableBaseUrl(value: string, version: string): URL {
+function requireArtifactBaseUrl(
+  value: string,
+  provenance: AgentReleaseProvenanceKind,
+  version: string,
+): URL {
   const url = new URL(value.endsWith('/') ? value : `${value}/`);
-  if (
-    url.protocol !== 'https:' ||
-    !url.pathname.includes(`/${version}/`) ||
-    url.search ||
-    url.hash
-  ) {
+  if (url.protocol !== 'https:' || url.search || url.hash) {
     throw new Error(
-      'Artifact base URL must be immutable, versioned, and HTTPS',
+      'Artifact base URL must be HTTPS without query or fragment',
+    );
+  }
+  if (provenance === 'self-use') {
+    if (!url.pathname.includes(`/${AGENT_LATEST_RELEASE_TAG}/`)) {
+      throw new Error(
+        `Self-use artifact base URL must publish under ${AGENT_LATEST_RELEASE_TAG}`,
+      );
+    }
+    return url;
+  }
+  if (!url.pathname.includes(`/${version}/`)) {
+    throw new Error(
+      'Pull-request artifact base URL must be versioned and HTTPS',
     );
   }
   return url;

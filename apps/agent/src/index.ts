@@ -12,12 +12,16 @@ import {
   createAgentRuntimeCore,
   createAgentRuntimeLockSet,
   FileAgentObservabilityRecorder,
+  getSelfUseSetupState,
+  isSelfUseConfigured,
   JsonAgentConfigStorage,
   JsonAgentEnvironmentStorage,
   loadAgentEnvironmentCatalog,
+  migrateToSelfUseConfig,
   probeAgentControl,
   resolveAgentControlEndpoint,
   resolveAgentDataPaths,
+  SELF_USE_ENVIRONMENT_ID,
   type WebSocketConstructor,
 } from '@cthutool/agent-runtime';
 import WebSocket from 'ws';
@@ -37,8 +41,27 @@ export async function runAgentProcess(
 ): Promise<AgentRuntimeService> {
   const paths = resolveAgentDataPaths({
     rootDir: options.userDataDir,
-    legacyDesktopUserDataDir: options.legacyDesktopUserDataDir,
+    legacyDesktopUserDataDir:
+      options.legacyDesktopUserDataDir ??
+      process.env.CTHUTOOL_AGENT_LEGACY_DATA_DIR,
   });
+  const allowDevelopmentLocalhost =
+    process.env.CTHUTOOL_AGENT_ALLOW_CUSTOM_ENVIRONMENTS === '1' ||
+    process.env.NODE_ENV !== 'production';
+  const selfUseMigration = migrateToSelfUseConfig(paths, {
+    allowDevelopmentLocalhost,
+  });
+  const setupState = getSelfUseSetupState(paths, { allowDevelopmentLocalhost });
+  if (
+    process.env.NODE_ENV === 'production' &&
+    !options.releaseEnvironmentCatalog &&
+    !process.env.CTHUTOOL_AGENT_ENVIRONMENTS_PATH &&
+    setupState.setupRequired
+  ) {
+    throw new Error(
+      'Agent setup required: run Agent Settings or `chc agent settings` to configure the deployment Origin',
+    );
+  }
   const config = new AgentConfigStore(
     new JsonAgentConfigStorage(paths.configPath),
     {
@@ -46,18 +69,34 @@ export async function runAgentProcess(
       connectionEnabled: process.env.CTHUTOOL_AGENT_DISABLED !== '1',
     },
   );
+  const selfUseReady =
+    Boolean(selfUseMigration.config.deploymentOrigin) &&
+    isSelfUseConfigured(selfUseMigration.config, {
+      allowDevelopmentLocalhost,
+    });
   const catalog = loadAgentEnvironmentCatalog({
     allowCustomDevelopmentProfiles:
       process.env.CTHUTOOL_AGENT_ALLOW_CUSTOM_ENVIRONMENTS === '1',
+    allowDevelopmentLocalhost,
     customDevelopmentCatalogPath:
       process.env.CTHUTOOL_AGENT_CUSTOM_ENVIRONMENTS_PATH,
     defaultBackendUrl: process.env.CTHUTOOL_AGENT_BACKEND_URL,
     defaultWebOrigin: process.env.CTHUTOOL_WEB_ORIGIN,
     nodeEnv: process.env.NODE_ENV,
     releaseCatalog: options.releaseEnvironmentCatalog,
-    releaseCatalogPath: process.env.CTHUTOOL_AGENT_ENVIRONMENTS_PATH,
+    releaseCatalogPath: selfUseReady
+      ? undefined
+      : process.env.CTHUTOOL_AGENT_ENVIRONMENTS_PATH,
+    selfUseDeploymentOrigin: selfUseReady
+      ? selfUseMigration.config.deploymentOrigin
+      : undefined,
   });
   const environmentStorage = new JsonAgentEnvironmentStorage(paths);
+  if (selfUseReady) {
+    environmentStorage.writeSelection({
+      activeEnvironmentId: SELF_USE_ENVIRONMENT_ID,
+    });
+  }
   const explicitEnvironmentId =
     environmentStorage.readSelection().activeEnvironmentId;
   const migration = await migrateLegacyDesktopData({

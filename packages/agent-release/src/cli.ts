@@ -4,10 +4,10 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { archiveBundleDirectory, assembleAgentBundle } from './assembly';
 import {
+  type AgentReleaseProvenanceKind,
   type AgentReleaseTarget,
+  assertSelfUseCatalogConfigured,
   canonicalJson,
-  signManifest,
-  signReleaseBlob,
   validateEnvironmentCatalog,
   validateReleaseManifest,
 } from './contracts';
@@ -15,9 +15,8 @@ import { validateBundleInventory } from './layout';
 import { preparePinnedNodeRuntime } from './node-runtime';
 import {
   createArtifactReceipt,
-  createChannelPointer,
   createReleaseManifest,
-  verifyProductionReleaseSet,
+  verifySelfUseReleaseSet,
 } from './publication';
 import { smokeExtractedAgentBundle } from './smoke';
 
@@ -25,12 +24,15 @@ async function main(argv: readonly string[]): Promise<void> {
   const command = argv[0];
   const flags = parseFlags(argv.slice(1));
   if (command === 'validate-catalog') {
-    validateEnvironmentCatalog(await readJson(required(flags, 'input')));
+    const catalog = validateEnvironmentCatalog(
+      await readJson(required(flags, 'input')),
+    );
+    if (flags.has('self-use')) assertSelfUseCatalogConfigured(catalog);
     return;
   }
   if (command === 'validate-manifest') {
     validateReleaseManifest(await readJson(required(flags, 'input')), {
-      requireProductionMatrix: flags.has('production'),
+      requireSelfUseMatrix: flags.has('self-use'),
     });
     return;
   }
@@ -44,12 +46,13 @@ async function main(argv: readonly string[]): Promise<void> {
   if (command === 'assemble') {
     const result = await assembleAgentBundle({
       deployedAgentDir: required(flags, 'agent-dir'),
-      environmentCatalogPath: required(flags, 'catalog'),
       nodeExecutablePath: required(flags, 'node'),
       nodeLicensePath: required(flags, 'node-license'),
       outputDir: required(flags, 'output-dir'),
       pullRequestMarker: flags.get('pull-request-marker'),
       releaseVersion: required(flags, 'version'),
+      setupExecutablePath: required(flags, 'setup'),
+      slintLicensePath: required(flags, 'slint-license'),
       stageDir: flags.get('stage-dir'),
       target: releaseTarget(required(flags, 'target')),
       thirdPartyNoticesPath: required(flags, 'notices'),
@@ -81,6 +84,8 @@ async function main(argv: readonly string[]): Promise<void> {
   if (command === 'smoke') {
     const result = await smokeExtractedAgentBundle({
       bundleRoot: required(flags, 'bundle-root'),
+      deploymentOrigin: flags.get('deployment-origin'),
+      nativeSetupSmoke: flags.has('native-smoke'),
       timeoutMs: flags.has('timeout-ms')
         ? Number(required(flags, 'timeout-ms'))
         : undefined,
@@ -92,11 +97,9 @@ async function main(argv: readonly string[]): Promise<void> {
   if (command === 'receipt') {
     const receipt = await createArtifactReceipt({
       archivePath: required(flags, 'archive'),
+      artifactBaseUrl: required(flags, 'base-url'),
       bundleRoot: required(flags, 'bundle-root'),
       cleanHostSmoke: flags.has('clean-host-smoke'),
-      immutableBaseUrl: required(flags, 'base-url'),
-      notarizationStapled: flags.has('notarization-stapled'),
-      platformSigned: flags.has('platform-signed'),
       provenance: provenance(required(flags, 'provenance')),
       releaseVersion: required(flags, 'version'),
       target: releaseTarget(required(flags, 'target')),
@@ -109,7 +112,6 @@ async function main(argv: readonly string[]): Promise<void> {
       required(flags, 'receipts').split(',').filter(Boolean).map(readJson),
     );
     const manifest = createReleaseManifest({
-      catalogBytes: await readFile(required(flags, 'catalog')),
       minimumCliVersion: required(flags, 'minimum-cli-version'),
       provenance: provenance(required(flags, 'provenance')),
       receipts,
@@ -118,51 +120,11 @@ async function main(argv: readonly string[]): Promise<void> {
     await writeJson(required(flags, 'output'), manifest);
     return;
   }
-  if (command === 'sign-manifest') {
-    const manifest = validateReleaseManifest(
-      await readJson(required(flags, 'input')),
-      { requireProductionMatrix: true },
-    );
-    await writeSignature(
-      required(flags, 'output'),
-      signManifest(
-        manifest,
-        requiredEnvironment('AGENT_RELEASE_PRIVATE_KEY_PEM'),
-      ),
-    );
-    return;
-  }
-  if (command === 'sign-blob') {
-    await writeSignature(
-      required(flags, 'output'),
-      signReleaseBlob(
-        await readFile(required(flags, 'input')),
-        requiredEnvironment('AGENT_RELEASE_PRIVATE_KEY_PEM'),
-      ),
-    );
-    return;
-  }
-  if (command === 'verify-production-set') {
-    await verifyProductionReleaseSet({
+  if (command === 'verify-self-use-set') {
+    await verifySelfUseReleaseSet({
       archivesDir: required(flags, 'archives-dir'),
-      catalogPath: required(flags, 'catalog'),
       manifestPath: required(flags, 'manifest'),
-      manifestSignaturePath: required(flags, 'manifest-signature'),
-      publicKeyPem: requiredEnvironment('AGENT_RELEASE_PUBLIC_KEY_PEM'),
     });
-    return;
-  }
-  if (command === 'channel-pointer') {
-    const manifest = validateReleaseManifest(
-      await readJson(required(flags, 'manifest')),
-      { requireProductionMatrix: true },
-    );
-    const pointer = createChannelPointer({
-      channel: channel(required(flags, 'channel')),
-      manifest,
-      manifestUrl: required(flags, 'manifest-url'),
-    });
-    await writeJson(required(flags, 'output'), pointer);
     return;
   }
   throw new Error(`Unknown Agent release command: ${command ?? '<missing>'}`);
@@ -195,14 +157,6 @@ function required(flags: ReadonlyMap<string, string>, name: string): string {
   return value;
 }
 
-function requiredEnvironment(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Protected release environment is missing ${name}`);
-  }
-  return value;
-}
-
 function releaseTarget(value: string): AgentReleaseTarget {
   if (
     value !== 'darwin-arm64' &&
@@ -214,16 +168,9 @@ function releaseTarget(value: string): AgentReleaseTarget {
   return value;
 }
 
-function provenance(value: string): 'production' | 'pull-request-validation' {
-  if (value !== 'production' && value !== 'pull-request-validation') {
+function provenance(value: string): AgentReleaseProvenanceKind {
+  if (value !== 'self-use' && value !== 'pull-request-validation') {
     throw new Error(`Invalid release provenance: ${value}`);
-  }
-  return value;
-}
-
-function channel(value: string): 'stable' | 'beta' {
-  if (value !== 'stable' && value !== 'beta') {
-    throw new Error(`Invalid Agent release channel: ${value}`);
   }
   return value;
 }
@@ -235,11 +182,6 @@ async function readJson(path: string): Promise<unknown> {
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, canonicalJson(value), { mode: 0o644 });
-}
-
-async function writeSignature(path: string, value: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${value}\n`, { mode: 0o600 });
 }
 
 async function listFiles(root: string, directory = root): Promise<string[]> {

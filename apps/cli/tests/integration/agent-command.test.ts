@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 describe('Agent CLI command contract', () => {
-  test('returns a versioned secret-free status schema for an isolated host', async () => {
+  test('returns a versioned secret-free SetupRequired status schema', async () => {
     const root = await isolatedRoot();
     const result = await runCli(['agent', 'status', '--json'], root);
     expect(result.code).toBe(0);
@@ -26,7 +26,12 @@ describe('Agent CLI command contract', () => {
       command: 'agent status',
       result: {
         installed: false,
-        tray: { state: 'stopped' },
+        tray: { state: 'SetupRequired' },
+        setup: {
+          required: true,
+          configured: false,
+          remediation: 'Run: chc agent settings',
+        },
         backend: { status: 'offline' },
         browser: { ready: false, status: 'unavailable' },
         autostart: {
@@ -40,56 +45,106 @@ describe('Agent CLI command contract', () => {
     );
   });
 
-  test('fails closed with a stable versioned error when no release key is pinned', async () => {
+  test('rejects removed channel selection and unavailable latest releases', async () => {
     const root = await isolatedRoot();
-    const result = await runCli(
-      ['agent', 'install', '--json', '--no-interactive'],
+    const channel = await runCli(
+      ['agent', 'install', '--channel', 'stable', '--json', '--no-interactive'],
       root,
     );
-    expect(result.code).not.toBe(0);
-    expect(JSON.parse(result.out)).toEqual({
+    expect(channel.code).not.toBe(0);
+    expect(JSON.parse(channel.out)).toEqual({
       schemaVersion: 1,
       ok: false,
       command: 'agent install',
       error: {
-        code: 'agent_release_untrusted',
+        code: 'invalid_option',
         message:
-          'Agent release verification is unavailable because the CLI has no pinned public key',
+          'Self-use mode has one latest release; --channel is no longer supported',
       },
     });
+    const install = await runCli(
+      ['agent', 'install', '--json', '--no-interactive'],
+      root,
+      {
+        CTHUTOOL_AGENT_RELEASE_MANIFEST_URL:
+          'https://127.0.0.1:1/manifest.json',
+      },
+    );
+    expect(install.code).not.toBe(0);
+    expect(JSON.parse(install.out).ok).toBe(false);
+    expect(JSON.parse(install.out).error.message).toMatch(
+      /latest agent release is unavailable|HTTP|download failed|supports macOS arm64\/x64 and Windows x64 only/i,
+    );
   });
 
-  test('lists and shows environments without secret-configured state', async () => {
+  test('redirects deprecated catalog env commands to native settings', async () => {
+    const root = await isolatedRoot();
+    const result = await runCli(['agent', 'env', '--json'], root);
+    expect(result.code).not.toBe(0);
+    expect(JSON.parse(result.out)).toMatchObject({
+      ok: false,
+      command: 'agent env',
+      error: {
+        code: 'agent_environment_invalid',
+        message: expect.stringContaining('chc agent settings'),
+      },
+    });
+    expect(result.out).not.toMatch(/catalog|environment id|set-secret/i);
+  });
+
+  test('help no longer advertises catalog environment selection', async () => {
+    const root = await isolatedRoot();
+    const result = await runCli(['agent', '--help'], root);
+    expect(result.code).toBe(0);
+    expect(result.out).toContain('settings');
+    expect(result.out).not.toMatch(/\benv list\b|\bset-secret\b/);
+  });
+
+  test('status JSON omits secret state and ignores a legacy secret file', async () => {
     const root = await isolatedRoot();
     await writeInstalledFixture(root);
-    const listed = await runCli(['agent', 'env', 'list', '--json'], root);
-    expect(listed.code).toBe(0);
-    const listedPayload = JSON.parse(listed.out);
-    expect(listedPayload).toMatchObject({
-      schemaVersion: 1,
-      ok: true,
-      command: 'agent env list',
+    const secret = 'integration-secret-value-that-must-stay-private';
+    await mkdir(join(root, 'data', 'environments', 'self-use'), {
+      recursive: true,
     });
-    expect(listedPayload.result).toEqual([
-      expect.objectContaining({
-        active: true,
-        id: 'production',
-        label: 'Production',
+    await writeFile(
+      join(root, 'data', 'config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        agentId: 'agent-integration',
+        deploymentOrigin: 'https://app.example.com',
+        deviceName: 'integration',
+        connectionEnabled: true,
+        browserRuntime: { kind: 'host-chrome' },
       }),
-    ]);
-    expect(JSON.stringify(listedPayload)).not.toMatch(
-      /secretConfigured|set-secret|agent-secret/i,
     );
-
-    const human = await runCli(['agent', 'env', 'get'], root);
-    expect(human.code).toBe(0);
-    expect(human.out).toContain('production');
-    expect(human.out).toContain('https://app.example.com');
-    expect(human.out).not.toMatch(/secret/i);
-
-    const help = await runCli(['agent', 'env', '--help'], root);
-    expect(help.code).toBe(0);
-    expect(help.out).not.toContain('set-secret');
+    await writeFile(
+      join(root, 'data', 'environments', 'self-use', 'agent-secret'),
+      `${secret}\n`,
+    );
+    const status = await runCli(['agent', 'status', '--json'], root);
+    expect(status.code).toBe(0);
+    expect(JSON.parse(status.out)).toMatchObject({
+      ok: true,
+      result: {
+        installed: true,
+        setup: {
+          configured: true,
+          required: false,
+          deploymentOrigin: 'https://app.example.com',
+        },
+      },
+    });
+    expect(`${status.out}${status.err}`).not.toContain(secret);
+    expect(`${status.out}${status.err}`).not.toMatch(
+      /secretConfigured|agent-secret/i,
+    );
+    expect(
+      await readFile(
+        join(root, 'data', 'environments', 'self-use', 'agent-secret'),
+        'utf8',
+      ),
+    ).toBe(`${secret}\n`);
   });
 });
 
@@ -99,14 +154,18 @@ async function isolatedRoot(): Promise<string> {
   return root;
 }
 
-async function runCli(args: readonly string[], root: string) {
+async function runCli(
+  args: readonly string[],
+  root: string,
+  env: Readonly<Record<string, string>> = {},
+) {
   const processHandle = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
     cwd: cliRoot,
     env: {
       ...process.env,
+      ...env,
       CTHUTOOL_AGENT_DATA_DIR: join(root, 'data'),
       CTHUTOOL_AGENT_INSTALL_DIR: join(root, 'install'),
-      CTHUTOOL_PINNED_AGENT_RELEASE_PUBLIC_KEY_PEM: '',
     },
     stdin: 'ignore',
     stdout: 'pipe',
@@ -127,23 +186,6 @@ async function writeInstalledFixture(root: string): Promise<void> {
   const layout = createBundleLayout('darwin-arm64', version);
   await mkdir(join(versionRoot, 'agent'), { recursive: true });
   await writeFile(join(versionRoot, 'layout.json'), canonicalJson(layout));
-  await writeFile(
-    join(versionRoot, 'agent', 'environments.json'),
-    canonicalJson({
-      schemaVersion: 1,
-      profiles: [
-        {
-          environmentId: 'production',
-          label: 'Production',
-          webOrigin: 'https://app.example.com',
-          webAgentUrl: 'https://app.example.com/agent',
-          backendHttpUrl: 'https://api.example.com',
-          backendAgentWsUrl: 'wss://api.example.com/agent/ws',
-          namespace: 'production',
-        },
-      ],
-    }),
-  );
   await writeFile(
     join(installRoot, 'active.json'),
     canonicalJson({

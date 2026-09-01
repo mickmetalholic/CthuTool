@@ -10,7 +10,7 @@ use cthutool_agent_tray::{
     model::TraySnapshot,
     supervisor::AgentLaunchConfig,
     tray_control::{
-        TrayCommand, TrayControlClient, TrayControlServer, instance_record_path,
+        CandidateVerifier, TrayCommand, TrayControlClient, TrayControlServer, instance_record_path,
         resolve_tray_control_endpoint,
     },
 };
@@ -60,19 +60,39 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let endpoint = resolve_tray_control_endpoint(&data_dir);
     let record = registry.create_record(endpoint, &SystemProcessInspector)?;
     registry.write(&record)?;
+    let launch_config = resolve_agent_launch_config(&data_dir)?;
+    let verifier_config = launch_config.clone();
+    let candidate_verifier: CandidateVerifier =
+        std::sync::Arc::new(move |user_data_dir, candidate, options| {
+            cthutool_agent_tray::supervisor::verify_candidate(
+                &verifier_config,
+                user_data_dir,
+                candidate,
+                options,
+            )
+            .map_err(|error| match error {
+                cthutool_agent_tray::supervisor::SupervisorError::CandidateConfiguration(
+                    message,
+                ) => message,
+                _ => "Backend did not accept the candidate Origin within the verification timeout"
+                    .into(),
+            })
+        });
 
     let snapshot = Arc::new(RwLock::new(TraySnapshot::default()));
     let (command_sender, command_receiver) = mpsc::channel();
-    let control_server = TrayControlServer::start(
+    let control_server = TrayControlServer::start_with_candidate_verifier(
         record.clone(),
         Arc::clone(&snapshot),
         command_sender.clone(),
+        data_dir.clone(),
+        candidate_verifier,
     )?;
     let event_loop = EventLoop::<NativeEvent>::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
     install_native_event_forwarders(&proxy);
     let worker = spawn_supervisor_worker(
-        resolve_agent_launch_config(&data_dir)?,
+        launch_config,
         Arc::clone(&snapshot),
         command_receiver,
         proxy.clone(),
@@ -146,6 +166,7 @@ fn resolve_agent_launch_config(
         agent_entry_point,
         user_data_dir: data_dir.to_path_buf(),
         environment_catalog,
+        legacy_desktop_user_data_dir: None,
     })
 }
 

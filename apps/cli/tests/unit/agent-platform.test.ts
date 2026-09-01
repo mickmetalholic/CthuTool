@@ -115,23 +115,6 @@ describe('Agent autostart platform fixtures', () => {
       canonicalJson(createBundleLayout(target, '1.2.3')),
     );
     await writeFile(
-      join(versionRoot, 'agent', 'environments.json'),
-      canonicalJson({
-        schemaVersion: 1,
-        profiles: [
-          {
-            environmentId: 'production',
-            label: 'Production',
-            webOrigin: 'https://app.example.com',
-            webAgentUrl: 'https://app.example.com/agent',
-            backendHttpUrl: 'https://api.example.com',
-            backendAgentWsUrl: 'wss://api.example.com/agent/ws',
-            namespace: 'production',
-          },
-        ],
-      }),
-    );
-    await writeFile(
       join(paths.installRoot, 'active.json'),
       canonicalJson({
         schemaVersion: 1,

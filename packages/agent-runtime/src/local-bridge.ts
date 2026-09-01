@@ -28,6 +28,10 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const BROWSER_COMMAND_TIMEOUT_MS = 120_000;
 const ALLOWED_HEADERS = new Set(['authorization', 'content-type']);
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'OPTIONS']);
+const TRUST_BOUNDARY_REJECTION_MESSAGE =
+  'Web requests cannot change Origin or other trust-boundary fields. Use native Agent Settings (tray → Agent Settings, or `chc agent settings`).';
+const TRUST_BOUNDARY_FIELD =
+  /^(activeEnvironment|activeEnvironmentId|agentSecret|backendAgentWsUrl|backendHttpUrl|backendUrl|deploymentOrigin|environmentId|namespace|origin|secret|webAgentUrl|webOrigin)$/i;
 
 export type AgentBridgeContext = {
   readonly environmentId: string;
@@ -440,10 +444,15 @@ export class AgentLocalBridge implements AgentLocalBridgePort {
     }
     const parsed = validateAgentBridgeRpcRequest(body.value);
     if (!parsed.ok) {
+      const directsToNativeSettings =
+        /forbidden metadata/i.test(parsed.message) ||
+        containsTrustBoundaryMutation(body.value);
       this.respondFailure(
         response,
         'INVALID_REQUEST',
-        'Bridge RPC request is invalid',
+        directsToNativeSettings
+          ? TRUST_BOUNDARY_REJECTION_MESSAGE
+          : 'Bridge RPC request is invalid',
         400,
       );
       return;
@@ -477,7 +486,7 @@ export class AgentLocalBridge implements AgentLocalBridgePort {
     if (containsTrustBoundaryMutation(request.params)) {
       return {
         code: 'INVALID_REQUEST',
-        message: 'Web requests cannot change the Agent trust boundary',
+        message: TRUST_BOUNDARY_REJECTION_MESSAGE,
         ok: false,
         status: 400,
       };
@@ -840,11 +849,7 @@ function containsTrustBoundaryMutation(input: unknown): boolean {
     return false;
   }
   for (const [key, value] of Object.entries(input)) {
-    if (
-      /^(activeEnvironment|backendAgentWsUrl|backendHttpUrl|backendUrl|environmentId|webAgentUrl|webOrigin)$/i.test(
-        key,
-      )
-    ) {
+    if (TRUST_BOUNDARY_FIELD.test(key)) {
       return true;
     }
     if (containsTrustBoundaryMutation(value)) {

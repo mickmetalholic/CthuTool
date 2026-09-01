@@ -12,13 +12,14 @@ function validInventory() {
   return [
     'layout.json',
     layout.entryPoints.tray,
+    layout.entryPoints.setup,
     layout.entryPoints.node,
     layout.entryPoints.agent,
-    layout.entryPoints.environmentCatalog,
     'agent/node_modules/playwright/package.json',
     'agent/node_modules/playwright-core/package.json',
     'licenses/NODE_LICENSE',
     'licenses/THIRD_PARTY_NOTICES.txt',
+    'licenses/LICENSE-SLINT.md',
     'bin/CthuTool Agent.app/Contents/Info.plist',
   ];
 }
@@ -45,7 +46,7 @@ describe('Agent bundle layout', () => {
     ).toThrow(/entry points/);
   });
 
-  test('accepts required UI-free immutable inventory', () => {
+  test('accepts required UI-free immutable inventory with native setup', () => {
     expect(validateBundleInventory('darwin-arm64', validInventory())).toEqual(
       [...validInventory()].sort(),
     );
@@ -58,10 +59,13 @@ describe('Agent bundle layout', () => {
     'frameworks/EmbeddedWebView.framework/runtime',
     'electron/Electron Framework',
     'settings.css',
-  ])('rejects UI runtime or application asset %s', (path) => {
+    'ui/app.tsx',
+    'webview/runtime',
+    'agent/environments.json',
+  ])('rejects UI runtime, catalog, or application asset %s', (path) => {
     expect(() =>
       validateBundleInventory('darwin-arm64', [...validInventory(), path]),
-    ).toThrow(/local UI runtime or assets/);
+    ).toThrow(/local UI runtime or assets|deployment URL catalog/);
   });
 
   test.each([
@@ -70,6 +74,7 @@ describe('Agent bundle layout', () => {
     'browser-profiles/profile/data',
     'logs/agent.log',
     'config.json',
+    'runtime/instance.json',
   ])('rejects mutable data %s from version contents', (path) => {
     expect(() =>
       validateBundleInventory('darwin-arm64', [...validInventory(), path]),
