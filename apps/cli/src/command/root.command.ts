@@ -50,13 +50,13 @@ const rootCommandRegistrations: readonly CliCommandRegistration[] = [
   {
     name: 'status',
     command: statusCommand,
-    visibility: 'public',
+    visibility: 'compat',
     bareBehavior: 'run',
   },
   {
     name: 'update',
     command: updateCommand,
-    visibility: 'public',
+    visibility: 'compat',
     bareBehavior: 'run',
   },
   {

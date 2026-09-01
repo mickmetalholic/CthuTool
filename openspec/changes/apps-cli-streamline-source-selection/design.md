@@ -19,6 +19,7 @@ The managed path is fixed at the self-update install directory. Existing source-
 - Change worktree discovery, registry identity, selector hashing, npm link ownership, or update preflight rules.
 - Automatically build a development bundle, repair an invalid managed directory, or update an existing managed checkout.
 - Change the `source list --json` candidate schema or abbreviate canonical machine paths.
+- Relocate the established top-level `status` and `update` lifecycle commands into the `source` namespace; that follow-up changes both source-switching and self-installation contracts and needs an explicit compatibility migration.
 - Introduce a new prompt or table dependency.
 
 ## Decisions
@@ -28,6 +29,8 @@ The managed path is fixed at the self-update install directory. Existing source-
 Remove the `current` command registration, implementation, help/completion entry, documentation, and dedicated tests. `source list` remains the source inventory API and continues to expose a top-level `active` object in JSON. `chc status` remains the detailed installation diagnostics API.
 
 Keeping `current` as a hidden compatibility alias was considered, but the source feature is new, the alias would preserve a second output contract, and existing callers have direct replacements. The removed operation therefore uses normal unknown-command behavior.
+
+The established top-level `status` and `update` commands are intentionally unchanged in this change. A follow-up namespace consolidation should move both together to `source status` and `source update`, keep the top-level forms as undiscoverable compatibility aliases for a migration period, preserve their existing flags and safety behavior, and define route-specific JSON `command` values. Treating that work separately avoids applying the no-alias decision for the new `source current` operation to older lifecycle entry points with existing callers, and keeps the corresponding `apps-cli-self-installation` contract explicit.
 
 ### 2. Model managed selection as a three-way state transition
 

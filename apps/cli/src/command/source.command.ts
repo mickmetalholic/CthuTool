@@ -38,6 +38,10 @@ import {
   registerPositionalCandidates,
 } from './command-discovery';
 import {
+  sourceStatusCommand,
+  sourceUpdateCommand,
+} from './self-update.command';
+import {
   actionableCliSourceCandidates,
   presentCliSourceCandidate,
   sourceChoiceLabel,
@@ -234,7 +238,7 @@ function createSourceUseCommand(deps: SourceCommandDeps) {
               scope,
               createCliError(
                 'invalid_option',
-                'Unknown option: --bootstrap. Select remote directly; use `chc update` to update an existing managed checkout.',
+                'Unknown option: --bootstrap. Select remote directly; use `chc source update` to update an existing managed checkout.',
               ),
               { phase: 'validation' },
             );
@@ -400,8 +404,20 @@ export function createSourceCommand(
       bareBehavior: 'run',
     },
     {
+      name: 'status',
+      command: sourceStatusCommand,
+      visibility: 'public',
+      bareBehavior: 'run',
+    },
+    {
       name: 'use',
       command: createSourceUseCommand(deps),
+      visibility: 'public',
+      bareBehavior: 'run',
+    },
+    {
+      name: 'update',
+      command: sourceUpdateCommand,
       visibility: 'public',
       bareBehavior: 'run',
     },
@@ -416,7 +432,8 @@ export function createSourceCommand(
     defineCommand({
       meta: {
         name: 'source',
-        description: 'Discover and switch the source used by global chc.',
+        description:
+          'Discover, inspect, switch, and update the source used by global chc.',
       },
       subCommands: buildRegisteredSubCommands(registrations),
     }),

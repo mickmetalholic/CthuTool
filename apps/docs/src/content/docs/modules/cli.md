@@ -8,7 +8,7 @@ The CLI exposes the `chc` command for client-side workflows.
 ## What It Does
 
 - installs globally from the repository package
-- updates itself through `chc update`
+- updates itself through `chc source update`
 - installs, updates, diagnoses, and removes the tray-owned local Agent through `chc agent`
 - manages shell completion
 - runs bundled scripts such as `convert-to-cbz`

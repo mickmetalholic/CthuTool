@@ -11,6 +11,7 @@
 - 改为由 `chc source use remote` 在 managed checkout 真正缺失时自动复用安全的 managed install 流程，安装成功并验证 committed bundle 后再切换全局命令。
 - 保持已有 managed checkout 的切换为纯本地重链接，不 fetch、不更新 ref；路径已存在但不是有效 checkout、缺少 bundle 或处于其他异常状态时，不自动覆盖或修复。
 - **BREAKING** 移除 `source use --bootstrap` 的公开刷新语义；managed source 的已有 checkout 更新继续由专门的 `chc update` 流程承担。
+- 保留现有顶层 `chc status` 与 `chc update` 生命周期入口；将二者迁入 `chc source`、定义顶层兼容别名并调整相关 JSON 命令标识属于后续独立变更，不与本次已完成的 source 选择行为混合交付。
 - 重做 `source list` 与交互式 `source use` 的共享 human 候选展示：突出 selector、active/ready/not-installed 状态和 source kind，使用 `~` 缩短 home 路径，避免重复或泄漏内部判断，并为不可直接使用的状态提供下一步提示。
 - 保留 `source list --json` 的完整结构化 candidate 信息，包括顶层 active source、规范路径、bundle 与可用性字段；同步更新帮助、completion、文档与测试。
 

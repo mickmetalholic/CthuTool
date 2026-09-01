@@ -64,8 +64,8 @@ chc --help
 Update later with:
 
 ```bash
-chc update --check
-chc update
+chc source update --check
+chc source update
 ```
 
 ## 5. Install the Local Agent

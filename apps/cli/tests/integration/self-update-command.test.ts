@@ -131,12 +131,15 @@ async function createFixture() {
   };
 }
 
-function updateArgs(fixture: {
-  readonly source: string;
-  readonly installDir: string;
-}) {
+function updateArgs(
+  fixture: {
+    readonly source: string;
+    readonly installDir: string;
+  },
+  route: readonly string[] = ['update'],
+) {
   return [
-    'update',
+    ...route,
     '--repo',
     fixture.source,
     '--ref',
@@ -188,7 +191,7 @@ describe('self-update command', () => {
       await fixture.clone();
       await fixture.advanceSource('Environment-selected update');
 
-      const result = await runCli(['update', '--json'], {
+      const result = await runCli(['source', 'update', '--json'], {
         ...fixture.env,
         CHC_INSTALL_DIR: fixture.installDir,
         CHC_REPO_URL: fixture.source,
@@ -197,6 +200,7 @@ describe('self-update command', () => {
 
       expect(result.code).toBe(0);
       expect(JSON.parse(result.out)).toMatchObject({
+        command: 'source update',
         result: {
           status: 'updated',
           installDir: fixture.installDir,
@@ -211,21 +215,26 @@ describe('self-update command', () => {
   test('checks a missing installation without cloning or invoking npm', async () => {
     const fixture = await createFixture();
     try {
-      const result = await runCli(
-        [...updateArgs(fixture), '--check', '--json'],
-        fixture.env,
-      );
+      for (const [route, command] of [
+        [['source', 'update'], 'source update'],
+        [['update'], 'update'],
+      ] as const) {
+        const result = await runCli(
+          [...updateArgs(fixture, route), '--check', '--json'],
+          fixture.env,
+        );
 
-      expect(result.code).toBe(0);
-      expect(result.err).toBe('');
-      expect(JSON.parse(result.out)).toMatchObject({
-        ok: true,
-        command: 'update',
-        result: {
-          status: 'install_required',
-          phases: ['preflight'],
-        },
-      });
+        expect(result.code).toBe(0);
+        expect(result.err).toBe('');
+        expect(JSON.parse(result.out)).toMatchObject({
+          ok: true,
+          command,
+          result: {
+            status: 'install_required',
+            phases: ['preflight'],
+          },
+        });
+      }
       expect(await fixture.npmInvocations()).toEqual([]);
       expect(await Bun.file(join(fixture.installDir, '.git')).exists()).toBe(
         false,
@@ -239,7 +248,7 @@ describe('self-update command', () => {
     const fixture = await createFixture();
     try {
       const result = await runCli(
-        [...updateArgs(fixture), '--json'],
+        [...updateArgs(fixture, ['source', 'update']), '--json'],
         fixture.env,
       );
 
@@ -247,7 +256,7 @@ describe('self-update command', () => {
       expect(result.err).toBe('');
       expect(JSON.parse(result.out)).toMatchObject({
         ok: true,
-        command: 'update',
+        command: 'source update',
         result: {
           status: 'installed',
           phases: expect.arrayContaining([
@@ -314,7 +323,7 @@ describe('self-update command', () => {
       );
       const result = await runCli(
         [
-          ...updateArgs(dirty),
+          ...updateArgs(dirty, ['source', 'update']),
           '--repo',
           join(dirty.root, 'different-remote'),
           '--json',

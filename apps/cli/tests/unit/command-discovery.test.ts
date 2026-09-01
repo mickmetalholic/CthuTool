@@ -32,7 +32,7 @@ describe('command discovery registry', () => {
       .filter((registration) => registration.visibility !== 'public')
       .map((registration) => registration.name);
     expect(hiddenNames).toEqual(
-      expect.arrayContaining(['__complete', 'version']),
+      expect.arrayContaining(['__complete', 'status', 'update', 'version']),
     );
     expect(publicNames).not.toEqual(expect.arrayContaining(hiddenNames));
   });
@@ -74,5 +74,21 @@ describe('command discovery registry', () => {
         words: ['completion', ''],
       }),
     ).resolves.toEqual(childNames);
+  });
+
+  test('source completion owns public lifecycle operations', async () => {
+    const source = getCommandRegistration(rootCommand, 'source');
+
+    await expect(
+      getCompletionCandidates({
+        rootCommand,
+        words: ['source', ''],
+      }),
+    ).resolves.toEqual(['list', 'register', 'status', 'update', 'use']);
+    expect(
+      getCommandRegistrations(source?.command ?? rootCommand)
+        ?.filter((registration) => registration.visibility === 'public')
+        .map((registration) => registration.name),
+    ).toEqual(['list', 'status', 'use', 'update', 'register']);
   });
 });

@@ -146,8 +146,6 @@ describe('shell completion command', () => {
       'obsidian',
       'scripts',
       'source',
-      'status',
-      'update',
     ]);
     expect(lines((await runCli(['__complete', 'co'])).out)).toEqual([
       'codex',
@@ -196,6 +194,8 @@ describe('shell completion command', () => {
     expect(lines((await runCli(['__complete', 'source', ''])).out)).toEqual([
       'list',
       'register',
+      'status',
+      'update',
       'use',
     ]);
     expect(

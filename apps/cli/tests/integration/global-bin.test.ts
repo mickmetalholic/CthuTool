@@ -53,7 +53,9 @@ describe('global bin', () => {
     expect(cliPackage.bin).toBeUndefined();
     expect(rootPackage.files).toContain('apps/cli/dist');
     expect(cliPackage.files).toBeUndefined();
-    expect(rootPackage.scripts.prepare).toBe('husky');
+    expect(rootPackage.scripts.prepare).toBe(
+      'node scripts/install-git-hooks.mjs',
+    );
     expect(rootPackage.scripts.prepack).toBe(
       'pnpm --filter @cthutool/cli build',
     );
@@ -159,7 +161,15 @@ describe('global bin', () => {
 
     const installDir = await mkdtemp(join(tmpdir(), 'cthutool-status-'));
     const status = Bun.spawn(
-      ['node', 'bin/chc.mjs', 'status', '--install-dir', installDir, '--json'],
+      [
+        'node',
+        'bin/chc.mjs',
+        'source',
+        'status',
+        '--install-dir',
+        installDir,
+        '--json',
+      ],
       {
         cwd: cliRoot,
         stdout: 'pipe',
@@ -176,7 +186,7 @@ describe('global bin', () => {
     const parsedStatus = JSON.parse(statusOut);
     expect(parsedStatus).toMatchObject({
       ok: true,
-      command: 'status',
+      command: 'source status',
       status: {
         version: rootPackage.version,
         mode: 'local',
@@ -217,7 +227,7 @@ describe('global bin', () => {
       },
     });
 
-    const humanStatus = Bun.spawn(['node', 'bin/chc.mjs', 'status'], {
+    const humanStatus = Bun.spawn(['node', 'bin/chc.mjs', 'source', 'status'], {
       cwd: cliRoot,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -308,6 +318,7 @@ describe('global bin', () => {
       [['agent'], ['agent', '--help']],
       [['codex'], ['codex', '--help']],
       [['scripts'], ['scripts', '--help']],
+      [['source'], ['source', '--help']],
       [['completion'], ['completion', '--help']],
     ] as const) {
       const proc = Bun.spawn(['node', 'bin/chc.mjs', ...args], {
@@ -346,14 +357,13 @@ describe('global bin', () => {
           '\n  scripts     Discover, list, and run bundled scripts under apps/cli/src/scripts/<id>/.',
         );
         expect(plain).not.toContain('\n  self-update');
-        expect(plain).toContain(
-          '\n  update      Update the global chc command from the CthuTool Git repository.',
-        );
+        expect(plain).not.toContain('\n  update');
         expect(plain).not.toContain('version');
         expect(plain).not.toContain('__complete');
         expect(plain).toContain(
-          '\n  status      Show chc CLI installation status.',
+          '\n  source      Discover, inspect, switch, and update the source used by global chc.',
         );
+        expect(plain).not.toContain('\n  status');
         expect(plain).not.toContain('\n    codex');
       } else if (args[0] === 'agent') {
         expect(out).toContain('COMMANDS');
@@ -381,6 +391,14 @@ describe('global bin', () => {
         expect(plain).toContain('run');
         expect(plain).toContain('AVAILABLE SCRIPTS');
         expect(plain).toContain('convert-to-cbz');
+      } else if (args[0] === 'source') {
+        expect(plain).toContain('COMMANDS');
+        expect(plain).toContain('list');
+        expect(plain).toContain('status');
+        expect(plain).toContain('use');
+        expect(plain).toContain('update');
+        expect(plain).toContain('register');
+        expect(plain).not.toContain('current');
       } else {
         expect(plain).toContain('COMMANDS');
         expect(plain).toContain('powershell');

@@ -131,24 +131,24 @@ After the first install, update from the CLI:
 
 ```bash
 chc --version
-chc status
-chc update --check
-chc update
-chc update --ref v0.1.0
+chc source status
+chc source update --check
+chc source update
+chc source update --ref v0.1.0
 ```
 
-Use `chc --version` for the lightweight version-only check. `chc status`
+Use `chc --version` for the lightweight version-only check. `chc source status`
 includes that version together with the detected installation mode and source
 checkout diagnostics. For the default remote managed installation,
-`chc update --check` and `chc update` follow that checkout's existing origin and
-checked-out branch, exact tag, or commit. A safe managed update reports the
-planned commit, validates the committed bundle before checkout, and skips the
-global reinstall when already current.
+`chc source update --check` and `chc source update` follow that checkout's
+existing origin and checked-out branch, exact tag, or commit. A safe managed
+update reports the planned commit, validates the committed bundle before
+checkout, and skips the global reinstall when already current.
 
-When `chc status` reports `mode: local`, the command follows that development
-checkout and default update/check commands do not mutate it or the separate
-managed checkout. Update the repository with the normal Git workflow and
-refresh `apps/cli/dist/index.js` with `pnpm --filter @cthutool/cli dev`. Use
+When `chc source status` reports `mode: local`, the command follows that
+development checkout and default update/check commands do not mutate it or the
+separate managed checkout. Update the repository with the normal Git workflow
+and refresh `apps/cli/dist/index.js` with `pnpm --filter @cthutool/cli dev`. Use
 either installer with `CHC_INSTALL_MODE=remote` to switch the global command
 back to managed mode. Advanced callers can explicitly select another source
 with `--install-dir`, `--repo`, and `--ref`; a successful apply relinks the
@@ -156,28 +156,35 @@ global command to that directory. Dirty, diverged, or invalid-bundle targets are
 blocked without automatic stash, reset, clean, or rebase. Update checks are
 explicit; the CLI does not run a periodic background checker.
 
+The older `chc status` and `chc update` forms remain accepted as undiscoverable
+compatibility aliases during migration; new scripts and documentation should use
+the `chc source` forms.
+
 Switch between an existing local checkout, its Git worktrees, and the managed
 remote checkout without updating Git state:
 
 ```bash
 chc source list
+chc source status
 chc source use local
 chc source use .
 chc source use worktree:<id>
 chc source use remote
+chc source update
 ```
 
-`source list` reports the stable selector for each currently registered
-worktree. Source switching validates the committed CLI bundle and relinks the
-global npm package, but it does not build, fetch, check out, or require a clean
-development worktree. Use `chc source register <path>` to remember a development
-clone while running from managed mode. If the managed checkout is absent,
-selecting `remote` creates it through the safe managed install flow. An existing
-valid remote is only relinked; update it separately with `chc update`. An
-existing invalid managed path is never overwritten automatically, so repair or
-move it before retrying. Switch away before removing an active worktree; if
-`chc` can no longer start after its linked worktree was removed, rerun the
-public Bash or PowerShell remote installer above.
+`source list` reports every candidate and marks the active source; `source
+status` gives detailed diagnostics for the active or explicitly selected
+installation. Source switching validates the committed CLI bundle and relinks
+the global npm package, but it does not build, fetch, check out, or require a
+clean development worktree. Use `chc source register <path>` to remember a
+development clone while running from managed mode. If the managed checkout is
+absent, selecting `remote` creates it through the safe managed install flow. An
+existing valid remote is only relinked; update it separately with `chc source
+update`. An existing invalid managed path is never overwritten automatically,
+so repair or move it before retrying. Switch away before removing an active
+worktree; if `chc` can no longer start after its linked worktree was removed,
+rerun the public Bash or PowerShell remote installer above.
 
 Discover command groups and bundled scripts directly from the CLI:
 

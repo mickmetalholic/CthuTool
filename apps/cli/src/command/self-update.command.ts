@@ -12,6 +12,7 @@ import {
 import { type CliContext, cliContractArgs } from '../runtime/cli-context';
 import { type CliError, createCliError } from '../runtime/cli-error';
 import { runObservedCliCommand } from '../runtime/command-diagnostics';
+import type { CliDiagnosticBase } from '../runtime/observability';
 import {
   processOutput,
   writeCommandError,
@@ -47,6 +48,11 @@ const selfUpdateArgs = {
     description: 'Show bounded Git and npm command details',
   },
 } as const;
+
+type LifecycleCommandRoute = {
+  readonly diagnostic: CliDiagnosticBase;
+  readonly jsonCommand: string;
+};
 
 function getStringArg(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0
@@ -85,7 +91,7 @@ function writeFailure(
   process.exitCode = cliError.exitCode;
 }
 
-function createUpdateCommand() {
+export function createUpdateCommand(route: LifecycleCommandRoute) {
   return defineCommand({
     meta: {
       name: 'update',
@@ -96,7 +102,7 @@ function createUpdateCommand() {
     async run({ args }) {
       await runObservedCliCommand(
         args,
-        { command: 'update' },
+        route.diagnostic,
         async ({ context, fail }) => {
           const repo = getStringArg(args.repo);
           const ref = getStringArg(args.ref);
@@ -116,7 +122,7 @@ function createUpdateCommand() {
               if (context.json) {
                 writeJsonValue(processOutput, {
                   ok: true,
-                  command: 'update',
+                  command: route.jsonCommand,
                   result,
                 });
               } else {
@@ -132,7 +138,7 @@ function createUpdateCommand() {
             if (context.json) {
               writeJsonValue(processOutput, {
                 ok: true,
-                command: 'update',
+                command: route.jsonCommand,
                 result,
               });
             } else {
@@ -182,41 +188,61 @@ export const versionCommand = defineCommand({
   },
 });
 
-export const statusCommand = defineCommand({
-  meta: {
-    name: 'status',
-    description: 'Show chc CLI installation status.',
-  },
-  args: { ...cliContractArgs, ...selfUpdateSourceArgs },
-  async run({ args }) {
-    await runObservedCliCommand(
-      args,
-      { command: 'status' },
-      async ({ context, fail }) => {
-        try {
-          const status = await getCliInstallationStatus({
-            repo: getStringArg(args.repo),
-            ref: getStringArg(args.ref),
-            installDir: getStringArg(args['install-dir']),
-          });
-          if (context.json) {
-            writeJsonValue(processOutput, {
-              ok: true,
-              command: 'status',
-              status,
+export function createStatusCommand(route: LifecycleCommandRoute) {
+  return defineCommand({
+    meta: {
+      name: 'status',
+      description: 'Show chc CLI installation status.',
+    },
+    args: { ...cliContractArgs, ...selfUpdateSourceArgs },
+    async run({ args }) {
+      await runObservedCliCommand(
+        args,
+        route.diagnostic,
+        async ({ context, fail }) => {
+          try {
+            const status = await getCliInstallationStatus({
+              repo: getStringArg(args.repo),
+              ref: getStringArg(args.ref),
+              installDir: getStringArg(args['install-dir']),
             });
-          } else {
-            renderCliInstallationStatus(context, status);
+            if (context.json) {
+              writeJsonValue(processOutput, {
+                ok: true,
+                command: route.jsonCommand,
+                status,
+              });
+            } else {
+              renderCliInstallationStatus(context, status);
+            }
+            process.exitCode = 0;
+          } catch (error) {
+            const cliError = toUpdateCliError(error);
+            fail(cliError);
+            writeFailure(context, cliError, error);
           }
-          process.exitCode = 0;
-        } catch (error) {
-          const cliError = toUpdateCliError(error);
-          fail(cliError);
-          writeFailure(context, cliError, error);
-        }
-      },
-    );
-  },
+        },
+      );
+    },
+  });
+}
+
+export const statusCommand = createStatusCommand({
+  diagnostic: { command: 'status' },
+  jsonCommand: 'status',
 });
 
-export const updateCommand = createUpdateCommand();
+export const updateCommand = createUpdateCommand({
+  diagnostic: { command: 'update' },
+  jsonCommand: 'update',
+});
+
+export const sourceStatusCommand = createStatusCommand({
+  diagnostic: { command: 'source', subcommand: 'status' },
+  jsonCommand: 'source status',
+});
+
+export const sourceUpdateCommand = createUpdateCommand({
+  diagnostic: { command: 'source', subcommand: 'update' },
+  jsonCommand: 'source update',
+});
