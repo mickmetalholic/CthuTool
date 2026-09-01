@@ -84,6 +84,37 @@ Remove-Item Env:CHC_INSTALL_MODE
 
 `CHC_INSTALL_MODE` accepts `auto`, `local`, or `remote`. In `auto` mode, raw stdin/expression execution selects `remote` and local file execution selects `local`. The Bash installer accepts `auto`, `zsh`, or `none` for `CHC_INSTALL_COMPLETION`. The PowerShell installer also accepts `powershell` and selects it for `auto`.
 
+## Switch CLI Source
+
+Inspect and switch the checkout that provides the global CLI bundle:
+
+```bash
+chc source list
+chc source current
+chc source use local
+chc source use .
+chc source use worktree:<id>
+chc source use remote
+chc source register /path/to/CthuTool
+```
+
+The existing installation `mode` remains `local` or `remote`. Source commands
+add `sourceKind: main`, `worktree`, or `managed`, and `source list` obtains live
+worktree selectors from Git. Registration stores only the validated main
+checkout anchor; worktrees are rediscovered instead of persisted.
+
+Switching a local or worktree source validates the CthuTool root and committed
+`apps/cli/dist/index.js`, then relinks the global npm package. It does not fetch,
+checkout, pull, merge, stash, reset, clean, or build, and it allows an explicitly
+selected dirty worktree. Run `pnpm --filter @cthutool/cli dev` in the selected
+checkout when its bundle needs refreshing.
+
+`chc source use remote` relinks an existing managed checkout without updating
+it. If the checkout is absent, use `chc source use remote --bootstrap` to invoke
+the safe managed install/update flow explicitly. Switch away before deleting an
+active worktree. If its deletion already made `chc` unavailable, rerun the
+public Bash or PowerShell remote installer from the previous section.
+
 ## Update
 
 ```bash

@@ -42,6 +42,8 @@ function createHarness(
 const localStatus: CliInstallationStatus = {
   version: '0.0.0',
   mode: 'local',
+  sourceKind: 'main',
+  sourceId: 'local',
   installDir: '/tmp/a/very/long/local/CthuTool',
   repo: 'https://github.com/mickmetalholic/CthuTool.git',
   ref: 'main',
@@ -50,6 +52,7 @@ const localStatus: CliInstallationStatus = {
   commitMessage: 'feat(cli): modernize status output',
   bundlePath: '/tmp/a/very/long/local/CthuTool/apps/cli/dist/index.js',
   bundlePresent: true,
+  dirty: false,
 };
 
 describe('self-update status output', () => {
@@ -60,6 +63,9 @@ describe('self-update status output', () => {
 
     expect(harness.stdout()).toContain('◆ CthuTool  v0.0.0  ● LOCAL');
     expect(harness.stdout()).toContain('├─ Source');
+    expect(harness.stdout()).toContain('Kind        main');
+    expect(harness.stdout()).toContain('Selector    local');
+    expect(harness.stdout()).toContain('Checkout    clean');
     expect(harness.stdout()).toContain('└─ Installation');
     expect(harness.stdout()).toContain('e41acd3 · 2026-09-01 12:08:45 +08:00');
     expect(harness.stdout()).toContain(
@@ -91,6 +97,8 @@ describe('self-update status output', () => {
     harness.render({
       ...localStatus,
       mode: 'remote',
+      sourceKind: 'managed',
+      sourceId: 'remote',
       commitTime: undefined,
       commitMessage: undefined,
       bundlePresent: false,

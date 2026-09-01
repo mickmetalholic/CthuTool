@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createWorktreeSourceId } from './cli-source-id';
 
 export const defaultSelfUpdateRepo =
   'https://github.com/mickmetalholic/CthuTool.git';
@@ -137,6 +138,8 @@ export type SelfUpdateResult = {
 export type CliInstallationStatus = {
   readonly version: string;
   readonly mode: 'local' | 'remote';
+  readonly sourceKind: 'main' | 'worktree' | 'managed';
+  readonly sourceId: string;
   readonly installDir: string;
   readonly repo: string;
   readonly ref: string;
@@ -145,6 +148,8 @@ export type CliInstallationStatus = {
   readonly commitMessage?: string;
   readonly bundlePath: string;
   readonly bundlePresent: boolean;
+  readonly dirty?: boolean;
+  readonly detached?: boolean;
 };
 
 export type SelfUpdateDeps = {
@@ -222,6 +227,10 @@ export function createSelfUpdateDeps(
 
 export function getCliVersion(): string {
   return readPackageVersion(findRepoRootFromModule());
+}
+
+export function getCliRuntimeRoot(): string {
+  return findRepoRootFromModule();
 }
 
 export async function resolveSelfUpdateSource(
@@ -923,10 +932,34 @@ export async function getCliInstallationStatus(
           ),
         )
       : {};
+  const sourceKind = classifyCliSourceKind(
+    resolved.installDir,
+    resolved.managedRoot,
+    gitRoot,
+  );
+  const worktreeBranch =
+    deps.exists(gitRoot) && sourceKind === 'worktree'
+      ? await runOptional(
+          deps,
+          'git',
+          ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+          { cwd: resolved.installDir },
+        )
+      : undefined;
+  const dirty = deps.exists(gitRoot)
+    ? await readCheckoutDirtyState(deps, resolved.installDir)
+    : undefined;
 
   return {
     version: getCliVersion(),
     mode,
+    sourceKind,
+    sourceId:
+      sourceKind === 'managed'
+        ? 'remote'
+        : sourceKind === 'main'
+          ? 'local'
+          : createWorktreeSourceId(resolved.installDir),
     installDir: resolved.installDir,
     repo,
     ref,
@@ -934,6 +967,9 @@ export async function getCliInstallationStatus(
     ...commitMetadata,
     bundlePath,
     bundlePresent: deps.exists(bundlePath),
+    dirty,
+    detached:
+      sourceKind === 'worktree' ? worktreeBranch === undefined : undefined,
   };
 }
 
@@ -978,6 +1014,31 @@ function sanitizeCommitSubject(value: string): string | undefined {
   return characters.length <= maxSubjectLength
     ? safe
     : `${characters.slice(0, maxSubjectLength - 1).join('')}…`;
+}
+
+function classifyCliSourceKind(
+  installDir: string,
+  managedRoot: string,
+  gitRoot: string,
+): CliInstallationStatus['sourceKind'] {
+  if (resolve(installDir) === resolve(managedRoot)) return 'managed';
+  try {
+    return statSync(gitRoot).isFile() ? 'worktree' : 'main';
+  } catch {
+    return 'main';
+  }
+}
+
+async function readCheckoutDirtyState(
+  deps: SelfUpdateDeps,
+  cwd: string,
+): Promise<boolean | undefined> {
+  const result = await deps.run(
+    'git',
+    ['status', '--porcelain', '--untracked-files=normal'],
+    { cwd, allowFailure: true },
+  );
+  return result.code === 0 ? result.stdout.trim().length > 0 : undefined;
 }
 
 async function runOptional(

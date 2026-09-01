@@ -16,4 +16,10 @@ describe('root command', () => {
     );
     expect(Object.keys(subCommands ?? {})).not.toContain('opencode');
   });
+
+  test('exposes the CLI source command group', async () => {
+    const subCommands = await rootCommand.subCommands;
+
+    expect(Object.keys(subCommands ?? {})).toContain('source');
+  });
 });
