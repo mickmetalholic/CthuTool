@@ -141,6 +141,8 @@ export type CliInstallationStatus = {
   readonly repo: string;
   readonly ref: string;
   readonly commit?: string;
+  readonly commitTime?: string;
+  readonly commitMessage?: string;
   readonly bundlePath: string;
   readonly bundlePresent: boolean;
 };
@@ -892,33 +894,90 @@ export async function getCliInstallationStatus(
   const resolved = await resolveSelfUpdateSource(options, deps);
   const bundlePath = join(resolved.installDir, committedCliBundlePath);
   const gitRoot = join(resolved.installDir, '.git');
-  const repo = deps.exists(gitRoot)
+  const canInspectCheckout = deps.exists(gitRoot);
+  const mode =
+    resolve(resolved.installDir) === resolve(resolved.managedRoot)
+      ? 'remote'
+      : 'local';
+  const repo = canInspectCheckout
     ? ((await runOptional(deps, 'git', ['remote', 'get-url', 'origin'], {
         cwd: resolved.installDir,
       })) ?? resolved.repo)
     : resolved.repo;
-  const ref = deps.exists(gitRoot)
+  const ref = canInspectCheckout
     ? ((await readInstalledRef(deps, resolved.installDir)) ?? resolved.ref)
     : resolved.ref;
-  const commit = deps.exists(gitRoot)
+  const commit = canInspectCheckout
     ? await runOptional(deps, 'git', ['rev-parse', '--short', 'HEAD'], {
         cwd: resolved.installDir,
       })
     : undefined;
+  const commitMetadata =
+    mode === 'local' && canInspectCheckout
+      ? parseStatusCommitMetadata(
+          await runOptional(
+            deps,
+            'git',
+            ['show', '-s', '--format=%cI%x00%s', 'HEAD'],
+            { cwd: resolved.installDir },
+          ),
+        )
+      : {};
 
   return {
     version: getCliVersion(),
-    mode:
-      resolve(resolved.installDir) === resolve(resolved.managedRoot)
-        ? 'remote'
-        : 'local',
+    mode,
     installDir: resolved.installDir,
     repo,
     ref,
     commit,
+    ...commitMetadata,
     bundlePath,
     bundlePresent: deps.exists(bundlePath),
   };
+}
+
+function parseStatusCommitMetadata(value: string | undefined): {
+  readonly commitTime?: string;
+  readonly commitMessage?: string;
+} {
+  if (!value) return {};
+  const separatorIndex = value.indexOf('\0');
+  if (separatorIndex < 0) return {};
+
+  const time = value.slice(0, separatorIndex).trim();
+  const message = sanitizeCommitSubject(value.slice(separatorIndex + 1));
+  const commitTime = isStrictIsoDateTime(time) ? time : undefined;
+  return {
+    ...(commitTime ? { commitTime } : {}),
+    ...(message ? { commitMessage: message } : {}),
+  };
+}
+
+function isStrictIsoDateTime(value: string): boolean {
+  return (
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      value,
+    ) && !Number.isNaN(Date.parse(value))
+  );
+}
+
+function sanitizeCommitSubject(value: string): string | undefined {
+  const safe = Array.from(value, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint < 32 || (codePoint >= 127 && codePoint <= 159)
+      ? ' '
+      : character;
+  })
+    .join('')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+  if (!safe) return undefined;
+
+  const characters = Array.from(safe);
+  return characters.length <= maxSubjectLength
+    ? safe
+    : `${characters.slice(0, maxSubjectLength - 1).join('')}…`;
 }
 
 async function runOptional(

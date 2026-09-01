@@ -79,8 +79,11 @@ chc update --ref v0.1.0
 Use `chc --version` for the lightweight version-only check. `chc status`
 includes that version, automatically detects whether the running command is
 linked to a local checkout or the default remote managed checkout, and reports
-that source as `mode: local` or `mode: remote`. Use `--install-dir` only to
-inspect a different checkout explicitly.
+that source as `mode: local` or `mode: remote`. Human output groups source and
+installation details with TTY-aware color and plain-text fallback. Local mode
+also shows the checked-out commit's absolute committer time and bounded subject;
+`--json` exposes them as optional `commitTime` and `commitMessage` fields. Use
+`--install-dir` only to inspect a different checkout explicitly.
 
 `chc update --check` resolves the selected remote ref and reports
 `install_required`, `update_available`, or `up_to_date` without changing

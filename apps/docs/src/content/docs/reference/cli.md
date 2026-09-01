@@ -16,7 +16,7 @@ chc update
 chc update --ref v0.1.0
 ```
 
-Use `chc --version` for the lightweight version-only check. `chc status` includes that version, reports the detected `local` or `remote` installation mode, and inspects the source checkout used by the running command. `chc status --install-dir <path>` overrides automatic source detection.
+Use `chc --version` for the lightweight version-only check. `chc status` includes that version, reports the detected `local` or `remote` installation mode, and presents source and installation details in a grouped, TTY-aware summary. Local mode includes the checked-out commit's absolute committer time and bounded subject. In `--json` mode these are optional `commitTime` and `commitMessage` fields. `chc status --install-dir <path>` overrides automatic source detection.
 
 ## Update
 
