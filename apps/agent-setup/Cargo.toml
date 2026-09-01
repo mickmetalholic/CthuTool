@@ -1,0 +1,25 @@
+[package]
+name = "cthutool-agent-setup"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Native first-run and settings UI for the CthuTool local Agent"
+
+[[bin]]
+name = "cthutool-agent-setup"
+path = "src/main.rs"
+
+[dependencies]
+cthutool-agent-tray = { path = "../agent-tray" }
+slint = "=1.17.1"
+
+[build-dependencies]
+slint-build = "=1.17.1"
+
+# Slint-generated UI bindings require `unsafe` internals; keep application code free of it.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+all = "deny"

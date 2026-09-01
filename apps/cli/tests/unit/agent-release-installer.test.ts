@@ -1,22 +1,20 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { generateKeyPairSync } from 'node:crypto';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
   type AgentReleaseManifest,
   type AgentReleaseTarget,
   canonicalJson,
   createBundleLayout,
   sha256,
-  signManifest,
-  signReleaseBlob,
 } from '@cthutool/agent-release';
 import { zipSync } from 'fflate';
 import type { AgentPaths } from '../../src/infra/agent-paths';
 import { installAgentRelease } from '../../src/infra/agent-release-installer';
 
-describe('Agent signed release installer', () => {
+describe('Agent self-use release installer', () => {
   let root: string | undefined;
 
   afterEach(async () => {
@@ -24,51 +22,65 @@ describe('Agent signed release installer', () => {
     root = undefined;
   });
 
-  test('verifies, safely stages, activates, and idempotently reinstalls a production bundle', async () => {
+  test('verifies, safely stages, activates, and idempotently reinstalls a self-use bundle', async () => {
     const fixture = createFixture();
     const paths = createPaths();
+    let smokeUserDataDir: string | undefined;
     const dependencies = {
       architecture: 'arm64',
       cliVersion: '1.0.0',
       fetchBytes: fixture.fetchBytes,
       platform: 'darwin' as const,
-      publicKeyPem: fixture.publicKey,
-      smoke: async () => ({
-        applicationVersion: '1.2.3',
-        bridgeEndpoint: 'http://127.0.0.1:1',
-        bundledNodePath: '/fixture/node',
-        environmentId: 'production',
-      }),
+      smoke: async (input: { readonly userDataDir: string }) => {
+        smokeUserDataDir = input.userDataDir;
+        return {
+          applicationVersion: '0.0.12',
+          bridgeEndpoint: 'http://127.0.0.1:1',
+          bundledNodePath: '/fixture/node',
+          environmentId: 'self-use',
+          setupRequiredVerified: true,
+        };
+      },
     };
 
     await expect(
       installAgentRelease({
         dependencies,
         paths,
-        version: '1.2.3',
       }),
-    ).resolves.toMatchObject({ changed: true, version: '1.2.3' });
+    ).resolves.toMatchObject({ changed: true, version: '0.0.12' });
+    expect(smokeUserDataDir).toBeDefined();
+    if (process.platform !== 'win32') {
+      expect(`${smokeUserDataDir}/runtime/control.sock`.length).toBeLessThan(
+        100,
+      );
+    }
     await expect(
       installAgentRelease({
         dependencies,
         paths,
-        version: '1.2.3',
       }),
-    ).resolves.toMatchObject({ changed: false, version: '1.2.3' });
+    ).resolves.toMatchObject({ changed: false, version: '0.0.12' });
     expect(
       JSON.parse(
         await readFile(join(paths.installRoot, 'active.json'), 'utf8'),
       ),
-    ).toMatchObject({ schemaVersion: 1, version: '1.2.3' });
+    ).toMatchObject({ schemaVersion: 1, version: '0.0.12' });
     await writeFile(
-      join(paths.installRoot, 'versions', '1.2.3', 'agent', 'dist', 'index.js'),
+      join(
+        paths.installRoot,
+        'versions',
+        '0.0.12',
+        'agent',
+        'dist',
+        'index.js',
+      ),
       'tampered local runtime',
     );
     await expect(
       installAgentRelease({
         dependencies,
         paths,
-        version: '1.2.3',
       }),
     ).rejects.toThrow(/differs from the verified release/i);
   });
@@ -83,13 +95,11 @@ describe('Agent signed release installer', () => {
           cliVersion: '1.0.0',
           fetchBytes: fixture.fetchBytes,
           platform: 'darwin',
-          publicKeyPem: fixture.publicKey,
           smoke: async () => {
             throw new Error('must not smoke a tampered archive');
           },
         },
         paths,
-        version: '1.2.3',
       }),
     ).rejects.toThrow(/digest|size|archive/i);
     await expect(
@@ -107,19 +117,17 @@ describe('Agent signed release installer', () => {
           cliVersion: '1.0.0',
           fetchBytes: fixture.fetchBytes,
           platform: 'darwin',
-          publicKeyPem: fixture.publicKey,
           smoke: async () => {
             throw new Error('must not smoke an unsafe archive');
           },
         },
         paths,
-        version: '1.2.3',
       }),
     ).rejects.toThrow(/unsafe agent archive path/i);
   });
 
-  test('rejects unsafe public catalog endpoints before extraction', async () => {
-    const fixture = createFixture({ unsafeCatalog: true });
+  test('rejects an embedded deployment catalog in the archive inventory', async () => {
+    const fixture = createFixture({ embedCatalog: true });
     const paths = createPaths();
     await expect(
       installAgentRelease({
@@ -128,12 +136,45 @@ describe('Agent signed release installer', () => {
           cliVersion: '1.0.0',
           fetchBytes: fixture.fetchBytes,
           platform: 'darwin',
-          publicKeyPem: fixture.publicKey,
         },
         paths,
-        version: '1.2.3',
       }),
-    ).rejects.toThrow(/https/i);
+    ).rejects.toThrow(/deployment URL catalog|forbidden/i);
+  });
+
+  test('rejects legacy signed-channel manifests and unavailable latest releases', async () => {
+    const paths = createPaths();
+    await expect(
+      installAgentRelease({
+        dependencies: {
+          architecture: 'arm64',
+          cliVersion: '1.0.0',
+          fetchBytes: async () =>
+            Buffer.from(
+              canonicalJson({
+                schemaVersion: 1,
+                releaseVersion: '1.2.3',
+                provenance: { kind: 'production', signed: true },
+              }),
+            ),
+          platform: 'darwin',
+        },
+        paths,
+      }),
+    ).rejects.toThrow(/unsupported|self-use/i);
+    await expect(
+      installAgentRelease({
+        dependencies: {
+          architecture: 'arm64',
+          cliVersion: '1.0.0',
+          fetchBytes: async () => {
+            throw new Error('HTTP 404');
+          },
+          platform: 'darwin',
+        },
+        paths,
+      }),
+    ).rejects.toThrow(/latest agent release is unavailable/i);
   });
 
   test('cleans up a corrupt extraction without activation', async () => {
@@ -146,10 +187,8 @@ describe('Agent signed release installer', () => {
           cliVersion: '1.0.0',
           fetchBytes: fixture.fetchBytes,
           platform: 'darwin',
-          publicKeyPem: fixture.publicKey,
         },
         paths,
-        version: '1.2.3',
       }),
     ).rejects.toThrow();
     await expect(
@@ -161,7 +200,13 @@ describe('Agent signed release installer', () => {
     const fixture = createFixture();
     const paths = createPaths();
     await mkdir(paths.userDataDir, { recursive: true });
-    await writeFile(join(paths.userDataDir, 'environment.json'), 'preserve');
+    await writeFile(
+      join(paths.userDataDir, 'config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        deploymentOrigin: 'https://keep.example.com',
+      }),
+    );
     await expect(
       installAgentRelease({
         dependencies: {
@@ -169,21 +214,21 @@ describe('Agent signed release installer', () => {
           cliVersion: '1.0.0',
           fetchBytes: fixture.fetchBytes,
           platform: 'darwin',
-          publicKeyPem: fixture.publicKey,
           smoke: async () => {
             throw new Error('simulated smoke interruption');
           },
         },
         paths,
-        version: '1.2.3',
       }),
     ).rejects.toThrow(/smoke interruption/i);
     await expect(
-      stat(join(paths.installRoot, 'versions', '1.2.3')),
+      stat(join(paths.installRoot, 'versions', '0.0.12')),
     ).rejects.toThrow();
     expect(
-      await readFile(join(paths.userDataDir, 'environment.json'), 'utf8'),
-    ).toBe('preserve');
+      JSON.parse(
+        await readFile(join(paths.userDataDir, 'config.json'), 'utf8'),
+      ),
+    ).toMatchObject({ deploymentOrigin: 'https://keep.example.com' });
   });
 
   test('rejects unsupported platforms before any download', async () => {
@@ -199,10 +244,8 @@ describe('Agent signed release installer', () => {
             return new Uint8Array();
           },
           platform: 'linux',
-          publicKeyPem: 'not-used',
         },
         paths,
-        version: '1.2.3',
       }),
     ).rejects.toThrow(/supports macos/i);
     expect(fetched).toBe(false);
@@ -223,53 +266,38 @@ function createFixture(
   options: {
     readonly corruptArchive?: boolean;
     readonly tamperArchive?: boolean;
-    readonly unsafeCatalog?: boolean;
+    readonly embedCatalog?: boolean;
     readonly unsafePath?: boolean;
   } = {},
 ) {
-  const version = '1.2.3';
+  const version = '0.0.12';
   const target: AgentReleaseTarget = 'darwin-arm64';
-  const catalog = {
-    schemaVersion: 1,
-    profiles: [
-      {
-        environmentId: 'production',
-        label: 'Production',
-        webOrigin: options.unsafeCatalog
-          ? 'http://app.example.com'
-          : 'https://app.example.com',
-        webAgentUrl: options.unsafeCatalog
-          ? 'http://app.example.com/agent'
-          : 'https://app.example.com/agent',
-        backendHttpUrl: 'https://api.example.com',
-        backendAgentWsUrl: 'wss://api.example.com/agent/ws',
-        namespace: 'production',
-      },
-    ],
-  };
-  const catalogBytes = Buffer.from(canonicalJson(catalog));
   const layout = createBundleLayout(target, version);
   const files: Record<string, Uint8Array> = {
     'layout.json': Buffer.from(canonicalJson(layout)),
     'agent/dist/index.js': Buffer.from('void 0;'),
-    'agent/environments.json': catalogBytes,
     'agent/node_modules/playwright/package.json': Buffer.from('{}'),
     'agent/node_modules/playwright-core/package.json': Buffer.from('{}'),
     'licenses/NODE_LICENSE': Buffer.from('Node license'),
     'licenses/THIRD_PARTY_NOTICES.txt': Buffer.from('Notices'),
+    'licenses/LICENSE-SLINT.md': Buffer.from('Slint license'),
     [layout.entryPoints.tray]: Buffer.from('tray'),
+    [layout.entryPoints.setup]: Buffer.from('setup'),
     [layout.entryPoints.node]: Buffer.from('node'),
     'bin/CthuTool Agent.app/Contents/Info.plist': Buffer.from('<plist/>'),
   };
+  if (options.embedCatalog) {
+    files['agent/environments.json'] = Buffer.from('{"schemaVersion":1}');
+  }
   if (options.unsafePath) files['../escaped'] = Buffer.from('escape');
   const archive = options.corruptArchive
     ? Buffer.from('not-a-zip')
     : zipSync(files, { level: 0 });
-  const archiveUrl = `https://releases.example.com/agent/${version}/cthutool-agent-${version}-${target}.zip`;
-  const artifact = createArtifact(target, archiveUrl, archive);
+  const archiveUrl = `https://github.com/mickmetalholic/CthuTool/releases/download/agent-latest/cthutool-agent-${version}-${target}.zip`;
+  const artifact = createArtifact(target, archiveUrl, archive, version);
   const placeholder = Buffer.from('placeholder');
   const manifest: AgentReleaseManifest = {
-    schemaVersion: 1,
+    schemaVersion: AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
     releaseVersion: version,
     minimumCliVersion: '0.0.0',
     layoutVersion: 1,
@@ -279,49 +307,36 @@ function createFixture(
       localBridge: 1,
       trayControl: 1,
     },
-    environmentCatalog: { schemaVersion: 1, sha256: sha256(catalogBytes) },
-    provenance: { kind: 'production', signed: true },
+    provenance: { kind: 'self-use', signed: false },
     artifacts: [
       artifact,
       createArtifact(
         'darwin-x64',
-        `https://releases.example.com/agent/${version}/cthutool-agent-${version}-darwin-x64.zip`,
+        `https://github.com/mickmetalholic/CthuTool/releases/download/agent-latest/cthutool-agent-${version}-darwin-x64.zip`,
         placeholder,
+        version,
       ),
       createArtifact(
         'windows-x64',
-        `https://releases.example.com/agent/${version}/cthutool-agent-${version}-windows-x64.zip`,
+        `https://github.com/mickmetalholic/CthuTool/releases/download/agent-latest/cthutool-agent-${version}-windows-x64.zip`,
         placeholder,
+        version,
       ),
     ],
   };
-  const keys = generateKeyPairSync('ed25519');
-  const privateKey = keys.privateKey
-    .export({ format: 'pem', type: 'pkcs8' })
-    .toString();
-  const publicKey = keys.publicKey
-    .export({ format: 'pem', type: 'spki' })
-    .toString();
   const manifestBytes = Buffer.from(canonicalJson(manifest));
   const manifestUrl =
-    'https://github.com/mickmetalholic/CthuTool/releases/download/agent-v1.2.3/manifest.json';
+    'https://github.com/mickmetalholic/CthuTool/releases/download/agent-latest/manifest.json';
   const responses = new Map<string, Uint8Array>([
     [manifestUrl, manifestBytes],
-    [`${manifestUrl}.sig`, Buffer.from(signManifest(manifest, privateKey))],
-    [
-      'https://releases.example.com/agent/1.2.3/environments.json',
-      catalogBytes,
-    ],
     [
       archiveUrl,
       options.tamperArchive
         ? Buffer.concat([archive, Buffer.from('tamper')])
         : archive,
     ],
-    [`${archiveUrl}.sig`, Buffer.from(signReleaseBlob(archive, privateKey))],
   ]);
   return {
-    publicKey,
     fetchBytes: async (url: string) => {
       const value = responses.get(url);
       if (!value) throw new Error(`Unexpected fixture URL: ${url}`);
@@ -334,8 +349,9 @@ function createArtifact(
   target: AgentReleaseTarget,
   archiveUrl: string,
   bytes: Uint8Array,
+  version: string,
 ) {
-  const layout = createBundleLayout(target, '1.2.3');
+  const layout = createBundleLayout(target, version);
   return {
     target,
     platform:
@@ -345,13 +361,9 @@ function createArtifact(
     archiveUrl,
     archiveSize: bytes.byteLength,
     archiveSha256: sha256(bytes),
-    archiveSignatureUrl: `${archiveUrl}.sig`,
     trayEntryPoint: layout.entryPoints.tray,
+    setupEntryPoint: layout.entryPoints.setup,
     nodeEntryPoint: layout.entryPoints.node,
     agentEntryPoint: layout.entryPoints.agent,
-    platformSignature: {
-      required: true as const,
-      notarizationRequired: target !== 'windows-x64',
-    },
   };
 }

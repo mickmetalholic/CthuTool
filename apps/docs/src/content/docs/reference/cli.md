@@ -59,8 +59,8 @@ In JSON mode, stdout is reserved for the JSON response. Human warnings and diagn
 Bare `chc agent` shows the statically registered command tree:
 
 ```bash
-chc agent install [--channel stable|beta] [--version 1.2.3]
-chc agent update [--channel stable|beta]
+chc agent install
+chc agent update
 chc agent start
 chc agent stop
 chc agent restart
@@ -71,42 +71,43 @@ chc agent doctor [--json]
 chc agent uninstall [--purge --yes]
 ```
 
-Environment and autostart operations are nested public groups:
+Autostart operations are a nested public group:
 
 ```bash
-chc agent env list
-chc agent env get [environment-id]
-chc agent env set <environment-id>
 chc agent autostart enable|disable|status
 ```
 
-Only environments from the verified release catalog can be selected. Catalog
-entries require HTTPS Web/backend origins, a WSS Agent endpoint, and the exact
-same-origin `/agent` Web page. There is no `env set-secret` command; the Agent
-connects with the selected environment id over the private-network Backend
-path. Cloudflare protects external Web or operator Backend HTTP access, not
-the Agent WebSocket path.
+`chc agent install` and `chc agent update` resolve the single unsigned self-use
+latest release from `agent-latest/manifest.json`. There is no `--channel` or
+remote `--version` selector; local rollback restores a previous installed
+version. The release protects HTTPS transport and SHA-256 integrity only and is
+not an authenticated public distribution channel. OS Gatekeeper/SmartScreen
+warnings may appear because platform signing is intentionally not used.
 
-`settings` auto-starts the tray and opens a newly issued one-time bridge URL in
-the default browser; the URL and ticket are never written to CLI output.
+Self-use uses one fixed environment derived from the exact HTTPS Origin saved
+by native Agent Settings. There is no release catalog or `agent env` selection
+flow. The Agent sends the fixed `self-use` environment id over the private
+network and does not use a static Agent Secret. Cloudflare protects external
+Web or operator Backend HTTP access, not the private Agent WebSocket path.
+
+`settings` auto-starts the tray and opens the native first-run/settings window.
 `logs` reads the Agent-owned redacted JSON-lines source. `--follow` is a human
 streaming mode and cannot be combined with `--json`.
 
-`doctor` includes the legacy CthuDesktop migration state. A zero or ambiguous
-trusted-environment match requires `env set`; an active profile lock requires
-stopping the tray/Agent before retry. The report may provide an exact next
-command but never includes legacy credentials, bridge tickets, or authorization
-headers.
+`doctor` includes the legacy CthuDesktop migration state. Ambiguous legacy data
+requires choosing the single Origin in native Agent Settings; an active profile
+lock requires stopping the tray/Agent before retry. The report may provide an
+exact next command but never includes legacy credentials or bridge tickets.
 
-`chc agent uninstall` preserves environment selection, browser profiles, and
-logs. `--purge` additionally removes those categories and requires an
+`chc agent uninstall` preserves the Origin, browser profiles, and logs.
+`--purge` additionally removes those categories and requires an
 interactive confirmation, or `--yes` when prompts are disabled. The command
 never removes data when purge confirmation is absent.
 
 `chc update` and `chc agent update` are intentionally unrelated: the first
-updates the CLI source/install, while the second stages a signed Agent release,
-checks readiness, and automatically restores the prior active version when the
-new version cannot start.
+updates the CLI source/install, while the second stages the latest self-use
+Agent release, checks readiness, and automatically restores the prior active
+version when the new version cannot start.
 
 ## Shell Completion
 

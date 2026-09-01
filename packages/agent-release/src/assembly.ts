@@ -11,11 +11,7 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { type Zippable, zipSync } from 'fflate';
-import {
-  type AgentReleaseTarget,
-  canonicalJson,
-  validateEnvironmentCatalog,
-} from './contracts';
+import { type AgentReleaseTarget, canonicalJson } from './contracts';
 import {
   createBundleLayout,
   normalizeArchivePath,
@@ -28,11 +24,12 @@ export type AssembleAgentBundleInput = {
   readonly target: AgentReleaseTarget;
   readonly releaseVersion: string;
   readonly trayExecutablePath: string;
+  readonly setupExecutablePath: string;
   readonly nodeExecutablePath: string;
   readonly nodeLicensePath: string;
   readonly deployedAgentDir: string;
-  readonly environmentCatalogPath: string;
   readonly thirdPartyNoticesPath: string;
+  readonly slintLicensePath: string;
   readonly outputDir: string;
   readonly pullRequestMarker?: string;
   readonly stageDir?: string;
@@ -62,15 +59,13 @@ export async function assembleAgentBundle(
     bytes: await readFile(input.trayExecutablePath),
     mode: 0o755,
   });
+  files.set(layout.entryPoints.setup, {
+    bytes: await readFile(input.setupExecutablePath),
+    mode: 0o755,
+  });
   files.set(layout.entryPoints.node, {
     bytes: await readFile(input.nodeExecutablePath),
     mode: 0o755,
-  });
-  const catalogBytes = await readFile(input.environmentCatalogPath);
-  validateEnvironmentCatalog(JSON.parse(catalogBytes.toString('utf8')));
-  files.set(layout.entryPoints.environmentCatalog, {
-    bytes: catalogBytes,
-    mode: 0o644,
   });
   files.set('licenses/NODE_LICENSE', {
     bytes: await readFile(input.nodeLicensePath),
@@ -78,6 +73,10 @@ export async function assembleAgentBundle(
   });
   files.set('licenses/THIRD_PARTY_NOTICES.txt', {
     bytes: await readFile(input.thirdPartyNoticesPath),
+    mode: 0o644,
+  });
+  files.set('licenses/LICENSE-SLINT.md', {
+    bytes: await readFile(input.slintLicensePath),
     mode: 0o644,
   });
   files.set('agent/package.json', {

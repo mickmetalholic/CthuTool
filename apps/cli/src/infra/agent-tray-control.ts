@@ -23,6 +23,8 @@ export type TraySnapshot = {
     readonly active: boolean;
   }[];
   readonly detail?: string;
+  readonly setupRequired?: boolean;
+  readonly deploymentOrigin?: string;
 };
 
 type TrayControlResponse = {
@@ -128,6 +130,33 @@ export async function requestTrayOpen(input: {
   readonly timeoutMs?: number;
 }): Promise<void> {
   await requestAccepted(input, 'open');
+}
+
+export async function requestTraySettingsOpen(input: {
+  readonly record: TrayInstanceRecord;
+  readonly timeoutMs?: number;
+}): Promise<void> {
+  await requestAccepted(input, 'settings.open');
+}
+
+export async function requestTraySetupGet(input: {
+  readonly record: TrayInstanceRecord;
+  readonly timeoutMs?: number;
+}): Promise<unknown> {
+  const response = await requestTrayControl({
+    endpoint: input.record.controlEndpoint,
+    nonce: input.record.nonce,
+    operation: 'setup.get',
+    timeoutMs: input.timeoutMs,
+  });
+  if (!response.ok) {
+    throw new Error(
+      response.error?.message ??
+        response.error?.code ??
+        'Tray rejected setup.get',
+    );
+  }
+  return response.result;
 }
 
 export async function requestTrayEnvironmentSwitch(input: {

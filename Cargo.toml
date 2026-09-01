@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/agent-tray"]
+members = ["apps/agent-tray", "apps/agent-setup"]
 resolver = "2"
 
 [workspace.package]

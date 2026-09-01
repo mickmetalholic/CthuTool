@@ -11,3 +11,4 @@ export * from './protocol-parity-fixtures';
 export * from './runtime-factory';
 export * from './runtime-service';
 export * from './runtime-state';
+export * from './self-use-config';

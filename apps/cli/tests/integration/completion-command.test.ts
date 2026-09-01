@@ -184,7 +184,6 @@ describe('shell completion command', () => {
     expect(lines((await runCli(['__complete', 'agent', ''])).out)).toEqual([
       'autostart',
       'doctor',
-      'env',
       'install',
       'logs',
       'restart',
@@ -195,9 +194,6 @@ describe('shell completion command', () => {
       'uninstall',
       'update',
     ]);
-    expect(
-      lines((await runCli(['__complete', 'agent', 'env', ''])).out),
-    ).toEqual(['get', 'list', 'set']);
     expect(lines((await runCli(['__complete', 'completion', ''])).out)).toEqual(
       ['disable', 'enable', 'powershell', 'status', 'zsh'],
     );

@@ -19,25 +19,29 @@ import { readAgentInstance, requestAgentHealth } from './agent-control';
 import {
   type AgentPaths,
   assertInstalledBundleInventory,
-  readEnvironmentSelection,
   readInstalledBundle,
   resolveAgentPaths,
-  writeEnvironmentSelection,
 } from './agent-paths';
 import {
   getAutostartStatus,
   setAutostart,
   startInstalledAgent,
+  startInstalledTray,
 } from './agent-platform';
 import {
   type AgentReleaseInstallerDependencies,
   installAgentRelease,
 } from './agent-release-installer';
 import {
+  readSelfUseSetupSnapshot,
+  SELF_USE_ENVIRONMENT_ID,
+  SELF_USE_NAMESPACE,
+  SETTINGS_REMEDIATION,
+} from './agent-self-use';
+import {
   readTrayInstanceRecord,
-  requestTrayEnvironmentSwitch,
   requestTrayHealth,
-  requestTrayOpen,
+  requestTraySettingsOpen,
   resolveTrayInstancePath,
   stopTrayOwnedAgent,
 } from './agent-tray-control';
@@ -52,6 +56,7 @@ export type FileSystemAgentLifecycleServiceOptions = {
     readonly getAutostartStatus?: typeof getAutostartStatus;
     readonly setAutostart?: typeof setAutostart;
     readonly startInstalledAgent?: typeof startInstalledAgent;
+    readonly startInstalledTray?: typeof startInstalledTray;
   };
 };
 
@@ -79,15 +84,12 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
       setAutostart: options.platform?.setAutostart ?? setAutostart,
       startInstalledAgent:
         options.platform?.startInstalledAgent ?? startInstalledAgent,
+      startInstalledTray:
+        options.platform?.startInstalledTray ?? startInstalledTray,
     };
   }
 
-  async install(
-    input: {
-      readonly channel?: 'stable' | 'beta';
-      readonly version?: string;
-    } = {},
-  ) {
+  async install() {
     if (await this.isRunning()) {
       throw new Error(
         'Stop the running Agent before install, or use chc agent update for coordinated replacement',
@@ -99,16 +101,15 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
         ...this.release,
         cliVersion: this.release.cliVersion ?? getCliVersion(),
       },
-      ...input,
     });
   }
 
-  async update(input: { readonly channel?: 'stable' | 'beta' } = {}) {
+  async update() {
     const wasRunning = await this.isRunning();
     const current = await this.installedVersion();
     const autostart = await this.platform.getAutostartStatus(this.paths);
     if (wasRunning) await this.stop();
-    const result = await this.install(input);
+    const result = await this.install();
     if (autostart.enabled) {
       await this.platform.setAutostart(this.paths, true);
     }
@@ -164,8 +165,8 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
 
   async status(): Promise<AgentLifecycleStatus> {
     const version = await this.installedVersion();
-    const environments = version ? await this.listEnvironments() : [];
-    const selected = environments.find((environment) => environment.active);
+    const setupSnapshot = readSelfUseSetupSnapshot(this.paths);
+    const environment = toEnvironmentView(setupSnapshot);
     const autostart = await this.platform.getAutostartStatus(this.paths);
     let trayState = 'stopped';
     let trayPid: number | undefined;
@@ -180,16 +181,25 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
     if (tray) {
       trayPid = tray.pid;
       try {
-        trayState = (await requestTrayHealth({ record: tray, timeoutMs: 500 }))
-          .state;
+        const health = await requestTrayHealth({
+          record: tray,
+          timeoutMs: 500,
+        });
+        trayState = health.state;
+        if (health.setupRequired === true) {
+          trayState = 'SetupRequired';
+        }
       } catch {
         trayState = 'unreachable';
       }
     }
+    if (setupSnapshot.setupRequired && trayState === 'stopped') {
+      trayState = 'SetupRequired';
+    }
     const agent = await readAgentInstance(this.paths.userDataDir).catch(
       () => undefined,
     );
-    if (agent) {
+    if (agent && !setupSnapshot.setupRequired) {
       try {
         const health = await requestAgentHealth(agent, 750);
         backend = {
@@ -206,11 +216,35 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
         /* exact record exists but local control is unavailable */
       }
     }
+    const setup: AgentLifecycleStatus['setup'] = {
+      required: setupSnapshot.setupRequired,
+      configured: setupSnapshot.configured,
+      ...(setupSnapshot.deploymentOrigin
+        ? { deploymentOrigin: setupSnapshot.deploymentOrigin }
+        : {}),
+      ...(setupSnapshot.setupRequired
+        ? { remediation: SETTINGS_REMEDIATION }
+        : {}),
+      ...(setupSnapshot.migrationNotice
+        ? { migrationNotice: setupSnapshot.migrationNotice }
+        : {}),
+    };
     return {
       installed: Boolean(version),
       ...(version ? { version } : {}),
       tray: { state: trayState, ...(trayPid ? { pid: trayPid } : {}) },
-      ...(selected ? { environment: selected } : {}),
+      setup,
+      ...(environment ? { environment } : {}),
+      ...(setupSnapshot.endpoints
+        ? {
+            endpoints: {
+              webOrigin: setupSnapshot.endpoints.webOrigin,
+              webAgentUrl: setupSnapshot.endpoints.webAgentUrl,
+              backendHttpUrl: setupSnapshot.endpoints.backendHttpUrl,
+              backendAgentWsUrl: setupSnapshot.endpoints.backendAgentWsUrl,
+            },
+          }
+        : {}),
       backend,
       browser,
       autostart,
@@ -218,9 +252,9 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
   }
 
   async settings(): Promise<'opened'> {
-    await this.start();
+    await this.platform.startInstalledTray(this.paths);
     const record = await this.requireTray();
-    await requestTrayOpen({ record });
+    await requestTraySettingsOpen({ record });
     return 'opened';
   }
 
@@ -237,52 +271,6 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
     }
   }
 
-  async listEnvironments(): Promise<readonly AgentEnvironmentView[]> {
-    const { catalog } = await readInstalledBundle(this.paths);
-    const selected =
-      (await readEnvironmentSelection(this.paths)) ??
-      catalog.profiles[0]?.environmentId;
-    return catalog.profiles.map((environment) => ({
-      id: environment.environmentId,
-      label: environment.label,
-      active: environment.environmentId === selected,
-      webOrigin: environment.webOrigin,
-      backendHttpUrl: environment.backendHttpUrl,
-    }));
-  }
-
-  async getEnvironment(id?: string): Promise<AgentEnvironmentView> {
-    const environments = await this.listEnvironments();
-    const environment = id
-      ? environments.find((candidate) => candidate.id === id)
-      : environments.find((candidate) => candidate.active);
-    if (!environment)
-      throw new Error(
-        id
-          ? `Unknown Agent environment "${id}"`
-          : 'No Agent environment is selected',
-      );
-    return environment;
-  }
-
-  async setEnvironment(id: string) {
-    const { catalog } = await readInstalledBundle(this.paths);
-    const environment = catalog.profiles.find(
-      (candidate) => candidate.environmentId === id,
-    );
-    if (!environment) throw new Error(`Unknown Agent environment "${id}"`);
-    const previous =
-      (await readEnvironmentSelection(this.paths)) ??
-      catalog.profiles[0]?.environmentId;
-    const tray = await readTrayInstanceRecord(
-      resolveTrayInstancePath(this.paths.userDataDir),
-    ).catch(() => undefined);
-    if (tray)
-      await requestTrayEnvironmentSwitch({ record: tray, environmentId: id });
-    else await writeEnvironmentSelection(this.paths, id);
-    return { id, changed: previous !== id };
-  }
-
   async autostart(action: 'enable' | 'disable' | 'status') {
     if (action === 'status')
       return this.platform.getAutostartStatus(this.paths);
@@ -292,8 +280,10 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
   async doctor(): Promise<readonly AgentDoctorCheck[]> {
     const checks: AgentDoctorCheck[] = [];
     let installed: Awaited<ReturnType<typeof readInstalledBundle>> | undefined;
-    let profileLockPath = join(
+    const profileLockPath = join(
       this.paths.userDataDir,
+      'environments',
+      SELF_USE_NAMESPACE,
       'browser-profiles',
       '.cthutool-agent.lock',
     );
@@ -303,7 +293,7 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
       checks.push({
         id: 'install',
         status: 'pass',
-        message: `Signed bundle layout and catalog loaded for ${installed.pointer.version}`,
+        message: `Verified self-use bundle layout loaded for ${installed.pointer.version}`,
       });
     } catch (error) {
       checks.push({
@@ -316,54 +306,74 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
       });
     }
     if (installed) {
-      const environment = await this.getEnvironment().catch(() => undefined);
+      const setupPath = join(
+        installed.root,
+        ...installed.layout.entryPoints.setup.split('/'),
+      );
+      const setupPresent = await pathExists(setupPath);
       checks.push({
-        id: 'environment',
-        status: environment ? 'pass' : 'fail',
-        message: environment
-          ? environment.label
-          : 'No valid active environment',
+        id: 'native-setup',
+        status: setupPresent ? 'pass' : 'warn',
+        message: setupPresent
+          ? `Native setup executable present at ${installed.layout.entryPoints.setup}`
+          : `Native setup executable not found at ${installed.layout.entryPoints.setup}; package a cthutool-agent-setup binary in the release archive`,
       });
-      if (environment) {
-        const profile = installed.catalog.profiles.find(
-          (candidate) => candidate.environmentId === environment.id,
-        );
-        if (profile) {
-          profileLockPath = join(
-            this.paths.userDataDir,
-            'environments',
-            profile.namespace,
-            'browser-profiles',
-            '.cthutool-agent.lock',
-          );
-        }
-        checks.push({
-          id: 'web-origin',
-          status: environment.webOrigin.startsWith('https://')
-            ? 'pass'
+    }
+    const setup = readSelfUseSetupSnapshot(this.paths);
+    checks.push({
+      id: 'configuration',
+      status: setup.configured ? 'pass' : 'fail',
+      message: setup.configured
+        ? 'Self-use deployment Origin configured'
+        : `SetupRequired; ${SETTINGS_REMEDIATION}`,
+    });
+    if (setup.migrationNotice) {
+      checks.push({
+        id: 'migration',
+        status: setup.configured ? 'warn' : 'fail',
+        message: `${setup.migrationNotice} Next: ${SETTINGS_REMEDIATION}`,
+      });
+    }
+    if (setup.endpoints) {
+      checks.push({
+        id: 'web-origin',
+        status: setup.endpoints.webOrigin.startsWith('https://')
+          ? 'pass'
+          : setup.endpoints.webOrigin.startsWith('http://localhost')
+            ? 'warn'
             : 'fail',
-          message: environment.webOrigin,
-        });
-        checks.push({
-          id: 'backend',
-          status: environment.backendHttpUrl.startsWith('https://')
-            ? 'pass'
+        message: setup.endpoints.webOrigin,
+      });
+      checks.push({
+        id: 'backend',
+        status: setup.endpoints.backendHttpUrl.startsWith('https://')
+          ? 'pass'
+          : setup.endpoints.backendHttpUrl.startsWith('http://localhost')
+            ? 'warn'
             : 'fail',
-          message: environment.backendHttpUrl,
-        });
-      }
+        message: setup.endpoints.backendHttpUrl,
+      });
+    }
+    if (installed) {
       const migration = await inspectLegacyDesktopMigration({
         agentRootDir: this.paths.userDataDir,
         legacyRootDir: this.legacyDesktopRoot,
-        environments: installed.catalog.profiles,
-        explicitEnvironmentId: await readEnvironmentSelection(this.paths),
+        environments: [
+          {
+            environmentId: SELF_USE_ENVIRONMENT_ID,
+            backendHttpUrl:
+              setup.endpoints?.backendHttpUrl ?? 'https://example.invalid',
+            namespace: SELF_USE_NAMESPACE,
+          },
+        ],
+        explicitEnvironmentId: SELF_USE_ENVIRONMENT_ID,
       }).catch((error) => ({
         status: 'failed' as const,
         message:
           error instanceof Error
             ? error.message
             : 'Legacy Desktop migration inspection failed',
-        retryCommand: 'chc agent doctor',
+        retryCommand: SETTINGS_REMEDIATION,
       }));
       checks.push({
         id: 'legacy-migration',
@@ -374,7 +384,14 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
             : migration.status === 'locked' || migration.status === 'ready'
               ? 'warn'
               : 'pass',
-        message: `${migration.message}${migration.retryCommand ? ` Next: ${migration.retryCommand}` : ''}`,
+        message: `${migration.message}${
+          migration.retryCommand
+            ? ` Next: ${String(migration.retryCommand).replace(
+                /chc agent env list && chc agent env set <id>/g,
+                SETTINGS_REMEDIATION,
+              )}`
+            : ''
+        }`,
       });
     }
     const status = await this.status();
@@ -404,12 +421,12 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
     });
     checks.push({
       id: 'profile-locks',
-      status: (await exists(profileLockPath)) ? 'warn' : 'pass',
+      status: (await pathExists(profileLockPath)) ? 'warn' : 'pass',
       message: 'Profile lock ownership checked',
     });
     checks.push({
       id: 'logs',
-      status: (await exists(join(this.paths.logsDir, 'agent.log')))
+      status: (await pathExists(join(this.paths.logsDir, 'agent.log')))
         ? 'pass'
         : 'warn',
       message: join(this.paths.logsDir, 'agent.log'),
@@ -425,7 +442,7 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
     await this.stop();
     const autostart = await this.platform.getAutostartStatus(this.paths);
     if (autostart.enabled) await this.platform.setAutostart(this.paths, false);
-    const installed = await exists(this.paths.installRoot);
+    const installed = await pathExists(this.paths.installRoot);
     await rm(this.paths.installRoot, { force: true, recursive: true });
     if (input.purge)
       await rm(this.paths.userDataDir, { force: true, recursive: true });
@@ -471,7 +488,20 @@ export class FileSystemAgentLifecycleService implements AgentLifecycleService {
   }
 }
 
-async function exists(path: string): Promise<boolean> {
+function toEnvironmentView(
+  setup: ReturnType<typeof readSelfUseSetupSnapshot>,
+): AgentEnvironmentView | undefined {
+  if (!setup.endpoints) return undefined;
+  return {
+    id: setup.endpoints.environmentId,
+    label: setup.endpoints.label,
+    active: true,
+    webOrigin: setup.endpoints.webOrigin,
+    backendHttpUrl: setup.endpoints.backendHttpUrl,
+  };
+}
+
+async function pathExists(path: string): Promise<boolean> {
   try {
     await stat(path);
     return true;

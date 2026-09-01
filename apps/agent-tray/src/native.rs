@@ -1,6 +1,7 @@
 use std::{
-    fs,
+    env, fs,
     path::{Path, PathBuf},
+    process::{Command, Stdio},
     sync::{
         Arc, RwLock,
         mpsc::{Receiver, RecvTimeoutError, Sender},
@@ -25,8 +26,12 @@ use crate::{
     backoff::{RestartDecision, RestartPolicy},
     icon::{ICON_SIZE, tray_icon_rgba},
     launch::SystemBrowserOpener,
+    menu::build_menu_model,
     model::{TraySnapshot, TrayState},
     platform::{ActivationGesture, current_platform, should_open},
+    self_use_config::{
+        OriginValidationOptions, SELF_USE_ENVIRONMENT_ID, get_setup_state, is_configured,
+    },
     supervisor::{
         AgentLaunchConfig, TrayInteraction, spawn_bundled_agent, wait_for_agent_readiness,
     },
@@ -129,13 +134,23 @@ impl ApplicationHandler<NativeEvent> for NativeTrayApplication {
                     _ => None,
                 };
                 if gesture.is_some_and(|gesture| should_open(current_platform(), gesture)) {
-                    let _ = self.commands.send(TrayCommand::Open);
+                    let setup_required = self.snapshot.read().is_ok_and(|snapshot| {
+                        snapshot.setup_required || snapshot.state == TrayState::SetupRequired
+                    });
+                    let command = if setup_required {
+                        TrayCommand::OpenSettings
+                    } else {
+                        TrayCommand::Open
+                    };
+                    let _ = self.commands.send(command);
                 }
             }
             NativeEvent::Menu(event) => {
                 let id = event.id().0.as_str();
                 if id == "open" {
                     let _ = self.commands.send(TrayCommand::Open);
+                } else if id == "settings" {
+                    let _ = self.commands.send(TrayCommand::OpenSettings);
                 } else if id == "exit" {
                     self.queue_shutdown();
                 } else if let Some(environment_id) = id.strip_prefix("environment:") {
@@ -164,24 +179,53 @@ impl ApplicationHandler<NativeEvent> for NativeTrayApplication {
 }
 
 fn create_native_menu(snapshot: &TraySnapshot) -> Result<Menu, String> {
+    use crate::menu::MenuEntry;
+
     let menu = Menu::new();
-    let status = MenuItem::with_id("status", snapshot.state.label(), false, None);
-    let open = MenuItem::with_id("open", "Open CthuTool", true, None);
-    let environments = Submenu::with_id("environments", "Environment", true);
-    for environment in &snapshot.environments {
-        environments
-            .append(&CheckMenuItem::with_id(
-                format!("environment:{}", environment.id),
-                &environment.label,
-                true,
-                environment.active,
-                None,
-            ))
+    let model = build_menu_model(snapshot);
+    let status_label = snapshot.state.label();
+    let status = MenuItem::with_id("status", status_label, false, None);
+    menu.append(&status).map_err(|error| error.to_string())?;
+
+    let setup_required = model
+        .iter()
+        .any(|entry| matches!(entry, MenuEntry::ConfigureAgent));
+    if setup_required {
+        let configure = MenuItem::with_id("settings", "Configure Agent", true, None);
+        let exit = MenuItem::with_id("exit", "Exit", true, None);
+        menu.append_items(&[&configure, &exit])
+            .map_err(|error| error.to_string())?;
+        return Ok(menu);
+    }
+
+    let settings = MenuItem::with_id("settings", "Agent Settings", true, None);
+    let open = MenuItem::with_id("open", "Open Web Console", true, None);
+    menu.append_items(&[&settings, &open])
+        .map_err(|error| error.to_string())?;
+
+    let show_environments = model
+        .iter()
+        .any(|entry| matches!(entry, MenuEntry::Environment { .. }));
+    if show_environments {
+        let environments = Submenu::with_id("environments", "Environment", true);
+        for environment in &snapshot.environments {
+            environments
+                .append(&CheckMenuItem::with_id(
+                    format!("environment:{}", environment.id),
+                    &environment.label,
+                    true,
+                    environment.active,
+                    None,
+                ))
+                .map_err(|error| error.to_string())?;
+        }
+        menu.append(&environments)
             .map_err(|error| error.to_string())?;
     }
+
     let separator = PredefinedMenuItem::separator();
     let exit = MenuItem::with_id("exit", "Exit", true, None);
-    menu.append_items(&[&status, &open, &environments, &separator, &exit])
+    menu.append_items(&[&separator, &exit])
         .map_err(|error| error.to_string())?;
     Ok(menu)
 }
@@ -229,10 +273,33 @@ fn supervisor_worker(
     let inspector = crate::supervisor::default_inspector();
     let mut restart_policy = RestartPolicy::production();
     let epoch = Instant::now();
+    let options = OriginValidationOptions::from_env();
+    // Auto-launch the native setup window at most once per tray process lifetime.
+    // Closing or crashing setup must not re-popup or crash-loop the tray.
+    let mut setup_launched_once = false;
     loop {
+        if !is_configured(&config.user_data_dir, options) {
+            if !wait_until_configured(
+                &config,
+                snapshot,
+                commands,
+                proxy,
+                options,
+                &mut setup_launched_once,
+            ) {
+                break;
+            }
+            continue;
+        }
+
         update_snapshot(snapshot, proxy, |state| {
             state.state = TrayState::Starting;
+            state.setup_required = false;
             state.detail = None;
+            if let Ok(setup) = get_setup_state(&config.user_data_dir, options) {
+                state.deployment_origin = setup.deployment_origin;
+                state.active_environment_id = Some(SELF_USE_ENVIRONMENT_ID.into());
+            }
         });
         let mut child = match spawn_bundled_agent(&config, &inspector) {
             Ok(child) => child,
@@ -241,6 +308,7 @@ fn supervisor_worker(
                     error.to_string(),
                     &mut restart_policy,
                     epoch.elapsed(),
+                    &config.user_data_dir,
                     snapshot,
                     commands,
                     proxy,
@@ -262,6 +330,7 @@ fn supervisor_worker(
                     error.to_string(),
                     &mut restart_policy,
                     epoch.elapsed(),
+                    &config.user_data_dir,
                     snapshot,
                     commands,
                     proxy,
@@ -280,6 +349,7 @@ fn supervisor_worker(
         let _ = proxy.send_event(NativeEvent::SnapshotChanged);
         let running_since = Instant::now();
         let mut shutdown = false;
+        let mut restart_for_config = false;
         loop {
             match commands.recv_timeout(Duration::from_millis(250)) {
                 Ok(TrayCommand::Open) => {
@@ -288,6 +358,13 @@ fn supervisor_worker(
                             state.detail = Some(error.to_string());
                         });
                     }
+                }
+                Ok(TrayCommand::OpenSettings) => {
+                    open_setup_application(&config.user_data_dir, snapshot, proxy);
+                }
+                Ok(TrayCommand::ConfigurationApplied) => {
+                    restart_for_config = true;
+                    break;
                 }
                 Ok(TrayCommand::SwitchEnvironment(environment_id)) => {
                     if let Err(error) = interaction.switch_environment(&environment_id) {
@@ -319,11 +396,21 @@ fn supervisor_worker(
             cleanup_owned_agent_artifacts(&config.user_data_dir, Some(&record));
             break;
         }
+        if restart_for_config {
+            update_snapshot(snapshot, proxy, |state| {
+                state.state = TrayState::Starting;
+                state.detail = None;
+            });
+            let _ = child.coordinated_stop(Some(&record), &inspector, Duration::from_secs(5));
+            cleanup_owned_agent_artifacts(&config.user_data_dir, Some(&record));
+            continue;
+        }
         cleanup_owned_agent_artifacts(&config.user_data_dir, Some(&record));
         if !handle_failed_start(
             "Agent process exited unexpectedly".into(),
             &mut restart_policy,
             epoch.elapsed(),
+            &config.user_data_dir,
             snapshot,
             commands,
             proxy,
@@ -334,10 +421,130 @@ fn supervisor_worker(
     let _ = proxy.send_event(NativeEvent::ExitReady);
 }
 
+fn wait_until_configured(
+    config: &AgentLaunchConfig,
+    snapshot: &Arc<RwLock<TraySnapshot>>,
+    commands: &Receiver<TrayCommand>,
+    proxy: &EventLoopProxy<NativeEvent>,
+    options: OriginValidationOptions,
+    setup_launched_once: &mut bool,
+) -> bool {
+    publish_setup_required(config, snapshot, proxy, options);
+    if should_auto_launch_setup(setup_launched_once) {
+        open_setup_application(&config.user_data_dir, snapshot, proxy);
+    }
+    loop {
+        if is_configured(&config.user_data_dir, options) {
+            return true;
+        }
+        match commands.recv_timeout(Duration::from_millis(250)) {
+            Ok(TrayCommand::Shutdown) | Err(RecvTimeoutError::Disconnected) => return false,
+            Ok(TrayCommand::OpenSettings | TrayCommand::Open) => {
+                // Manual reopen is always allowed; auto-launch remains once-only.
+                open_setup_application(&config.user_data_dir, snapshot, proxy);
+            }
+            Ok(TrayCommand::ConfigurationApplied) => {
+                publish_setup_required(config, snapshot, proxy, options);
+                if is_configured(&config.user_data_dir, options) {
+                    return true;
+                }
+            }
+            Ok(TrayCommand::SwitchEnvironment(_)) => {}
+            Err(RecvTimeoutError::Timeout) => {
+                publish_setup_required(config, snapshot, proxy, options);
+            }
+        }
+    }
+}
+
+/// Marks auto-launch as consumed for this tray process and returns whether setup
+/// should be launched now. Subsequent SetupRequired entries do not re-popup.
+#[must_use]
+fn should_auto_launch_setup(setup_launched_once: &mut bool) -> bool {
+    if *setup_launched_once {
+        return false;
+    }
+    *setup_launched_once = true;
+    true
+}
+
+fn publish_setup_required(
+    config: &AgentLaunchConfig,
+    snapshot: &Arc<RwLock<TraySnapshot>>,
+    proxy: &EventLoopProxy<NativeEvent>,
+    options: OriginValidationOptions,
+) {
+    update_snapshot(snapshot, proxy, |state| {
+        state.state = TrayState::SetupRequired;
+        state.setup_required = true;
+        state.environments.clear();
+        state.active_environment_id = None;
+        if let Ok(setup) = get_setup_state(&config.user_data_dir, options) {
+            state.deployment_origin = setup.deployment_origin;
+            state.detail = None;
+        } else {
+            state.deployment_origin = None;
+        }
+    });
+}
+
+fn open_setup_application(
+    user_data_dir: &Path,
+    snapshot: &Arc<RwLock<TraySnapshot>>,
+    proxy: &EventLoopProxy<NativeEvent>,
+) {
+    match resolve_setup_executable() {
+        Some(path) => match Command::new(&path)
+            .arg("--user-data-dir")
+            .arg(user_data_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(_) => {}
+            Err(error) => update_snapshot(snapshot, proxy, |state| {
+                state.detail = Some(format!("Failed to open Agent Settings: {error}"));
+            }),
+        },
+        None => update_snapshot(snapshot, proxy, |state| {
+            state.detail = Some(
+                "Native setup application was not found next to the tray or under the install root"
+                    .into(),
+            );
+        }),
+    }
+}
+
+fn resolve_setup_executable() -> Option<PathBuf> {
+    let current = env::current_exe().ok()?;
+    let file_name = if cfg!(windows) {
+        "cthutool-agent-setup.exe"
+    } else {
+        "cthutool-agent-setup"
+    };
+    let sibling = current.with_file_name(file_name);
+    if sibling.is_file() {
+        return Some(sibling);
+    }
+    for ancestor in current.ancestors() {
+        let nested = ancestor.join("bin").join(file_name);
+        if nested.is_file() {
+            return Some(nested);
+        }
+        let direct = ancestor.join(file_name);
+        if direct.is_file() {
+            return Some(direct);
+        }
+    }
+    None
+}
+
 fn handle_failed_start(
     detail: String,
     policy: &mut RestartPolicy,
     now: Duration,
+    user_data_dir: &Path,
     snapshot: &Arc<RwLock<TraySnapshot>>,
     commands: &Receiver<TrayCommand>,
     proxy: &EventLoopProxy<NativeEvent>,
@@ -351,7 +558,14 @@ fn handle_failed_start(
             loop {
                 match commands.recv() {
                     Ok(TrayCommand::Shutdown) | Err(_) => return false,
-                    Ok(TrayCommand::Open | TrayCommand::SwitchEnvironment(_)) => {}
+                    Ok(TrayCommand::OpenSettings) => {
+                        open_setup_application(user_data_dir, snapshot, proxy);
+                    }
+                    Ok(
+                        TrayCommand::Open
+                        | TrayCommand::ConfigurationApplied
+                        | TrayCommand::SwitchEnvironment(_),
+                    ) => {}
                 }
             }
         }
@@ -360,10 +574,14 @@ fn handle_failed_start(
                 state.state = TrayState::Error;
                 state.detail = Some(detail);
             });
-            !matches!(
-                commands.recv_timeout(delay),
-                Ok(TrayCommand::Shutdown) | Err(RecvTimeoutError::Disconnected)
-            )
+            match commands.recv_timeout(delay) {
+                Ok(TrayCommand::Shutdown) | Err(RecvTimeoutError::Disconnected) => false,
+                Ok(TrayCommand::OpenSettings) => {
+                    open_setup_application(user_data_dir, snapshot, proxy);
+                    true
+                }
+                Ok(_) | Err(RecvTimeoutError::Timeout) => true,
+            }
         }
     }
 }
@@ -412,10 +630,19 @@ fn cleanup_owned_agent_artifacts(data_dir: &Path, record: Option<&AgentInstanceR
 
 #[cfg(test)]
 mod tests {
-    use super::cleanup_owned_agent_artifacts;
+    use super::{cleanup_owned_agent_artifacts, should_auto_launch_setup};
     use crate::agent_control::AgentInstanceRecord;
     use std::{fs, path::PathBuf};
     use uuid::Uuid;
+
+    #[test]
+    fn setup_auto_launch_is_consumed_once_per_tray_lifetime() {
+        let mut setup_launched_once = false;
+        assert!(should_auto_launch_setup(&mut setup_launched_once));
+        assert!(setup_launched_once);
+        assert!(!should_auto_launch_setup(&mut setup_launched_once));
+        assert!(!should_auto_launch_setup(&mut setup_launched_once));
+    }
 
     #[test]
     fn forced_exit_cleanup_removes_only_records_owned_by_agent_child() {

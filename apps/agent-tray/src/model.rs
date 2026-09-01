@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TrayState {
+    SetupRequired,
     Starting,
     Ready,
     SwitchingEnvironment,
@@ -16,6 +17,7 @@ impl TrayState {
     #[must_use]
     pub const fn label(&self) -> &'static str {
         match self {
+            Self::SetupRequired => "Setup required",
             Self::Starting => "Agent starting",
             Self::Ready => "Agent ready",
             Self::SwitchingEnvironment => "Switching environment",
@@ -42,6 +44,10 @@ pub struct TraySnapshot {
     pub active_environment_id: Option<String>,
     pub environments: Vec<EnvironmentSummary>,
     pub detail: Option<String>,
+    #[serde(default)]
+    pub setup_required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deployment_origin: Option<String>,
 }
 
 impl Default for TraySnapshot {
@@ -51,6 +57,8 @@ impl Default for TraySnapshot {
             active_environment_id: None,
             environments: Vec::new(),
             detail: None,
+            setup_required: false,
+            deployment_origin: None,
         }
     }
 }
@@ -58,6 +66,9 @@ impl Default for TraySnapshot {
 impl TraySnapshot {
     #[must_use]
     pub fn accessibility_label(&self) -> String {
+        if self.state == TrayState::SetupRequired || self.setup_required {
+            return format!("CthuTool — {}", self.state.label());
+        }
         let environment = self
             .environments
             .iter()
@@ -82,11 +93,24 @@ mod tests {
                 label: "Production".into(),
             }],
             detail: None,
+            setup_required: false,
+            deployment_origin: None,
         };
 
         assert_eq!(
             snapshot.accessibility_label(),
             "CthuTool — Backend offline — Production"
         );
+    }
+
+    #[test]
+    fn setup_required_accessibility_omits_environment() {
+        let snapshot = TraySnapshot {
+            state: TrayState::SetupRequired,
+            setup_required: true,
+            ..TraySnapshot::default()
+        };
+        assert_eq!(snapshot.accessibility_label(), "CthuTool — Setup required");
+        assert_eq!(TrayState::SetupRequired.label(), "Setup required");
     }
 }

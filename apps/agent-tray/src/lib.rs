@@ -8,6 +8,7 @@ pub mod model;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod native;
 pub mod platform;
+pub mod self_use_config;
 pub mod supervisor;
 pub mod tray_control;
 

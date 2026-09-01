@@ -5,6 +5,7 @@ import {
   type AgentLifecycleService,
 } from '../domain/agent-lifecycle';
 import { FileSystemAgentLifecycleService } from '../infra/agent-lifecycle-service';
+import { SETTINGS_REMEDIATION } from '../infra/agent-self-use';
 import { type CliContext, cliContractArgs } from '../runtime/cli-context';
 import { type CliErrorCode, createCliError } from '../runtime/cli-error';
 import { runObservedCliCommand } from '../runtime/command-diagnostics';
@@ -28,33 +29,35 @@ type CommandArgs = Record<string, unknown> & {
   readonly quiet?: unknown;
 };
 
+const NATIVE_SETTINGS_REDIRECT =
+  'The self-use deployment Origin is configured in the native settings window. Run: chc agent settings';
+
 export function createAgentCommand(service: AgentLifecycleService) {
   const install = defineCommand({
     meta: {
       name: 'install',
-      description: 'Install a verified local Agent release.',
+      description: 'Install the latest self-use Agent release.',
     },
     args: {
       ...lifecycleArgs,
       channel: {
         type: 'string',
-        description: 'Release channel: stable or beta',
-        default: 'stable',
+        description: 'Removed; self-use mode has one latest release',
       },
       version: {
         type: 'string',
-        description: 'Install an immutable release version',
+        description:
+          'Removed; install the latest release and use local rollback for recovery',
       },
     },
     run: ({ args }) =>
       execute(
         args,
         'install',
-        () =>
-          service.install({
-            channel: parseChannel(args.channel),
-            version: stringValue(args.version),
-          }),
+        () => {
+          rejectRemovedReleaseOptions(args);
+          return service.install();
+        },
         installationMessage,
       ),
   });
@@ -62,21 +65,28 @@ export function createAgentCommand(service: AgentLifecycleService) {
     meta: {
       name: 'update',
       description:
-        'Update only the local Agent and roll back on failed readiness.',
+        'Update the local Agent from the latest self-use release and roll back on failed readiness.',
     },
     args: {
       ...lifecycleArgs,
       channel: {
         type: 'string',
-        description: 'Release channel: stable or beta',
-        default: 'stable',
+        description: 'Removed; self-use mode has one latest release',
+      },
+      version: {
+        type: 'string',
+        description:
+          'Removed; update to the latest release and use local rollback for recovery',
       },
     },
     run: ({ args }) =>
       execute(
         args,
         'update',
-        () => service.update({ channel: parseChannel(args.channel) }),
+        () => {
+          rejectRemovedReleaseOptions(args);
+          return service.update();
+        },
         installationMessage,
       ),
   });
@@ -99,7 +109,7 @@ export function createAgentCommand(service: AgentLifecycleService) {
     meta: {
       name: 'status',
       description:
-        'Show install, tray, environment, backend, browser, and autostart status.',
+        'Show install, tray, SetupRequired/configured, backend, browser, and autostart status.',
     },
     args: lifecycleArgs,
     run: ({ args }) =>
@@ -111,17 +121,29 @@ export function createAgentCommand(service: AgentLifecycleService) {
           const value = result as Awaited<
             ReturnType<AgentLifecycleService['status']>
           >;
-          return value.installed
-            ? `CthuTool Agent ${value.version}: tray ${value.tray.state}; environment ${value.environment?.id ?? 'none'}; backend ${value.backend.status}; browser ${value.browser.status}; autostart ${value.autostart.enabled ? 'enabled' : 'disabled'}.`
-            : 'CthuTool Agent is not installed.';
+          if (!value.installed) return 'CthuTool Agent is not installed.';
+          if (value.setup.required) {
+            return `CthuTool Agent ${value.version}: SetupRequired; tray ${value.tray.state}; ${value.setup.remediation ?? SETTINGS_REMEDIATION}.`;
+          }
+          return `CthuTool Agent ${value.version}: tray ${value.tray.state}; configured; backend ${value.backend.status}; browser ${value.browser.status}; autostart ${value.autostart.enabled ? 'enabled' : 'disabled'}.`;
         },
       ),
   });
-  const settings = simpleCommand(
-    'settings',
-    'Start the Agent if needed and open a fresh deployed-Web settings session.',
-    service.settings.bind(service),
-  );
+  const settings = defineCommand({
+    meta: {
+      name: 'settings',
+      description:
+        'Start the tray if needed and open the native Agent first-run or settings window.',
+    },
+    args: lifecycleArgs,
+    run: ({ args }) =>
+      execute(
+        args,
+        'settings',
+        () => service.settings(),
+        () => 'CthuTool Agent native settings opened.',
+      ),
+  });
   const logs = defineCommand({
     meta: {
       name: 'logs',
@@ -160,7 +182,7 @@ export function createAgentCommand(service: AgentLifecycleService) {
     meta: {
       name: 'doctor',
       description:
-        'Run integrity, local-control, environment, browser, and log diagnostics.',
+        'Run integrity, native-setup, configuration, local-control, backend, browser, and log diagnostics.',
     },
     args: lifecycleArgs,
     run: ({ args }) =>
@@ -187,13 +209,13 @@ export function createAgentCommand(service: AgentLifecycleService) {
     meta: {
       name: 'uninstall',
       description:
-        'Remove Agent binaries and autostart; preserve data unless --purge is confirmed.',
+        'Remove Agent binaries and autostart; preserve Origin, profiles, and logs unless --purge is confirmed.',
     },
     args: {
       ...lifecycleArgs,
       purge: {
         type: 'boolean',
-        description: 'Also remove environment selection, profiles, and logs',
+        description: 'Also remove deployment Origin, profiles, and logs',
       },
       yes: {
         type: 'boolean',
@@ -209,8 +231,7 @@ export function createAgentCommand(service: AgentLifecycleService) {
           let confirmed = args.yes === true;
           if (args.purge === true && !confirmed && context.interactive) {
             const answer = await confirm({
-              message:
-                'Permanently delete Agent profiles, selection, and logs?',
+              message: 'Permanently delete Agent Origin, profiles, and logs?',
               initialValue: false,
             });
             confirmed = !isCancel(answer) && answer === true;
@@ -235,72 +256,26 @@ export function createAgentCommand(service: AgentLifecycleService) {
     },
   });
 
-  const envList = defineCommand({
-    meta: { name: 'list', description: 'List verified release environments.' },
+  const envRedirect = defineCommand({
+    meta: {
+      name: 'env',
+      description:
+        'Deprecated for self-use; open native Agent Settings instead.',
+    },
     args: lifecycleArgs,
     run: ({ args }) =>
       execute(
         args,
-        'env list',
-        () => service.listEnvironments(),
-        environmentListMessage,
+        'env',
+        async () => {
+          throw createCliError(
+            'agent_environment_invalid',
+            NATIVE_SETTINGS_REDIRECT,
+          );
+        },
+        () => NATIVE_SETTINGS_REDIRECT,
       ),
   });
-  const envGet = defineCommand({
-    meta: {
-      name: 'get',
-      description: 'Show the active or named environment.',
-    },
-    args: {
-      ...lifecycleArgs,
-      id: {
-        type: 'positional',
-        required: false,
-        description: 'Environment id',
-      },
-    },
-    run: ({ args }) =>
-      execute(
-        args,
-        'env get',
-        () => service.getEnvironment(stringValue(args.id)),
-        environmentMessage,
-      ),
-  });
-  const envSet = defineCommand({
-    meta: {
-      name: 'set',
-      description:
-        'Select a verified environment for the running or stopped Agent.',
-    },
-    args: {
-      ...lifecycleArgs,
-      id: { type: 'positional', required: true, description: 'Environment id' },
-    },
-    run: ({ args }) =>
-      execute(
-        args,
-        'env set',
-        () => service.setEnvironment(requiredString(args.id, 'environment id')),
-        (result) =>
-          `Active Agent environment: ${(result as { readonly id: string }).id}.`,
-      ),
-  });
-  const envRegistrations: readonly CliCommandRegistration[] = [
-    registration('list', envList),
-    registration('get', envGet),
-    registration('set', envSet),
-  ];
-  const environment = registerCommandGroup(
-    defineCommand({
-      meta: {
-        name: 'env',
-        description: 'Manage verified Agent environments.',
-      },
-      subCommands: buildRegisteredSubCommands(envRegistrations),
-    }),
-    envRegistrations,
-  );
 
   const autostartCommands = (['enable', 'disable', 'status'] as const).map(
     (action) => ({
@@ -352,7 +327,6 @@ export function createAgentCommand(service: AgentLifecycleService) {
     registration('status', status),
     registration('settings', settings),
     registration('logs', logs),
-    registration('env', environment, 'help'),
     registration('autostart', autostart, 'help'),
     registration('doctor', doctor),
     registration('uninstall', uninstall),
@@ -364,7 +338,11 @@ export function createAgentCommand(service: AgentLifecycleService) {
           name: 'agent',
           description: 'Install and control the local CthuTool Agent.',
         },
-        subCommands: buildRegisteredSubCommands(registrations),
+        subCommands: {
+          ...buildRegisteredSubCommands(registrations),
+          // Keep a soft-deprecated entry so mistyped catalog flows get a clear redirect.
+          env: envRedirect,
+        },
       }),
       registrations,
     ),
@@ -373,7 +351,13 @@ export function createAgentCommand(service: AgentLifecycleService) {
 }
 
 const defaultAgentCommand = createAgentCommand(
-  new FileSystemAgentLifecycleService(),
+  new FileSystemAgentLifecycleService({
+    release: process.env.CTHUTOOL_AGENT_RELEASE_MANIFEST_URL
+      ? {
+          manifestUrl: process.env.CTHUTOOL_AGENT_RELEASE_MANIFEST_URL,
+        }
+      : undefined,
+  }),
 );
 export const agentCommand = defaultAgentCommand.command;
 export const agentCommandRegistrations = defaultAgentCommand.registrations;
@@ -464,9 +448,10 @@ function classifyAgentError(error: unknown): CliErrorCode {
   const message = safeErrorMessage(error).toLowerCase();
   if (message.includes('not installed')) return 'agent_not_installed';
   if (
-    message.includes('pinned public key') ||
-    message.includes('signature') ||
-    message.includes('untrusted')
+    message.includes('unsupported') ||
+    message.includes('self-use release') ||
+    message.includes('legacy') ||
+    message.includes('unknown schema')
   )
     return 'agent_release_untrusted';
   if (
@@ -474,7 +459,8 @@ function classifyAgentError(error: unknown): CliErrorCode {
     message.includes('archive') ||
     message.includes('catalog') ||
     message.includes('layout') ||
-    message.includes('canonical')
+    message.includes('size') ||
+    message.includes('integrity')
   )
     return 'agent_integrity_failed';
   if (
@@ -484,6 +470,7 @@ function classifyAgentError(error: unknown): CliErrorCode {
   )
     return 'agent_incompatible';
   if (
+    message.includes('native settings') ||
     message.includes('unknown agent environment') ||
     message.includes('no agent environment')
   )
@@ -492,6 +479,12 @@ function classifyAgentError(error: unknown): CliErrorCode {
     return 'agent_start_failed';
   if (message.includes('purging agent data'))
     return 'agent_purge_confirmation_required';
+  if (
+    message.includes('channel') ||
+    message.includes('one latest release') ||
+    message.includes('--version is no longer supported')
+  )
+    return 'invalid_option';
   return 'agent_control_failed';
 }
 
@@ -501,13 +494,19 @@ function safeErrorMessage(error: unknown): string {
     : 'Unable to complete Agent command';
 }
 
-function parseChannel(value: unknown): 'stable' | 'beta' {
-  if (value === undefined || value === 'stable') return 'stable';
-  if (value === 'beta') return 'beta';
-  throw createCliError(
-    'invalid_option',
-    'Agent release channel must be stable or beta',
-  );
+function rejectRemovedReleaseOptions(args: CommandArgs): void {
+  if ('channel' in args && args.channel !== undefined) {
+    throw createCliError(
+      'invalid_option',
+      'Self-use mode has one latest release; --channel is no longer supported',
+    );
+  }
+  if ('version' in args && args.version !== undefined) {
+    throw createCliError(
+      'invalid_option',
+      'Self-use mode installs the latest release only; --version is no longer supported. Use local rollback to restore a previous version.',
+    );
+  }
 }
 
 function parseLineCount(value: unknown): number {
@@ -520,43 +519,6 @@ function parseLineCount(value: unknown): number {
   return parsed;
 }
 
-function stringValue(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-function requiredString(value: unknown, label: string): string {
-  const result = stringValue(value);
-  if (!result)
-    throw createCliError(
-      'missing_required_argument',
-      `Missing required ${label}`,
-    );
-  return result;
-}
-
-function environmentListMessage(result: unknown): string {
-  return (
-    result as readonly {
-      readonly id: string;
-      readonly label: string;
-      readonly active: boolean;
-    }[]
-  )
-    .map(
-      (environment) =>
-        `${environment.active ? '*' : ' '} ${environment.id}\t${environment.label}`,
-    )
-    .join('\n');
-}
-function environmentMessage(result: unknown): string {
-  const environment = result as {
-    readonly id: string;
-    readonly label: string;
-    readonly active: boolean;
-    readonly webOrigin: string;
-    readonly backendHttpUrl: string;
-  };
-  return `${environment.active ? 'Active ' : ''}${environment.id} (${environment.label})\nWeb: ${environment.webOrigin}\nBackend: ${environment.backendHttpUrl}`;
-}
 function installationMessage(result: unknown): string {
   const value = result as {
     readonly version: string;

@@ -1,6 +1,7 @@
 import {
   chmod,
   mkdir,
+  mkdtemp,
   readdir,
   readFile,
   rm,
@@ -10,13 +11,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import {
+  AGENT_LATEST_RELEASE_TAG,
   type AgentReleaseManifest,
   type AgentReleaseTarget,
   activateVersion,
   assertArchiveBinding,
-  assertCatalogBinding,
   assertCliCompatibility,
-  canonicalJson,
+  assertSelfUseProvenance,
   readActiveVersion,
   releaseTargetFromPlatform,
   selectReleaseArtifact,
@@ -25,31 +26,24 @@ import {
   stageVersion,
   validateBundleInventory,
   validateBundleLayout,
-  validateChannelPointer,
   validateReleaseManifest,
-  verifyManifestSignature,
-  verifyReleaseBlobSignature,
 } from '@cthutool/agent-release';
 import { unzipSync } from 'fflate';
 import type { AgentPaths } from './agent-paths';
 
 const REPOSITORY_RELEASES =
   'https://github.com/mickmetalholic/CthuTool/releases/download';
+const LATEST_MANIFEST_URL = `${REPOSITORY_RELEASES}/${AGENT_LATEST_RELEASE_TAG}/manifest.json`;
 const MAX_METADATA_BYTES = 2 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 750 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES = 2 * 1024 * 1024 * 1024;
-declare const process: NodeJS.Process & {
-  env: NodeJS.ProcessEnv & {
-    CTHUTOOL_PINNED_AGENT_RELEASE_PUBLIC_KEY_PEM?: string;
-  };
-};
 
 export type AgentReleaseInstallerDependencies = {
   readonly fetchBytes?: (
     url: string,
     maximumBytes: number,
   ) => Promise<Uint8Array>;
-  readonly publicKeyPem?: string;
+  readonly manifestUrl?: string;
   readonly platform?: NodeJS.Platform;
   readonly architecture?: string;
   readonly cliVersion: string;
@@ -58,8 +52,6 @@ export type AgentReleaseInstallerDependencies = {
 
 export async function installAgentRelease(input: {
   readonly paths: AgentPaths;
-  readonly channel?: 'stable' | 'beta';
-  readonly version?: string;
   readonly dependencies: AgentReleaseInstallerDependencies;
 }): Promise<{
   readonly version: string;
@@ -67,13 +59,6 @@ export async function installAgentRelease(input: {
   readonly changed: boolean;
 }> {
   const fetchBytes = input.dependencies.fetchBytes ?? fetchHttpsBytes;
-  const key =
-    input.dependencies.publicKeyPem ??
-    process.env.CTHUTOOL_PINNED_AGENT_RELEASE_PUBLIC_KEY_PEM;
-  if (!key?.trim())
-    throw new Error(
-      'Agent release verification is unavailable because the CLI has no pinned public key',
-    );
   const target = releaseTargetFromPlatform(
     input.dependencies.platform ?? process.platform,
     input.dependencies.architecture ?? process.arch,
@@ -82,41 +67,20 @@ export async function installAgentRelease(input: {
     throw new Error(
       'CthuTool Agent supports macOS arm64/x64 and Windows x64 only',
     );
-  const manifest = input.version
-    ? await fetchVerifiedManifest(
-        `${REPOSITORY_RELEASES}/agent-v${assertVersion(input.version)}/manifest.json`,
-        key,
-        fetchBytes,
-      )
-    : await resolveChannel(input.channel ?? 'stable', key, fetchBytes);
+  const manifest = await fetchSelfUseManifest(
+    input.dependencies.manifestUrl ?? LATEST_MANIFEST_URL,
+    fetchBytes,
+  );
   assertCliCompatibility(manifest, input.dependencies.cliVersion);
   assertProtocolCompatibility(manifest);
   const artifact = selectReleaseArtifact(manifest, target);
-  const catalogUrl = new URL(
-    'environments.json',
-    manifestUrlFor(manifest, artifact),
-  ).href;
-  const [catalogBytes, archiveBytes, archiveSignatureBytes] = await Promise.all(
-    [
-      fetchBytes(catalogUrl, MAX_METADATA_BYTES),
-      fetchBytes(
-        artifact.archiveUrl,
-        Math.min(MAX_ARCHIVE_BYTES, artifact.archiveSize + 1),
-      ),
-      fetchBytes(artifact.archiveSignatureUrl, MAX_METADATA_BYTES),
-    ],
+  const archiveBytes = await fetchBytes(
+    artifact.archiveUrl,
+    Math.min(MAX_ARCHIVE_BYTES, artifact.archiveSize + 1),
   );
-  assertCatalogBinding(manifest, catalogBytes);
   assertArchiveBinding(artifact, archiveBytes);
-  verifyReleaseBlobSignature(
-    archiveBytes,
-    Buffer.from(archiveSignatureBytes).toString('utf8').trim(),
-    key,
-  );
-  const temporaryRoot = join(
-    tmpdir(),
-    `cthutool-agent-install-${crypto.randomUUID()}`,
-  );
+  // Keep the smoke user-data path short enough for macOS Unix-domain sockets.
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'cth-agent-'));
   const extractedRoot = join(temporaryRoot, 'bundle');
   const previous = await readActiveVersion(input.paths.installRoot);
   const versionRoot = join(
@@ -135,14 +99,7 @@ export async function installAgentRelease(input: {
       layout.target !== target
     )
       throw new Error(
-        'Agent archive layout does not match the signed manifest',
-      );
-    const embeddedCatalog = await readFile(
-      join(extractedRoot, ...layout.entryPoints.environmentCatalog.split('/')),
-    );
-    if (sha256(embeddedCatalog) !== sha256(catalogBytes))
-      throw new Error(
-        'Embedded Agent catalog does not match the signed catalog',
+        'Agent archive layout does not match the self-use manifest',
       );
     if (versionExisted) {
       await assertDirectoriesMatch(extractedRoot, versionRoot);
@@ -159,7 +116,7 @@ export async function installAgentRelease(input: {
       smokeCheck: async (root) => {
         await (input.dependencies.smoke ?? smokeExtractedAgentBundle)({
           bundleRoot: root,
-          userDataDir: join(temporaryRoot, 'smoke-data'),
+          userDataDir: join(temporaryRoot, 's'),
         });
       },
     });
@@ -178,65 +135,30 @@ export async function installAgentRelease(input: {
   }
 }
 
-async function resolveChannel(
-  channel: 'stable' | 'beta',
-  key: string,
-  fetchBytes: (url: string, maximumBytes: number) => Promise<Uint8Array>,
-): Promise<AgentReleaseManifest> {
-  const pointerUrl = `${REPOSITORY_RELEASES}/agent-${channel}/channel-${channel}.json`;
-  const [bytes, signature] = await Promise.all([
-    fetchBytes(pointerUrl, MAX_METADATA_BYTES),
-    fetchBytes(`${pointerUrl}.sig`, MAX_METADATA_BYTES),
-  ]);
-  verifyReleaseBlobSignature(
-    bytes,
-    Buffer.from(signature).toString('utf8').trim(),
-    key,
-  );
-  const pointer = validateChannelPointer(
-    JSON.parse(Buffer.from(bytes).toString('utf8')),
-  );
-  const manifestBytes = await fetchBytes(
-    pointer.manifestUrl,
-    MAX_METADATA_BYTES,
-  );
-  if (sha256(manifestBytes) !== pointer.manifestSha256)
-    throw new Error('Channel manifest digest mismatch');
-  return fetchVerifiedManifest(
-    pointer.manifestUrl,
-    key,
-    fetchBytes,
-    manifestBytes,
-  );
-}
-
-async function fetchVerifiedManifest(
+async function fetchSelfUseManifest(
   url: string,
-  key: string,
   fetchBytes: (url: string, maximumBytes: number) => Promise<Uint8Array>,
-  supplied?: Uint8Array,
 ): Promise<AgentReleaseManifest> {
-  const [bytes, signature] = await Promise.all([
-    supplied ?? fetchBytes(url, MAX_METADATA_BYTES),
-    fetchBytes(`${url}.sig`, MAX_METADATA_BYTES),
-  ]);
-  const manifest = validateReleaseManifest(
-    JSON.parse(Buffer.from(bytes).toString('utf8')),
-    { requireProductionMatrix: true },
-  );
-  if (
-    manifest.provenance.kind !== 'production' ||
-    !manifest.provenance.signed ||
-    canonicalJson(manifest) !== Buffer.from(bytes).toString('utf8')
-  )
+  let bytes: Uint8Array;
+  try {
+    bytes = await fetchBytes(url, MAX_METADATA_BYTES);
+  } catch (error) {
     throw new Error(
-      'Agent release manifest is not canonical production metadata',
+      `Latest Agent release is unavailable: ${
+        error instanceof Error ? error.message : 'download failed'
+      }`,
     );
-  verifyManifestSignature(
-    manifest,
-    Buffer.from(signature).toString('utf8').trim(),
-    key,
-  );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(bytes).toString('utf8'));
+  } catch {
+    throw new Error('Latest Agent release manifest is not valid JSON');
+  }
+  const manifest = validateReleaseManifest(parsed, {
+    requireSelfUseMatrix: true,
+  });
+  assertSelfUseProvenance(manifest);
   return manifest;
 }
 
@@ -367,6 +289,8 @@ function executableArchivePath(path: string): boolean {
   return (
     path === 'runtime/node/bin/node' ||
     path.endsWith('/cthutool-agent-tray') ||
+    path.endsWith('/cthutool-agent-setup') ||
+    path === 'bin/cthutool-agent-setup' ||
     path.endsWith('.exe')
   );
 }
@@ -376,17 +300,4 @@ function assertProtocolCompatibility(manifest: AgentReleaseManifest): void {
     throw new Error(
       'Agent release protocol versions are incompatible with this CLI',
     );
-}
-
-function assertVersion(version: string): string {
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))
-    throw new Error('Agent release version is invalid');
-  return version;
-}
-
-function manifestUrlFor(
-  _manifest: AgentReleaseManifest,
-  artifact: { readonly archiveUrl: string },
-): URL {
-  return new URL('.', artifact.archiveUrl);
 }

@@ -78,6 +78,46 @@ describe('Agent environment catalog and storage', () => {
     ).toThrow(/secure production protocol|WSS/);
   });
 
+  test('builds a fixed self-use profile from a deployment Origin', () => {
+    const catalog = loadAgentEnvironmentCatalog({
+      selfUseDeploymentOrigin: 'https://app.example.com',
+    });
+    expect(catalog.profiles).toEqual([
+      expect.objectContaining({
+        backendAgentWsUrl: 'wss://app.example.com/ws/agents',
+        backendHttpUrl: 'https://app.example.com',
+        environmentId: 'self-use',
+        namespace: 'self-use',
+        webAgentUrl: 'https://app.example.com/agent',
+        webOrigin: 'https://app.example.com',
+      }),
+    ]);
+  });
+
+  test('rejects switching away from the fixed self-use environment', async () => {
+    root = await mkdtemp(join(tmpdir(), 'cthutool-self-use-switch-'));
+    const paths = resolveAgentDataPaths({ rootDir: root });
+    const baseConfig: AgentConfigPort = {
+      load: () => ({
+        activeEnvironment: { id: 'self-use', label: 'Self-use' },
+        agentId: 'agent-1',
+        backendUrl: 'https://app.example.com',
+        browserRuntime: { kind: 'host-chrome' },
+        connectionEnabled: true,
+        deviceName: 'Test Agent',
+      }),
+    };
+    const manager = new AgentEnvironmentManager(
+      baseConfig,
+      loadAgentEnvironmentCatalog({
+        selfUseDeploymentOrigin: 'https://app.example.com',
+      }),
+      paths,
+      new JsonAgentEnvironmentStorage(paths),
+    );
+    expect(() => manager.selectEnvironment('other')).toThrow(/self-use/);
+  });
+
   test('requires an explicit non-production opt-in for custom profiles', () => {
     expect(() =>
       loadAgentEnvironmentCatalog({

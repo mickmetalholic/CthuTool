@@ -4,9 +4,9 @@
   "target": "darwin-arm64",
   "entryPoints": {
     "tray": "bin/CthuTool Agent.app/Contents/MacOS/cthutool-agent-tray",
+    "setup": "bin/cthutool-agent-setup",
     "node": "runtime/node/bin/node",
-    "agent": "agent/dist/index.js",
-    "environmentCatalog": "agent/environments.json"
+    "agent": "agent/dist/index.js"
   },
   "mutableDataRoot": "external-user-data"
 }

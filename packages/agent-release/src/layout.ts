@@ -3,9 +3,9 @@ import type { AgentReleaseTarget } from './contracts';
 export const REQUIRED_COMMON_BUNDLE_PATHS = [
   'layout.json',
   'agent/dist/index.js',
-  'agent/environments.json',
   'licenses/NODE_LICENSE',
   'licenses/THIRD_PARTY_NOTICES.txt',
+  'licenses/LICENSE-SLINT.md',
 ] as const;
 
 export const MUTABLE_AGENT_PATH_SEGMENTS = [
@@ -13,6 +13,12 @@ export const MUTABLE_AGENT_PATH_SEGMENTS = [
   'browser-profiles',
   'logs',
   'config.json',
+  'instance.json',
+] as const;
+
+export const FORBIDDEN_CATALOG_PATHS = [
+  'agent/environments.json',
+  'environments.json',
 ] as const;
 
 const FORBIDDEN_VERSION_PATH_SEGMENTS = [
@@ -26,9 +32,9 @@ export type BundleLayout = {
   readonly target: AgentReleaseTarget;
   readonly entryPoints: {
     readonly tray: string;
+    readonly setup: string;
     readonly node: string;
     readonly agent: 'agent/dist/index.js';
-    readonly environmentCatalog: 'agent/environments.json';
   };
   readonly mutableDataRoot: 'external-user-data';
 };
@@ -60,9 +66,11 @@ export function createBundleLayout(
       tray: windows
         ? 'bin/cthutool-agent-tray.exe'
         : 'bin/CthuTool Agent.app/Contents/MacOS/cthutool-agent-tray',
+      setup: windows
+        ? 'bin/cthutool-agent-setup.exe'
+        : 'bin/cthutool-agent-setup',
       node: windows ? 'runtime/node/node.exe' : 'runtime/node/bin/node',
       agent: 'agent/dist/index.js',
-      environmentCatalog: 'agent/environments.json',
     },
     mutableDataRoot: 'external-user-data',
   };
@@ -107,7 +115,7 @@ export function validateBundleLayout(input: unknown): BundleLayout {
     typeof entryPoints !== 'object' ||
     Array.isArray(entryPoints) ||
     Object.keys(entryPoints).sort().join(',') !==
-      ['agent', 'environmentCatalog', 'node', 'tray'].join(',') ||
+      ['agent', 'node', 'setup', 'tray'].join(',') ||
     Object.entries(expected.entryPoints).some(
       ([key, entryPoint]) =>
         (entryPoints as Record<string, unknown>)[key] !== entryPoint,
@@ -136,6 +144,7 @@ export function validateBundleInventory(
   const required = [
     ...REQUIRED_COMMON_BUNDLE_PATHS,
     layout.entryPoints.tray,
+    layout.entryPoints.setup,
     layout.entryPoints.node,
     ...(target.startsWith('darwin-')
       ? ['bin/CthuTool Agent.app/Contents/Info.plist']
@@ -168,18 +177,42 @@ export function validateBundleInventory(
     const lower = path.toLowerCase();
     const dependencyAsset = lower.startsWith('agent/node_modules/');
     if (
+      FORBIDDEN_CATALOG_PATHS.some(
+        (forbidden) => lower === forbidden.toLowerCase(),
+      )
+    ) {
+      throw new BundleLayoutError(
+        'FORBIDDEN_CONTENT',
+        `Agent bundle must not embed a deployment URL catalog: ${path}`,
+      );
+    }
+    if (
       lower.startsWith('electron/') ||
       lower.includes('/node_modules/electron/') ||
       lower.includes('electron framework') ||
       lower.startsWith('webview/') ||
       lower.includes('/embeddedwebview.framework/') ||
+      lower.includes('webview2') ||
+      lower.includes('wkwebview') ||
       lower.startsWith('desktop/') ||
       lower.includes('/renderer/') ||
       lower.startsWith('web/') ||
       lower.includes('/_next/') ||
+      lower.startsWith('apps/web/') ||
+      lower.includes('/tauri/') ||
       (!dependencyAsset &&
-        (lower.endsWith('.html') || lower.endsWith('.css'))) ||
-      (lower.endsWith('.js') && !lower.startsWith('agent/'))
+        (lower.endsWith('.html') ||
+          lower.endsWith('.htm') ||
+          lower.endsWith('.css') ||
+          lower.endsWith('.scss') ||
+          lower.endsWith('.sass') ||
+          lower.endsWith('.jsx') ||
+          lower.endsWith('.tsx') ||
+          lower.endsWith('.vue') ||
+          lower.endsWith('.svelte'))) ||
+      (lower.endsWith('.js') && !lower.startsWith('agent/')) ||
+      (lower.endsWith('.mjs') && !lower.startsWith('agent/')) ||
+      (lower.endsWith('.cjs') && !lower.startsWith('agent/'))
     ) {
       throw new BundleLayoutError(
         'FORBIDDEN_CONTENT',
@@ -214,4 +247,8 @@ export function normalizeArchivePath(input: string): string {
     );
   }
   return path;
+}
+
+export function setupEntryPointForTarget(target: AgentReleaseTarget): string {
+  return createBundleLayout(target, '0.0.0').entryPoints.setup;
 }

@@ -1523,23 +1523,29 @@ var require_dist = __commonJS((exports) => {
 // ../../packages/agent-release/dist/layout.js
 var require_layout = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
-  exports.BundleLayoutError = exports.MUTABLE_AGENT_PATH_SEGMENTS = exports.REQUIRED_COMMON_BUNDLE_PATHS = undefined;
+  exports.BundleLayoutError = exports.FORBIDDEN_CATALOG_PATHS = exports.MUTABLE_AGENT_PATH_SEGMENTS = exports.REQUIRED_COMMON_BUNDLE_PATHS = undefined;
   exports.createBundleLayout = createBundleLayout;
   exports.validateBundleLayout = validateBundleLayout;
   exports.validateBundleInventory = validateBundleInventory;
   exports.normalizeArchivePath = normalizeArchivePath;
+  exports.setupEntryPointForTarget = setupEntryPointForTarget;
   exports.REQUIRED_COMMON_BUNDLE_PATHS = [
     "layout.json",
     "agent/dist/index.js",
-    "agent/environments.json",
     "licenses/NODE_LICENSE",
-    "licenses/THIRD_PARTY_NOTICES.txt"
+    "licenses/THIRD_PARTY_NOTICES.txt",
+    "licenses/LICENSE-SLINT.md"
   ];
   exports.MUTABLE_AGENT_PATH_SEGMENTS = [
     "environment.json",
     "browser-profiles",
     "logs",
-    "config.json"
+    "config.json",
+    "instance.json"
+  ];
+  exports.FORBIDDEN_CATALOG_PATHS = [
+    "agent/environments.json",
+    "environments.json"
   ];
   var FORBIDDEN_VERSION_PATH_SEGMENTS = [
     ...exports.MUTABLE_AGENT_PATH_SEGMENTS,
@@ -1563,9 +1569,9 @@ var require_layout = __commonJS((exports) => {
       target,
       entryPoints: {
         tray: windows ? "bin/cthutool-agent-tray.exe" : "bin/CthuTool Agent.app/Contents/MacOS/cthutool-agent-tray",
+        setup: windows ? "bin/cthutool-agent-setup.exe" : "bin/cthutool-agent-setup",
         node: windows ? "runtime/node/node.exe" : "runtime/node/bin/node",
-        agent: "agent/dist/index.js",
-        environmentCatalog: "agent/environments.json"
+        agent: "agent/dist/index.js"
       },
       mutableDataRoot: "external-user-data"
     };
@@ -1588,7 +1594,7 @@ var require_layout = __commonJS((exports) => {
     }
     const expected = createBundleLayout(value.target, value.releaseVersion);
     const entryPoints = value.entryPoints;
-    if (!entryPoints || typeof entryPoints !== "object" || Array.isArray(entryPoints) || Object.keys(entryPoints).sort().join(",") !== ["agent", "environmentCatalog", "node", "tray"].join(",") || Object.entries(expected.entryPoints).some(([key, entryPoint]) => entryPoints[key] !== entryPoint)) {
+    if (!entryPoints || typeof entryPoints !== "object" || Array.isArray(entryPoints) || Object.keys(entryPoints).sort().join(",") !== ["agent", "node", "setup", "tray"].join(",") || Object.entries(expected.entryPoints).some(([key, entryPoint]) => entryPoints[key] !== entryPoint)) {
       throw new BundleLayoutError("INVALID_PATH", "Bundle layout entry points do not match the target contract");
     }
     return expected;
@@ -1604,6 +1610,7 @@ var require_layout = __commonJS((exports) => {
     const required = [
       ...exports.REQUIRED_COMMON_BUNDLE_PATHS,
       layout.entryPoints.tray,
+      layout.entryPoints.setup,
       layout.entryPoints.node,
       ...target.startsWith("darwin-") ? ["bin/CthuTool Agent.app/Contents/Info.plist"] : []
     ];
@@ -1620,7 +1627,10 @@ var require_layout = __commonJS((exports) => {
     for (const path of paths) {
       const lower = path.toLowerCase();
       const dependencyAsset = lower.startsWith("agent/node_modules/");
-      if (lower.startsWith("electron/") || lower.includes("/node_modules/electron/") || lower.includes("electron framework") || lower.startsWith("webview/") || lower.includes("/embeddedwebview.framework/") || lower.startsWith("desktop/") || lower.includes("/renderer/") || lower.startsWith("web/") || lower.includes("/_next/") || !dependencyAsset && (lower.endsWith(".html") || lower.endsWith(".css")) || lower.endsWith(".js") && !lower.startsWith("agent/")) {
+      if (exports.FORBIDDEN_CATALOG_PATHS.some((forbidden) => lower === forbidden.toLowerCase())) {
+        throw new BundleLayoutError("FORBIDDEN_CONTENT", `Agent bundle must not embed a deployment URL catalog: ${path}`);
+      }
+      if (lower.startsWith("electron/") || lower.includes("/node_modules/electron/") || lower.includes("electron framework") || lower.startsWith("webview/") || lower.includes("/embeddedwebview.framework/") || lower.includes("webview2") || lower.includes("wkwebview") || lower.startsWith("desktop/") || lower.includes("/renderer/") || lower.startsWith("web/") || lower.includes("/_next/") || lower.startsWith("apps/web/") || lower.includes("/tauri/") || !dependencyAsset && (lower.endsWith(".html") || lower.endsWith(".htm") || lower.endsWith(".css") || lower.endsWith(".scss") || lower.endsWith(".sass") || lower.endsWith(".jsx") || lower.endsWith(".tsx") || lower.endsWith(".vue") || lower.endsWith(".svelte")) || lower.endsWith(".js") && !lower.startsWith("agent/") || lower.endsWith(".mjs") && !lower.startsWith("agent/") || lower.endsWith(".cjs") && !lower.startsWith("agent/")) {
         throw new BundleLayoutError("FORBIDDEN_CONTENT", `Agent bundle contains local UI runtime or assets: ${path}`);
       }
       if (FORBIDDEN_VERSION_PATH_SEGMENTS.some((segment) => path === segment || path.split("/").includes(segment))) {
@@ -1635,6 +1645,9 @@ var require_layout = __commonJS((exports) => {
       throw new BundleLayoutError("INVALID_PATH", `Unsafe Agent archive path: ${input}`);
     }
     return path;
+  }
+  function setupEntryPointForTarget(target) {
+    return createBundleLayout(target, "0.0.0").entryPoints.setup;
   }
 });
 
@@ -4019,14 +4032,14 @@ var require_node = __commonJS((exports) => {
 // ../../packages/agent-release/dist/contracts.js
 var require_contracts = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
-  exports.AgentReleaseValidationError = exports.SUPPORTED_AGENT_TARGETS = exports.AGENT_BUNDLE_LAYOUT_VERSION = exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION = exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION = undefined;
+  exports.AgentReleaseValidationError = exports.SUPPORTED_AGENT_TARGETS = exports.AGENT_LATEST_RELEASE_TAG = exports.AGENT_BUNDLE_LAYOUT_VERSION = exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION = exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION = undefined;
   exports.validateEnvironmentCatalog = validateEnvironmentCatalog;
+  exports.assertSelfUseCatalogConfigured = assertSelfUseCatalogConfigured;
   exports.validateReleaseManifest = validateReleaseManifest;
-  exports.validateChannelPointer = validateChannelPointer;
   exports.selectReleaseArtifact = selectReleaseArtifact;
   exports.assertCliCompatibility = assertCliCompatibility;
-  exports.assertCatalogBinding = assertCatalogBinding;
   exports.assertArchiveBinding = assertArchiveBinding;
+  exports.assertSelfUseProvenance = assertSelfUseProvenance;
   exports.signManifest = signManifest;
   exports.verifyManifestSignature = verifyManifestSignature;
   exports.signReleaseBlob = signReleaseBlob;
@@ -4034,9 +4047,10 @@ var require_contracts = __commonJS((exports) => {
   exports.canonicalJson = canonicalJson;
   exports.sha256 = sha256;
   var node_crypto_1 = __require("node:crypto");
-  exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION = 1;
+  exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION = 3;
   exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION = 1;
   exports.AGENT_BUNDLE_LAYOUT_VERSION = 1;
+  exports.AGENT_LATEST_RELEASE_TAG = "agent-latest";
   exports.SUPPORTED_AGENT_TARGETS = [
     "darwin-arm64",
     "darwin-x64",
@@ -4103,48 +4117,63 @@ var require_contracts = __commonJS((exports) => {
       profiles
     };
   }
+  function assertSelfUseCatalogConfigured(catalog) {
+    const hasPlaceholder = catalog.profiles.some((profile) => [
+      profile.webOrigin,
+      profile.webAgentUrl,
+      profile.backendHttpUrl,
+      profile.backendAgentWsUrl
+    ].some((value) => {
+      const hostname = new URL(value).hostname;
+      return hostname === "example.com" || hostname.endsWith(".example.com");
+    }));
+    if (hasPlaceholder) {
+      throw new AgentReleaseValidationError("INVALID_CATALOG", "Self-use release catalog must use deployed Web and backend origins; example.com placeholders are not publishable");
+    }
+  }
   function validateReleaseManifest(input, options = {}) {
     const manifest = requireObject(input, "release manifest");
+    if (typeof manifest.schemaVersion !== "number" || manifest.schemaVersion !== exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION) {
+      throw new AgentReleaseValidationError("INCOMPATIBLE_SCHEMA", "Release manifest schema is unsupported");
+    }
     requireExactKeys(manifest, [
       "schemaVersion",
       "releaseVersion",
       "minimumCliVersion",
       "layoutVersion",
       "protocols",
-      "environmentCatalog",
       "provenance",
       "artifacts"
     ], "manifest");
-    if (manifest.schemaVersion !== exports.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION) {
-      throw new AgentReleaseValidationError("INCOMPATIBLE_SCHEMA", "Release manifest schema is unsupported");
-    }
     if (manifest.layoutVersion !== exports.AGENT_BUNDLE_LAYOUT_VERSION) {
       invalidManifest("Bundle layout version is unsupported");
     }
-    const releaseVersion = requireSemver(manifest.releaseVersion, "releaseVersion");
+    if ("environmentCatalog" in manifest) {
+      invalidManifest("Self-use manifests must not bind a deployment URL catalog digest");
+    }
+    const releaseVersion = requireGeneratedReleaseVersion(manifest.releaseVersion, "releaseVersion");
     const minimumCliVersion = requireSemver(manifest.minimumCliVersion, "minimumCliVersion");
     const protocols = validateProtocolObject(manifest.protocols);
-    const environmentCatalog = validateCatalogBinding(manifest.environmentCatalog);
     const provenance = validateProvenance(manifest.provenance);
     if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) {
       invalidManifest("Release manifest must contain platform artifacts");
     }
-    const artifacts = manifest.artifacts.map(validateArtifact);
+    const artifacts = manifest.artifacts.map((artifact) => validateArtifact(artifact, provenance.kind));
     const targets = artifacts.map((artifact) => artifact.target);
     if (new Set(targets).size !== targets.length) {
       invalidManifest("Release manifest target entries must be unique");
     }
-    const requiresMatrix = options.requireProductionMatrix ?? provenance.kind === "production";
+    const requiresMatrix = options.requireSelfUseMatrix ?? provenance.kind === "self-use";
     if (requiresMatrix && !exports.SUPPORTED_AGENT_TARGETS.every((target) => targets.includes(target))) {
-      invalidManifest("Production manifest must contain every supported target");
+      invalidManifest("Self-use manifest must contain every supported target");
     }
-    if (provenance.kind === "production" && !provenance.signed) {
-      invalidManifest("Production manifest must be signed");
+    if (provenance.signed) {
+      invalidManifest("Self-use and pull-request manifests must be unsigned");
     }
-    if (provenance.kind === "production" && artifacts.some((artifact) => artifact.archiveUrl.includes("-unsigned-pr-"))) {
-      invalidManifest("Production manifest cannot reference pull-request artifacts");
+    if (provenance.kind === "self-use" && artifacts.some((artifact) => artifact.archiveUrl.includes("-unsigned-pr-"))) {
+      invalidManifest("Self-use manifest cannot reference pull-request artifacts");
     }
-    if (provenance.kind === "pull-request-validation" && (provenance.signed || artifacts.some((artifact) => !artifact.archiveUrl.includes("-unsigned-pr-")))) {
+    if (provenance.kind === "pull-request-validation" && artifacts.some((artifact) => !artifact.archiveUrl.includes("-unsigned-pr-"))) {
       invalidManifest("Pull-request artifacts must be unsigned and marked");
     }
     return {
@@ -4153,34 +4182,8 @@ var require_contracts = __commonJS((exports) => {
       minimumCliVersion,
       layoutVersion: exports.AGENT_BUNDLE_LAYOUT_VERSION,
       protocols,
-      environmentCatalog,
       provenance,
       artifacts
-    };
-  }
-  function validateChannelPointer(input) {
-    const pointer = requireObject(input, "channel pointer");
-    requireExactKeys(pointer, [
-      "schemaVersion",
-      "channel",
-      "releaseVersion",
-      "manifestUrl",
-      "manifestSha256"
-    ], "channel pointer");
-    if (pointer.schemaVersion !== 1 || pointer.channel !== "stable" && pointer.channel !== "beta") {
-      invalidChannel("Channel pointer schema or channel is invalid");
-    }
-    const releaseVersion = requireSemver(pointer.releaseVersion, "releaseVersion");
-    const manifestUrl = requireManifestHttpsUrl(pointer.manifestUrl, "manifestUrl");
-    if (!manifestUrl.pathname.includes(`/${releaseVersion}/`)) {
-      invalidChannel("Channel pointer must reference an immutable version URL");
-    }
-    return {
-      schemaVersion: 1,
-      channel: pointer.channel,
-      releaseVersion,
-      manifestUrl: manifestUrl.href,
-      manifestSha256: requireSha256(pointer.manifestSha256, "manifestSha256")
     };
   }
   function selectReleaseArtifact(manifest, target) {
@@ -4197,16 +4200,14 @@ var require_contracts = __commonJS((exports) => {
       throw new AgentReleaseValidationError("INCOMPATIBLE_CLI", `Agent release requires chc ${manifest.minimumCliVersion} or newer`);
     }
   }
-  function assertCatalogBinding(manifest, catalogBytes) {
-    const catalog = validateEnvironmentCatalog(JSON.parse(Buffer.from(catalogBytes).toString("utf8")));
-    if (catalog.schemaVersion !== manifest.environmentCatalog.schemaVersion || sha256(catalogBytes) !== manifest.environmentCatalog.sha256) {
-      throw new AgentReleaseValidationError("INTEGRITY_MISMATCH", "Environment catalog does not match the release manifest");
-    }
-    return catalog;
-  }
   function assertArchiveBinding(artifact, archiveBytes) {
     if (archiveBytes.byteLength !== artifact.archiveSize || sha256(archiveBytes) !== artifact.archiveSha256) {
       throw new AgentReleaseValidationError("INTEGRITY_MISMATCH", "Agent archive size or digest does not match the release manifest");
+    }
+  }
+  function assertSelfUseProvenance(manifest) {
+    if (manifest.provenance.kind !== "self-use" || manifest.provenance.signed) {
+      throw new AgentReleaseValidationError("INCOMPATIBLE_SCHEMA", "Agent install requires an unsigned self-use release manifest");
     }
   }
   function signManifest(manifest, privateKeyPem) {
@@ -4233,7 +4234,7 @@ var require_contracts = __commonJS((exports) => {
   function sha256(bytes) {
     return (0, node_crypto_1.createHash)("sha256").update(bytes).digest("hex");
   }
-  function validateArtifact(input) {
+  function validateArtifact(input, provenance) {
     const artifact = requireObject(input, "artifact");
     requireExactKeys(artifact, [
       "target",
@@ -4242,11 +4243,10 @@ var require_contracts = __commonJS((exports) => {
       "archiveUrl",
       "archiveSize",
       "archiveSha256",
-      "archiveSignatureUrl",
       "trayEntryPoint",
+      "setupEntryPoint",
       "nodeEntryPoint",
-      "agentEntryPoint",
-      "platformSignature"
+      "agentEntryPoint"
     ], "artifact");
     if (!exports.SUPPORTED_AGENT_TARGETS.includes(artifact.target)) {
       invalidManifest("Artifact target is unsupported");
@@ -4255,38 +4255,47 @@ var require_contracts = __commonJS((exports) => {
     if (artifact.platform !== expected.platform || artifact.architecture !== expected.architecture || !Number.isSafeInteger(artifact.archiveSize) || artifact.archiveSize <= 0) {
       invalidManifest("Artifact platform, architecture, or size is invalid");
     }
-    const signature = requireObject(artifact.platformSignature, "platformSignature");
-    requireExactKeys(signature, ["required", "notarizationRequired"], "platformSignature");
-    if (signature.required !== true || typeof signature.notarizationRequired !== "boolean" || signature.notarizationRequired !== (expected.platform === "darwin")) {
-      invalidManifest("Platform signing requirements are invalid");
+    if ("archiveSignatureUrl" in artifact || "platformSignature" in artifact) {
+      invalidManifest("Self-use artifacts must not declare detached signatures or platform signing requirements");
     }
     const entryPoints = targetEntryPoints(artifact.target);
     const trayEntryPoint = requireRelativePath(artifact.trayEntryPoint, "trayEntryPoint");
+    const setupEntryPoint = requireRelativePath(artifact.setupEntryPoint, "setupEntryPoint");
     const nodeEntryPoint = requireRelativePath(artifact.nodeEntryPoint, "nodeEntryPoint");
     const agentEntryPoint = requireRelativePath(artifact.agentEntryPoint, "agentEntryPoint");
-    if (trayEntryPoint !== entryPoints.tray || nodeEntryPoint !== entryPoints.node || agentEntryPoint !== entryPoints.agent) {
+    if (trayEntryPoint !== entryPoints.tray || setupEntryPoint !== entryPoints.setup || nodeEntryPoint !== entryPoints.node || agentEntryPoint !== entryPoints.agent) {
       invalidManifest("Artifact entry points do not match the target layout");
+    }
+    const archiveUrl = requireManifestHttpsUrl(artifact.archiveUrl, "archiveUrl");
+    if (provenance === "self-use") {
+      assertSelfUseArchiveUrl(archiveUrl, artifact.target);
     }
     return {
       target: artifact.target,
       platform: expected.platform,
       architecture: expected.architecture,
-      archiveUrl: requireManifestHttpsUrl(artifact.archiveUrl, "archiveUrl").href,
+      archiveUrl: archiveUrl.href,
       archiveSize: artifact.archiveSize,
       archiveSha256: requireSha256(artifact.archiveSha256, "archiveSha256"),
-      archiveSignatureUrl: requireManifestHttpsUrl(artifact.archiveSignatureUrl, "archiveSignatureUrl").href,
       trayEntryPoint,
+      setupEntryPoint,
       nodeEntryPoint,
-      agentEntryPoint,
-      platformSignature: {
-        required: true,
-        notarizationRequired: signature.notarizationRequired
-      }
+      agentEntryPoint
     };
+  }
+  function assertSelfUseArchiveUrl(url, target) {
+    const name = url.pathname.split("/").at(-1) ?? "";
+    if (!name.startsWith("cthutool-agent-") || !name.includes(`-${target}.zip`) || name.includes("-unsigned-pr-")) {
+      invalidManifest("Self-use archive URL must use a versioned target archive name");
+    }
+    if (!url.pathname.includes(`/${exports.AGENT_LATEST_RELEASE_TAG}/`)) {
+      invalidManifest(`Self-use archive URL must be published under ${exports.AGENT_LATEST_RELEASE_TAG}`);
+    }
   }
   function targetEntryPoints(target) {
     return {
       tray: target === "windows-x64" ? "bin/cthutool-agent-tray.exe" : "bin/CthuTool Agent.app/Contents/MacOS/cthutool-agent-tray",
+      setup: target === "windows-x64" ? "bin/cthutool-agent-setup.exe" : "bin/cthutool-agent-setup",
       node: target === "windows-x64" ? "runtime/node/node.exe" : "runtime/node/bin/node",
       agent: "agent/dist/index.js"
     };
@@ -4300,21 +4309,10 @@ var require_contracts = __commonJS((exports) => {
     }
     return protocols;
   }
-  function validateCatalogBinding(input) {
-    const binding = requireObject(input, "environmentCatalog");
-    requireExactKeys(binding, ["schemaVersion", "sha256"], "environmentCatalog");
-    if (binding.schemaVersion !== exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION) {
-      invalidManifest("Environment catalog schema is unsupported");
-    }
-    return {
-      schemaVersion: exports.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION,
-      sha256: requireSha256(binding.sha256, "environmentCatalog.sha256")
-    };
-  }
   function validateProvenance(input) {
     const provenance = requireObject(input, "provenance");
     requireExactKeys(provenance, ["kind", "signed"], "provenance");
-    if (provenance.kind !== "production" && provenance.kind !== "pull-request-validation" || typeof provenance.signed !== "boolean") {
+    if (provenance.kind !== "self-use" && provenance.kind !== "pull-request-validation" || provenance.signed !== false) {
       invalidManifest("Manifest provenance is invalid");
     }
     return provenance;
@@ -4405,6 +4403,9 @@ var require_contracts = __commonJS((exports) => {
     }
     return input;
   }
+  function requireGeneratedReleaseVersion(input, label) {
+    return requireSemver(input, label);
+  }
   function requireSha256(input, label) {
     if (typeof input !== "string" || !/^[a-f0-9]{64}$/.test(input)) {
       invalidManifest(`${label} must be a lowercase SHA-256 digest`);
@@ -4446,9 +4447,6 @@ var require_contracts = __commonJS((exports) => {
   function invalidManifest(message) {
     throw new AgentReleaseValidationError("INVALID_MANIFEST", message);
   }
-  function invalidChannel(message) {
-    throw new AgentReleaseValidationError("INVALID_CHANNEL_POINTER", message);
-  }
 });
 
 // ../../packages/agent-release/dist/assembly.js
@@ -4476,15 +4474,13 @@ var require_assembly = __commonJS((exports) => {
       bytes: await (0, promises_1.readFile)(input.trayExecutablePath),
       mode: 493
     });
+    files.set(layout.entryPoints.setup, {
+      bytes: await (0, promises_1.readFile)(input.setupExecutablePath),
+      mode: 493
+    });
     files.set(layout.entryPoints.node, {
       bytes: await (0, promises_1.readFile)(input.nodeExecutablePath),
       mode: 493
-    });
-    const catalogBytes = await (0, promises_1.readFile)(input.environmentCatalogPath);
-    (0, contracts_1.validateEnvironmentCatalog)(JSON.parse(catalogBytes.toString("utf8")));
-    files.set(layout.entryPoints.environmentCatalog, {
-      bytes: catalogBytes,
-      mode: 420
     });
     files.set("licenses/NODE_LICENSE", {
       bytes: await (0, promises_1.readFile)(input.nodeLicensePath),
@@ -4492,6 +4488,10 @@ var require_assembly = __commonJS((exports) => {
     });
     files.set("licenses/THIRD_PARTY_NOTICES.txt", {
       bytes: await (0, promises_1.readFile)(input.thirdPartyNoticesPath),
+      mode: 420
+    });
+    files.set("licenses/LICENSE-SLINT.md", {
+      bytes: await (0, promises_1.readFile)(input.slintLicensePath),
       mode: 420
     });
     files.set("agent/package.json", {
@@ -4777,8 +4777,7 @@ var require_publication = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.createArtifactReceipt = createArtifactReceipt;
   exports.createReleaseManifest = createReleaseManifest;
-  exports.createChannelPointer = createChannelPointer;
-  exports.verifyProductionReleaseSet = verifyProductionReleaseSet;
+  exports.verifySelfUseReleaseSet = verifySelfUseReleaseSet;
   exports.validateReceipt = validateReceipt;
   var promises_1 = __require("node:fs/promises");
   var node_path_1 = __require("node:path");
@@ -4796,7 +4795,13 @@ var require_publication = __commonJS((exports) => {
     if (!archiveName.startsWith(expectedPrefix) || !archiveName.endsWith(".zip")) {
       throw new Error("Agent archive name does not match its version and target");
     }
-    const baseUrl = requireImmutableBaseUrl(input.immutableBaseUrl, input.releaseVersion);
+    if (input.provenance === "pull-request-validation" && !archiveName.includes("-unsigned-pr-")) {
+      throw new Error("Pull-request archives must include an unsigned marker");
+    }
+    if (input.provenance === "self-use" && archiveName.includes("-unsigned-pr-")) {
+      throw new Error("Self-use archives must not include a pull-request marker");
+    }
+    const baseUrl = requireArtifactBaseUrl(input.artifactBaseUrl, input.provenance, input.releaseVersion);
     const archiveUrl = new URL(archiveName, baseUrl).href;
     const windows = input.target === "windows-x64";
     const receipt = {
@@ -4810,26 +4815,21 @@ var require_publication = __commonJS((exports) => {
         archiveUrl,
         archiveSize: archiveBytes.byteLength,
         archiveSha256: (0, contracts_1.sha256)(archiveBytes),
-        archiveSignatureUrl: `${archiveUrl}.sig`,
         trayEntryPoint: layout.entryPoints.tray,
+        setupEntryPoint: layout.entryPoints.setup,
         nodeEntryPoint: layout.entryPoints.node,
-        agentEntryPoint: layout.entryPoints.agent,
-        platformSignature: {
-          required: true,
-          notarizationRequired: !windows
-        }
+        agentEntryPoint: layout.entryPoints.agent
       },
       validation: {
         cleanHostSmoke: input.cleanHostSmoke,
-        platformSigned: input.platformSigned,
-        notarizationStapled: input.notarizationStapled
+        platformSigned: false,
+        notarizationStapled: false
       }
     };
     validateReceipt(receipt);
     return receipt;
   }
   function createReleaseManifest(input) {
-    const catalog = (0, contracts_1.validateEnvironmentCatalog)(JSON.parse(Buffer.from(input.catalogBytes).toString("utf8")));
     const receipts = input.receipts.map(validateReceipt);
     if (new Set(receipts.map((receipt) => receipt.artifact.target)).size !== receipts.length) {
       throw new Error("Artifact receipts contain duplicate targets");
@@ -4837,12 +4837,15 @@ var require_publication = __commonJS((exports) => {
     if (receipts.some((receipt) => receipt.releaseVersion !== input.releaseVersion || receipt.provenance !== input.provenance)) {
       throw new Error("Artifact receipts have mixed versions or provenance");
     }
-    if (input.provenance === "production" && receipts.some((receipt) => !receipt.validation.cleanHostSmoke || !receipt.validation.platformSigned || receipt.artifact.platform === "darwin" && !receipt.validation.notarizationStapled)) {
-      throw new Error("Production artifacts require clean-host smoke, platform signing, and macOS stapling");
+    if (receipts.some((receipt) => receipt.validation.platformSigned || receipt.validation.notarizationStapled)) {
+      throw new Error("Self-use and pull-request receipts must not claim platform signing or notarization");
+    }
+    if (input.provenance === "self-use" && receipts.some((receipt) => !receipt.validation.cleanHostSmoke)) {
+      throw new Error("Self-use artifacts require clean-host smoke validation");
     }
     const receiptByTarget = new Map(receipts.map((receipt) => [receipt.artifact.target, receipt]));
-    if (input.provenance === "production" && !contracts_1.SUPPORTED_AGENT_TARGETS.every((target) => receiptByTarget.has(target))) {
-      throw new Error("Production release is missing a supported target");
+    if (input.provenance === "self-use" && !contracts_1.SUPPORTED_AGENT_TARGETS.every((target) => receiptByTarget.has(target))) {
+      throw new Error("Self-use release is missing a supported target");
     }
     const manifest = {
       schemaVersion: contracts_1.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
@@ -4855,13 +4858,9 @@ var require_publication = __commonJS((exports) => {
         localBridge: 1,
         trayControl: 1
       },
-      environmentCatalog: {
-        schemaVersion: catalog.schemaVersion,
-        sha256: (0, contracts_1.sha256)(input.catalogBytes)
-      },
       provenance: {
         kind: input.provenance,
-        signed: input.provenance === "production"
+        signed: false
       },
       artifacts: contracts_1.SUPPORTED_AGENT_TARGETS.flatMap((target) => {
         const receipt = receiptByTarget.get(target);
@@ -4869,37 +4868,18 @@ var require_publication = __commonJS((exports) => {
       })
     };
     return (0, contracts_1.validateReleaseManifest)(manifest, {
-      requireProductionMatrix: input.provenance === "production"
+      requireSelfUseMatrix: input.provenance === "self-use"
     });
   }
-  function createChannelPointer(input) {
-    if (input.manifest.provenance.kind !== "production") {
-      throw new Error("A channel cannot point to a pull-request manifest");
+  async function verifySelfUseReleaseSet(input) {
+    const manifest = (0, contracts_1.validateReleaseManifest)(JSON.parse(await (0, promises_1.readFile)(input.manifestPath, "utf8")), { requireSelfUseMatrix: true });
+    if (manifest.provenance.kind !== "self-use" || manifest.provenance.signed) {
+      throw new Error("Self-use verification requires an unsigned self-use manifest");
     }
-    const url = new URL(input.manifestUrl);
-    if (url.protocol !== "https:" || !url.pathname.includes(`/${input.manifest.releaseVersion}/`)) {
-      throw new Error("Channel target must be an immutable HTTPS manifest URL");
-    }
-    return {
-      schemaVersion: 1,
-      channel: input.channel,
-      releaseVersion: input.manifest.releaseVersion,
-      manifestUrl: url.href,
-      manifestSha256: (0, contracts_1.sha256)((0, contracts_1.canonicalJson)(input.manifest))
-    };
-  }
-  async function verifyProductionReleaseSet(input) {
-    const manifest = (0, contracts_1.validateReleaseManifest)(JSON.parse(await (0, promises_1.readFile)(input.manifestPath, "utf8")), { requireProductionMatrix: true });
-    if (manifest.provenance.kind !== "production") {
-      throw new Error("Production verification requires a production manifest");
-    }
-    (0, contracts_1.verifyManifestSignature)(manifest, (await (0, promises_1.readFile)(input.manifestSignaturePath, "utf8")).trim(), input.publicKeyPem);
-    (0, contracts_1.assertCatalogBinding)(manifest, await (0, promises_1.readFile)(input.catalogPath));
     for (const artifact of manifest.artifacts) {
       const archivePath = (0, node_path_1.join)(input.archivesDir, (0, node_path_1.basename)(new URL(artifact.archiveUrl).pathname));
       const archiveBytes = await (0, promises_1.readFile)(archivePath);
       (0, contracts_1.assertArchiveBinding)(artifact, archiveBytes);
-      (0, contracts_1.verifyReleaseBlobSignature)(archiveBytes, (await (0, promises_1.readFile)(`${archivePath}.sig`, "utf8")).trim(), input.publicKeyPem);
     }
     return manifest;
   }
@@ -4908,11 +4888,11 @@ var require_publication = __commonJS((exports) => {
       throw new Error("Artifact receipt must be an object");
     }
     const receipt = input;
-    if (receipt.schemaVersion !== 1 || typeof receipt.releaseVersion !== "string" || receipt.provenance !== "production" && receipt.provenance !== "pull-request-validation" || !receipt.artifact || !receipt.validation || typeof receipt.validation.cleanHostSmoke !== "boolean" || typeof receipt.validation.platformSigned !== "boolean" || typeof receipt.validation.notarizationStapled !== "boolean") {
+    if (receipt.schemaVersion !== 1 || typeof receipt.releaseVersion !== "string" || receipt.provenance !== "self-use" && receipt.provenance !== "pull-request-validation" || !receipt.artifact || !receipt.validation || typeof receipt.validation.cleanHostSmoke !== "boolean" || receipt.validation.platformSigned !== false || receipt.validation.notarizationStapled !== false) {
       throw new Error("Artifact receipt contract is invalid");
     }
     const validationManifest = (0, contracts_1.validateReleaseManifest)({
-      schemaVersion: 1,
+      schemaVersion: contracts_1.AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
       releaseVersion: receipt.releaseVersion,
       minimumCliVersion: "0.0.0",
       layoutVersion: 1,
@@ -4922,16 +4902,12 @@ var require_publication = __commonJS((exports) => {
         localBridge: 1,
         trayControl: 1
       },
-      environmentCatalog: {
-        schemaVersion: contracts_1.AGENT_ENVIRONMENT_CATALOG_SCHEMA_VERSION,
-        sha256: "0".repeat(64)
-      },
       provenance: {
         kind: receipt.provenance,
-        signed: receipt.provenance === "production"
+        signed: false
       },
       artifacts: [receipt.artifact]
-    }, { requireProductionMatrix: false });
+    }, { requireSelfUseMatrix: false });
     return {
       schemaVersion: 1,
       releaseVersion: receipt.releaseVersion,
@@ -4952,10 +4928,19 @@ var require_publication = __commonJS((exports) => {
     }
     return output;
   }
-  function requireImmutableBaseUrl(value, version) {
+  function requireArtifactBaseUrl(value, provenance, version) {
     const url = new URL(value.endsWith("/") ? value : `${value}/`);
-    if (url.protocol !== "https:" || !url.pathname.includes(`/${version}/`) || url.search || url.hash) {
-      throw new Error("Artifact base URL must be immutable, versioned, and HTTPS");
+    if (url.protocol !== "https:" || url.search || url.hash) {
+      throw new Error("Artifact base URL must be HTTPS without query or fragment");
+    }
+    if (provenance === "self-use") {
+      if (!url.pathname.includes(`/${contracts_1.AGENT_LATEST_RELEASE_TAG}/`)) {
+        throw new Error(`Self-use artifact base URL must publish under ${contracts_1.AGENT_LATEST_RELEASE_TAG}`);
+      }
+      return url;
+    }
+    if (!url.pathname.includes(`/${version}/`)) {
+      throw new Error("Pull-request artifact base URL must be versioned and HTTPS");
     }
     return url;
   }
@@ -4964,33 +4949,103 @@ var require_publication = __commonJS((exports) => {
 // ../../packages/agent-release/dist/smoke.js
 var require_smoke = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
+  exports.AgentBundleSmokeError = undefined;
   exports.smokeExtractedAgentBundle = smokeExtractedAgentBundle;
+  exports.assertNoForbiddenEmbeddedContent = assertNoForbiddenEmbeddedContent;
   var node_child_process_1 = __require("node:child_process");
   var promises_1 = __require("node:fs/promises");
   var node_net_1 = __require("node:net");
   var node_path_1 = __require("node:path");
-  var contracts_1 = require_contracts();
   var layout_1 = require_layout();
+
+  class AgentBundleSmokeError extends Error {
+    kind;
+    constructor(kind, message, options) {
+      super(`[${kind}] ${message}`, options);
+      this.kind = kind;
+      this.name = "AgentBundleSmokeError";
+    }
+  }
+  exports.AgentBundleSmokeError = AgentBundleSmokeError;
+  var FORBIDDEN_EMBEDDED_MARKERS = [
+    "agentSecret",
+    "AGENT_SECRET",
+    "BEGIN PRIVATE KEY",
+    "BEGIN RSA PRIVATE KEY",
+    "BEGIN OPENSSH PRIVATE KEY"
+  ];
   async function smokeExtractedAgentBundle(input) {
     const timeoutMs = input.timeoutMs ?? 20000;
-    const layout = (0, layout_1.validateBundleLayout)(JSON.parse(await (0, promises_1.readFile)((0, node_path_1.join)(input.bundleRoot, "layout.json"), "utf8")));
-    (0, layout_1.validateBundleInventory)(layout.target, await listBundleFiles(input.bundleRoot));
-    const catalogPath = (0, node_path_1.resolve)(input.bundleRoot, ...layout.entryPoints.environmentCatalog.split("/"));
-    const catalog = (0, contracts_1.validateEnvironmentCatalog)(JSON.parse(await (0, promises_1.readFile)(catalogPath, "utf8")));
+    let layout;
+    try {
+      layout = (0, layout_1.validateBundleLayout)(JSON.parse(await (0, promises_1.readFile)((0, node_path_1.join)(input.bundleRoot, "layout.json"), "utf8")));
+      (0, layout_1.validateBundleInventory)(layout.target, await listBundleFiles(input.bundleRoot));
+      await assertNoForbiddenEmbeddedContent(input.bundleRoot);
+    } catch (error) {
+      throw wrapSmokeError("NATIVE_SETUP_PACKAGING", error);
+    }
+    const setupPath = (0, node_path_1.resolve)(input.bundleRoot, ...layout.entryPoints.setup.split("/"));
+    try {
+      await (0, promises_1.realpath)(setupPath);
+    } catch (error) {
+      throw new AgentBundleSmokeError("NATIVE_SETUP_PACKAGING", `Native setup executable is missing at ${layout.entryPoints.setup}`, { cause: error });
+    }
+    if (input.nativeSetupSmoke) {
+      await smokeNativeSetupExecutable(setupPath, timeoutMs);
+    }
     const userDataDir = (0, node_path_1.resolve)(input.userDataDir);
-    const nodePath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...layout.entryPoints.node.split("/")));
-    const agentPath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...layout.entryPoints.agent.split("/")));
-    const instancePath = (0, node_path_1.join)(userDataDir, "runtime", "instance.json");
+    const { deploymentOrigin } = input;
+    if (typeof deploymentOrigin !== "string" || deploymentOrigin.length === 0) {
+      return smokeFreshSetupRequired({
+        bundleRoot: input.bundleRoot,
+        environment: input.environment,
+        layout,
+        timeoutMs,
+        userDataDir
+      });
+    }
+    return smokeConfiguredReadiness({
+      bundleRoot: input.bundleRoot,
+      deploymentOrigin,
+      environment: input.environment,
+      layout,
+      timeoutMs,
+      userDataDir
+    });
+  }
+  async function smokeNativeSetupExecutable(setupPath, timeoutMs) {
+    const stderr = [];
+    const child = (0, node_child_process_1.spawn)(setupPath, ["--smoke-test"], {
+      cwd: (0, node_path_1.resolve)(setupPath, ".."),
+      stdio: ["ignore", "ignore", "pipe"]
+    });
+    child.stderr?.on("data", (chunk) => {
+      if (Buffer.concat(stderr).byteLength < 16 * 1024)
+        stderr.push(chunk);
+    });
+    try {
+      const exit = await waitForExitCode(child, timeoutMs);
+      if (exit.code !== 0) {
+        throw new Error(`native setup exited with code ${exit.code ?? "none"} signal ${exit.signal ?? "none"}: ${Buffer.concat(stderr).toString("utf8").trim() || "<empty stderr>"}`);
+      }
+    } catch (error) {
+      await terminateExactChild(child);
+      throw new AgentBundleSmokeError("NATIVE_SETUP_PACKAGING", `Native setup executable failed its smoke test: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+  }
+  async function smokeFreshSetupRequired(input) {
+    const nodePath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...input.layout.entryPoints.node.split("/")));
+    const agentPath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...input.layout.entryPoints.agent.split("/")));
+    const instancePath = (0, node_path_1.join)(input.userDataDir, "runtime", "instance.json");
     await (0, promises_1.rm)(instancePath, { force: true });
     const stderr = [];
-    const child = (0, node_child_process_1.spawn)(nodePath, [agentPath, "--user-data-dir", userDataDir], {
+    const child = (0, node_child_process_1.spawn)(nodePath, [agentPath, "--user-data-dir", input.userDataDir], {
       cwd: input.bundleRoot,
       env: {
         ...process.env,
         ...input.environment,
         CTHUTOOL_AGENT_DISABLED: "1",
-        CTHUTOOL_AGENT_ENVIRONMENTS_PATH: catalogPath,
-        CTHUTOOL_AGENT_VERSION: layout.releaseVersion,
+        CTHUTOOL_AGENT_VERSION: input.layout.releaseVersion,
         NODE_ENV: "production",
         PATH: ""
       },
@@ -5002,47 +5057,150 @@ var require_smoke = __commonJS((exports) => {
       }
     });
     try {
-      const record = await waitForInstance(instancePath, child, timeoutMs, stderr);
-      if (await (0, promises_1.realpath)(record.executablePath) !== nodePath || await (0, promises_1.realpath)(record.entryPoint) !== agentPath || record.pid !== child.pid) {
-        throw new Error("Agent smoke process did not use the bundled entry points");
+      const exit = await waitForExitCode(child, input.timeoutMs);
+      const detail = Buffer.concat(stderr).toString("utf8");
+      if (exit.code === 0) {
+        throw new AgentBundleSmokeError("AGENT_RUNTIME", "Fresh archive Agent exited successfully instead of SetupRequired");
       }
-      const healthResult = await waitForControl(record, child, timeoutMs, stderr);
-      if (healthResult.applicationVersion !== layout.releaseVersion || typeof healthResult.bridge?.endpoint !== "string") {
-        throw new Error("Agent health did not report the release version and bridge");
+      if (!/setup required|configure the deployment Origin|Agent Settings/i.test(detail)) {
+        throw new AgentBundleSmokeError("AGENT_RUNTIME", `Fresh archive did not report SetupRequired (exit ${exit.code ?? "none"}): ${detail.trim() || "<empty stderr>"}`);
       }
-      const environments = requireSuccess(await requestControl(record, "environment.list"), "environment.list");
-      const environmentId = catalog.profiles[0]?.environmentId;
-      if (!environmentId || !environments.environments?.some((item) => item.id === environmentId)) {
-        throw new Error("Agent smoke did not load the release environment catalog");
-      }
-      requireSuccess(await requestControl(record, "environment.switch", environmentId, timeoutMs), "environment.switch");
-      const launch = requireSuccess(await requestControl(record, "bridge.launch"), "bridge.launch");
-      if (launch.endpoint !== healthResult.bridge.endpoint || launch.environmentId !== environmentId || typeof launch.launchUrl !== "string") {
-        throw new Error("Agent bridge launch metadata is inconsistent");
-      }
-      const bootstrapResponse = await fetch(`${launch.endpoint}/v1/bootstrap`, {
-        headers: { origin: catalog.profiles[0].webOrigin },
-        signal: AbortSignal.timeout(Math.min(timeoutMs, 5000))
-      });
-      if (!bootstrapResponse.ok) {
-        throw new Error(`Agent bridge readiness returned ${bootstrapResponse.status}`);
-      }
-      await requestControl(record, "shutdown");
-      await waitForExit(child, timeoutMs);
-      await waitForRemoval(instancePath, timeoutMs);
+      await assertPathAbsent(instancePath);
       return {
-        applicationVersion: layout.releaseVersion,
-        bridgeEndpoint: launch.endpoint,
+        applicationVersion: input.layout.releaseVersion,
+        bridgeEndpoint: "",
         bundledNodePath: nodePath,
-        environmentId
+        environmentId: "self-use",
+        setupRequiredVerified: true
       };
     } catch (error) {
       await terminateExactChild(child);
-      const detail = Buffer.concat(stderr).toString("utf8").trim();
-      throw new Error(`${error instanceof Error ? error.message : "Agent bundle smoke failed"}${detail ? `
-Agent stderr:
-${detail}` : ""}`, { cause: error });
+      throw wrapSmokeError("AGENT_RUNTIME", error, stderr);
     }
+  }
+  async function smokeConfiguredReadiness(input) {
+    await writeConfiguredUserData(input.userDataDir, input.deploymentOrigin);
+    const nodePath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...input.layout.entryPoints.node.split("/")));
+    const agentPath = await (0, promises_1.realpath)((0, node_path_1.resolve)(input.bundleRoot, ...input.layout.entryPoints.agent.split("/")));
+    const instancePath = (0, node_path_1.join)(input.userDataDir, "runtime", "instance.json");
+    await (0, promises_1.rm)(instancePath, { force: true });
+    const stderr = [];
+    const child = (0, node_child_process_1.spawn)(nodePath, [agentPath, "--user-data-dir", input.userDataDir], {
+      cwd: input.bundleRoot,
+      env: {
+        ...process.env,
+        ...input.environment,
+        CTHUTOOL_AGENT_DISABLED: "1",
+        CTHUTOOL_AGENT_VERSION: input.layout.releaseVersion,
+        NODE_ENV: "production",
+        PATH: ""
+      },
+      stdio: ["ignore", "ignore", "pipe"]
+    });
+    child.stderr?.on("data", (chunk) => {
+      if (Buffer.concat(stderr).byteLength < 64 * 1024) {
+        stderr.push(chunk);
+      }
+    });
+    try {
+      const record = await waitForInstance(instancePath, child, input.timeoutMs, stderr);
+      if (await (0, promises_1.realpath)(record.executablePath) !== nodePath || await (0, promises_1.realpath)(record.entryPoint) !== agentPath || record.pid !== child.pid) {
+        throw new AgentBundleSmokeError("AGENT_RUNTIME", "Agent smoke process did not use the bundled entry points");
+      }
+      const healthResult = await waitForControl(record, child, input.timeoutMs, stderr);
+      if (healthResult.applicationVersion !== input.layout.releaseVersion || typeof healthResult.bridge?.endpoint !== "string") {
+        throw new AgentBundleSmokeError("AGENT_RUNTIME", "Agent health did not report the release version and bridge");
+      }
+      const environments = requireSuccess(await requestControl(record, "environment.list"), "environment.list");
+      const environmentId = "self-use";
+      if (!environments.environments?.some((item) => item.id === environmentId)) {
+        throw new AgentBundleSmokeError("AGENT_RUNTIME", "Configured Agent smoke did not load the fixed self-use environment");
+      }
+      requireSuccess(await requestControl(record, "environment.switch", environmentId, input.timeoutMs), "environment.switch");
+      const launch = requireSuccess(await requestControl(record, "bridge.launch"), "bridge.launch");
+      if (launch.endpoint !== healthResult.bridge.endpoint || launch.environmentId !== environmentId || typeof launch.launchUrl !== "string") {
+        throw new AgentBundleSmokeError("AGENT_RUNTIME", "Agent bridge launch metadata is inconsistent");
+      }
+      try {
+        const bootstrapResponse = await fetch(`${launch.endpoint}/v1/bootstrap`, {
+          headers: { origin: input.deploymentOrigin },
+          signal: AbortSignal.timeout(Math.min(input.timeoutMs, 5000))
+        });
+        if (!bootstrapResponse.ok) {
+          throw new AgentBundleSmokeError("BACKEND_CONNECTIVITY", `Agent bridge readiness returned ${bootstrapResponse.status}`);
+        }
+      } catch (error) {
+        if (error instanceof AgentBundleSmokeError) {
+          throw error;
+        }
+        throw new AgentBundleSmokeError("BACKEND_CONNECTIVITY", error instanceof Error ? error.message : "Agent bridge readiness probe failed", { cause: error });
+      }
+      await requestControl(record, "shutdown");
+      await waitForExit(child, input.timeoutMs);
+      await waitForRemoval(instancePath, input.timeoutMs);
+      return {
+        applicationVersion: input.layout.releaseVersion,
+        bridgeEndpoint: launch.endpoint,
+        bundledNodePath: nodePath,
+        environmentId,
+        setupRequiredVerified: false
+      };
+    } catch (error) {
+      await terminateExactChild(child);
+      throw wrapSmokeError(error instanceof AgentBundleSmokeError ? error.kind : "AGENT_RUNTIME", error, stderr);
+    }
+  }
+  async function assertNoForbiddenEmbeddedContent(bundleRoot) {
+    const files = await listBundleFiles(bundleRoot);
+    for (const relativePath of files) {
+      const lower = relativePath.toLowerCase();
+      if (lower === "agent/environments.json" || lower === "environments.json" || lower.endsWith("/environments.json")) {
+        throw new AgentBundleSmokeError("NATIVE_SETUP_PACKAGING", `Forbidden deployment URL catalog embedded at ${relativePath}`);
+      }
+      if (lower.endsWith(".exe") || lower.endsWith(".dylib") || lower.endsWith(".so") || lower.endsWith(".node") || lower.includes("/node") || lower.endsWith("/cthutool-agent-tray") || lower.endsWith("/cthutool-agent-setup") || lower.endsWith("cthutool-agent-tray.exe") || lower.endsWith("cthutool-agent-setup.exe") || lower.startsWith("agent/node_modules/") || lower.startsWith("agent/dist/")) {
+        continue;
+      }
+      const absolute = (0, node_path_1.join)(bundleRoot, ...relativePath.split("/"));
+      const bytes = await (0, promises_1.readFile)(absolute);
+      if (bytes.byteLength > 2 * 1024 * 1024) {
+        continue;
+      }
+      const text = bytes.toString("utf8");
+      for (const marker of FORBIDDEN_EMBEDDED_MARKERS) {
+        if (text.includes(marker)) {
+          throw new AgentBundleSmokeError("NATIVE_SETUP_PACKAGING", `Forbidden secret or credential marker "${marker}" embedded in ${relativePath}`);
+        }
+      }
+      if (looksLikeDeploymentCatalog(text)) {
+        throw new AgentBundleSmokeError("NATIVE_SETUP_PACKAGING", `Forbidden deployment URL catalog content embedded in ${relativePath}`);
+      }
+    }
+  }
+  function looksLikeDeploymentCatalog(text) {
+    const trimmed = text.trim();
+    if (!trimmed.startsWith("{") || !trimmed.includes('"profiles"')) {
+      return false;
+    }
+    try {
+      const value = JSON.parse(trimmed);
+      return typeof value.schemaVersion === "number" && Array.isArray(value.profiles) && value.profiles.some((profile) => profile && typeof profile === "object" && ("webOrigin" in profile) && ("backendHttpUrl" in profile));
+    } catch {
+      return false;
+    }
+  }
+  async function writeConfiguredUserData(userDataDir, deploymentOrigin) {
+    await (0, promises_1.mkdir)(userDataDir, { recursive: true });
+    await (0, promises_1.writeFile)((0, node_path_1.join)(userDataDir, "config.json"), `${JSON.stringify({
+      schemaVersion: 1,
+      agentId: "smoke-agent",
+      deploymentOrigin,
+      deviceName: "smoke-host",
+      connectionEnabled: true,
+      browserRuntime: { kind: "host-chrome" }
+    })}
+`, { mode: 384 });
+    await (0, promises_1.writeFile)((0, node_path_1.join)(userDataDir, "environment.json"), `${JSON.stringify({ activeEnvironmentId: "self-use" })}
+`, { mode: 384 });
   }
   async function listBundleFiles(root, directory = root) {
     const output = [];
@@ -5060,7 +5218,7 @@ ${detail}` : ""}`, { cause: error });
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (child.exitCode !== null) {
-        throw new Error(`Agent exited before readiness with code ${child.exitCode}: ${Buffer.concat(stderr).toString("utf8")}`);
+        throw new AgentBundleSmokeError("AGENT_RUNTIME", `Agent exited before readiness with code ${child.exitCode}: ${Buffer.concat(stderr).toString("utf8")}`);
       }
       try {
         const value = JSON.parse(await (0, promises_1.readFile)(path, "utf8"));
@@ -5070,9 +5228,26 @@ ${detail}` : ""}`, { cause: error });
       } catch {}
       await delay(50);
     }
-    throw new Error("Timed out waiting for Agent readiness record");
+    throw new AgentBundleSmokeError("AGENT_RUNTIME", "Timed out waiting for Agent readiness record");
   }
   async function requestControl(record, operation, environmentId, timeoutMs = 5000) {
+    const deadline = Date.now() + timeoutMs;
+    let lastError;
+    while (Date.now() < deadline) {
+      try {
+        return await requestControlOnce(record, operation, environmentId, Math.max(250, deadline - Date.now()));
+      } catch (error) {
+        lastError = error;
+        const code = error.code;
+        if (code !== "ENOENT" && code !== "ECONNREFUSED" && code !== "ECONNRESET" && code !== "ETIMEDOUT") {
+          throw error;
+        }
+        await delay(50);
+      }
+    }
+    throw lastError instanceof Error ? lastError : new AgentBundleSmokeError("AGENT_RUNTIME", `Agent ${operation} request failed`);
+  }
+  async function requestControlOnce(record, operation, environmentId, timeoutMs) {
     return new Promise((resolvePromise, rejectPromise) => {
       const socket = (0, node_net_1.createConnection)(record.controlEndpoint);
       const timer = setTimeout(() => {
@@ -5137,7 +5312,7 @@ ${detail}` : ""}`, { cause: error });
   }
   function requireSuccess(value, operation) {
     if (!value || typeof value !== "object" || value.ok !== true || !("result" in value)) {
-      throw new Error(`Agent ${operation} control request failed`);
+      throw new AgentBundleSmokeError("AGENT_RUNTIME", `Agent ${operation} control request failed`);
     }
     return value.result;
   }
@@ -5148,11 +5323,26 @@ ${detail}` : ""}`, { cause: error });
     await Promise.race([
       new Promise((resolvePromise, rejectPromise) => {
         child.once("exit", (code, signal) => {
-          code === 0 ? resolvePromise() : rejectPromise(new Error(`Agent exited with code ${code ?? "none"} signal ${signal ?? "none"}`));
+          code === 0 ? resolvePromise() : rejectPromise(new AgentBundleSmokeError("AGENT_RUNTIME", `Agent exited with code ${code ?? "none"} signal ${signal ?? "none"}`));
         });
       }),
       delay(timeoutMs).then(() => {
-        throw new Error("Timed out waiting for coordinated Agent shutdown");
+        throw new AgentBundleSmokeError("AGENT_RUNTIME", "Timed out waiting for coordinated Agent shutdown");
+      })
+    ]);
+  }
+  async function waitForExitCode(child, timeoutMs) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return { code: child.exitCode, signal: child.signalCode };
+    }
+    return Promise.race([
+      new Promise((resolvePromise) => {
+        child.once("exit", (code, signal) => {
+          resolvePromise({ code, signal });
+        });
+      }),
+      delay(timeoutMs).then(() => {
+        throw new AgentBundleSmokeError("AGENT_RUNTIME", "Timed out waiting for SetupRequired Agent exit");
       })
     ]);
   }
@@ -5169,7 +5359,18 @@ ${detail}` : ""}`, { cause: error });
       }
       await delay(50);
     }
-    throw new Error("Agent shutdown left a stale instance record");
+    throw new AgentBundleSmokeError("AGENT_RUNTIME", "Agent shutdown left a stale instance record");
+  }
+  async function assertPathAbsent(path) {
+    try {
+      await (0, promises_1.readFile)(path);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+    throw new AgentBundleSmokeError("AGENT_RUNTIME", "SetupRequired Agent left a runtime instance record");
   }
   async function terminateExactChild(child) {
     if (child.exitCode !== null || child.pid === undefined) {
@@ -5183,6 +5384,21 @@ ${detail}` : ""}`, { cause: error });
     if (child.exitCode === null) {
       child.kill("SIGKILL");
     }
+  }
+  function wrapSmokeError(kind, error, stderr = []) {
+    if (error instanceof AgentBundleSmokeError) {
+      const detail2 = Buffer.concat(stderr).toString("utf8").trim();
+      if (!detail2 || error.message.includes(detail2)) {
+        return error;
+      }
+      return new AgentBundleSmokeError(error.kind, `${error.message}
+Agent stderr:
+${detail2}`, { cause: error });
+    }
+    const detail = Buffer.concat(stderr).toString("utf8").trim();
+    return new AgentBundleSmokeError(kind, `${error instanceof Error ? error.message : "Agent bundle smoke failed"}${detail ? `
+Agent stderr:
+${detail}` : ""}`, { cause: error });
   }
   function delay(milliseconds) {
     return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
@@ -7324,8 +7540,8 @@ var AGENT_CLI_RESPONSE_SCHEMA_VERSION = 1;
 // src/infra/agent-lifecycle-service.ts
 var import_agent_data_migration = __toESM(require_dist(), 1);
 var import_agent_release3 = __toESM(require_dist2(), 1);
-import { readFile as readFile6, rm as rm3, stat as stat4 } from "node:fs/promises";
-import { join as join7 } from "node:path";
+import { readFile as readFile6, rm as rm4, stat as stat4 } from "node:fs/promises";
+import { join as join8 } from "node:path";
 
 // src/domain/self-update-manager.ts
 import { spawn } from "node:child_process";
@@ -8031,14 +8247,13 @@ function isAgentInstance(value) {
 
 // src/infra/agent-paths.ts
 var import_agent_release = __toESM(require_dist2(), 1);
-import { spawn as spawn2 } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import {
   chmod,
   mkdir as mkdir2,
   readdir,
   readFile as readFile3,
   rename,
+  rm,
   writeFile
 } from "node:fs/promises";
 import { homedir as homedir3 } from "node:os";
@@ -8106,20 +8321,8 @@ async function requestTrayHealth(input) {
   }
   return response.result;
 }
-async function requestTrayOpen(input) {
-  await requestAccepted(input, "open");
-}
-async function requestTrayEnvironmentSwitch(input) {
-  const response = await requestTrayControl({
-    endpoint: input.record.controlEndpoint,
-    nonce: input.record.nonce,
-    operation: "environment.switch",
-    environmentId: input.environmentId,
-    timeoutMs: input.timeoutMs
-  });
-  if (!response.ok) {
-    throw new Error(response.error?.message ?? response.error?.code ?? "Tray rejected environment switch");
-  }
+async function requestTraySettingsOpen(input) {
+  await requestAccepted(input, "settings.open");
 }
 async function waitForTrayExit(input) {
   const deadline = Date.now() + (input.timeoutMs ?? 1e4);
@@ -8262,50 +8465,10 @@ async function readInstalledBundle(paths) {
     throw new Error("CthuTool Agent is not installed");
   const root = join4(paths.installRoot, "versions", pointer.version);
   const layout = import_agent_release.validateBundleLayout(JSON.parse(await readFile3(join4(root, "layout.json"), "utf8")));
-  const catalog = import_agent_release.validateEnvironmentCatalog(JSON.parse(await readFile3(join4(root, ...layout.entryPoints.environmentCatalog.split("/")), "utf8")));
-  return { pointer, root, layout, catalog };
+  return { pointer, root, layout };
 }
 async function assertInstalledBundleInventory(bundle) {
   import_agent_release.validateBundleInventory(bundle.layout.target, await listRelativeFiles(bundle.root));
-}
-async function readEnvironmentSelection(paths) {
-  try {
-    const value = JSON.parse(await readFile3(join4(paths.userDataDir, "environment.json"), "utf8"));
-    return typeof value.activeEnvironmentId === "string" ? value.activeEnvironmentId : undefined;
-  } catch (error) {
-    if (error.code === "ENOENT")
-      return;
-    throw error;
-  }
-}
-async function writeEnvironmentSelection(paths, environmentId) {
-  await atomicPrivateWrite(join4(paths.userDataDir, "environment.json"), `${JSON.stringify({ activeEnvironmentId: environmentId }, null, 2)}
-`);
-}
-async function atomicPrivateWrite(path, value) {
-  await mkdir2(dirname2(path), { mode: 448, recursive: true });
-  const temporary = `${path}.tmp-${randomUUID()}`;
-  await writeFile(temporary, value, { mode: 384 });
-  if (process.platform !== "win32")
-    await chmod(temporary, 384);
-  else
-    await protectWindowsFile(temporary);
-  await rename(temporary, path);
-}
-async function protectWindowsFile(path) {
-  const username = process.env.USERNAME;
-  if (!username) {
-    throw new Error("Cannot resolve the Windows user for protected Agent storage");
-  }
-  const identity = process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${username}` : username;
-  const exitCode = await new Promise((resolvePromise) => {
-    const child = spawn2("icacls.exe", [path, "/inheritance:r", "/grant:r", `${identity}:F`], { stdio: "ignore", windowsHide: true });
-    child.once("error", () => resolvePromise(null));
-    child.once("exit", resolvePromise);
-  });
-  if (exitCode !== 0) {
-    throw new Error("Unable to protect Agent storage with a user-only ACL");
-  }
 }
 async function listRelativeFiles(root, directory = root) {
   const output = [];
@@ -8321,18 +8484,41 @@ async function listRelativeFiles(root, directory = root) {
 }
 
 // src/infra/agent-platform.ts
-import { spawn as spawn3 } from "node:child_process";
+import { spawn as spawn2 } from "node:child_process";
 import {
   chmod as chmod2,
   mkdir as mkdir3,
   readFile as readFile4,
   realpath,
-  rm,
+  rm as rm2,
   writeFile as writeFile2
 } from "node:fs/promises";
 import { homedir as homedir4 } from "node:os";
 import { dirname as dirname3, join as join5 } from "node:path";
 async function startInstalledAgent(paths, timeoutMs = 20000) {
+  const result = await startInstalledTray(paths, timeoutMs);
+  const tray = await readTrayInstanceRecord(resolveTrayInstancePath(paths.userDataDir));
+  if (!tray)
+    throw new Error("Agent tray instance record is not ready");
+  const snapshot = await requestTrayHealth({ record: tray, timeoutMs: 500 });
+  if (snapshot.setupRequired || snapshot.state === "SetupRequired") {
+    return "started";
+  }
+  const bundle = await readInstalledBundle(paths);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const agent = await readAgentInstance(paths.userDataDir);
+      if (!agent)
+        throw new Error("Agent instance record is not ready");
+      await assertExactAgentRuntime(bundle, agent);
+      return result === "already-running" ? "already-running" : "started";
+    } catch {}
+    await delay(100);
+  }
+  throw new Error("Timed out waiting for the tray-owned Agent to become ready");
+}
+async function startInstalledTray(paths, timeoutMs = 20000) {
   const bundle = await readInstalledBundle(paths);
   const executable = join5(bundle.root, ...bundle.layout.entryPoints.tray.split("/"));
   const instancePath = resolveTrayInstancePath(paths.userDataDir);
@@ -8344,13 +8530,13 @@ async function startInstalledAgent(paths, timeoutMs = 20000) {
       healthy = true;
     } catch {}
     if (healthy) {
-      await assertExactRuntime(paths, bundle, executable, current.executablePath);
+      await assertExactTrayRuntime(executable, current.executablePath);
       return "already-running";
     }
   }
   if (process.platform !== "win32")
     await chmod2(executable, 493);
-  const child = spawn3(executable, ["--user-data-dir", paths.userDataDir], {
+  const child = spawn2(executable, ["--user-data-dir", paths.userDataDir], {
     detached: true,
     stdio: "ignore",
     windowsHide: true,
@@ -8365,28 +8551,20 @@ async function startInstalledAgent(paths, timeoutMs = 20000) {
     if (record) {
       try {
         await requestTrayHealth({ record, timeoutMs: 500 });
-        await assertExactRuntime(paths, bundle, executable, record.executablePath);
-        const agent = await readAgentInstance(paths.userDataDir);
-        if (!agent)
-          throw new Error("Agent instance record is not ready");
-        const health = await requestAgentHealth(agent, 1000);
-        const expectedNode = join5(bundle.root, ...bundle.layout.entryPoints.node.split("/"));
-        const expectedAgent = join5(bundle.root, ...bundle.layout.entryPoints.agent.split("/"));
-        if (await realpath(agent.executablePath) !== await realpath(expectedNode) || await realpath(agent.entryPoint) !== await realpath(expectedAgent) || health.applicationVersion !== bundle.pointer.version) {
-          throw new Error("Agent process identity does not match the active bundle");
-        }
+        await assertExactTrayRuntime(executable, record.executablePath);
         return "started";
       } catch {}
     }
     await delay(100);
   }
-  throw new Error("Timed out waiting for the tray-owned Agent to become ready");
+  throw new Error("Timed out waiting for the Agent tray to become ready");
 }
-async function assertExactRuntime(paths, bundle, expectedTray, actualTray) {
+async function assertExactTrayRuntime(expectedTray, actualTray) {
   if (await realpath(actualTray) !== await realpath(expectedTray)) {
     throw new Error("Running tray identity does not match the active bundle");
   }
-  const agent = await readAgentInstance(paths.userDataDir);
+}
+async function assertExactAgentRuntime(bundle, agent) {
   if (!agent)
     throw new Error("Running tray has no exact Agent instance");
   const health = await requestAgentHealth(agent, 1000);
@@ -8424,7 +8602,7 @@ async function setAutostart(paths, enabled, options = {}) {
   if (platform2 === "darwin") {
     const plist = options.launchAgentPath ?? resolveLaunchAgentPath();
     if (!enabled)
-      await rm(plist, { force: true });
+      await rm2(plist, { force: true });
     else {
       const executable = await resolveTrayExecutable(paths);
       await mkdir3(dirname3(plist), { mode: 448, recursive: true });
@@ -8471,7 +8649,7 @@ function createLaunchAgentPlist(executable, userDataDir) {
 }
 async function runProcess(command, args) {
   return new Promise((resolve2) => {
-    const child = spawn3(command, args, { stdio: "ignore", windowsHide: true });
+    const child = spawn2(command, args, { stdio: "ignore", windowsHide: true });
     child.once("error", () => resolve2(null));
     child.once("exit", (code) => resolve2(code));
   });
@@ -8485,9 +8663,10 @@ var import_agent_release2 = __toESM(require_dist2(), 1);
 import {
   chmod as chmod3,
   mkdir as mkdir4,
+  mkdtemp,
   readdir as readdir2,
   readFile as readFile5,
-  rm as rm2,
+  rm as rm3,
   stat as stat3,
   writeFile as writeFile3
 } from "node:fs/promises";
@@ -8889,31 +9068,22 @@ function unzipSync(data, opts) {
 
 // src/infra/agent-release-installer.ts
 var REPOSITORY_RELEASES = "https://github.com/mickmetalholic/CthuTool/releases/download";
+var LATEST_MANIFEST_URL = `${REPOSITORY_RELEASES}/${import_agent_release2.AGENT_LATEST_RELEASE_TAG}/manifest.json`;
 var MAX_METADATA_BYTES = 2 * 1024 * 1024;
 var MAX_ARCHIVE_BYTES = 750 * 1024 * 1024;
 var MAX_EXTRACTED_BYTES = 2 * 1024 * 1024 * 1024;
 async function installAgentRelease(input) {
   const fetchBytes = input.dependencies.fetchBytes ?? fetchHttpsBytes;
-  const key = input.dependencies.publicKeyPem ?? "";
-  if (!key?.trim())
-    throw new Error("Agent release verification is unavailable because the CLI has no pinned public key");
   const target = import_agent_release2.releaseTargetFromPlatform(input.dependencies.platform ?? process.platform, input.dependencies.architecture ?? process.arch);
   if (!target)
     throw new Error("CthuTool Agent supports macOS arm64/x64 and Windows x64 only");
-  const manifest = input.version ? await fetchVerifiedManifest(`${REPOSITORY_RELEASES}/agent-v${assertVersion(input.version)}/manifest.json`, key, fetchBytes) : await resolveChannel(input.channel ?? "stable", key, fetchBytes);
+  const manifest = await fetchSelfUseManifest(input.dependencies.manifestUrl ?? LATEST_MANIFEST_URL, fetchBytes);
   import_agent_release2.assertCliCompatibility(manifest, input.dependencies.cliVersion);
   assertProtocolCompatibility(manifest);
   const artifact = import_agent_release2.selectReleaseArtifact(manifest, target);
-  const catalogUrl = new URL("environments.json", manifestUrlFor(manifest, artifact)).href;
-  const [catalogBytes, archiveBytes, archiveSignatureBytes] = await Promise.all([
-    fetchBytes(catalogUrl, MAX_METADATA_BYTES),
-    fetchBytes(artifact.archiveUrl, Math.min(MAX_ARCHIVE_BYTES, artifact.archiveSize + 1)),
-    fetchBytes(artifact.archiveSignatureUrl, MAX_METADATA_BYTES)
-  ]);
-  import_agent_release2.assertCatalogBinding(manifest, catalogBytes);
+  const archiveBytes = await fetchBytes(artifact.archiveUrl, Math.min(MAX_ARCHIVE_BYTES, artifact.archiveSize + 1));
   import_agent_release2.assertArchiveBinding(artifact, archiveBytes);
-  import_agent_release2.verifyReleaseBlobSignature(archiveBytes, Buffer.from(archiveSignatureBytes).toString("utf8").trim(), key);
-  const temporaryRoot = join6(tmpdir(), `cthutool-agent-install-${crypto.randomUUID()}`);
+  const temporaryRoot = await mkdtemp(join6(tmpdir(), "cth-agent-"));
   const extractedRoot = join6(temporaryRoot, "bundle");
   const previous = await import_agent_release2.readActiveVersion(input.paths.installRoot);
   const versionRoot = join6(input.paths.installRoot, "versions", manifest.releaseVersion);
@@ -8922,10 +9092,7 @@ async function installAgentRelease(input) {
     await extractVerifiedArchive(archiveBytes, extractedRoot, target);
     const layout = import_agent_release2.validateBundleLayout(JSON.parse(await readFile5(join6(extractedRoot, "layout.json"), "utf8")));
     if (layout.releaseVersion !== manifest.releaseVersion || layout.target !== target)
-      throw new Error("Agent archive layout does not match the signed manifest");
-    const embeddedCatalog = await readFile5(join6(extractedRoot, ...layout.entryPoints.environmentCatalog.split("/")));
-    if (import_agent_release2.sha256(embeddedCatalog) !== import_agent_release2.sha256(catalogBytes))
-      throw new Error("Embedded Agent catalog does not match the signed catalog");
+      throw new Error("Agent archive layout does not match the self-use manifest");
     if (versionExisted) {
       await assertDirectoriesMatch(extractedRoot, versionRoot);
     }
@@ -8941,7 +9108,7 @@ async function installAgentRelease(input) {
       smokeCheck: async (root) => {
         await (input.dependencies.smoke ?? import_agent_release2.smokeExtractedAgentBundle)({
           bundleRoot: root,
-          userDataDir: join6(temporaryRoot, "smoke-data")
+          userDataDir: join6(temporaryRoot, "s")
         });
       }
     });
@@ -8952,35 +9119,30 @@ async function installAgentRelease(input) {
     };
   } catch (error) {
     if (!versionExisted) {
-      await rm2(versionRoot, { force: true, recursive: true });
+      await rm3(versionRoot, { force: true, recursive: true });
     }
     throw error;
   } finally {
-    await rm2(temporaryRoot, { force: true, recursive: true });
+    await rm3(temporaryRoot, { force: true, recursive: true });
   }
 }
-async function resolveChannel(channel, key, fetchBytes) {
-  const pointerUrl = `${REPOSITORY_RELEASES}/agent-${channel}/channel-${channel}.json`;
-  const [bytes, signature] = await Promise.all([
-    fetchBytes(pointerUrl, MAX_METADATA_BYTES),
-    fetchBytes(`${pointerUrl}.sig`, MAX_METADATA_BYTES)
-  ]);
-  import_agent_release2.verifyReleaseBlobSignature(bytes, Buffer.from(signature).toString("utf8").trim(), key);
-  const pointer = import_agent_release2.validateChannelPointer(JSON.parse(Buffer.from(bytes).toString("utf8")));
-  const manifestBytes = await fetchBytes(pointer.manifestUrl, MAX_METADATA_BYTES);
-  if (import_agent_release2.sha256(manifestBytes) !== pointer.manifestSha256)
-    throw new Error("Channel manifest digest mismatch");
-  return fetchVerifiedManifest(pointer.manifestUrl, key, fetchBytes, manifestBytes);
-}
-async function fetchVerifiedManifest(url, key, fetchBytes, supplied) {
-  const [bytes, signature] = await Promise.all([
-    supplied ?? fetchBytes(url, MAX_METADATA_BYTES),
-    fetchBytes(`${url}.sig`, MAX_METADATA_BYTES)
-  ]);
-  const manifest = import_agent_release2.validateReleaseManifest(JSON.parse(Buffer.from(bytes).toString("utf8")), { requireProductionMatrix: true });
-  if (manifest.provenance.kind !== "production" || !manifest.provenance.signed || import_agent_release2.canonicalJson(manifest) !== Buffer.from(bytes).toString("utf8"))
-    throw new Error("Agent release manifest is not canonical production metadata");
-  import_agent_release2.verifyManifestSignature(manifest, Buffer.from(signature).toString("utf8").trim(), key);
+async function fetchSelfUseManifest(url, fetchBytes) {
+  let bytes;
+  try {
+    bytes = await fetchBytes(url, MAX_METADATA_BYTES);
+  } catch (error) {
+    throw new Error(`Latest Agent release is unavailable: ${error instanceof Error ? error.message : "download failed"}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(Buffer.from(bytes).toString("utf8"));
+  } catch {
+    throw new Error("Latest Agent release manifest is not valid JSON");
+  }
+  const manifest = import_agent_release2.validateReleaseManifest(parsed, {
+    requireSelfUseMatrix: true
+  });
+  import_agent_release2.assertSelfUseProvenance(manifest);
   return manifest;
 }
 async function fetchHttpsBytes(url, maximumBytes) {
@@ -9086,19 +9248,105 @@ async function pathExists(path) {
   }
 }
 function executableArchivePath(path) {
-  return path === "runtime/node/bin/node" || path.endsWith("/cthutool-agent-tray") || path.endsWith(".exe");
+  return path === "runtime/node/bin/node" || path.endsWith("/cthutool-agent-tray") || path.endsWith("/cthutool-agent-setup") || path === "bin/cthutool-agent-setup" || path.endsWith(".exe");
 }
 function assertProtocolCompatibility(manifest) {
   if (Object.values(manifest.protocols).some((version) => version !== 1))
     throw new Error("Agent release protocol versions are incompatible with this CLI");
 }
-function assertVersion(version) {
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))
-    throw new Error("Agent release version is invalid");
-  return version;
+
+// src/infra/agent-self-use.ts
+import { existsSync as existsSync2, readdirSync, readFileSync as readFileSync2 } from "node:fs";
+import { join as join7 } from "node:path";
+var SELF_USE_ENVIRONMENT_ID = "self-use";
+var SELF_USE_NAMESPACE = "self-use";
+var SELF_USE_LABEL = "Self-use";
+var SETTINGS_REMEDIATION = "Run: chc agent settings";
+function resolveSelfUseConfigPath(paths) {
+  return join7(paths.userDataDir, "config.json");
 }
-function manifestUrlFor(_manifest, artifact) {
-  return new URL(".", artifact.archiveUrl);
+function readSelfUseSetupSnapshot(paths) {
+  const configPath = resolveSelfUseConfigPath(paths);
+  const preserved = listEnvironmentNamespaces(paths.userDataDir);
+  let deploymentOrigin;
+  let deviceName;
+  let migrationNotice;
+  if (existsSync2(configPath)) {
+    try {
+      const raw = JSON.parse(readFileSync2(configPath, "utf8"));
+      if (typeof raw.deploymentOrigin === "string" && raw.deploymentOrigin.trim()) {
+        try {
+          deploymentOrigin = validateExactOrigin(raw.deploymentOrigin.trim());
+        } catch {
+          migrationNotice = "Saved deploymentOrigin is invalid; reconfigure in native Agent Settings.";
+        }
+      }
+      if (typeof raw.deviceName === "string" && raw.deviceName.trim()) {
+        deviceName = raw.deviceName.trim();
+      }
+    } catch {
+      migrationNotice = "Self-use configuration could not be read; open native Agent Settings.";
+    }
+  } else if (preserved.some((namespace) => namespace !== SELF_USE_NAMESPACE) || preserved.length > 1) {
+    migrationNotice = "Multiple legacy environments were preserved; choose the deployment Origin in native Agent Settings.";
+  } else if (preserved.length > 0) {
+    migrationNotice = "Legacy Agent data was preserved; configure self-use in native Agent Settings.";
+  }
+  const endpoints = deploymentOrigin ? deriveSelfUseEndpoints(deploymentOrigin) : undefined;
+  const configured = Boolean(deploymentOrigin);
+  if (!configured && !migrationNotice) {
+    migrationNotice = undefined;
+  }
+  return {
+    configured,
+    setupRequired: !configured,
+    ...deploymentOrigin ? { deploymentOrigin } : {},
+    ...endpoints ? { endpoints } : {},
+    ...deviceName ? { deviceName } : {},
+    ...migrationNotice ? { migrationNotice } : {},
+    preservedEnvironmentNamespaces: preserved
+  };
+}
+function deriveSelfUseEndpoints(deploymentOrigin) {
+  const origin = validateExactOrigin(deploymentOrigin);
+  const url = new URL(origin);
+  const wsProtocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return {
+    webOrigin: origin,
+    webAgentUrl: `${origin}/agent`,
+    backendHttpUrl: origin,
+    backendAgentWsUrl: `${wsProtocol}//${url.host}/ws/agents`,
+    environmentId: SELF_USE_ENVIRONMENT_ID,
+    namespace: SELF_USE_NAMESPACE,
+    label: SELF_USE_LABEL
+  };
+}
+function validateExactOrigin(input) {
+  let url;
+  try {
+    url = new URL(input);
+  } catch {
+    throw new Error("deploymentOrigin must be a valid absolute URL");
+  }
+  if (input !== url.origin) {
+    throw new Error("deploymentOrigin must be an exact Origin without path, query, or hash");
+  }
+  const localhost = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+  if (url.protocol === "https:")
+    return input;
+  if (url.protocol === "http:" && localhost)
+    return input;
+  throw new Error("deploymentOrigin must use https");
+}
+function listEnvironmentNamespaces(userDataDir) {
+  const root = join7(userDataDir, "environments");
+  try {
+    return readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  } catch (error) {
+    if (error.code === "ENOENT")
+      return [];
+    throw error;
+  }
 }
 
 // src/infra/agent-lifecycle-service.ts
@@ -9114,10 +9362,11 @@ class FileSystemAgentLifecycleService {
     this.platform = {
       getAutostartStatus: options.platform?.getAutostartStatus ?? getAutostartStatus,
       setAutostart: options.platform?.setAutostart ?? setAutostart,
-      startInstalledAgent: options.platform?.startInstalledAgent ?? startInstalledAgent
+      startInstalledAgent: options.platform?.startInstalledAgent ?? startInstalledAgent,
+      startInstalledTray: options.platform?.startInstalledTray ?? startInstalledTray
     };
   }
-  async install(input = {}) {
+  async install() {
     if (await this.isRunning()) {
       throw new Error("Stop the running Agent before install, or use chc agent update for coordinated replacement");
     }
@@ -9126,17 +9375,16 @@ class FileSystemAgentLifecycleService {
       dependencies: {
         ...this.release,
         cliVersion: this.release.cliVersion ?? getCliVersion()
-      },
-      ...input
+      }
     });
   }
-  async update(input = {}) {
+  async update() {
     const wasRunning = await this.isRunning();
     const current = await this.installedVersion();
     const autostart = await this.platform.getAutostartStatus(this.paths);
     if (wasRunning)
       await this.stop();
-    const result = await this.install(input);
+    const result = await this.install();
     if (autostart.enabled) {
       await this.platform.setAutostart(this.paths, true);
     }
@@ -9155,14 +9403,14 @@ class FileSystemAgentLifecycleService {
       await import_agent_release3.rollbackActiveVersion({
         installRoot: this.paths.installRoot,
         smokeCheck: async (root) => {
-          const smokeData = join7(this.paths.installRoot, ".rollback-smoke");
+          const smokeData = join8(this.paths.installRoot, ".rollback-smoke");
           try {
             await (this.release.smoke ?? import_agent_release3.smokeExtractedAgentBundle)({
               bundleRoot: root,
               userDataDir: smokeData
             });
           } finally {
-            await rm3(smokeData, { force: true, recursive: true });
+            await rm4(smokeData, { force: true, recursive: true });
           }
         }
       });
@@ -9186,8 +9434,8 @@ class FileSystemAgentLifecycleService {
   }
   async status() {
     const version = await this.installedVersion();
-    const environments = version ? await this.listEnvironments() : [];
-    const selected = environments.find((environment) => environment.active);
+    const setupSnapshot = readSelfUseSetupSnapshot(this.paths);
+    const environment = toEnvironmentView(setupSnapshot);
     const autostart = await this.platform.getAutostartStatus(this.paths);
     let trayState = "stopped";
     let trayPid;
@@ -9202,15 +9450,25 @@ class FileSystemAgentLifecycleService {
     if (tray) {
       trayPid = tray.pid;
       try {
-        trayState = (await requestTrayHealth({ record: tray, timeoutMs: 500 })).state;
+        const health = await requestTrayHealth({
+          record: tray,
+          timeoutMs: 500
+        });
+        trayState = health.state;
+        if (health.setupRequired === true) {
+          trayState = "SetupRequired";
+        }
       } catch {
         trayState = "unreachable";
       }
     }
+    if (setupSnapshot.setupRequired && trayState === "stopped") {
+      trayState = "SetupRequired";
+    }
     const agent = await readAgentInstance(this.paths.userDataDir).catch(() => {
       return;
     });
-    if (agent) {
+    if (agent && !setupSnapshot.setupRequired) {
       try {
         const health = await requestAgentHealth(agent, 750);
         backend = {
@@ -9223,65 +9481,48 @@ class FileSystemAgentLifecycleService {
         };
       } catch {}
     }
+    const setup = {
+      required: setupSnapshot.setupRequired,
+      configured: setupSnapshot.configured,
+      ...setupSnapshot.deploymentOrigin ? { deploymentOrigin: setupSnapshot.deploymentOrigin } : {},
+      ...setupSnapshot.setupRequired ? { remediation: SETTINGS_REMEDIATION } : {},
+      ...setupSnapshot.migrationNotice ? { migrationNotice: setupSnapshot.migrationNotice } : {}
+    };
     return {
       installed: Boolean(version),
       ...version ? { version } : {},
       tray: { state: trayState, ...trayPid ? { pid: trayPid } : {} },
-      ...selected ? { environment: selected } : {},
+      setup,
+      ...environment ? { environment } : {},
+      ...setupSnapshot.endpoints ? {
+        endpoints: {
+          webOrigin: setupSnapshot.endpoints.webOrigin,
+          webAgentUrl: setupSnapshot.endpoints.webAgentUrl,
+          backendHttpUrl: setupSnapshot.endpoints.backendHttpUrl,
+          backendAgentWsUrl: setupSnapshot.endpoints.backendAgentWsUrl
+        }
+      } : {},
       backend,
       browser,
       autostart
     };
   }
   async settings() {
-    await this.start();
+    await this.platform.startInstalledTray(this.paths);
     const record = await this.requireTray();
-    await requestTrayOpen({ record });
+    await requestTraySettingsOpen({ record });
     return "opened";
   }
   async logs(input = {}) {
     const count = Math.max(1, Math.min(input.lines ?? 200, 1e4));
     try {
-      const raw = await readFile6(join7(this.paths.logsDir, "agent.log"), "utf8");
+      const raw = await readFile6(join8(this.paths.logsDir, "agent.log"), "utf8");
       return raw.split(/\r?\n/).filter(Boolean).slice(-count);
     } catch (error) {
       if (error.code === "ENOENT")
         return [];
       throw error;
     }
-  }
-  async listEnvironments() {
-    const { catalog } = await readInstalledBundle(this.paths);
-    const selected = await readEnvironmentSelection(this.paths) ?? catalog.profiles[0]?.environmentId;
-    return catalog.profiles.map((environment) => ({
-      id: environment.environmentId,
-      label: environment.label,
-      active: environment.environmentId === selected,
-      webOrigin: environment.webOrigin,
-      backendHttpUrl: environment.backendHttpUrl
-    }));
-  }
-  async getEnvironment(id) {
-    const environments = await this.listEnvironments();
-    const environment = id ? environments.find((candidate) => candidate.id === id) : environments.find((candidate) => candidate.active);
-    if (!environment)
-      throw new Error(id ? `Unknown Agent environment "${id}"` : "No Agent environment is selected");
-    return environment;
-  }
-  async setEnvironment(id) {
-    const { catalog } = await readInstalledBundle(this.paths);
-    const environment = catalog.profiles.find((candidate) => candidate.environmentId === id);
-    if (!environment)
-      throw new Error(`Unknown Agent environment "${id}"`);
-    const previous = await readEnvironmentSelection(this.paths) ?? catalog.profiles[0]?.environmentId;
-    const tray = await readTrayInstanceRecord(resolveTrayInstancePath(this.paths.userDataDir)).catch(() => {
-      return;
-    });
-    if (tray)
-      await requestTrayEnvironmentSwitch({ record: tray, environmentId: id });
-    else
-      await writeEnvironmentSelection(this.paths, id);
-    return { id, changed: previous !== id };
   }
   async autostart(action) {
     if (action === "status")
@@ -9291,14 +9532,14 @@ class FileSystemAgentLifecycleService {
   async doctor() {
     const checks = [];
     let installed;
-    let profileLockPath = join7(this.paths.userDataDir, "browser-profiles", ".cthutool-agent.lock");
+    const profileLockPath = join8(this.paths.userDataDir, "environments", SELF_USE_NAMESPACE, "browser-profiles", ".cthutool-agent.lock");
     try {
       installed = await readInstalledBundle(this.paths);
       await assertInstalledBundleInventory(installed);
       checks.push({
         id: "install",
         status: "pass",
-        message: `Signed bundle layout and catalog loaded for ${installed.pointer.version}`
+        message: `Verified self-use bundle layout loaded for ${installed.pointer.version}`
       });
     } catch (error) {
       checks.push({
@@ -9308,44 +9549,60 @@ class FileSystemAgentLifecycleService {
       });
     }
     if (installed) {
-      const environment = await this.getEnvironment().catch(() => {
-        return;
+      const setupPath = join8(installed.root, ...installed.layout.entryPoints.setup.split("/"));
+      const setupPresent = await pathExists2(setupPath);
+      checks.push({
+        id: "native-setup",
+        status: setupPresent ? "pass" : "warn",
+        message: setupPresent ? `Native setup executable present at ${installed.layout.entryPoints.setup}` : `Native setup executable not found at ${installed.layout.entryPoints.setup}; package a cthutool-agent-setup binary in the release archive`
+      });
+    }
+    const setup = readSelfUseSetupSnapshot(this.paths);
+    checks.push({
+      id: "configuration",
+      status: setup.configured ? "pass" : "fail",
+      message: setup.configured ? "Self-use deployment Origin configured" : `SetupRequired; ${SETTINGS_REMEDIATION}`
+    });
+    if (setup.migrationNotice) {
+      checks.push({
+        id: "migration",
+        status: setup.configured ? "warn" : "fail",
+        message: `${setup.migrationNotice} Next: ${SETTINGS_REMEDIATION}`
+      });
+    }
+    if (setup.endpoints) {
+      checks.push({
+        id: "web-origin",
+        status: setup.endpoints.webOrigin.startsWith("https://") ? "pass" : setup.endpoints.webOrigin.startsWith("http://localhost") ? "warn" : "fail",
+        message: setup.endpoints.webOrigin
       });
       checks.push({
-        id: "environment",
-        status: environment ? "pass" : "fail",
-        message: environment ? environment.label : "No valid active environment"
+        id: "backend",
+        status: setup.endpoints.backendHttpUrl.startsWith("https://") ? "pass" : setup.endpoints.backendHttpUrl.startsWith("http://localhost") ? "warn" : "fail",
+        message: setup.endpoints.backendHttpUrl
       });
-      if (environment) {
-        const profile = installed.catalog.profiles.find((candidate) => candidate.environmentId === environment.id);
-        if (profile) {
-          profileLockPath = join7(this.paths.userDataDir, "environments", profile.namespace, "browser-profiles", ".cthutool-agent.lock");
-        }
-        checks.push({
-          id: "web-origin",
-          status: environment.webOrigin.startsWith("https://") ? "pass" : "fail",
-          message: environment.webOrigin
-        });
-        checks.push({
-          id: "backend",
-          status: environment.backendHttpUrl.startsWith("https://") ? "pass" : "fail",
-          message: environment.backendHttpUrl
-        });
-      }
+    }
+    if (installed) {
       const migration = await import_agent_data_migration.inspectLegacyDesktopMigration({
         agentRootDir: this.paths.userDataDir,
         legacyRootDir: this.legacyDesktopRoot,
-        environments: installed.catalog.profiles,
-        explicitEnvironmentId: await readEnvironmentSelection(this.paths)
+        environments: [
+          {
+            environmentId: SELF_USE_ENVIRONMENT_ID,
+            backendHttpUrl: setup.endpoints?.backendHttpUrl ?? "https://example.invalid",
+            namespace: SELF_USE_NAMESPACE
+          }
+        ],
+        explicitEnvironmentId: SELF_USE_ENVIRONMENT_ID
       }).catch((error) => ({
         status: "failed",
         message: error instanceof Error ? error.message : "Legacy Desktop migration inspection failed",
-        retryCommand: "chc agent doctor"
+        retryCommand: SETTINGS_REMEDIATION
       }));
       checks.push({
         id: "legacy-migration",
         status: migration.status === "failed" || migration.status === "selection-required" ? "fail" : migration.status === "locked" || migration.status === "ready" ? "warn" : "pass",
-        message: `${migration.message}${migration.retryCommand ? ` Next: ${migration.retryCommand}` : ""}`
+        message: `${migration.message}${migration.retryCommand ? ` Next: ${String(migration.retryCommand).replace(/chc agent env list && chc agent env set <id>/g, SETTINGS_REMEDIATION)}` : ""}`
       });
     }
     const status = await this.status();
@@ -9366,13 +9623,13 @@ class FileSystemAgentLifecycleService {
     });
     checks.push({
       id: "profile-locks",
-      status: await exists(profileLockPath) ? "warn" : "pass",
+      status: await pathExists2(profileLockPath) ? "warn" : "pass",
       message: "Profile lock ownership checked"
     });
     checks.push({
       id: "logs",
-      status: await exists(join7(this.paths.logsDir, "agent.log")) ? "pass" : "warn",
-      message: join7(this.paths.logsDir, "agent.log")
+      status: await pathExists2(join8(this.paths.logsDir, "agent.log")) ? "pass" : "warn",
+      message: join8(this.paths.logsDir, "agent.log")
     });
     return checks;
   }
@@ -9383,10 +9640,10 @@ class FileSystemAgentLifecycleService {
     const autostart = await this.platform.getAutostartStatus(this.paths);
     if (autostart.enabled)
       await this.platform.setAutostart(this.paths, false);
-    const installed = await exists(this.paths.installRoot);
-    await rm3(this.paths.installRoot, { force: true, recursive: true });
+    const installed = await pathExists2(this.paths.installRoot);
+    await rm4(this.paths.installRoot, { force: true, recursive: true });
     if (input.purge)
-      await rm3(this.paths.userDataDir, { force: true, recursive: true });
+      await rm4(this.paths.userDataDir, { force: true, recursive: true });
     return {
       removed: installed,
       purged: input.purge === true,
@@ -9422,7 +9679,18 @@ class FileSystemAgentLifecycleService {
     return record;
   }
 }
-async function exists(path) {
+function toEnvironmentView(setup) {
+  if (!setup.endpoints)
+    return;
+  return {
+    id: setup.endpoints.environmentId,
+    label: setup.endpoints.label,
+    active: true,
+    webOrigin: setup.endpoints.webOrigin,
+    backendHttpUrl: setup.endpoints.backendHttpUrl
+  };
+}
+async function pathExists2(path) {
   try {
     await stat4(path);
     return true;
@@ -9706,43 +9974,49 @@ function toDiagnosticCliError(error) {
 
 // src/command/agent.command.ts
 var lifecycleArgs = { ...cliContractArgs };
+var NATIVE_SETTINGS_REDIRECT = "The self-use deployment Origin is configured in the native settings window. Run: chc agent settings";
 function createAgentCommand(service) {
   const install = defineCommand({
     meta: {
       name: "install",
-      description: "Install a verified local Agent release."
+      description: "Install the latest self-use Agent release."
     },
     args: {
       ...lifecycleArgs,
       channel: {
         type: "string",
-        description: "Release channel: stable or beta",
-        default: "stable"
+        description: "Removed; self-use mode has one latest release"
       },
       version: {
         type: "string",
-        description: "Install an immutable release version"
+        description: "Removed; install the latest release and use local rollback for recovery"
       }
     },
-    run: ({ args }) => execute2(args, "install", () => service.install({
-      channel: parseChannel(args.channel),
-      version: stringValue(args.version)
-    }), installationMessage)
+    run: ({ args }) => execute2(args, "install", () => {
+      rejectRemovedReleaseOptions(args);
+      return service.install();
+    }, installationMessage)
   });
   const update = defineCommand({
     meta: {
       name: "update",
-      description: "Update only the local Agent and roll back on failed readiness."
+      description: "Update the local Agent from the latest self-use release and roll back on failed readiness."
     },
     args: {
       ...lifecycleArgs,
       channel: {
         type: "string",
-        description: "Release channel: stable or beta",
-        default: "stable"
+        description: "Removed; self-use mode has one latest release"
+      },
+      version: {
+        type: "string",
+        description: "Removed; update to the latest release and use local rollback for recovery"
       }
     },
-    run: ({ args }) => execute2(args, "update", () => service.update({ channel: parseChannel(args.channel) }), installationMessage)
+    run: ({ args }) => execute2(args, "update", () => {
+      rejectRemovedReleaseOptions(args);
+      return service.update();
+    }, installationMessage)
   });
   const start = simpleCommand("start", "Start the tray-owned local Agent.", service.start.bind(service));
   const stop = simpleCommand("stop", "Stop the tray and its local Agent.", service.stop.bind(service));
@@ -9750,15 +10024,27 @@ function createAgentCommand(service) {
   const status = defineCommand({
     meta: {
       name: "status",
-      description: "Show install, tray, environment, backend, browser, and autostart status."
+      description: "Show install, tray, SetupRequired/configured, backend, browser, and autostart status."
     },
     args: lifecycleArgs,
     run: ({ args }) => execute2(args, "status", () => service.status(), (result) => {
       const value = result;
-      return value.installed ? `CthuTool Agent ${value.version}: tray ${value.tray.state}; environment ${value.environment?.id ?? "none"}; backend ${value.backend.status}; browser ${value.browser.status}; autostart ${value.autostart.enabled ? "enabled" : "disabled"}.` : "CthuTool Agent is not installed.";
+      if (!value.installed)
+        return "CthuTool Agent is not installed.";
+      if (value.setup.required) {
+        return `CthuTool Agent ${value.version}: SetupRequired; tray ${value.tray.state}; ${value.setup.remediation ?? SETTINGS_REMEDIATION}.`;
+      }
+      return `CthuTool Agent ${value.version}: tray ${value.tray.state}; configured; backend ${value.backend.status}; browser ${value.browser.status}; autostart ${value.autostart.enabled ? "enabled" : "disabled"}.`;
     })
   });
-  const settings = simpleCommand("settings", "Start the Agent if needed and open a fresh deployed-Web settings session.", service.settings.bind(service));
+  const settings = defineCommand({
+    meta: {
+      name: "settings",
+      description: "Start the tray if needed and open the native Agent first-run or settings window."
+    },
+    args: lifecycleArgs,
+    run: ({ args }) => execute2(args, "settings", () => service.settings(), () => "CthuTool Agent native settings opened.")
+  });
   const logs = defineCommand({
     meta: {
       name: "logs",
@@ -9790,7 +10076,7 @@ function createAgentCommand(service) {
   const doctor = defineCommand({
     meta: {
       name: "doctor",
-      description: "Run integrity, local-control, environment, browser, and log diagnostics."
+      description: "Run integrity, native-setup, configuration, local-control, backend, browser, and log diagnostics."
     },
     args: lifecycleArgs,
     run: ({ args }) => execute2(args, "doctor", () => service.doctor(), (result) => result.map((check) => `${check.status.toUpperCase()} ${check.id}: ${check.message}`).join(`
@@ -9799,13 +10085,13 @@ function createAgentCommand(service) {
   const uninstall = defineCommand({
     meta: {
       name: "uninstall",
-      description: "Remove Agent binaries and autostart; preserve data unless --purge is confirmed."
+      description: "Remove Agent binaries and autostart; preserve Origin, profiles, and logs unless --purge is confirmed."
     },
     args: {
       ...lifecycleArgs,
       purge: {
         type: "boolean",
-        description: "Also remove environment selection, profiles, and logs"
+        description: "Also remove deployment Origin, profiles, and logs"
       },
       yes: {
         type: "boolean",
@@ -9818,7 +10104,7 @@ function createAgentCommand(service) {
         let confirmed = args.yes === true;
         if (args.purge === true && !confirmed && context.interactive) {
           const answer = await ce2({
-            message: "Permanently delete Agent profiles, selection, and logs?",
+            message: "Permanently delete Agent Origin, profiles, and logs?",
             initialValue: false
           });
           confirmed = !lD2(answer) && answer === true;
@@ -9832,49 +10118,16 @@ function createAgentCommand(service) {
       });
     }
   });
-  const envList = defineCommand({
-    meta: { name: "list", description: "List verified release environments." },
-    args: lifecycleArgs,
-    run: ({ args }) => execute2(args, "env list", () => service.listEnvironments(), environmentListMessage)
-  });
-  const envGet = defineCommand({
-    meta: {
-      name: "get",
-      description: "Show the active or named environment."
-    },
-    args: {
-      ...lifecycleArgs,
-      id: {
-        type: "positional",
-        required: false,
-        description: "Environment id"
-      }
-    },
-    run: ({ args }) => execute2(args, "env get", () => service.getEnvironment(stringValue(args.id)), environmentMessage)
-  });
-  const envSet = defineCommand({
-    meta: {
-      name: "set",
-      description: "Select a verified environment for the running or stopped Agent."
-    },
-    args: {
-      ...lifecycleArgs,
-      id: { type: "positional", required: true, description: "Environment id" }
-    },
-    run: ({ args }) => execute2(args, "env set", () => service.setEnvironment(requiredString(args.id, "environment id")), (result) => `Active Agent environment: ${result.id}.`)
-  });
-  const envRegistrations = [
-    registration("list", envList),
-    registration("get", envGet),
-    registration("set", envSet)
-  ];
-  const environment = registerCommandGroup(defineCommand({
+  const envRedirect = defineCommand({
     meta: {
       name: "env",
-      description: "Manage verified Agent environments."
+      description: "Deprecated for self-use; open native Agent Settings instead."
     },
-    subCommands: buildRegisteredSubCommands(envRegistrations)
-  }), envRegistrations);
+    args: lifecycleArgs,
+    run: ({ args }) => execute2(args, "env", async () => {
+      throw createCliError("agent_environment_invalid", NATIVE_SETTINGS_REDIRECT);
+    }, () => NATIVE_SETTINGS_REDIRECT)
+  });
   const autostartCommands = ["enable", "disable", "status"].map((action) => ({
     action,
     command: defineCommand({
@@ -9906,7 +10159,6 @@ function createAgentCommand(service) {
     registration("status", status),
     registration("settings", settings),
     registration("logs", logs),
-    registration("env", environment, "help"),
     registration("autostart", autostart, "help"),
     registration("doctor", doctor),
     registration("uninstall", uninstall)
@@ -9917,12 +10169,19 @@ function createAgentCommand(service) {
         name: "agent",
         description: "Install and control the local CthuTool Agent."
       },
-      subCommands: buildRegisteredSubCommands(registrations)
+      subCommands: {
+        ...buildRegisteredSubCommands(registrations),
+        env: envRedirect
+      }
     }), registrations),
     registrations
   };
 }
-var defaultAgentCommand = createAgentCommand(new FileSystemAgentLifecycleService);
+var defaultAgentCommand = createAgentCommand(new FileSystemAgentLifecycleService({
+  release: process.env.CTHUTOOL_AGENT_RELEASE_MANIFEST_URL ? {
+    manifestUrl: process.env.CTHUTOOL_AGENT_RELEASE_MANIFEST_URL
+  } : undefined
+}));
 var agentCommand = defaultAgentCommand.command;
 var agentCommandRegistrations = defaultAgentCommand.registrations;
 function simpleCommand(name, description, operation) {
@@ -9974,54 +10233,38 @@ function classifyAgentError(error) {
   const message = safeErrorMessage(error).toLowerCase();
   if (message.includes("not installed"))
     return "agent_not_installed";
-  if (message.includes("pinned public key") || message.includes("signature") || message.includes("untrusted"))
+  if (message.includes("unsupported") || message.includes("self-use release") || message.includes("legacy") || message.includes("unknown schema"))
     return "agent_release_untrusted";
-  if (message.includes("digest") || message.includes("archive") || message.includes("catalog") || message.includes("layout") || message.includes("canonical"))
+  if (message.includes("digest") || message.includes("archive") || message.includes("catalog") || message.includes("layout") || message.includes("size") || message.includes("integrity"))
     return "agent_integrity_failed";
   if (message.includes("supports macos") || message.includes("incompatible") || message.includes("requires chc"))
     return "agent_incompatible";
-  if (message.includes("unknown agent environment") || message.includes("no agent environment"))
+  if (message.includes("native settings") || message.includes("unknown agent environment") || message.includes("no agent environment"))
     return "agent_environment_invalid";
   if (message.includes("timed out waiting") && message.includes("ready"))
     return "agent_start_failed";
   if (message.includes("purging agent data"))
     return "agent_purge_confirmation_required";
+  if (message.includes("channel") || message.includes("one latest release") || message.includes("--version is no longer supported"))
+    return "invalid_option";
   return "agent_control_failed";
 }
 function safeErrorMessage(error) {
   return error instanceof Error ? error.message : "Unable to complete Agent command";
 }
-function parseChannel(value) {
-  if (value === undefined || value === "stable")
-    return "stable";
-  if (value === "beta")
-    return "beta";
-  throw createCliError("invalid_option", "Agent release channel must be stable or beta");
+function rejectRemovedReleaseOptions(args) {
+  if ("channel" in args && args.channel !== undefined) {
+    throw createCliError("invalid_option", "Self-use mode has one latest release; --channel is no longer supported");
+  }
+  if ("version" in args && args.version !== undefined) {
+    throw createCliError("invalid_option", "Self-use mode installs the latest release only; --version is no longer supported. Use local rollback to restore a previous version.");
+  }
 }
 function parseLineCount(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1e4)
     throw createCliError("invalid_option", "--lines must be an integer from 1 to 10000");
   return parsed;
-}
-function stringValue(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-function requiredString(value, label) {
-  const result = stringValue(value);
-  if (!result)
-    throw createCliError("missing_required_argument", `Missing required ${label}`);
-  return result;
-}
-function environmentListMessage(result) {
-  return result.map((environment) => `${environment.active ? "*" : " "} ${environment.id}	${environment.label}`).join(`
-`);
-}
-function environmentMessage(result) {
-  const environment = result;
-  return `${environment.active ? "Active " : ""}${environment.id} (${environment.label})
-Web: ${environment.webOrigin}
-Backend: ${environment.backendHttpUrl}`;
 }
 function installationMessage(result) {
   const value = result;
@@ -10058,17 +10301,17 @@ var import_picocolors3 = __toESM(require_picocolors(), 1);
 
 // src/domain/codex-plugin-install-manager.ts
 import { readFile as readFile8 } from "node:fs/promises";
-import { basename as basename2, join as join9, resolve as resolve5 } from "node:path";
+import { basename as basename2, join as join10, resolve as resolve5 } from "node:path";
 
 // src/infra/codex-config-paths.ts
-import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
+import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
 import { homedir as homedir5 } from "node:os";
-import { dirname as dirname5, isAbsolute, join as join8, relative, resolve as resolve3 } from "node:path";
+import { dirname as dirname5, isAbsolute, join as join9, relative, resolve as resolve3 } from "node:path";
 function createCodexConfigPaths(options = {}) {
   const repoRoot = resolve3(options.repoRoot ?? getDefaultRepoRoot());
   const homeRoot = resolve3(options.homeRoot ?? homedir5());
-  const localCodexRoot = resolve3(options.codexHome ?? join8(homeRoot, ".codex"));
-  const localOpenCodeRoot = resolve3(options.openCodeHome ?? join8(homeRoot, ".config", "opencode"));
+  const localCodexRoot = resolve3(options.codexHome ?? join9(homeRoot, ".codex"));
+  const localOpenCodeRoot = resolve3(options.openCodeHome ?? join9(homeRoot, ".config", "opencode"));
   const openCodeConfigPath = resolve3(options.openCodeConfig ?? getDefaultOpenCodeConfigPath(localOpenCodeRoot));
   return {
     repoRoot,
@@ -10077,14 +10320,14 @@ function createCodexConfigPaths(options = {}) {
     localCodexRoot,
     localOpenCodeRoot,
     openCodeConfigPath,
-    marketplacePath: resolve3(options.marketplace ?? join8(homeRoot, ".agents", "plugins", "marketplace.json")),
-    pluginsRoot: resolve3(options.pluginsRoot ?? join8(repoRoot, "codex", "plugins")),
-    cacheRoot: resolve3(options.cacheRoot ?? join8(homeRoot, ".codex", "plugins", "cache", "personal"))
+    marketplacePath: resolve3(options.marketplace ?? join9(homeRoot, ".agents", "plugins", "marketplace.json")),
+    pluginsRoot: resolve3(options.pluginsRoot ?? join9(repoRoot, "codex", "plugins")),
+    cacheRoot: resolve3(options.cacheRoot ?? join9(homeRoot, ".codex", "plugins", "cache", "personal"))
   };
 }
 function getDefaultOpenCodeConfigPath(openCodeRoot) {
-  const jsoncPath = join8(openCodeRoot, "opencode.jsonc");
-  return existsSync2(jsoncPath) ? jsoncPath : join8(openCodeRoot, "opencode.json");
+  const jsoncPath = join9(openCodeRoot, "opencode.jsonc");
+  return existsSync3(jsoncPath) ? jsoncPath : join9(openCodeRoot, "opencode.json");
 }
 function assertPathInside(parent, child) {
   const parentPath = resolve3(parent);
@@ -10109,11 +10352,11 @@ function getDefaultRepoRoot() {
   }
 }
 function isWorkspaceRoot(path) {
-  if (existsSync2(join8(path, "pnpm-workspace.yaml"))) {
+  if (existsSync3(join9(path, "pnpm-workspace.yaml"))) {
     return true;
   }
   try {
-    const pkg = JSON.parse(readFileSync2(join8(path, "package.json"), "utf8"));
+    const pkg = JSON.parse(readFileSync3(join9(path, "package.json"), "utf8"));
     return pkg.name === "cthutool";
   } catch {
     return false;
@@ -10121,7 +10364,7 @@ function isWorkspaceRoot(path) {
 }
 
 // src/domain/codex-plugin-manager.ts
-import { cp, mkdir as mkdir5, readdir as readdir3, readFile as readFile7, rm as rm4, writeFile as writeFile4 } from "node:fs/promises";
+import { cp, mkdir as mkdir5, readdir as readdir3, readFile as readFile7, rm as rm5, writeFile as writeFile4 } from "node:fs/promises";
 import { dirname as dirname6, isAbsolute as isAbsolute2, relative as relative2, resolve as resolve4 } from "node:path";
 async function discoverCodexPlugins(pluginsRoot) {
   let entries;
@@ -10203,7 +10446,7 @@ async function syncCodexPluginCache(options) {
   assertPathInside2(cacheRoot, pluginCacheRoot);
   assertPathInside2(pluginCacheRoot, versionCacheRoot);
   await mkdir5(cacheRoot, { recursive: true });
-  await rm4(pluginCacheRoot, { recursive: true, force: true });
+  await rm5(pluginCacheRoot, { recursive: true, force: true });
   await mkdir5(pluginCacheRoot, { recursive: true });
   await cp(options.plugin.root, versionCacheRoot, {
     recursive: true,
@@ -10402,7 +10645,7 @@ async function installRepositoryCodexPlugins(paths) {
   const selectedNames = plugins.map((plugin) => plugin.name);
   const installedPlugins = await installCodexPlugins({
     homeRoot: paths.homeRoot,
-    configPath: join9(paths.localCodexRoot, "config.toml"),
+    configPath: join10(paths.localCodexRoot, "config.toml"),
     marketplacePath: paths.marketplacePath,
     plugins,
     selectedNames
@@ -10431,7 +10674,7 @@ async function discoverEnabledRepositoryCodexPlugins(paths) {
   ]);
 }
 async function readPluginManifest2(repoCodexRoot) {
-  const path = join9(repoCodexRoot, "plugins.manifest.json");
+  const path = join10(repoCodexRoot, "plugins.manifest.json");
   try {
     const value = JSON.parse(await readFile8(path, "utf8"));
     if (!isRecord2(value) || value.version !== 1 || !Array.isArray(value.plugins)) {
@@ -10463,7 +10706,7 @@ function validatePluginManifestEntry(value, index) {
 }
 async function readPluginDisplayName(root) {
   try {
-    const value = JSON.parse(await readFile8(join9(root, ".codex-plugin", "plugin.json"), "utf8"));
+    const value = JSON.parse(await readFile8(join10(root, ".codex-plugin", "plugin.json"), "utf8"));
     return typeof value.interface?.displayName === "string" ? value.interface.displayName : basename2(root);
   } catch {
     return basename2(root);
@@ -10479,7 +10722,7 @@ function isMissingFileError(error) {
 // src/domain/codex-skills-backend.ts
 import { execFile as execFileCallback } from "node:child_process";
 import { readFile as readFile9 } from "node:fs/promises";
-import { join as join10 } from "node:path";
+import { join as join11 } from "node:path";
 import { promisify } from "node:util";
 var execFile = promisify(execFileCallback);
 var pinnedSkillsCliVersion = "1.5.19";
@@ -10626,7 +10869,7 @@ async function runSkillsProcess(args, env2) {
 }
 async function readSkillLock(homeRoot) {
   try {
-    const parsed = JSON.parse(await readFile9(join10(homeRoot, ".agents", ".skill-lock.json"), "utf8"));
+    const parsed = JSON.parse(await readFile9(join11(homeRoot, ".agents", ".skill-lock.json"), "utf8"));
     if (!isRecord3(parsed) || parsed.version !== 3 || !isRecord3(parsed.skills)) {
       throw new Error("expected lock version 3 with a skills object");
     }
@@ -10755,12 +10998,12 @@ function isMissingFileError2(error) {
 }
 
 // src/domain/codex-skills-manager.ts
-import { mkdir as mkdir7, rename as rename3, rm as rm6 } from "node:fs/promises";
-import { dirname as dirname8, join as join12 } from "node:path";
+import { mkdir as mkdir7, rename as rename3, rm as rm7 } from "node:fs/promises";
+import { dirname as dirname8, join as join13 } from "node:path";
 
 // src/domain/codex-skills-manifest.ts
-import { mkdir as mkdir6, readFile as readFile10, rename as rename2, rm as rm5, writeFile as writeFile5 } from "node:fs/promises";
-import { dirname as dirname7, join as join11, resolve as resolve6 } from "node:path";
+import { mkdir as mkdir6, readFile as readFile10, rename as rename2, rm as rm6, writeFile as writeFile5 } from "node:fs/promises";
+import { dirname as dirname7, join as join12, resolve as resolve6 } from "node:path";
 var emptyCodexSkillsManifest = () => ({
   version: 2,
   skills: []
@@ -10808,7 +11051,7 @@ function validateCodexSkillsManifest(value) {
 async function writeCodexSkillsManifest(repoCodexRoot, manifest) {
   const validated = validateCodexSkillsManifest(manifest);
   const path = getManifestPath(repoCodexRoot);
-  const temporaryPath = join11(dirname7(path), `.skills.manifest.${process.pid}.${Date.now()}.tmp`);
+  const temporaryPath = join12(dirname7(path), `.skills.manifest.${process.pid}.${Date.now()}.tmp`);
   assertPathInside(repoCodexRoot, path);
   assertPathInside(repoCodexRoot, temporaryPath);
   await mkdir6(dirname7(path), { recursive: true });
@@ -10817,7 +11060,7 @@ async function writeCodexSkillsManifest(repoCodexRoot, manifest) {
 `, "utf8");
     await rename2(temporaryPath, path);
   } finally {
-    await rm5(temporaryPath, { force: true });
+    await rm6(temporaryPath, { force: true });
   }
 }
 function upsertManagedSkill(manifest, skill) {
@@ -11048,14 +11291,14 @@ async function replaceSkillWithRollback(item, backend) {
   if (!skill || !installedPath) {
     throw new Error(`Missing replacement metadata for ${item.name}.`);
   }
-  const backupPath = join12(dirname8(installedPath), `.${item.name}.cthutool-backup-${process.pid}-${Date.now()}`);
+  const backupPath = join13(dirname8(installedPath), `.${item.name}.cthutool-backup-${process.pid}-${Date.now()}`);
   await mkdir7(dirname8(backupPath), { recursive: true });
   await rename3(installedPath, backupPath);
   try {
     await backend.install(skill);
-    await rm6(backupPath, { recursive: true, force: true });
+    await rm7(backupPath, { recursive: true, force: true });
   } catch (error) {
-    await rm6(installedPath, { recursive: true, force: true });
+    await rm7(installedPath, { recursive: true, force: true });
     await rename3(backupPath, installedPath);
     throw error;
   }
@@ -11510,7 +11753,7 @@ var codexCommand = defineCommand({
 import { execFile as execFile2 } from "node:child_process";
 import { mkdir as mkdir8, readFile as readFile11, writeFile as writeFile6 } from "node:fs/promises";
 import { homedir as homedir6, platform as platform2 } from "node:os";
-import { dirname as dirname9, join as join13 } from "node:path";
+import { dirname as dirname9, join as join14 } from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // src/domain/completion-candidates.ts
@@ -11704,9 +11947,9 @@ async function resolvePowerShellProfilePath() {
     } catch {}
   }
   if (platform2() === "win32") {
-    return join13(process.env.USERPROFILE || homedir6(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
+    return join14(process.env.USERPROFILE || homedir6(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
   }
-  return join13(homedir6(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
+  return join14(homedir6(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
 }
 function resolveZshProfilePath() {
   const override = process.env[zshProfileEnv]?.trim();
@@ -11714,7 +11957,7 @@ function resolveZshProfilePath() {
     return override;
   }
   const zdotdir = process.env.ZDOTDIR?.trim();
-  return join13(zdotdir || homedir6(), ".zshrc");
+  return join14(zdotdir || homedir6(), ".zshrc");
 }
 async function handlePowerShellProfileAction(action) {
   const profilePath = await resolvePowerShellProfilePath();
@@ -11899,13 +12142,13 @@ function createInternalCompleteCommand(resolveRootCommand) {
 }
 
 // src/command/obsidian.command.ts
-import { join as join17 } from "node:path";
+import { join as join18 } from "node:path";
 var import_picocolors4 = __toESM(require_picocolors(), 1);
 
 // src/domain/obsidian-agents-config.ts
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mkdir as mkdir9, readFile as readFile12, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
-import { isAbsolute as isAbsolute3, join as join14, relative as relative3, resolve as resolve7, sep as sep4 } from "node:path";
+import { isAbsolute as isAbsolute3, join as join15, relative as relative3, resolve as resolve7, sep as sep4 } from "node:path";
 var OBSIDIAN_AGENTS_CONFIG_VERSION = 2;
 
 class ObsidianAgentsConfigError extends Error {
@@ -11926,8 +12169,8 @@ function normalizeObsidianAgentsProfile(input) {
     throw new ObsidianAgentsConfigError("Profile id must start with a lowercase letter or number and contain only lowercase letters, numbers, hyphens, or underscores.");
   }
   const vaultPath = normalizeAbsolutePath(input.vaultPath, "vault path");
-  const sourcePath = normalizeAbsolutePath(input.sourcePath?.trim() || join14(vaultPath, "Agents"), "visible source path");
-  const agentsPath = join14(vaultPath, ".agents");
+  const sourcePath = normalizeAbsolutePath(input.sourcePath?.trim() || join15(vaultPath, "Agents"), "visible source path");
+  const agentsPath = join15(vaultPath, ".agents");
   const sourceRelative = relative3(vaultPath, sourcePath);
   if (sourceRelative.length === 0 || sourceRelative === ".." || sourceRelative.startsWith(`..${sep4}`) || isAbsolute3(sourceRelative)) {
     throw new ObsidianAgentsConfigError("The visible source path must be a directory inside the Obsidian vault.");
@@ -11972,7 +12215,7 @@ async function writeObsidianAgentsConfig(paths, config) {
     ]))
   };
   await mkdir9(paths.dataRoot, { recursive: true });
-  const temporaryPath = `${paths.configPath}.tmp-${randomUUID2()}`;
+  const temporaryPath = `${paths.configPath}.tmp-${randomUUID()}`;
   await writeFile7(temporaryPath, `${JSON.stringify(persisted, null, 2)}
 `, "utf8");
   await rename4(temporaryPath, paths.configPath);
@@ -12055,7 +12298,7 @@ import {
   basename as basename3,
   dirname as dirname10,
   isAbsolute as isAbsolute4,
-  join as join15,
+  join as join16,
   normalize,
   relative as relative4,
   resolve as resolve8,
@@ -12090,12 +12333,12 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
   switch (topology.agents.kind) {
     case "absent":
       transition = topology.source.kind === "absent" ? "create" : "link_existing_source";
-      actions.push(topology.source.kind === "absent" ? `create visible source ${profile.sourcePath}` : `preserve visible source ${profile.sourcePath}`, `ensure ${join15(profile.sourcePath, "skills")} and ${join15(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
+      actions.push(topology.source.kind === "absent" ? `create visible source ${profile.sourcePath}` : `preserve visible source ${profile.sourcePath}`, `ensure ${join16(profile.sourcePath, "skills")} and ${join16(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
       break;
     case "directory":
       if (topology.source.kind === "absent" || topology.source.empty === true) {
         transition = "adopt_existing_agents";
-        actions.push(`move existing directory ${profile.agentsPath} to ${profile.sourcePath}`, `ensure ${join15(profile.sourcePath, "skills")} and ${join15(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
+        actions.push(`move existing directory ${profile.agentsPath} to ${profile.sourcePath}`, `ensure ${join16(profile.sourcePath, "skills")} and ${join16(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
       } else if (topology.agents.empty === true) {
         transition = "replace_empty_agents";
         actions.push(`remove empty directory ${profile.agentsPath}`, `preserve visible source ${profile.sourcePath}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
@@ -12107,11 +12350,11 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
       if (topology.linkStatus === "correct") {
         transition = "reuse";
         actions.push(`validate existing link ${profile.agentsPath}`);
-        if (!await isDirectory(join15(profile.sourcePath, "skills"))) {
-          actions.push(`create ${join15(profile.sourcePath, "skills")}`);
+        if (!await isDirectory(join16(profile.sourcePath, "skills"))) {
+          actions.push(`create ${join16(profile.sourcePath, "skills")}`);
         }
-        if (!await isDirectory(join15(profile.sourcePath, "state"))) {
-          actions.push(`create ${join15(profile.sourcePath, "state")}`);
+        if (!await isDirectory(join16(profile.sourcePath, "state"))) {
+          actions.push(`create ${join16(profile.sourcePath, "state")}`);
         }
       } else {
         transition = "repair_link";
@@ -12209,9 +12452,9 @@ async function inspectObsidianAgentsStatus(options) {
   const vaultExists = await isDirectory(profile.vaultPath);
   const sourceInsideVault = vaultExists && await isCanonicalSourceInsideVault(profile);
   const sourceExists = topology.source.kind === "directory";
-  const skillsExists = sourceExists ? await isDirectory(join15(profile.sourcePath, "skills")) : false;
-  const stateExists = sourceExists ? await isDirectory(join15(profile.sourcePath, "state")) : false;
-  const gitMetadata = sourceExists ? await pathExists2(join15(profile.sourcePath, ".git")) : false;
+  const skillsExists = sourceExists ? await isDirectory(join16(profile.sourcePath, "skills")) : false;
+  const stateExists = sourceExists ? await isDirectory(join16(profile.sourcePath, "state")) : false;
+  const gitMetadata = sourceExists ? await pathExists3(join16(profile.sourcePath, ".git")) : false;
   const warnings = [];
   if (!vaultExists)
     warnings.push("The configured Obsidian vault is missing.");
@@ -12370,11 +12613,11 @@ function createMissingStatus() {
   };
 }
 async function ensureSourceDirectories(sourcePath) {
-  await mkdir10(join15(sourcePath, "skills"), { recursive: true });
-  await mkdir10(join15(sourcePath, "state"), { recursive: true });
+  await mkdir10(join16(sourcePath, "skills"), { recursive: true });
+  await mkdir10(join16(sourcePath, "state"), { recursive: true });
 }
 async function assertContentDirectory(sourcePath, name) {
-  const state = await inspectObsidianAgentsPath(join15(sourcePath, name));
+  const state = await inspectObsidianAgentsPath(join16(sourcePath, name));
   if (state.kind !== "absent" && state.kind !== "directory") {
     throw new ObsidianAgentsServiceError("invalid_configuration", `The visible source ${name}/ path is not a real directory: ${state.path}`);
   }
@@ -12440,7 +12683,7 @@ function normalizeComparablePath(value, platform3) {
   comparable = normalize(comparable).replace(/[\\/]+$/u, "");
   return platform3 === "win32" ? comparable.toLowerCase() : comparable;
 }
-async function pathExists2(path) {
+async function pathExists3(path) {
   try {
     await lstat(path);
     return true;
@@ -12465,7 +12708,7 @@ function isMissingFileError5(error) {
 
 // src/infra/obsidian-agents-paths.ts
 import { homedir as homedir7 } from "node:os";
-import { join as join16, resolve as resolve9 } from "node:path";
+import { join as join17, resolve as resolve9 } from "node:path";
 function resolveCthuToolChcDataRoot(options = {}) {
   const env2 = options.env ?? process.env;
   const explicit = options.dataRoot?.trim() || env2.CTHUTOOL_CHC_DATA_DIR;
@@ -12474,18 +12717,18 @@ function resolveCthuToolChcDataRoot(options = {}) {
   const homeRoot = options.homeRoot ?? homedir7();
   const platform3 = options.platform ?? process.platform;
   if (platform3 === "win32") {
-    return resolve9(join16(env2.APPDATA ?? join16(homeRoot, "AppData", "Roaming"), "CthuTool", "chc"));
+    return resolve9(join17(env2.APPDATA ?? join17(homeRoot, "AppData", "Roaming"), "CthuTool", "chc"));
   }
   if (platform3 === "darwin") {
-    return resolve9(join16(homeRoot, "Library", "Application Support", "CthuTool", "chc"));
+    return resolve9(join17(homeRoot, "Library", "Application Support", "CthuTool", "chc"));
   }
-  return resolve9(join16(env2.XDG_STATE_HOME ?? join16(homeRoot, ".local", "state"), "cthutool", "chc"));
+  return resolve9(join17(env2.XDG_STATE_HOME ?? join17(homeRoot, ".local", "state"), "cthutool", "chc"));
 }
 function createObsidianAgentsDataPaths(options = {}) {
   const dataRoot = resolveCthuToolChcDataRoot(options);
   return {
     dataRoot,
-    configPath: join16(dataRoot, "obsidian-agents.json")
+    configPath: join17(dataRoot, "obsidian-agents.json")
   };
 }
 
@@ -12617,7 +12860,7 @@ async function collectSetupInput(args, current, interactive) {
     return {
       id: suppliedProfile ?? current?.id ?? "obsidian-main",
       vaultPath: vaultPath2,
-      sourcePath: suppliedSource ?? current?.sourcePath ?? join17(vaultPath2, "Agents")
+      sourcePath: suppliedSource ?? current?.sourcePath ?? join18(vaultPath2, "Agents")
     };
   }
   if (current) {
@@ -12641,7 +12884,7 @@ async function collectSetupInput(args, current, interactive) {
   const vaultPath = suppliedVault ?? await promptString("Obsidian vault path", current?.vaultPath, (value) => value.trim() ? undefined : "A vault path is required.");
   if (!vaultPath)
     return;
-  const sourcePath = suppliedSource ?? await promptString("Visible Agents source path", current?.sourcePath ?? join17(vaultPath, "Agents"), (value) => value.trim() ? undefined : "A source path is required.");
+  const sourcePath = suppliedSource ?? await promptString("Visible Agents source path", current?.sourcePath ?? join18(vaultPath, "Agents"), (value) => value.trim() ? undefined : "A source path is required.");
   if (!sourcePath)
     return;
   return { id, vaultPath, sourcePath };
@@ -12766,7 +13009,7 @@ var obsidianCommand = defineCommand({
 var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // src/domain/opencode-config-manager.ts
-import { mkdir as mkdir11, readFile as readFile13, rename as rename6, rm as rm7, writeFile as writeFile8 } from "node:fs/promises";
+import { mkdir as mkdir11, readFile as readFile13, rename as rename6, rm as rm8, writeFile as writeFile8 } from "node:fs/promises";
 import { dirname as dirname11, isAbsolute as isAbsolute5, resolve as resolve10 } from "node:path";
 async function syncOpenCodeSkillPaths(input) {
   const plugins = [];
@@ -12860,7 +13103,7 @@ async function writeOpenCodeConfig(configPath, config) {
 `, "utf8");
     await rename6(temporaryPath, path);
   } finally {
-    await rm7(temporaryPath, { force: true });
+    await rm8(temporaryPath, { force: true });
   }
 }
 async function readPluginSkillPaths(plugin) {
@@ -13702,10 +13945,10 @@ var resolvePackage = (catalog, id) => {
 };
 
 // src/flow/run-bundled-script.ts
-import { join as join18 } from "node:path";
+import { join as join19 } from "node:path";
 import { pathToFileURL } from "node:url";
 function runBundledScript(pkg, args, context) {
-  const entryPath = join18(pkg.rootPath, pkg.entryRelative);
+  const entryPath = join19(pkg.rootPath, pkg.entryRelative);
   const href = pathToFileURL(entryPath).href;
   const startedAt = Date.now();
   const diagnostics = context.diagnostics?.child({ scriptId: pkg.id });
@@ -13785,22 +14028,22 @@ function runBundledScript(pkg, args, context) {
 var import_picocolors6 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
-import { existsSync as existsSync3 } from "node:fs";
-import { dirname as dirname12, join as join19 } from "node:path";
+import { existsSync as existsSync4 } from "node:fs";
+import { dirname as dirname12, join as join20 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 function getBundledScriptsRoot() {
   const moduleDir = dirname12(fileURLToPath2(import.meta.url));
   const candidates = [
-    join19(moduleDir, "scripts"),
-    join19(moduleDir, "../scripts"),
-    join19(moduleDir, "../src/scripts")
+    join20(moduleDir, "scripts"),
+    join20(moduleDir, "../scripts"),
+    join20(moduleDir, "../src/scripts")
   ];
-  return candidates.find((candidate) => existsSync3(candidate)) ?? candidates[0];
+  return candidates.find((candidate) => existsSync4(candidate)) ?? candidates[0];
 }
 
 // src/infra/discover-scripts.ts
 import { readdir as readdir5, readFile as readFile14, stat as stat6 } from "node:fs/promises";
-import { join as join20 } from "node:path";
+import { join as join21 } from "node:path";
 
 // src/domain/script-id.ts
 var KEBAB_CASE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -14154,18 +14397,18 @@ async function scanScriptsRoot(scriptsRoot) {
   }
   const names = entries.filter((e3) => e3.isDirectory()).map((e3) => e3.name).sort((a4, b5) => a4.localeCompare(b5));
   for (const name of names) {
-    const dirPath = join20(scriptsRoot, name);
+    const dirPath = join21(scriptsRoot, name);
     const dirIdResult = validateScriptId(name);
     if (dirIdResult.isErr()) {
       pushWarning(warnings, dirPath, `skip non-kebab-case script folder: ${dirIdResult.error.message}`);
       continue;
     }
-    const manifestPath = join20(dirPath, MANIFEST_FILE);
+    const manifestPath = join21(dirPath, MANIFEST_FILE);
     let entryRelative;
     let entryStat;
     for (const candidate of ENTRY_FILES) {
       try {
-        const candidateStat = await stat6(join20(dirPath, candidate));
+        const candidateStat = await stat6(join21(dirPath, candidate));
         if (candidateStat.isFile()) {
           entryRelative = candidate;
           entryStat = candidateStat;

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { canonicalJson, createBundleLayout } from '@cthutool/agent-release';
 import { FileSystemAgentLifecycleService } from '../../src/infra/agent-lifecycle-service';
 import type { AgentPaths } from '../../src/infra/agent-paths';
+import { resolveSelfUseConfigPath } from '../../src/infra/agent-self-use';
 import { resolveTrayInstancePath } from '../../src/infra/agent-tray-control';
 
 describe('filesystem Agent lifecycle service', () => {
@@ -17,40 +18,50 @@ describe('filesystem Agent lifecycle service', () => {
     );
   });
 
-  test('selects verified environments without secret configuration state', async () => {
-    const { service } = await createService();
-    expect(await service.listEnvironments()).toEqual([
-      expect.objectContaining({
-        active: true,
-        id: 'production',
-        label: 'Production',
-        webOrigin: 'https://app.example.com',
-        backendHttpUrl: 'https://api.example.com',
-      }),
-      expect.objectContaining({
-        active: false,
-        id: 'staging',
-        label: 'Staging',
-      }),
-    ]);
-    expect(JSON.stringify(await service.listEnvironments())).not.toMatch(
-      /secretConfigured|agent-secret/i,
-    );
-    await expect(service.setEnvironment('staging')).resolves.toEqual({
-      changed: true,
-      id: 'staging',
+  test('reports SetupRequired until Origin is configured', async () => {
+    const { paths, service } = await createService();
+    const status = await service.status();
+    expect(status.setup).toMatchObject({
+      configured: false,
+      required: true,
+      remediation: 'Run: chc agent settings',
     });
-    await expect(service.getEnvironment()).resolves.toEqual(
-      expect.objectContaining({ active: true, id: 'staging' }),
+    expect(status.tray.state).toBe('SetupRequired');
+    expect(JSON.stringify(status)).not.toMatch(/ticket|bearer|agent-secret/i);
+
+    await writeSelfUseConfig(paths, 'https://app.example.com');
+    const configured = await service.status();
+    expect(configured.setup).toMatchObject({
+      configured: true,
+      required: false,
+      deploymentOrigin: 'https://app.example.com',
+    });
+    expect(configured.endpoints).toEqual({
+      webOrigin: 'https://app.example.com',
+      webAgentUrl: 'https://app.example.com/agent',
+      backendHttpUrl: 'https://app.example.com',
+      backendAgentWsUrl: 'wss://app.example.com/ws/agents',
+    });
+    expect(configured.environment).toMatchObject({
+      id: 'self-use',
+      webOrigin: 'https://app.example.com',
+    });
+    expect(JSON.stringify(configured)).not.toMatch(
+      /secretConfigured|agent-secret/i,
     );
   });
 
-  test('default uninstall preserves mutable data and unconfirmed purge deletes nothing', async () => {
+  test('default uninstall preserves Origin, legacy files, profiles, and logs', async () => {
     const first = await createService();
+    await writeSelfUseConfig(first.paths, 'https://app.example.com');
+    await writeLegacyAgentSecret(
+      first.paths,
+      'production-secret-value-that-is-long-enough',
+    );
     const profile = join(
       first.paths.userDataDir,
       'environments',
-      'production',
+      'self-use',
       'browser-profiles',
       'site',
     );
@@ -60,23 +71,25 @@ describe('filesystem Agent lifecycle service', () => {
     await mkdir(first.paths.userDataDir, { recursive: true });
     await writeFile(join(profile, 'state'), 'profile');
     await writeFile(log, 'redacted log');
-    await writeFile(
-      join(first.paths.userDataDir, 'environment.json'),
-      `${JSON.stringify({ activeEnvironmentId: 'production' }, null, 2)}\n`,
-    );
     await expect(first.service.uninstall()).resolves.toMatchObject({
       purged: false,
       preservedDataDir: first.paths.userDataDir,
     });
     await expect(stat(first.paths.installRoot)).rejects.toThrow();
+    expect(
+      await readFile(resolveSelfUseConfigPath(first.paths), 'utf8'),
+    ).toContain('https://app.example.com');
+    expect(await readFile(legacyAgentSecretPath(first.paths), 'utf8')).toBe(
+      'production-secret-value-that-is-long-enough\n',
+    );
     expect(await readFile(join(profile, 'state'), 'utf8')).toBe('profile');
     expect(await readFile(log, 'utf8')).toBe('redacted log');
 
     const second = await createService();
-    await mkdir(second.paths.userDataDir, { recursive: true });
-    await writeFile(
-      join(second.paths.userDataDir, 'environment.json'),
-      `${JSON.stringify({ activeEnvironmentId: 'production' }, null, 2)}\n`,
+    await writeSelfUseConfig(second.paths, 'https://app.example.com');
+    await writeLegacyAgentSecret(
+      second.paths,
+      'another-production-secret-value-long-enough',
     );
     await expect(
       second.service.uninstall({ purge: true, confirmed: false }),
@@ -89,8 +102,22 @@ describe('filesystem Agent lifecycle service', () => {
     await expect(stat(second.paths.userDataDir)).rejects.toThrow();
   });
 
-  test('repoints autostart and rolls a running Agent back after failed update readiness', async () => {
+  test('update rollback preserves mutable self-use configuration', async () => {
     const { paths, service } = await createService({ autostartEnabled: true });
+    await writeSelfUseConfig(paths, 'https://keep.example.com');
+    await writeLegacyAgentSecret(
+      paths,
+      'keep-this-secret-across-update-rollback',
+    );
+    const profile = join(
+      paths.userDataDir,
+      'environments',
+      'self-use',
+      'browser-profiles',
+      'site',
+    );
+    await mkdir(profile, { recursive: true });
+    await writeFile(join(profile, 'state'), 'preserved');
     let startAttempts = 0;
     let autostartWrites = 0;
     const mutable = service as unknown as {
@@ -147,10 +174,33 @@ describe('filesystem Agent lifecycle service', () => {
         await readFile(join(paths.installRoot, 'active.json'), 'utf8'),
       ),
     ).toMatchObject({ version: '1.2.3' });
+    expect(await readFile(resolveSelfUseConfigPath(paths), 'utf8')).toContain(
+      'https://keep.example.com',
+    );
+    expect(await readFile(legacyAgentSecretPath(paths), 'utf8')).toBe(
+      'keep-this-secret-across-update-rollback\n',
+    );
+    expect(await readFile(join(profile, 'state'), 'utf8')).toBe('preserved');
   });
 
-  test('opens settings, switches a running environment, and coordinates tray shutdown over exact local control', async () => {
+  test('opens native settings through settings.open after starting the tray', async () => {
     const { paths, service } = await createService();
+    const platform = (
+      service as unknown as {
+        readonly platform: {
+          startInstalledAgent: () => Promise<never>;
+          startInstalledTray: () => Promise<'started'>;
+        };
+      }
+    ).platform;
+    let trayStarts = 0;
+    platform.startInstalledAgent = async () => {
+      throw new Error('settings must not start the Node Agent directly');
+    };
+    platform.startInstalledTray = async () => {
+      trayStarts += 1;
+      return 'started';
+    };
     const endpoint =
       process.platform === 'win32'
         ? `\\\\.\\pipe\\cthutool-cli-lifecycle-${crypto.randomUUID()}`
@@ -159,14 +209,12 @@ describe('filesystem Agent lifecycle service', () => {
     await mkdir(paths.runtimeDir, { recursive: true });
     const operations: Array<{
       readonly operation: string;
-      readonly environmentId?: string;
     }> = [];
     const server = createServer((socket) => {
       socket.setEncoding('utf8');
       socket.once('data', (chunk) => {
         const request = JSON.parse(String(chunk).trim()) as {
           readonly operation: string;
-          readonly environmentId?: string;
         };
         operations.push(request);
         socket.end(
@@ -197,17 +245,10 @@ describe('filesystem Agent lifecycle service', () => {
     );
     try {
       await expect(service.settings()).resolves.toBe('opened');
-      await expect(service.setEnvironment('staging')).resolves.toEqual({
-        changed: true,
-        id: 'staging',
-      });
+      expect(trayStarts).toBe(1);
       await expect(service.stop()).resolves.toBe('stopped');
       expect(operations).toEqual([
-        expect.objectContaining({ operation: 'open' }),
-        expect.objectContaining({
-          environmentId: 'staging',
-          operation: 'environment.switch',
-        }),
+        expect.objectContaining({ operation: 'settings.open' }),
         expect.objectContaining({ operation: 'shutdown' }),
       ]);
     } finally {
@@ -218,7 +259,23 @@ describe('filesystem Agent lifecycle service', () => {
     }
   });
 
-  test('doctor reports redacted legacy migration repair guidance', async () => {
+  test('doctor reports SetupRequired remediation without leaking secrets', async () => {
+    const { paths, service } = await createService();
+    await writeLegacyAgentSecret(paths, 'doctor-secret-must-never-appear-here');
+    const checks = await service.doctor();
+    const configuration = checks.find((check) => check.id === 'configuration');
+    expect(configuration).toMatchObject({
+      id: 'configuration',
+      status: 'fail',
+      message: expect.stringContaining('chc agent settings'),
+    });
+    expect(JSON.stringify(checks)).not.toContain(
+      'doctor-secret-must-never-appear-here',
+    );
+    expect(JSON.stringify(checks)).not.toMatch(/ticket|bearer/i);
+  });
+
+  test('doctor never advertises catalog env remediation and redacts legacy secrets', async () => {
     const { legacyDesktopRoot, service } = await createService();
     await mkdir(legacyDesktopRoot, { recursive: true });
     await writeFile(
@@ -230,17 +287,12 @@ describe('filesystem Agent lifecycle service', () => {
     );
 
     const checks = await service.doctor();
-    const migration = checks.find((check) => check.id === 'legacy-migration');
-
-    expect(migration).toEqual({
-      id: 'legacy-migration',
-      status: 'fail',
-      message:
-        'Legacy data cannot be assigned to exactly one trusted environment; select it explicitly before retrying. Next: chc agent env list && chc agent env set <id>',
-    });
+    expect(JSON.stringify(checks)).not.toMatch(/chc agent env /);
     expect(JSON.stringify(checks)).not.toContain(
       'legacy-secret-must-never-appear',
     );
+    const configuration = checks.find((check) => check.id === 'configuration');
+    expect(configuration?.message ?? '').toContain('chc agent settings');
   });
 
   async function createService(
@@ -269,6 +321,7 @@ describe('filesystem Agent lifecycle service', () => {
         }),
         setAutostart: async (_paths, enabled) => ({ enabled, supported: true }),
         startInstalledAgent: async () => 'started',
+        startInstalledTray: async () => 'started',
       },
       release: {
         cliVersion: '1.0.0',
@@ -276,7 +329,8 @@ describe('filesystem Agent lifecycle service', () => {
           applicationVersion: '1.2.3',
           bridgeEndpoint: 'http://127.0.0.1:1',
           bundledNodePath: '/fixture/node',
-          environmentId: 'production',
+          environmentId: 'self-use',
+          setupRequiredVerified: true,
         }),
       },
     });
@@ -284,39 +338,49 @@ describe('filesystem Agent lifecycle service', () => {
   }
 });
 
+async function writeSelfUseConfig(
+  paths: AgentPaths,
+  deploymentOrigin: string,
+): Promise<void> {
+  await mkdir(paths.userDataDir, { recursive: true });
+  await writeFile(
+    resolveSelfUseConfigPath(paths),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        agentId: 'agent-test',
+        deploymentOrigin,
+        deviceName: 'test-device',
+        connectionEnabled: true,
+        browserRuntime: { kind: 'host-chrome' },
+      },
+      null,
+      2,
+    )}\n`,
+    { mode: 0o600 },
+  );
+}
+
+function legacyAgentSecretPath(paths: AgentPaths): string {
+  return join(paths.userDataDir, 'environments', 'self-use', 'agent-secret');
+}
+
+async function writeLegacyAgentSecret(
+  paths: AgentPaths,
+  secret: string,
+): Promise<void> {
+  const secretPath = legacyAgentSecretPath(paths);
+  await mkdir(join(secretPath, '..'), { recursive: true });
+  await writeFile(secretPath, `${secret}\n`, { mode: 0o600 });
+  if (process.platform !== 'win32') await chmod(secretPath, 0o600);
+}
+
 async function writeInstalledFixture(paths: AgentPaths): Promise<void> {
   const version = '1.2.3';
   const root = join(paths.installRoot, 'versions', version);
   const layout = createBundleLayout('darwin-arm64', version);
-  const catalog = {
-    schemaVersion: 1,
-    profiles: [
-      {
-        environmentId: 'production',
-        label: 'Production',
-        webOrigin: 'https://app.example.com',
-        webAgentUrl: 'https://app.example.com/agent',
-        backendHttpUrl: 'https://api.example.com',
-        backendAgentWsUrl: 'wss://api.example.com/agent/ws',
-        namespace: 'production',
-      },
-      {
-        environmentId: 'staging',
-        label: 'Staging',
-        webOrigin: 'https://staging.example.com',
-        webAgentUrl: 'https://staging.example.com/agent',
-        backendHttpUrl: 'https://api.staging.example.com',
-        backendAgentWsUrl: 'wss://api.staging.example.com/agent/ws',
-        namespace: 'staging',
-      },
-    ],
-  };
   await mkdir(join(root, 'agent'), { recursive: true });
   await writeFile(join(root, 'layout.json'), canonicalJson(layout));
-  await writeFile(
-    join(root, 'agent', 'environments.json'),
-    canonicalJson(catalog),
-  );
   await writeFile(
     join(paths.installRoot, 'active.json'),
     `${JSON.stringify({ schemaVersion: 1, version, activatedAt: new Date(0).toISOString() })}\n`,

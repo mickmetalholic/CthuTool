@@ -1,4 +1,3 @@
-import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import {
   AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
@@ -6,18 +5,14 @@ import {
   type AgentReleaseTarget,
   type AgentReleaseValidationError,
   assertArchiveBinding,
-  assertCatalogBinding,
   assertCliCompatibility,
+  assertSelfUseCatalogConfigured,
+  assertSelfUseProvenance,
   canonicalJson,
   selectReleaseArtifact,
   sha256,
-  signManifest,
-  signReleaseBlob,
-  validateChannelPointer,
   validateEnvironmentCatalog,
   validateReleaseManifest,
-  verifyManifestSignature,
-  verifyReleaseBlobSignature,
 } from './contracts';
 
 const catalog = {
@@ -45,27 +40,24 @@ function artifact(target: AgentReleaseTarget) {
     target,
     platform,
     architecture,
-    archiveUrl: `https://releases.example.com/agent/1.2.3/cthutool-agent-1.2.3-${target}.zip`,
+    archiveUrl: `https://github.com/example/CthuTool/releases/download/agent-latest/cthutool-agent-0.0.12-${target}.zip`,
     archiveSize: 3,
     archiveSha256: sha256('abc'),
-    archiveSignatureUrl: `https://releases.example.com/agent/1.2.3/cthutool-agent-1.2.3-${target}.zip.sig`,
     trayEntryPoint: windows
       ? 'bin/cthutool-agent-tray.exe'
       : 'bin/CthuTool Agent.app/Contents/MacOS/cthutool-agent-tray',
+    setupEntryPoint: windows
+      ? 'bin/cthutool-agent-setup.exe'
+      : 'bin/cthutool-agent-setup',
     nodeEntryPoint: windows ? 'runtime/node/node.exe' : 'runtime/node/bin/node',
     agentEntryPoint: 'agent/dist/index.js',
-    platformSignature: {
-      required: true as const,
-      notarizationRequired: !windows,
-    },
   };
 }
 
 function manifest(): AgentReleaseManifest {
-  const catalogBytes = Buffer.from(`${JSON.stringify(catalog)}\n`);
   return {
     schemaVersion: AGENT_RELEASE_MANIFEST_SCHEMA_VERSION,
-    releaseVersion: '1.2.3',
+    releaseVersion: '0.0.12',
     minimumCliVersion: '0.1.0',
     layoutVersion: 1,
     protocols: {
@@ -74,11 +66,7 @@ function manifest(): AgentReleaseManifest {
       localBridge: 1,
       trayControl: 1,
     },
-    environmentCatalog: {
-      schemaVersion: 1,
-      sha256: sha256(catalogBytes),
-    },
-    provenance: { kind: 'production', signed: true },
+    provenance: { kind: 'self-use', signed: false },
     artifacts: [
       artifact('darwin-arm64'),
       artifact('darwin-x64'),
@@ -88,8 +76,14 @@ function manifest(): AgentReleaseManifest {
 }
 
 describe('Agent release contracts', () => {
-  test('accepts exact non-secret HTTPS/WSS catalog entries', () => {
+  test('accepts exact non-secret HTTPS/WSS catalog entries for development tooling', () => {
     expect(validateEnvironmentCatalog(catalog)).toEqual(catalog);
+  });
+
+  test('rejects placeholder origins for development catalog publication helpers', () => {
+    expect(() =>
+      assertSelfUseCatalogConfigured(validateEnvironmentCatalog(catalog)),
+    ).toThrow(/placeholders are not publishable/i);
   });
 
   test('rejects catalog secrets, duplicate ids, and cross-origin console URLs', () => {
@@ -121,8 +115,16 @@ describe('Agent release contracts', () => {
     ).toThrow(/same-origin/);
   });
 
-  test('validates complete production matrix and rejects unknown schema', () => {
+  test('validates complete self-use matrix without catalog binding', () => {
     expect(validateReleaseManifest(manifest())).toEqual(manifest());
+    expect(() => assertSelfUseProvenance(manifest())).not.toThrow();
+    expect(() =>
+      validateReleaseManifest({ ...manifest(), schemaVersion: 2 }),
+    ).toThrowError(
+      expect.objectContaining<Partial<AgentReleaseValidationError>>({
+        code: 'INCOMPATIBLE_SCHEMA',
+      }),
+    );
     expect(() =>
       validateReleaseManifest({ ...manifest(), schemaVersion: 99 }),
     ).toThrowError(
@@ -130,6 +132,50 @@ describe('Agent release contracts', () => {
         code: 'INCOMPATIBLE_SCHEMA',
       }),
     );
+    expect(() =>
+      validateReleaseManifest({
+        ...manifest(),
+        provenance: { kind: 'production', signed: true },
+      }),
+    ).toThrow(/provenance is invalid/);
+    expect(() =>
+      validateReleaseManifest({
+        ...manifest(),
+        environmentCatalog: { schemaVersion: 1, sha256: '0'.repeat(64) },
+      }),
+    ).toThrow(/must not bind a deployment URL catalog|unknown or missing/);
+  });
+
+  test('rejects signature fields and missing integrity metadata', () => {
+    expect(() =>
+      validateReleaseManifest({
+        ...manifest(),
+        artifacts: manifest().artifacts.map((value) => ({
+          ...value,
+          archiveSignatureUrl: `${value.archiveUrl}.sig`,
+        })),
+      }),
+    ).toThrow(/unknown or missing fields|must not declare/);
+    expect(() =>
+      validateReleaseManifest({
+        ...manifest(),
+        artifacts: manifest().artifacts.map(
+          ({ archiveSha256: _ignored, ...value }) => value,
+        ),
+      }),
+    ).toThrow(/unknown or missing fields/);
+    expect(() =>
+      validateReleaseManifest({
+        ...manifest(),
+        artifacts: [
+          {
+            ...manifest().artifacts[0],
+            archiveUrl: 'http://insecure.example.com/agent.zip',
+          },
+          ...manifest().artifacts.slice(1),
+        ],
+      }),
+    ).toThrow(/HTTPS/);
   });
 
   test('fails before download for unsupported target or old CLI', () => {
@@ -146,59 +192,20 @@ describe('Agent release contracts', () => {
     );
   });
 
-  test('binds manifest signature, archive bytes, and exact catalog bytes', () => {
-    const keys = generateKeyPairSync('ed25519', {
-      privateKeyEncoding: { format: 'pem', type: 'pkcs8' },
-      publicKeyEncoding: { format: 'pem', type: 'spki' },
-    });
+  test('binds archive bytes without catalog digests', () => {
     const value = manifest();
-    const signature = signManifest(value, keys.privateKey);
-    const archiveSignature = signReleaseBlob(
-      Buffer.from('abc'),
-      keys.privateKey,
-    );
-
-    expect(() =>
-      verifyManifestSignature(value, signature, keys.publicKey),
-    ).not.toThrow();
-    expect(() =>
-      verifyManifestSignature(
-        { ...value, releaseVersion: '1.2.4' },
-        signature,
-        keys.publicKey,
-      ),
-    ).toThrowError(/signature is invalid/);
     expect(() =>
       assertArchiveBinding(value.artifacts[0], Buffer.from('abc')),
     ).not.toThrow();
     expect(() =>
       assertArchiveBinding(value.artifacts[0], Buffer.from('bad')),
     ).toThrow(/size or digest/);
-    expect(() =>
-      verifyReleaseBlobSignature(
-        Buffer.from('abc'),
-        archiveSignature,
-        keys.publicKey,
-      ),
-    ).not.toThrow();
-    expect(() =>
-      verifyReleaseBlobSignature(
-        Buffer.from('tampered'),
-        archiveSignature,
-        keys.publicKey,
-      ),
-    ).toThrow(/blob signature/);
-    const catalogBytes = Buffer.from(`${JSON.stringify(catalog)}\n`);
-    expect(assertCatalogBinding(value, catalogBytes)).toEqual(catalog);
-    expect(() =>
-      assertCatalogBinding(
-        value,
-        Buffer.from(`${JSON.stringify({ ...catalog, x: 1 })}\n`),
-      ),
-    ).toThrow();
+    expect(canonicalJson({ z: 1, a: { y: 2, b: 3 } })).toBe(
+      '{"a":{"b":3,"y":2},"z":1}\n',
+    );
   });
 
-  test('keeps unsigned PR artifacts unreachable from production manifests', () => {
+  test('keeps unsigned PR artifacts unreachable from self-use manifests', () => {
     expect(() =>
       validateReleaseManifest({
         ...manifest(),
@@ -207,30 +214,6 @@ describe('Agent release contracts', () => {
           archiveUrl: value.archiveUrl.replace('.zip', '-unsigned-pr-42.zip'),
         })),
       }),
-    ).toThrow(/cannot reference pull-request/);
-  });
-
-  test('validates immutable channel pointers and deterministic JSON', () => {
-    expect(
-      validateChannelPointer({
-        schemaVersion: 1,
-        channel: 'stable',
-        releaseVersion: '1.2.3',
-        manifestUrl: 'https://releases.example.com/agent/1.2.3/manifest.json',
-        manifestSha256: sha256('manifest'),
-      }),
-    ).toMatchObject({ channel: 'stable', releaseVersion: '1.2.3' });
-    expect(() =>
-      validateChannelPointer({
-        schemaVersion: 1,
-        channel: 'stable',
-        releaseVersion: '1.2.3',
-        manifestUrl: 'https://releases.example.com/agent/latest/manifest.json',
-        manifestSha256: sha256('manifest'),
-      }),
-    ).toThrow(/immutable/);
-    expect(canonicalJson({ z: 1, a: { y: 2, b: 3 } })).toBe(
-      '{"a":{"b":3,"y":2},"z":1}\n',
-    );
+    ).toThrow(/cannot reference pull-request|versioned target archive/);
   });
 });

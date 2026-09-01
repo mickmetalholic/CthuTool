@@ -4,6 +4,7 @@ import type { AgentBridgeResourceSnapshot } from '@cthutool/agent-bridge-protoco
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   type AgentBridgeBootstrapState,
+  AgentBridgeClientError,
   AgentBridgeFetchClient,
   classifyAgentBridgeError,
   consumeAgentBridgeFragment,
@@ -126,6 +127,17 @@ export function AgentConsole({
       }
       applySnapshot(await client.getResources());
     } catch (error) {
+      if (
+        error instanceof AgentBridgeClientError &&
+        (error.code === 'INVALID_REQUEST' ||
+          error.code === 'BROWSER_COMMAND_REJECTED' ||
+          error.code === 'CONFIRMATION_REQUIRED' ||
+          error.code === 'PROFILE_LOCKED' ||
+          error.code === 'LIFECYCLE_UNAVAILABLE')
+      ) {
+        setNotice(error.message);
+        return;
+      }
       setState(
         classifyAgentBridgeError(error, await queryLocalNetworkPermission()),
       );
@@ -357,12 +369,16 @@ function EnvironmentCard({
         <span className="mono-pill">{resources.environment.id}</span>
       </div>
       <dl className="fact-grid">
+        <Fact label="Web Origin" value={resources.environment.webOrigin} />
+        <Fact label="Backend" value={resources.environment.backendHttpUrl} />
         <Fact label="Agent" value={resources.agent.deviceName} />
-        <Fact label="Backend" value={resources.agent.backendStatus} />
+        <Fact label="Backend status" value={resources.agent.backendStatus} />
         <Fact label="Process" value={resources.agent.processState} />
       </dl>
       <p className="card-note">
-        环境切换只能在托盘或 CLI 中完成，Web 页面不能更改信任边界。
+        Origin 只读。修改连接目标请使用本机原生 Agent Settings（托盘 → Agent
+        Settings，或 <code>chc agent settings</code>）。Web
+        页面不能更改这个信任边界。
       </p>
     </section>
   );
@@ -465,6 +481,10 @@ function SettingsCard({
         <button className="primary-button" disabled={busy} type="submit">
           {busy ? '正在应用…' : '保存设置'}
         </button>
+        <p className="card-note">
+          本表单只保存设备名、Chrome 路径和连接开关。Origin 请在原生 Agent
+          Settings 中配置。
+        </p>
       </form>
     </section>
   );

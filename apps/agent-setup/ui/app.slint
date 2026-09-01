@@ -1,0 +1,351 @@
+import { AboutSlint, Button, CheckBox, LineEdit, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "CthuTool Agent Setup";
+    preferred-width: 560px;
+    preferred-height: 680px;
+    min-width: 520px;
+    min-height: 600px;
+    background: root.bg;
+
+    in-out property <bool> first-run: true;
+    in-out property <string> window-subtitle: "Connect this device to your CthuTool deployment";
+    in-out property <string> origin: "";
+    in-out property <string> device-name: "";
+    in-out property <string> connection-status: "Setup required";
+    in-out property <string> connection-detail: "";
+    in-out property <bool> connection-enabled: true;
+    in-out property <string> web-agent-url: "";
+    in-out property <string> backend-http-url: "";
+    in-out property <string> backend-ws-url: "";
+    in-out property <string> origin-error: "";
+    in-out property <string> action-error: "";
+    in-out property <string> primary-action-label: "Verify and connect";
+    in-out property <bool> busy: false;
+    in-out property <bool> show-about: false;
+    in-out property <string> status-banner: "";
+
+    callback origin-edited(/* value */ string);
+    callback device-name-edited(/* value */ string);
+    callback connection-enabled-toggled(/* enabled */ bool);
+    callback primary-action();
+    callback cancel-action();
+    callback open-web-console();
+    callback show-about-slint();
+    callback hide-about-slint();
+
+    property <color> bg: #F3F1F6;
+    property <color> surface: #FFFBFE;
+    property <color> ink: #1C1526;
+    property <color> muted: #5C5368;
+    property <color> line: #D8D0E2;
+    property <color> accent: #5A3D86;
+    property <color> accent-hover: #4A3170;
+    property <color> danger: #9B1C1C;
+    property <color> ok: #1F6B45;
+
+    VerticalBox {
+        padding: 20px;
+        spacing: 14px;
+
+        VerticalBox {
+            spacing: 4px;
+            Text {
+                text: "CthuTool";
+                color: root.accent;
+                font-size: 13px;
+                font-weight: 700;
+                letter-spacing: 0.8px;
+            }
+            Text {
+                text: root.first-run ? "Connect your Agent" : "Agent Settings";
+                color: root.ink;
+                font-size: 24px;
+                font-weight: 700;
+            }
+            Text {
+                text: root.window-subtitle;
+                color: root.muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+        }
+
+        if root.status-banner != "": Rectangle {
+            background: #EDE6F5;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: root.line;
+            VerticalBox {
+                padding: 10px;
+                Text {
+                    text: root.status-banner;
+                    color: root.accent;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
+        ScrollView {
+            vertical-stretch: 1;
+            VerticalBox {
+                spacing: 14px;
+                padding-right: 4px;
+
+                Rectangle {
+                    background: root.surface;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: root.line;
+                    VerticalBox {
+                        padding: 14px;
+                        spacing: 10px;
+
+                        Text {
+                            text: "Deployment";
+                            color: root.ink;
+                            font-size: 14px;
+                            font-weight: 700;
+                        }
+
+                        Text {
+                            text: "Origin";
+                            color: root.muted;
+                            font-size: 12px;
+                        }
+                        LineEdit {
+                            text: root.origin;
+                            placeholder-text: "https://your-deployment.example";
+                            enabled: !root.busy;
+                            accessible-label: "Deployment Origin";
+                            edited(value) => { root.origin-edited(value); }
+                        }
+                        if root.origin-error != "": Text {
+                            text: root.origin-error;
+                            color: root.danger;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: "Web, Backend HTTP, and Agent WebSocket endpoints are derived from this one Origin.";
+                            color: root.muted;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: "Device name";
+                            color: root.muted;
+                            font-size: 12px;
+                        }
+                        LineEdit {
+                            text: root.device-name;
+                            placeholder-text: "This device";
+                            enabled: !root.busy;
+                            accessible-label: "Device name";
+                            edited(value) => { root.device-name-edited(value); }
+                        }
+                    }
+                }
+
+                if !root.first-run: Rectangle {
+                    background: root.surface;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: root.line;
+                    VerticalBox {
+                        padding: 14px;
+                        spacing: 8px;
+                        Text {
+                            text: "Connection";
+                            color: root.ink;
+                            font-size: 14px;
+                            font-weight: 700;
+                        }
+                        Text {
+                            text: root.connection-status;
+                            color: root.ink;
+                            font-size: 13px;
+                            font-weight: 600;
+                        }
+                        if root.connection-detail != "": Text {
+                            text: root.connection-detail;
+                            color: root.muted;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                        CheckBox {
+                            text: "Connection enabled";
+                            checked: root.connection-enabled;
+                            enabled: !root.busy;
+                            toggled => {
+                                root.connection-enabled-toggled(self.checked);
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    background: root.surface;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: root.line;
+                    VerticalBox {
+                        padding: 14px;
+                        spacing: 6px;
+                        Text {
+                            text: "Derived endpoints";
+                            color: root.ink;
+                            font-size: 14px;
+                            font-weight: 700;
+                        }
+                        Text {
+                            text: "Web /agent";
+                            color: root.muted;
+                            font-size: 11px;
+                        }
+                        Text {
+                            text: root.web-agent-url == "" ? "—" : root.web-agent-url;
+                            color: root.ink;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                        Text {
+                            text: "Backend HTTP";
+                            color: root.muted;
+                            font-size: 11px;
+                        }
+                        Text {
+                            text: root.backend-http-url == "" ? "—" : root.backend-http-url;
+                            color: root.ink;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                        Text {
+                            text: "Agent WebSocket";
+                            color: root.muted;
+                            font-size: 11px;
+                        }
+                        Text {
+                            text: root.backend-ws-url == "" ? "—" : root.backend-ws-url;
+                            color: root.ink;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                if root.action-error != "": Rectangle {
+                    background: #FBEAEA;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #E8B4B4;
+                    VerticalBox {
+                        padding: 10px;
+                        Text {
+                            text: root.action-error;
+                            color: root.danger;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+        }
+
+        HorizontalBox {
+            spacing: 10px;
+            alignment: end;
+
+            if root.first-run: Button {
+                text: "Cancel";
+                enabled: !root.busy;
+                accessible-label: "Cancel setup";
+                clicked => { root.cancel-action(); }
+            }
+
+            if !root.first-run: Button {
+                text: "Open Web Console";
+                enabled: !root.busy;
+                accessible-label: "Open Web Console";
+                clicked => { root.open-web-console(); }
+            }
+
+            Button {
+                text: root.busy ? "Working…" : root.primary-action-label;
+                enabled: !root.busy;
+                accessible-label: root.busy ? "Applying Agent configuration" : root.primary-action-label;
+                min-width: 160px;
+                height: 36px;
+                clicked => { root.primary-action(); }
+            }
+        }
+
+        HorizontalBox {
+            alignment: space-between;
+            Text {
+                text: "The Agent connection is authorized by your private-network boundary.";
+                color: root.muted;
+                font-size: 11px;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.show-about-slint(); }
+                Text {
+                    text: "About Slint";
+                    color: root.accent;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+            }
+        }
+    }
+
+    if root.show-about: Rectangle {
+        x: 0;
+        y: 0;
+        width: 100%;
+        height: 100%;
+        background: #1C152688;
+
+        TouchArea {
+            clicked => { root.hide-about-slint(); }
+        }
+
+        Rectangle {
+            width: 320px;
+            height: 220px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: root.surface;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: root.line;
+
+            VerticalBox {
+                padding: 16px;
+                spacing: 12px;
+                alignment: center;
+
+                Text {
+                    text: "About Slint";
+                    color: root.ink;
+                    font-size: 16px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                }
+
+                AboutSlint { }
+
+                Button {
+                    text: "Close";
+                    clicked => { root.hide-about-slint(); }
+                }
+            }
+        }
+    }
+}

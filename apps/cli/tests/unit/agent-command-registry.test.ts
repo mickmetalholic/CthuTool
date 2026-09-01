@@ -7,7 +7,7 @@ import {
 import { rootCommand } from '../../src/command/root.command';
 
 describe('public Agent command registry', () => {
-  test('statically exposes lifecycle, environment, and autostart commands', () => {
+  test('statically exposes lifecycle and native-settings commands without catalog env selection', () => {
     const names = (getCommandRegistrations(agentCommand) ?? []).map(
       (item) => item.name,
     );
@@ -20,17 +20,13 @@ describe('public Agent command registry', () => {
       'status',
       'settings',
       'logs',
-      'env',
       'autostart',
       'doctor',
       'uninstall',
     ]);
-    const environment = getCommandRegistration(agentCommand, 'env');
-    expect(
-      (getCommandRegistrations(environment?.command ?? agentCommand) ?? []).map(
-        (item) => item.name,
-      ),
-    ).toEqual(['list', 'get', 'set']);
+    expect(names).not.toContain('env');
+    expect(getCommandRegistration(agentCommand, 'env')).toBeUndefined();
+    expect(getCommandRegistration(agentCommand, 'settings')).toBeDefined();
     const autostart = getCommandRegistration(agentCommand, 'autostart');
     expect(
       (getCommandRegistrations(autostart?.command ?? agentCommand) ?? []).map(

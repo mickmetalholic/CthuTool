@@ -43,7 +43,10 @@ export function AgentPermissionHelp() {
         <h2>页面不会做什么</h2>
         <p className="card-note">
           页面不会扫描 localhost 端口，不使用 WebSocket，不保存 bearer
-          token，也不会从 Web 修改 Agent 的受信环境。
+          token，也不会从 Web 修改 Origin、环境标识或派生端点等信任边界。 Origin
+          只能通过本机原生 Agent Settings（托盘菜单或{' '}
+          <code>chc agent settings</code>）配置。详见仓库文档{' '}
+          <code>docs/agent-native-settings-boundary.md</code>。
         </p>
         <a className="secondary-button inline-link" href="/agent">
           返回 Agent 页面

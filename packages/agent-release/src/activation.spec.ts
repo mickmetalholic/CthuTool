@@ -133,13 +133,14 @@ async function createExtractedFixture(root: string, version: string) {
   const paths = [
     'layout.json',
     layout.entryPoints.tray,
+    layout.entryPoints.setup,
     layout.entryPoints.node,
     layout.entryPoints.agent,
-    layout.entryPoints.environmentCatalog,
     'agent/node_modules/playwright/package.json',
     'agent/node_modules/playwright-core/package.json',
     'licenses/NODE_LICENSE',
     'licenses/THIRD_PARTY_NOTICES.txt',
+    'licenses/LICENSE-SLINT.md',
     'bin/CthuTool Agent.app/Contents/Info.plist',
   ];
   for (const path of paths) {

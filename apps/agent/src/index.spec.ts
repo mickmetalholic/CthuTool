@@ -235,6 +235,51 @@ describe('headless Agent process entry', () => {
     expect(source).not.toContain('WebView');
   });
 
+  test('preserves native self-use metadata across Agent bootstrap and restart', async () => {
+    root = await mkdtemp(join(tmpdir(), 'cta-self-use-'));
+    await mkdir(join(root, 'environments', 'self-use'), { recursive: true });
+    await writeFile(
+      join(root, 'config.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        agentId: 'agent-self-use',
+        deploymentOrigin: 'https://app.example.com',
+        deviceName: 'Desk',
+        connectionEnabled: false,
+        browserRuntime: { kind: 'host-chrome' },
+      })}\n`,
+    );
+    await writeFile(
+      join(root, 'environments', 'self-use', 'agent-secret'),
+      `${'s'.repeat(32)}\n`,
+    );
+
+    const first = await runAgentProcess({
+      applicationVersion: '0.1.0-test',
+      createRuntimeCore: () => createRuntimeCoreFixture(),
+      legacyDesktopUserDataDir: join(root, 'legacy-desktop'),
+      processPlatform: 'linux',
+      userDataDir: root,
+    });
+    await first.stop();
+    const second = await runAgentProcess({
+      applicationVersion: '0.1.0-test',
+      createRuntimeCore: () => createRuntimeCoreFixture(),
+      legacyDesktopUserDataDir: join(root, 'legacy-desktop'),
+      processPlatform: 'linux',
+      userDataDir: root,
+    });
+    await second.stop();
+
+    expect(
+      JSON.parse(await readFile(join(root, 'config.json'), 'utf8')),
+    ).toMatchObject({
+      agentId: 'agent-self-use',
+      deploymentOrigin: 'https://app.example.com',
+      schemaVersion: 1,
+    });
+  });
+
   test('fails closed when legacy data needs an explicit trusted environment', async () => {
     root = await mkdtemp(join(tmpdir(), 'cthutool-agent-process-'));
     const legacy = join(root, 'legacy-desktop');

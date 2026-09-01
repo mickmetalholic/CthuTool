@@ -8,6 +8,7 @@ use std::{
 };
 
 use thiserror::Error;
+use uuid::Uuid;
 
 use crate::{
     agent_control::{
@@ -24,6 +25,7 @@ pub struct AgentLaunchConfig {
     pub agent_entry_point: PathBuf,
     pub user_data_dir: PathBuf,
     pub environment_catalog: Option<PathBuf>,
+    pub legacy_desktop_user_data_dir: Option<PathBuf>,
 }
 
 impl AgentLaunchConfig {
@@ -43,6 +45,10 @@ pub enum SupervisorError {
     ReadinessTimeout,
     #[error("Agent bridge launch is unavailable: {0}")]
     BridgeUnavailable(String),
+    #[error("candidate configuration could not be prepared: {0}")]
+    CandidateConfiguration(String),
+    #[error("candidate configuration did not establish a Backend connection")]
+    CandidateBackendUnavailable,
     #[error("browser open failed: {0}")]
     BrowserOpen(String),
     #[error(transparent)]
@@ -267,6 +273,9 @@ pub fn spawn_bundled_agent(
     if let Some(catalog) = &config.environment_catalog {
         command.env("CTHUTOOL_AGENT_ENVIRONMENTS_PATH", catalog);
     }
+    if let Some(legacy_data_dir) = &config.legacy_desktop_user_data_dir {
+        command.env("CTHUTOOL_AGENT_LEGACY_DATA_DIR", legacy_data_dir);
+    }
     let child = command.spawn()?;
     let pid = child.id();
     let identity = (0..20)
@@ -283,6 +292,51 @@ pub fn spawn_bundled_agent(
         identity,
         entry_point: config.agent_entry_point.clone(),
     })
+}
+
+pub fn verify_candidate(
+    launch_config: &AgentLaunchConfig,
+    user_data_dir: &Path,
+    candidate: &crate::self_use_config::SelfUseCandidate,
+    options: crate::self_use_config::OriginValidationOptions,
+) -> Result<(), SupervisorError> {
+    let prepared = crate::self_use_config::prepare_candidate(user_data_dir, candidate, options)
+        .map_err(|error| SupervisorError::CandidateConfiguration(error.to_string()))?;
+    if !prepared.config.connection_enabled {
+        return Ok(());
+    }
+
+    let verification_root =
+        user_data_dir.join(format!(".setup-verification-{}", Uuid::new_v4().simple()));
+    let result = (|| {
+        fs::create_dir_all(&verification_root)?;
+        let mut verification_config = prepared.config;
+        // The backend registry treats an Agent id as the authoritative connection
+        // key. Use a transient id so validation never disconnects the user's
+        // currently running Agent.
+        verification_config.agent_id = format!("agent-verify-{}", Uuid::new_v4().simple());
+        crate::self_use_config::write_config(&verification_root, &verification_config, options)
+            .map_err(|error| SupervisorError::CandidateConfiguration(error.to_string()))?;
+        let verification_launch = AgentLaunchConfig {
+            user_data_dir: verification_root.clone(),
+            environment_catalog: None,
+            legacy_desktop_user_data_dir: Some(verification_root.join("legacy-desktop")),
+            ..launch_config.clone()
+        };
+        let inspector = default_inspector();
+        let mut child = spawn_bundled_agent(&verification_launch, &inspector)?;
+        let readiness = wait_for_agent_backend_readiness(
+            &verification_launch,
+            child.identity(),
+            Duration::from_secs(10),
+        );
+        let record = readiness.as_ref().ok().map(|(record, _)| record.clone());
+        let stop_result =
+            child.coordinated_stop(record.as_ref(), &inspector, Duration::from_secs(2));
+        readiness.map(|_| ()).and(stop_result.map(|_| ()))
+    })();
+    let _ = fs::remove_dir_all(&verification_root);
+    result
 }
 
 pub fn wait_for_agent_readiness(
@@ -304,6 +358,32 @@ pub fn wait_for_agent_readiness(
         thread::sleep(Duration::from_millis(25));
     }
     Err(SupervisorError::ReadinessTimeout)
+}
+
+pub fn wait_for_agent_backend_readiness(
+    config: &AgentLaunchConfig,
+    child: &ProcessIdentity,
+    timeout: Duration,
+) -> Result<(AgentInstanceRecord, AgentHealth), SupervisorError> {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if let Ok(record) = AgentInstanceRecord::read(&config.instance_path())
+            && record.pid == child.pid
+            && same_path(&record.executable_path, &child.executable_path)
+            && let Ok(health) = AgentControlClient::new(record.clone())
+                .with_timeout(Duration::from_millis(500))
+                .health()
+        {
+            if health.backend.status == "connected" {
+                return Ok((record, health));
+            }
+            if matches!(health.process.state.as_str(), "stopped" | "stopping") {
+                return Err(SupervisorError::CandidateBackendUnavailable);
+            }
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    Err(SupervisorError::CandidateBackendUnavailable)
 }
 
 #[must_use]
@@ -500,6 +580,44 @@ mod tests {
                 .lock()
                 .expect("browser lock")
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn unavailable_endpoint_keeps_tray_usable_without_browser_launch() {
+        // Documented behavior: when Web/Backend bridge launch is unavailable,
+        // Open Web Console fails closed (no browser) and leaves the tray process
+        // running so the operator can open native Agent Settings instead.
+        let snapshot = Arc::new(RwLock::new(TraySnapshot {
+            active_environment_id: Some("self-use".into()),
+            state: TrayState::BackendOffline,
+            deployment_origin: Some("https://app.example.com".into()),
+            ..TraySnapshot::default()
+        }));
+        let interaction = TrayInteraction::new(
+            agent(vec![Err(AgentControlError::Rejected {
+                code: "BRIDGE_UNAVAILABLE".into(),
+                message: "local bridge endpoint is unavailable".into(),
+            })]),
+            FakeBrowser::default(),
+            Arc::clone(&snapshot),
+        );
+
+        let error = interaction.open().expect_err("open must fail closed");
+        assert!(matches!(error, SupervisorError::BridgeUnavailable(_)));
+        assert!(
+            interaction
+                .browser
+                .0
+                .lock()
+                .expect("browser lock")
+                .is_empty()
+        );
+        let state = snapshot.read().expect("snapshot");
+        assert_eq!(state.state, TrayState::BackendOffline);
+        assert_eq!(
+            state.deployment_origin.as_deref(),
+            Some("https://app.example.com")
         );
     }
 

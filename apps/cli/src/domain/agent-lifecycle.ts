@@ -8,11 +8,26 @@ export type AgentEnvironmentView = {
   readonly backendHttpUrl: string;
 };
 
+export type AgentSetupStatus = {
+  readonly required: boolean;
+  readonly configured: boolean;
+  readonly deploymentOrigin?: string;
+  readonly remediation?: string;
+  readonly migrationNotice?: string;
+};
+
 export type AgentLifecycleStatus = {
   readonly installed: boolean;
   readonly version?: string;
   readonly tray: { readonly state: string; readonly pid?: number };
+  readonly setup: AgentSetupStatus;
   readonly environment?: AgentEnvironmentView;
+  readonly endpoints?: {
+    readonly webOrigin: string;
+    readonly webAgentUrl: string;
+    readonly backendHttpUrl: string;
+    readonly backendAgentWsUrl: string;
+  };
   readonly backend: { readonly status: string; readonly lastError?: string };
   readonly browser: { readonly ready: boolean; readonly status: string };
   readonly autostart: {
@@ -28,11 +43,8 @@ export type AgentDoctorCheck = {
 };
 
 export interface AgentLifecycleService {
-  install(input?: {
-    readonly channel?: 'stable' | 'beta';
-    readonly version?: string;
-  }): Promise<{ readonly version: string; readonly changed: boolean }>;
-  update(input?: { readonly channel?: 'stable' | 'beta' }): Promise<{
+  install(): Promise<{ readonly version: string; readonly changed: boolean }>;
+  update(): Promise<{
     readonly version: string;
     readonly previousVersion?: string;
     readonly changed: boolean;
@@ -46,11 +58,6 @@ export interface AgentLifecycleService {
     readonly lines?: number;
     readonly follow?: boolean;
   }): Promise<readonly string[]>;
-  listEnvironments(): Promise<readonly AgentEnvironmentView[]>;
-  getEnvironment(id?: string): Promise<AgentEnvironmentView>;
-  setEnvironment(
-    id: string,
-  ): Promise<{ readonly id: string; readonly changed: boolean }>;
   autostart(
     action: 'enable' | 'disable' | 'status',
   ): Promise<{ readonly enabled: boolean; readonly supported: boolean }>;

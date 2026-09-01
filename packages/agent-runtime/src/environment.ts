@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -158,6 +159,15 @@ export class AgentEnvironmentManager implements AgentEnvironmentSwitchPort {
     readonly paths: AgentEnvironmentDataPaths;
   } {
     const normalized = normalizeEnvironmentId(environmentId);
+    if (
+      this.catalog.profiles.length === 1 &&
+      this.catalog.profiles[0]?.environmentId === 'self-use' &&
+      normalized !== 'self-use'
+    ) {
+      throw new Error(
+        'Self-use Agent installations support only the fixed self-use environment',
+      );
+    }
     const profile = this.catalog.profiles.find(
       (candidate) => candidate.environmentId === normalized,
     );
@@ -208,8 +218,21 @@ export function loadAgentEnvironmentCatalog(
     readonly nodeEnv?: string;
     readonly defaultBackendUrl?: string;
     readonly defaultWebOrigin?: string;
+    readonly selfUseDeploymentOrigin?: string;
+    readonly allowDevelopmentLocalhost?: boolean;
   } = {},
 ): AgentEnvironmentCatalog {
+  if (options.selfUseDeploymentOrigin) {
+    return {
+      version: 1,
+      profiles: [
+        createSelfUseReleaseProfile(
+          options.selfUseDeploymentOrigin,
+          options.allowDevelopmentLocalhost === true,
+        ),
+      ],
+    };
+  }
   const releaseInput = options.releaseCatalogPath
     ? readJson(options.releaseCatalogPath)
     : options.releaseCatalog;
@@ -234,7 +257,7 @@ export function loadAgentEnvironmentCatalog(
   if (releaseProfiles.length === 0 && customProfiles.length === 0) {
     if (options.nodeEnv === 'production') {
       throw new Error(
-        'Production Agent requires a release environment catalog',
+        'Production Agent requires a self-use deployment Origin or a release environment catalog',
       );
     }
     customProfiles = [
@@ -247,6 +270,44 @@ export function loadAgentEnvironmentCatalog(
   const profiles = [...releaseProfiles, ...customProfiles];
   assertUniqueCatalog(profiles);
   return { version: 1, profiles };
+}
+
+export function createSelfUseReleaseProfile(
+  deploymentOrigin: string,
+  allowDevelopmentLocalhost = false,
+): AgentEnvironmentProfile {
+  const trust: AgentEnvironmentTrust =
+    allowDevelopmentLocalhost && isLocalDevelopmentOrigin(deploymentOrigin)
+      ? 'custom-development'
+      : 'release';
+  const origin = exactOrigin(deploymentOrigin, trust, 'deploymentOrigin');
+  if (trust === 'release' && new URL(origin).protocol !== 'https:') {
+    throw new Error('deploymentOrigin must use https');
+  }
+  const wsUrl = new URL('/ws/agents', origin);
+  wsUrl.protocol = new URL(origin).protocol === 'https:' ? 'wss:' : 'ws:';
+  return parseEnvironmentProfile(
+    {
+      backendAgentWsUrl: trimTrailingSlash(wsUrl.toString()),
+      backendHttpUrl: origin,
+      environmentId: 'self-use',
+      label: 'Self-use',
+      namespace: 'self-use',
+      webAgentUrl: new URL('/agent', origin).toString(),
+      webOrigin: origin,
+    },
+    trust,
+    0,
+  );
+}
+
+function isLocalDevelopmentOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 export function resolveAgentEnvironmentDataPaths(
@@ -497,5 +558,24 @@ function atomicWrite(filePath: string, value: string, mode: number): void {
   mkdirSync(dirname(filePath), { mode: 0o700, recursive: true });
   const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   writeFileSync(temporaryPath, value, { encoding: 'utf8', mode });
-  renameSync(temporaryPath, filePath);
+  try {
+    renameSync(temporaryPath, filePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (
+      process.platform === 'win32' &&
+      (code === 'EEXIST' || code === 'EPERM')
+    ) {
+      rmSync(filePath, { force: true });
+      try {
+        renameSync(temporaryPath, filePath);
+      } catch (retryError) {
+        rmSync(temporaryPath, { force: true });
+        throw retryError;
+      }
+    } else {
+      rmSync(temporaryPath, { force: true });
+      throw error;
+    }
+  }
 }
