@@ -53,7 +53,6 @@ describe('command discovery registry', () => {
       'codex',
       'completion',
       'obsidian',
-      'opencode',
       'scripts',
     ]);
   });

@@ -64,10 +64,13 @@ export async function buildManagedSkillInventory(input: {
   readonly manifest: CodexSkillsManifest;
   readonly legacyEntries: readonly string[];
   readonly backend: SkillsBackend;
+  readonly installedSkills?: readonly InstalledSkill[];
 }): Promise<ManagedSkillInventoryRow[]> {
-  const installed = await input.backend.listInstalled({
-    trackableOnly: input.manifest.skills.length === 0,
-  });
+  const installed = input.installedSkills
+    ? [...input.installedSkills]
+    : await input.backend.listInstalled({
+        trackableOnly: input.manifest.skills.length === 0,
+      });
   const installedByName = new Map(
     installed.map((skill) => [skill.name, skill]),
   );
@@ -82,8 +85,10 @@ export async function buildManagedSkillInventory(input: {
   });
   const updates = await input.backend.checkUpdates(trackedSkills);
 
-  const rows = input.manifest.skills.map((skill) =>
-    classifyManagedSkill(skill, installedByName.get(skill.name), updates),
+  const rows = await Promise.all(
+    input.manifest.skills.map((skill) =>
+      classifyManagedSkill(skill, installedByName.get(skill.name), updates),
+    ),
   );
   const reservedNames = new Set([
     ...input.manifest.skills.map((skill) => skill.name),
@@ -119,10 +124,10 @@ export function classifyManagedSkill(
   skill: ManagedCodexSkill,
   installed: InstalledSkill | undefined,
   updates: ReadonlySet<string>,
-): ManagedSkillInventoryRow {
+): Promise<ManagedSkillInventoryRow> {
   const source = `${skill.repository}:${skill.selector}@${skill.tracking.ref}`;
   if (!skill.enabled) {
-    return {
+    return Promise.resolve({
       name: skill.name,
       source,
       state: 'disabled',
@@ -132,19 +137,19 @@ export function classifyManagedSkill(
         installed.repository === skill.repository,
       availableActions: ['none', 'enable', 'remove'],
       skill,
-    };
+    });
   }
   if (!installed) {
-    return {
+    return Promise.resolve({
       name: skill.name,
       source,
       state: 'missing',
       availableActions: ['none', 'install', 'remove'],
       skill,
-    };
+    });
   }
   if (!installed.managed || installed.repository !== skill.repository) {
-    return {
+    return Promise.resolve({
       name: skill.name,
       source,
       state: 'unmanaged_collision',
@@ -152,10 +157,10 @@ export function classifyManagedSkill(
       installedManaged: false,
       availableActions: ['none', 'replace', 'remove'],
       skill,
-    };
+    });
   }
   if (skill.tracking.type === 'branch' && updates.has(skill.name)) {
-    return {
+    return Promise.resolve({
       name: skill.name,
       source,
       state: 'update_available',
@@ -163,9 +168,9 @@ export function classifyManagedSkill(
       installedManaged: true,
       availableActions: ['none', 'update', 'remove'],
       skill,
-    };
+    });
   }
-  return {
+  return Promise.resolve({
     name: skill.name,
     source,
     state: 'installed',
@@ -173,7 +178,7 @@ export function classifyManagedSkill(
     installedManaged: true,
     availableActions: ['none', 'remove'],
     skill,
-  };
+  });
 }
 
 export async function executeSkillPlan(input: {
@@ -241,10 +246,7 @@ export async function executeSkillPlan(input: {
 }
 
 async function replaceSkillWithRollback(
-  item: SkillPlanItem & {
-    readonly skill?: ManagedCodexSkill;
-    readonly installedPath?: string;
-  },
+  item: SkillPlanItem,
   backend: SkillsBackend,
 ): Promise<void> {
   const skill = item.skill;

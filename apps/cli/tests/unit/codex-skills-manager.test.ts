@@ -24,6 +24,10 @@ import {
   validateCodexSkillsManifest,
   writeCodexSkillsManifest,
 } from '../../src/domain/codex-skills-manifest';
+import {
+  parseSkillSource,
+  SkillSourceError,
+} from '../../src/domain/codex-skills-source';
 import type { ObservedCliCommandScope } from '../../src/runtime/command-diagnostics';
 
 const trackedSkill: ManagedCodexSkill = {
@@ -112,8 +116,69 @@ describe('Codex skills manifest', () => {
     expect(result.manifest).toEqual({ version: 2, skills: [] });
     expect(result.legacyEntries).toEqual(['old-skill']);
   });
+
+  test('rejects version 2 local-source entries', () => {
+    expect(() =>
+      validateCodexSkillsManifest({
+        version: 2,
+        skills: [
+          {
+            name: 'my-local-skill',
+            source: 'local',
+            path: 'my-local-skills',
+            selector: 'my-local-skill',
+            enabled: true,
+          },
+        ],
+      }),
+    ).toThrow('must use source "github"');
+  });
 });
 
+describe('Codex skill source parser', () => {
+  test('normalizes GitHub shorthand, repository URL, and tree URL', () => {
+    expect(parseSkillSource('vercel-labs/agent-skills')).toEqual({
+      kind: 'github',
+      repository: 'vercel-labs/agent-skills',
+      locator: 'vercel-labs/agent-skills',
+    });
+    expect(
+      parseSkillSource('https://github.com/vercel-labs/agent-skills'),
+    ).toEqual({
+      kind: 'github',
+      repository: 'vercel-labs/agent-skills',
+      locator: 'vercel-labs/agent-skills',
+    });
+    expect(
+      parseSkillSource(
+        'https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines',
+      ),
+    ).toEqual({
+      kind: 'github',
+      repository: 'vercel-labs/agent-skills',
+      ref: 'main',
+      subpath: 'skills/web-design-guidelines',
+      locator:
+        'https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines',
+    });
+  });
+
+  test('rejects local paths and unsupported URLs', () => {
+    for (const source of [
+      './my-local-skills',
+      '../outside',
+      '/tmp/my-local-skills',
+      'https://gitlab.com/org/repo',
+      'git@github.com:vercel-labs/agent-skills.git',
+      'https://example.com/org/repo',
+    ]) {
+      expect(() => parseSkillSource(source)).toThrow(SkillSourceError);
+      expect(() => parseSkillSource(source)).toThrow(
+        'Unsupported skill source',
+      );
+    }
+  });
+});
 describe('pinned skills backend contract', () => {
   test('parses pinned list and discovery fixtures and rejects drift', () => {
     expect(pinnedSkillsCliVersion).toBe('1.5.19');
@@ -299,6 +364,66 @@ describe('pinned skills backend contract', () => {
 
     expect(await backend.listInstalled({ trackableOnly: true })).toEqual([]);
     expect(ran).toBe(false);
+  });
+
+  test('uses GitHub arguments for tree discovery and lifecycle', async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), 'chc-skills-home-'));
+    const calls: string[][] = [];
+    const backend = createNpxSkillsBackend({
+      homeRoot,
+      localCodexRoot: join(homeRoot, '.codex'),
+      run: async (args) => {
+        calls.push([...args]);
+        return {
+          stdout: 'Found 1 skills\n│    web-design-guidelines\n',
+          stderr: '',
+        };
+      },
+    });
+    const treeSource = parseSkillSource(
+      'https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines',
+    );
+    const githubSkill: ManagedCodexSkill = {
+      name: 'web-design-guidelines',
+      source: 'github',
+      repository: 'vercel-labs/agent-skills',
+      selector: 'web-design-guidelines',
+      tracking: { type: 'branch', ref: 'main' },
+      enabled: true,
+    };
+
+    await backend.discover(treeSource);
+    await backend.validate(githubSkill);
+    await backend.install(githubSkill);
+    await backend.update(githubSkill);
+    expect(calls).toEqual([
+      [
+        'add',
+        'https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines',
+        '--list',
+      ],
+      ['add', 'vercel-labs/agent-skills#main', '--list'],
+      [
+        'add',
+        'vercel-labs/agent-skills#main',
+        '--skill',
+        'web-design-guidelines',
+        '--global',
+        '--agent',
+        'codex',
+        '--yes',
+      ],
+      [
+        'add',
+        'vercel-labs/agent-skills#main',
+        '--skill',
+        'web-design-guidelines',
+        '--global',
+        '--agent',
+        'codex',
+        '--yes',
+      ],
+    ]);
   });
 });
 
@@ -495,8 +620,8 @@ describe('Codex skills interaction', () => {
     const homeRoot = await mkdtemp(join(tmpdir(), 'chc-skills-home-'));
     const calls: string[] = [];
     const backend = fakeBackend({
-      discover: async (repository) => {
-        calls.push(`discover:${repository}`);
+      discover: async (source) => {
+        calls.push(`discover:${source.locator}`);
         return [{ name: 'grill-me' }];
       },
       install: async (skill) => {
@@ -521,6 +646,39 @@ describe('Codex skills interaction', () => {
       expect(Number(process.exitCode)).toBe(0);
     } finally {
       process.exitCode = previousExitCode;
+    }
+  });
+
+  test('rejects unsupported sources before backend discovery', async () => {
+    for (const source of [
+      './my-local-skills',
+      '/tmp/my-local-skills',
+      'https://gitlab.com/org/repo',
+      'git@github.com:vercel-labs/agent-skills.git',
+    ]) {
+      const repoRoot = await mkdtemp(
+        join(tmpdir(), 'chc-skills-source-error-'),
+      );
+      const homeRoot = await mkdtemp(join(tmpdir(), 'chc-skills-home-'));
+      let discovered = false;
+      await expect(
+        runSkills({ repoRoot, home: homeRoot }, interactiveScope(), {
+          createBackend: () =>
+            fakeBackend({
+              discover: async () => {
+                discovered = true;
+                return [];
+              },
+            }),
+          interaction: addInteraction({
+            requestRepository: async () => source,
+          }),
+        }),
+      ).rejects.toThrow('Unsupported skill source');
+      expect(discovered).toBe(false);
+      await expect(
+        stat(join(repoRoot, 'codex', 'skills.manifest.json')),
+      ).rejects.toThrow();
     }
   });
 
@@ -568,7 +726,9 @@ describe('Codex skills interaction', () => {
         },
       ],
       validate: async (skill) => {
-        calls.push(`validate:${skill.tracking.ref}`);
+        if (skill.source === 'github') {
+          calls.push(`validate:${skill.tracking.ref}`);
+        }
       },
       install: async () => {
         calls.push('install');

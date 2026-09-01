@@ -148,7 +148,11 @@ describe('codex command boundary', () => {
     expect(JSON.parse(result.out)).toEqual({
       ok: true,
       command: 'codex skills',
-      result: { manifestVersion: 2, skills: [], legacyEntries: [] },
+      result: {
+        manifestVersion: 2,
+        skills: [],
+        legacyEntries: [],
+      },
     });
     expect(
       await readFile(join(repoRoot, 'codex', 'skills.manifest.json'), 'utf8'),

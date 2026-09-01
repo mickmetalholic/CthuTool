@@ -18,6 +18,7 @@ COPY packages/agent-protocol/ packages/agent-protocol/
 COPY packages/browser-runtime-protocol/ packages/browser-runtime-protocol/
 COPY packages/config/ packages/config/
 COPY apps/backend/ apps/backend/
+COPY scripts/build-workspace-dependencies.mjs scripts/
 RUN pnpm --filter @cthutool/agent-protocol build
 RUN pnpm --filter @cthutool/browser-runtime-protocol build
 RUN pnpm --filter @cthutool/config build

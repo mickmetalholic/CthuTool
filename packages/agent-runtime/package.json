@@ -8,7 +8,7 @@
     "dist"
   ],
   "scripts": {
-    "build:deps": "pnpm --filter @cthutool/agent-bridge-protocol build && pnpm --filter @cthutool/agent-protocol build && pnpm --filter @cthutool/browser-runtime-protocol build",
+    "build:deps": "node ../../scripts/build-workspace-dependencies.mjs @cthutool/agent-bridge-protocol @cthutool/agent-protocol @cthutool/browser-runtime-protocol",
     "build": "pnpm run build:deps && tsc -p tsconfig.json",
     "test": "vitest run",
     "smoke:lna": "pnpm run build && node scripts/lna-compatibility-spike.cjs",

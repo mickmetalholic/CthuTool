@@ -1,0 +1,6 @@
+interface:
+  display_name: "Codex · Absorb and Promote Skill"
+  short_description: "Promote compatible Hermes or Codex skills into CthuCodex."
+  default_prompt: "Use $codex-skill-promoter to scan eligible Hermes and local Codex skills, let me choose promotion and exact Codex or Hermes cleanup targets, check shared compatibility, and apply the confirmed plan through my prepared Git checkout."
+policy:
+  allow_implicit_invocation: false

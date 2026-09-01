@@ -17,15 +17,11 @@ From the repository root:
 
 ```bash
 chc codex install
-chc opencode skills
-chc opencode mcp
 ```
 
 After install, start a new Codex thread or restart Codex so the bundled MCP
 server is loaded. In a fresh thread, use `/mcp` to verify the `anki` server and
-its tools are available. The two OpenCode commands reference the same plugin
-skill directories and translate the same `.mcp.json` declaration into
-OpenCode's configuration; restart or reload OpenCode after syncing.
+its tools are available.
 
 ## Mature Japanese Sentence Conversion
 
@@ -52,6 +48,22 @@ second MCP server.
 Keep repository-owned plugin source, manifests, and implementation assets under
 `codex/plugins/cthu-codex`. Keep generated command or skill adapters out of the
 repository; regenerate them per tool or platform.
+
+`$codex-skill-promoter` is the single Codex-side development workflow. It can
+adapt an explicitly selected Hermes skill only when a dedicated Evolution
+provenance marker is present, or start from an explicitly selected local Codex
+skill. It scans local skill trees read-only and then lets the user choose the
+promotion set and exact post-verification cleanup targets; every row defaults
+to Skip and every local copy defaults to Keep. It keeps an agent-neutral core
+with explicit Codex or Hermes adapters. For a Hermes candidate, the original
+eligible Evolution source and adapted Codex staging path are independent
+cleanup targets. The workflow validates and writes the clean feature checkout
+prepared by the user, installs and verifies that checkout, then deletes only
+confirmed unchanged targets after path, provenance, and fingerprint rechecks.
+It never edits or updates Hermes and never creates or switches a Git
+branch/worktree; final deletion of an explicitly selected eligible Hermes
+source is its only permitted Hermes mutation. Hermes-side skill absorption
+remains owned by the Hermes skill repository and local skill directory.
 
 ## TODO
 

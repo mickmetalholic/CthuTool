@@ -8,9 +8,12 @@ describe('root command', () => {
     expect(Object.keys(subCommands ?? {})).not.toContain('browser');
   });
 
-  test('exposes the OpenCode adapter command group', async () => {
+  test('keeps Codex command groups after OpenCode removal', async () => {
     const subCommands = await rootCommand.subCommands;
 
-    expect(Object.keys(subCommands ?? {})).toContain('opencode');
+    expect(Object.keys(subCommands ?? {})).toEqual(
+      expect.arrayContaining(['codex']),
+    );
+    expect(Object.keys(subCommands ?? {})).not.toContain('opencode');
   });
 });

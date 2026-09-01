@@ -13,6 +13,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - Notion channel-library skill
 - Notion album-maintenance skill
 - Notion movie-library skill
+- unified Hermes-to-Codex absorption and local skill promotion skill
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -24,13 +25,24 @@ User Codex environment, with local dependencies such as Anki and AnkiConnect whe
 
 ```bash
 chc codex install
-chc opencode skills
-chc opencode mcp
 ```
 
-Restart Codex after install so plugin-provided tools are loaded. The OpenCode
-commands reference the same skill directories and MCP declaration from this
-plugin; reload OpenCode after syncing.
+Restart Codex after install so plugin-provided tools are loaded.
+
+`$codex-skill-promoter` is the single Codex-side development workflow. It reads
+eligible local Hermes and Codex skills read-only, then shows every candidate so
+the user can choose the promotion set and exact post-verification cleanup
+targets. Every candidate defaults to Skip and every local copy defaults to
+Keep. Hermes still requires a dedicated Evolution provenance marker; its
+original source and adapted Codex staging path are independent cleanup targets.
+Promoted content keeps an agent-neutral core with explicit Codex or Hermes
+adapters. The user prepares the clean feature checkout; the skill validates and
+writes it but never creates or switches a branch/worktree. It never edits or
+updates Hermes, and may delete only an explicitly selected eligible unchanged
+Hermes source after plugin verification and final exact-path confirmation.
+Bundled, Hub-managed, protected, external, organization-managed, opted-out,
+and unprovenanced Hermes skills are excluded. Hermes-side absorption remains
+owned by the Hermes skill repository and local skill directory.
 
 ## Anki MCP Server
 

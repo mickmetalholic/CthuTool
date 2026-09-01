@@ -32,7 +32,6 @@ OpenSpec currently treats each `openspec/specs/<capability>/spec.md` directory a
 - [apps-cli-bundled-script-execution](apps-cli-bundled-script-execution/spec.md): bundled script discovery, invocation, interactive selection, and JSON-safe execution.
 - [apps-cli-codex-config](apps-cli-codex-config/spec.md): reproducible Codex configuration maintenance and repository-managed Codex state.
 - [apps-cli-codex-plugin-management](apps-cli-codex-plugin-management/spec.md): repository-owned Codex plugin discovery, install, cache sync, and language-coach hook behavior.
-- [apps-cli-opencode-shared-assets](apps-cli-opencode-shared-assets/spec.md): repository-owned plugin skill and MCP synchronization into OpenCode configuration.
 - [apps-cli-codex-skill-management](apps-cli-codex-skill-management/spec.md): interactive manifest-managed third-party Codex skill discovery, review, installation, update, and removal.
 - [apps-cli-distribution-ci](apps-cli-distribution-ci/spec.md): CLI distribution CI behavior.
 - [apps-cli-observability](apps-cli-observability/spec.md): CLI command diagnostics, JSON-safe observability, stderr behavior, and redaction.

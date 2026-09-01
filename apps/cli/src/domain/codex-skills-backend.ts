@@ -2,7 +2,11 @@ import { execFile as execFileCallback } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { ManagedCodexSkill } from './codex-skills-manifest';
+import type {
+  ManagedCodexSkill,
+  ManagedGitHubSkill,
+} from './codex-skills-manifest';
+import type { SkillSource } from './codex-skills-source';
 
 const execFile = promisify(execFileCallback);
 
@@ -50,7 +54,7 @@ export type SkillsBackend = {
   readonly listInstalled: (options?: {
     readonly trackableOnly?: boolean;
   }) => Promise<InstalledSkill[]>;
-  readonly discover: (repository: string) => Promise<DiscoveredSkill[]>;
+  readonly discover: (source: SkillSource) => Promise<DiscoveredSkill[]>;
   readonly validate: (skill: ManagedCodexSkill) => Promise<void>;
   readonly checkUpdates: (
     skills: readonly ManagedCodexSkill[],
@@ -131,8 +135,11 @@ export function createNpxSkillsBackend(
         };
       });
     },
-    async discover(repository) {
-      const result = await run(['add', repository, '--list'], env);
+    async discover(source) {
+      const result = await run(
+        ['add', resolveDiscoverySource(source), '--list'],
+        env,
+      );
       return parseDiscoveredSkills(result.stdout);
     },
     async validate(skill) {
@@ -149,7 +156,7 @@ export function createNpxSkillsBackend(
       ) {
         throw new SkillsBackendError(
           'contract_mismatch',
-          `Skill ${skill.selector} was not found in ${skill.repository}@${skill.tracking.ref}.`,
+          `Skill ${skill.selector} was not found in ${describeSkillSource(skill)}.`,
         );
       }
     },
@@ -364,8 +371,16 @@ function readLocalGitHubCandidate(
   };
 }
 
+function resolveDiscoverySource(source: SkillSource): string {
+  return source.locator;
+}
+
 function resolveSkillSource(skill: ManagedCodexSkill): string {
   return `${skill.repository}#${encodeURIComponent(skill.tracking.ref)}`;
+}
+
+function describeSkillSource(skill: ManagedCodexSkill): string {
+  return `${skill.repository}@${skill.tracking.ref}`;
 }
 
 type GitHubTreeEntry = {
@@ -375,7 +390,7 @@ type GitHubTreeEntry = {
 };
 
 async function checkGitHubUpdates(
-  skills: readonly ManagedCodexSkill[],
+  skills: readonly ManagedGitHubSkill[],
   lock: ReadonlyMap<string, Record<string, unknown>>,
   fetchRemoteTree: RemoteTreeFetcher,
   env: NodeJS.ProcessEnv,

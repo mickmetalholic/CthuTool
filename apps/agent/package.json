@@ -7,7 +7,7 @@
     "dist"
   ],
   "scripts": {
-    "build:deps": "pnpm --filter @cthutool/agent-data-migration build && pnpm --filter @cthutool/agent-runtime build",
+    "build:deps": "node ../../scripts/build-workspace-dependencies.mjs @cthutool/agent-data-migration @cthutool/agent-runtime",
     "build": "pnpm run build:deps && tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "pnpm run build:deps && vitest run",

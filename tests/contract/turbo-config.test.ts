@@ -44,6 +44,13 @@ describe("Turbo orchestration contract", () => {
     expect(tasks["test:cov"]?.dependsOn).toContain("^build");
   });
 
+  it("builds workspace dependencies before orchestrated runtime tasks", () => {
+    const tasks = readTurboConfig().tasks ?? {};
+
+    expect(tasks.dev?.dependsOn).toContain("^build");
+    expect(tasks.start?.dependsOn).toContain("^build");
+  });
+
   it("keeps standardized test layer tasks orchestrable", () => {
     const tasks = readTurboConfig().tasks ?? {};
 

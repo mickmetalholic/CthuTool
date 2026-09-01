@@ -24,9 +24,11 @@ import {
 } from '../domain/codex-skills-manager';
 import {
   type CodexSkillsManifest,
+  isManagedGitHubSkill,
   type ManagedCodexSkill,
   readCodexSkillsManifest,
 } from '../domain/codex-skills-manifest';
+import { parseSkillSource } from '../domain/codex-skills-source';
 import { createCodexConfigPaths } from '../infra/codex-config-paths';
 import { cliContractArgs } from '../runtime/cli-context';
 import { createCliError } from '../runtime/cli-error';
@@ -166,9 +168,11 @@ export async function runSkills(
         homeRoot: paths.homeRoot,
         localCodexRoot: paths.localCodexRoot,
       });
+  const installedSkills = await backend.listInstalled();
   const inventory = await buildManagedSkillInventory({
     ...manifestResult,
     backend,
+    installedSkills,
   });
 
   if (scope.context.json) {
@@ -203,12 +207,12 @@ export async function runSkills(
     writeHumanStatus(
       scope.context,
       processOutput,
-      pc.dim('No tracked or trackable GitHub skills were found.'),
+      pc.dim('No tracked or trackable supported skills were found.'),
     );
     writeHumanStatus(
       scope.context,
       processOutput,
-      pc.dim('Choose Add skills from GitHub to install and track one.'),
+      pc.dim('Choose Add to install and track a GitHub skill.'),
     );
     return;
   }
@@ -360,8 +364,8 @@ async function createAddPlan(
   if (!repositoryAnswer) {
     return undefined;
   }
-  const repository = repositoryAnswer.trim();
-  const discovered = await backend.discover(repository);
+  const source = parseSkillSource(repositoryAnswer);
+  const discovered = await backend.discover(source);
   const selectedNames = await interaction.chooseDiscoveredNames(discovered);
   if (!selectedNames) {
     return undefined;
@@ -370,15 +374,17 @@ async function createAddPlan(
   if (!trackingType) {
     return undefined;
   }
-  const refAnswer = await interaction.requestTrackingRef(trackingType);
+  const refAnswer = await interaction.requestTrackingRef(
+    trackingType,
+    source.ref,
+  );
   if (!refAnswer) {
     return undefined;
   }
-
   const selectedSkills: ManagedCodexSkill[] = selectedNames.map((name) => ({
     name,
-    source: 'github',
-    repository,
+    source: 'github' as const,
+    repository: source.repository,
     selector: name,
     tracking: { type: trackingType, ref: refAnswer.trim() },
     enabled: true,
@@ -419,7 +425,7 @@ const defaultSkillsInteraction: SkillsInteraction = {
     const answer = await select<'manage' | 'add'>({
       message: 'Codex skills',
       options: [
-        { value: 'manage', label: 'Manage tracked and local skills' },
+        { value: 'manage', label: 'Manage tracked GitHub skills' },
         { value: 'add', label: 'Add skills from GitHub' },
       ],
     });
@@ -430,18 +436,16 @@ const defaultSkillsInteraction: SkillsInteraction = {
   },
   async requestRepository() {
     const answer = await promptText({
-      message: 'GitHub repository (owner/repo)',
+      message: 'Skill source (owner/repo or GitHub URL)',
       validate(value) {
-        return /^[^/\s]+\/[^/\s]+$/u.test(value.trim())
-          ? undefined
-          : 'Use owner/repo format.';
+        return value.trim().length > 0 ? undefined : 'A source is required.';
       },
     });
     return isCancel(answer) ? undefined : answer.trim();
   },
   async chooseDiscoveredNames(skills) {
     const answer = await multiselect<string>({
-      message: 'Select skills to track (Space toggles)',
+      message: 'Select skills to add (Space toggles)',
       required: true,
       options: skills.map((skill) => ({
         value: skill.name,
@@ -584,7 +588,11 @@ function writePlan(
 }
 
 function describePlanEffect(item: SkillPlanItem): string {
-  if (item.action === 'track' && item.skill) {
+  if (
+    item.action === 'track' &&
+    item.skill &&
+    isManagedGitHubSkill(item.skill)
+  ) {
     return `(manifest only; ${item.skill.repository}:${item.skill.selector}@${item.skill.tracking.ref} ${item.skill.tracking.type}; keep local installation unchanged)`;
   }
   if (item.action === 'add' || item.action === 'install') {
@@ -602,7 +610,7 @@ function describePlanEffect(item: SkillPlanItem): string {
     return '(enable manifest entry)';
   }
   if (item.action === 'update') {
-    return '(update local installation; preserve manifest source)';
+    return '(update local GitHub installation; preserve manifest source)';
   }
   return '';
 }
@@ -616,8 +624,7 @@ export const codexCommand = defineCommand({
     skills: defineCommand({
       meta: {
         name: 'skills',
-        description:
-          'Reconcile manifest-tracked and eligible local GitHub skills.',
+        description: 'Reconcile manifest-tracked GitHub skills.',
       },
       args: commonArgs,
       async run({ args }) {

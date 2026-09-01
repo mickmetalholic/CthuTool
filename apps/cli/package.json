@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:deps": "pnpm --filter @cthutool/agent-data-migration build && pnpm --filter @cthutool/agent-release build",
+    "build:deps": "node ../../scripts/build-workspace-dependencies.mjs @cthutool/agent-data-migration @cthutool/agent-release",
     "dev": "bun build src/index.ts --outdir dist --target node --watch",
     "build": "pnpm run build:deps && node ../../scripts/build-cli-dist.mjs",
     "test": "pnpm run build:deps && pnpm run test:unit && pnpm run test:integration",
