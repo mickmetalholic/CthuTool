@@ -26,9 +26,10 @@ describe('source command', () => {
     expect(bare).toEqual(explicit);
     expect(bare.code).toBe(0);
     expect(bare.err).toBe('');
-    for (const operation of ['list', 'current', 'use', 'register']) {
+    for (const operation of ['list', 'use', 'register']) {
       expect(bare.out).toContain(operation);
     }
+    expect(bare.out).not.toContain('current');
   });
 
   test('lists the active source and worktree candidates as one JSON value', async () => {
@@ -57,20 +58,20 @@ describe('source command', () => {
 
     expect(human.code).toBe(0);
     expect(human.out).toContain('CthuTool sources');
-    expect(human.out).toContain('local');
+    expect(human.out).toMatch(/●\s+\S+.*active/);
+    expect(human.out).toMatch(/(main|worktree) ·/);
+    expect(human.out).toContain('~/');
     expect(quiet).toMatchObject({ code: 0, out: '', err: '' });
   });
 
-  test('reports the actual running source in JSON mode', async () => {
-    const result = await runCli(['source', 'current', '--json']);
+  test('rejects the removed current operation and bootstrap option', async () => {
+    const current = await runCli(['source', 'current']);
+    const bootstrap = await runCli(['source', 'use', 'remote', '--bootstrap']);
 
-    expect(result.code).toBe(0);
-    expect(result.err).toBe('');
-    expect(JSON.parse(result.out)).toMatchObject({
-      ok: true,
-      command: 'source current',
-      source: { active: true },
-    });
+    expect(current.code).not.toBe(0);
+    expect(`${current.out}\n${current.err}`).toContain('current');
+    expect(bootstrap.code).not.toBe(0);
+    expect(`${bootstrap.out}\n${bootstrap.err}`).toContain('bootstrap');
   });
 
   test('extends lifecycle status with compatible source identity fields', async () => {

@@ -90,7 +90,6 @@ Inspect and switch the checkout that provides the global CLI bundle:
 
 ```bash
 chc source list
-chc source current
 chc source use local
 chc source use .
 chc source use worktree:<id>
@@ -109,11 +108,13 @@ checkout, pull, merge, stash, reset, clean, or build, and it allows an explicitl
 selected dirty worktree. Run `pnpm --filter @cthutool/cli dev` in the selected
 checkout when its bundle needs refreshing.
 
-`chc source use remote` relinks an existing managed checkout without updating
-it. If the checkout is absent, use `chc source use remote --bootstrap` to invoke
-the safe managed install/update flow explicitly. Switch away before deleting an
-active worktree. If its deletion already made `chc` unavailable, rerun the
-public Bash or PowerShell remote installer from the previous section.
+`chc source use remote` creates the managed checkout through the safe managed
+install flow when its path is absent. An existing valid checkout is only
+relinked and remains updateable through `chc update`. An existing invalid path
+is not overwritten automatically; repair or move it before retrying. Switch
+away before deleting an active worktree. If its deletion already made `chc`
+unavailable, rerun the public Bash or PowerShell remote installer from the
+previous section.
 
 ## Update
 

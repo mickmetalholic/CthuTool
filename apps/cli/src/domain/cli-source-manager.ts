@@ -26,6 +26,8 @@ const maxCommandDetailLength = 600;
 
 export type CliSourceKind = 'main' | 'worktree' | 'managed';
 export type CliSourceMode = 'local' | 'remote';
+export type CliManagedSourceState = 'ready' | 'absent' | 'invalid';
+const cliManagedSourceState = Symbol('cliManagedSourceState');
 
 export type CliSourceCandidate = {
   readonly id: string;
@@ -42,6 +44,7 @@ export type CliSourceCandidate = {
   readonly locked?: boolean;
   readonly prunable?: boolean;
   readonly reason?: string;
+  readonly [cliManagedSourceState]?: CliManagedSourceState;
 };
 
 export type CliSourceInventory = {
@@ -380,14 +383,16 @@ export async function registerCliSource(
 
 export async function switchCliSource(
   selector: string,
-  options: { readonly bootstrap?: boolean } = {},
   deps = createCliSourceManagerDeps(),
 ): Promise<CliSourceSwitchResult> {
   const inventory = await discoverCliSources(deps);
   const selected = await resolveCliSourceSelector(selector, inventory, deps);
   const previous = inventory.active;
 
-  if (selected.kind === 'managed' && options.bootstrap === true) {
+  if (
+    selected.kind === 'managed' &&
+    getCliManagedSourceState(selected) === 'absent'
+  ) {
     await rememberDevelopmentSource(previous, deps);
     return withSourceSwitchLock(deps, async () => {
       try {
@@ -688,6 +693,7 @@ async function inspectManagedCandidate(
       path,
       active,
       reason: 'The managed source checkout does not exist.',
+      managedState: 'absent',
     });
   }
   const checkout = await tryResolveDevelopmentCheckout(path, deps);
@@ -699,6 +705,7 @@ async function inspectManagedCandidate(
       active,
       bundlePresent,
       reason: 'The managed source path is not a valid CthuTool Git checkout.',
+      managedState: 'invalid',
     });
   }
   const record = checkout.worktrees.find((item) =>
@@ -725,6 +732,7 @@ async function inspectManagedCandidate(
     dirty,
     locked: record?.locked,
     prunable: record?.prunable,
+    [cliManagedSourceState]: bundlePresent ? 'ready' : 'invalid',
     reason: bundlePresent
       ? undefined
       : `Missing committed CLI bundle: ${join(path, committedCliBundlePath)}`,
@@ -763,6 +771,7 @@ function unavailableCandidate(input: {
   readonly active: boolean;
   readonly reason: string;
   readonly bundlePresent?: boolean;
+  readonly managedState?: CliManagedSourceState;
 }): CliSourceCandidate {
   return {
     id: input.id,
@@ -773,7 +782,18 @@ function unavailableCandidate(input: {
     available: false,
     bundlePresent: input.bundlePresent ?? false,
     reason: input.reason,
+    [cliManagedSourceState]: input.managedState,
   };
+}
+
+export function getCliManagedSourceState(
+  candidate: CliSourceCandidate,
+): CliManagedSourceState | undefined {
+  if (candidate.kind !== 'managed') return undefined;
+  return (
+    candidate[cliManagedSourceState] ??
+    (candidate.available ? 'ready' : 'invalid')
+  );
 }
 
 function sourceUnavailableReason(input: {
@@ -808,7 +828,7 @@ function assertAvailableSource(candidate: CliSourceCandidate): void {
   if (candidate.available) return;
   const hint =
     candidate.kind === 'managed'
-      ? 'Run `chc source use remote --bootstrap` or use the public remote installer.'
+      ? 'Repair or move the existing managed path, then retry; use `chc update` only for a valid checkout.'
       : 'Refresh apps/cli/dist/index.js or select another checkout.';
   throw new CliSourceError({
     code: 'source_unavailable',

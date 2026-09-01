@@ -4,7 +4,9 @@ import pc from 'picocolors';
 import {
   type CliSourceCandidate,
   CliSourceError,
+  type CliSourceInventory,
   type CliSourceManagerDeps,
+  type CliSourceSwitchResult,
   createCliSourceManagerDeps,
   discoverCliSources,
   getCliSourceSelectorCandidates,
@@ -35,25 +37,40 @@ import {
   registerCommandGroup,
   registerPositionalCandidates,
 } from './command-discovery';
+import {
+  actionableCliSourceCandidates,
+  presentCliSourceCandidate,
+  sourceChoiceLabel,
+  sourcePresentationDescription,
+} from './source-presentation';
 
 export type SourceCommandInteraction = {
   readonly chooseSource: (
     candidates: readonly CliSourceCandidate[],
+    home: string,
   ) => Promise<string | undefined>;
 };
 
 export type SourceCommandDeps = {
   readonly manager: CliSourceManagerDeps;
   readonly interaction: SourceCommandInteraction;
+  readonly isTty: () => boolean;
+  readonly discoverSources: (
+    manager: CliSourceManagerDeps,
+  ) => Promise<CliSourceInventory>;
+  readonly switchSource: (
+    selector: string,
+    manager: CliSourceManagerDeps,
+  ) => Promise<CliSourceSwitchResult>;
 };
 
 const defaultInteraction: SourceCommandInteraction = {
-  async chooseSource(candidates) {
+  async chooseSource(candidates, home) {
     const answer = await select<string>({
       message: 'Choose the source for global chc',
       options: candidates.map((candidate) => ({
         value: candidate.id,
-        label: sourceChoiceLabel(candidate),
+        label: sourceChoiceLabel(candidate, home),
       })),
     });
     return isCancel(answer) ? undefined : answer;
@@ -63,6 +80,9 @@ const defaultInteraction: SourceCommandInteraction = {
 const defaultDeps: SourceCommandDeps = {
   manager: createCliSourceManagerDeps(),
   interaction: defaultInteraction,
+  isTty: () => process.stdin.isTTY === true,
+  discoverSources: discoverCliSources,
+  switchSource: switchCliSource,
 };
 
 const useArgs = {
@@ -71,10 +91,6 @@ const useArgs = {
     type: 'positional',
     description: 'local, remote, ., a worktree id, or a checkout path',
     required: false,
-  },
-  bootstrap: {
-    type: 'boolean',
-    description: 'Create or safely refresh the managed source explicitly',
   },
 } as const;
 
@@ -93,29 +109,25 @@ function getStringArg(value: unknown): string | undefined {
     : undefined;
 }
 
-function sourceChoiceLabel(candidate: CliSourceCandidate): string {
-  const ref = candidate.branch ?? (candidate.detached ? 'detached' : 'unknown');
-  return `${candidate.kind} · ${ref} · ${candidate.path}`;
-}
-
-function sourceStatusLabel(candidate: CliSourceCandidate): string {
-  const parts: string[] = [candidate.kind];
-  if (candidate.branch) parts.push(candidate.branch);
-  else if (candidate.detached) parts.push('detached');
-  if (candidate.dirty === true) parts.push('dirty');
-  if (!candidate.bundlePresent) parts.push('bundle missing');
-  if (!candidate.available) parts.push('unavailable');
-  return parts.join(', ');
-}
-
-function writeSourceCandidate(candidate: CliSourceCandidate): void {
-  const marker = candidate.active ? pc.green('●') : ' ';
+function writeSourceCandidate(
+  candidate: CliSourceCandidate,
+  home: string,
+): void {
+  const presentation = presentCliSourceCandidate(candidate, home);
+  const marker =
+    presentation.state === 'active'
+      ? pc.green('●')
+      : presentation.state === 'ready'
+        ? '○'
+        : presentation.state === 'not installed'
+          ? '◌'
+          : pc.yellow('×');
   processOutput.stdout.write(
-    `${marker} ${candidate.id.padEnd(23)} ${sourceStatusLabel(candidate)}\n`,
+    `${marker} ${presentation.selector.padEnd(23)} ${sourcePresentationDescription(presentation)}\n`,
   );
-  processOutput.stdout.write(`  ${candidate.path}\n`);
-  if (candidate.reason) {
-    processOutput.stdout.write(`  ${pc.yellow(candidate.reason)}\n`);
+  processOutput.stdout.write(`  ${presentation.displayPath}\n`);
+  if (presentation.hint) {
+    processOutput.stdout.write(`  ${pc.yellow(presentation.hint)}\n`);
   }
 }
 
@@ -154,7 +166,7 @@ function createSourceListCommand(deps: SourceCommandDeps) {
         { command: 'source', subcommand: 'list' },
         async (scope) => {
           try {
-            const inventory = await discoverCliSources(deps.manager);
+            const inventory = await deps.discoverSources(deps.manager);
             if (scope.context.json) {
               writeJsonValue(processOutput, {
                 ok: true,
@@ -169,8 +181,10 @@ function createSourceListCommand(deps: SourceCommandDeps) {
                 processOutput,
                 pc.cyan('CthuTool sources'),
               );
+              processOutput.stdout.write('\n');
               for (const candidate of inventory.candidates) {
-                writeSourceCandidate(candidate);
+                writeSourceCandidate(candidate, deps.manager.home());
+                processOutput.stdout.write('\n');
               }
             }
             if (!scope.context.quiet) {
@@ -183,44 +197,7 @@ function createSourceListCommand(deps: SourceCommandDeps) {
             failSourceCommand(scope, error, { phase: 'discovery' });
           }
         },
-      );
-    },
-  });
-}
-
-function createSourceCurrentCommand(deps: SourceCommandDeps) {
-  return defineCommand({
-    meta: {
-      name: 'current',
-      description: 'Show the source that provides the running chc command.',
-    },
-    args: cliContractArgs,
-    async run({ args }) {
-      await runObservedCliCommand(
-        args,
-        { command: 'source', subcommand: 'current' },
-        async (scope) => {
-          try {
-            const inventory = await discoverCliSources(deps.manager);
-            if (scope.context.json) {
-              writeJsonValue(processOutput, {
-                ok: true,
-                command: 'source current',
-                source: inventory.active,
-              });
-            } else {
-              writeHumanStatus(
-                scope.context,
-                processOutput,
-                pc.cyan('CthuTool source'),
-              );
-              if (!scope.context.quiet) writeSourceCandidate(inventory.active);
-            }
-            process.exitCode = 0;
-          } catch (error) {
-            failSourceCommand(scope, error, { phase: 'discovery' });
-          }
-        },
+        { isTty: deps.isTty },
       );
     },
   });
@@ -241,11 +218,28 @@ function createSourceUseCommand(deps: SourceCommandDeps) {
       description: 'Switch global chc to a local, worktree, or managed source.',
     },
     args: useArgs,
-    async run({ args }) {
+    async run({ args, rawArgs }) {
       await runObservedCliCommand(
         args,
         { command: 'source', subcommand: 'use' },
         async (scope) => {
+          if (
+            rawArgs.some(
+              (argument) =>
+                argument === '--bootstrap' ||
+                argument.startsWith('--bootstrap='),
+            )
+          ) {
+            failSourceCommand(
+              scope,
+              createCliError(
+                'invalid_option',
+                'Unknown option: --bootstrap. Select remote directly; use `chc update` to update an existing managed checkout.',
+              ),
+              { phase: 'validation' },
+            );
+            return;
+          }
           let selector = getStringArg(args.selector);
           if (!selector) {
             if (!scope.context.interactive || scope.context.json) {
@@ -260,13 +254,13 @@ function createSourceUseCommand(deps: SourceCommandDeps) {
               return;
             }
             try {
-              const inventory = await discoverCliSources(deps.manager);
+              const inventory = await deps.discoverSources(deps.manager);
               selector = await deps.interaction.chooseSource(
-                inventory.candidates.filter(
-                  (candidate) =>
-                    candidate.available ||
-                    (args.bootstrap === true && candidate.kind === 'managed'),
+                actionableCliSourceCandidates(
+                  inventory.candidates,
+                  deps.manager.home(),
                 ),
+                deps.manager.home(),
               );
             } catch (error) {
               failSourceCommand(scope, error, { phase: 'discovery' });
@@ -283,11 +277,7 @@ function createSourceUseCommand(deps: SourceCommandDeps) {
           }
 
           try {
-            const result = await switchCliSource(
-              selector,
-              { bootstrap: args.bootstrap === true },
-              deps.manager,
-            );
+            const result = await deps.switchSource(selector, deps.manager);
             if (scope.context.json) {
               writeJsonValue(processOutput, {
                 ok: true,
@@ -326,10 +316,10 @@ function createSourceUseCommand(deps: SourceCommandDeps) {
             failSourceCommand(scope, error, {
               phase: 'switch',
               selector,
-              bootstrap: args.bootstrap === true,
             });
           }
         },
+        { isTty: deps.isTty },
       );
     },
   });
@@ -392,6 +382,7 @@ function createSourceRegisterCommand(deps: SourceCommandDeps) {
             });
           }
         },
+        { isTty: deps.isTty },
       );
     },
   });
@@ -405,12 +396,6 @@ export function createSourceCommand(
     {
       name: 'list',
       command: createSourceListCommand(deps),
-      visibility: 'public',
-      bareBehavior: 'run',
-    },
-    {
-      name: 'current',
-      command: createSourceCurrentCommand(deps),
       visibility: 'public',
       bareBehavior: 'run',
     },

@@ -125,7 +125,6 @@ List and switch the checkout that supplies the global `chc` runtime bundle:
 
 ```bash
 chc source list
-chc source current
 chc source use local
 chc source use .
 chc source use worktree:<id>
@@ -143,12 +142,13 @@ selected path. It deliberately does not fetch, pull, checkout, stash, reset, or
 build, and an explicitly selected dirty worktree is allowed. Refresh the bundle
 with `pnpm --filter @cthutool/cli dev` before testing source changes.
 
-`chc source use remote` only relinks an existing valid managed checkout and does
-not update it. Use `chc source use remote --bootstrap` when that checkout is
-missing or when an explicit safe managed refresh is intended. Switch to `local`
-or `remote` before deleting an active worktree. If the worktree is already gone
-and `chc` cannot start, recover with the public Bash or PowerShell remote
-installer from the Installation Contract section.
+`chc source use remote` automatically installs the managed checkout through the
+safe managed flow when its path is absent. An existing valid checkout is only
+relinked and is updated separately with `chc update`; an existing invalid path
+is not overwritten, so repair or move it before retrying. Switch to `local` or
+`remote` before deleting an active worktree. If the worktree is already gone and
+`chc` cannot start, recover with the public Bash or PowerShell remote installer
+from the Installation Contract section.
 
 ## Shell Completion
 
