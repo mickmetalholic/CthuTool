@@ -1,7 +1,7 @@
 # apps-agent-release-artifacts Specification
 
 ## Purpose
-TBD - created by archiving change add-agent-release-artifacts. Update Purpose after archive.
+Define the contents, integrity, publication, compatibility, and installation layout of self-contained cross-platform Agent release bundles.
 
 ## Requirements
 

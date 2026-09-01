@@ -1,7 +1,7 @@
 # apps-cli-comic-conversion Specification
 
 ## Purpose
-TBD - created by archiving change harden-convert-to-cbz. Update Purpose after archive.
+Define deterministic and safe PDF or EPUB to CBZ conversion, including discovery, extraction, conflict handling, atomic output, cleanup, and reporting.
 ## Requirements
 ### Requirement: PDF and EPUB source discovery
 The `convert-to-cbz` command SHALL recursively discover PDF and EPUB source files case-insensitively, exclude its selected output tree from source discovery, and map each source to the same relative directory with a `.cbz` extension.

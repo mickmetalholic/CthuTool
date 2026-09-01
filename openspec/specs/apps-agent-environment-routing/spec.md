@@ -1,7 +1,7 @@
 # apps-agent-environment-routing Specification
 
 ## Purpose
-TBD - created by archiving change add-agent-environment-routing. Update Purpose after archive.
+Define how the local Agent selects trusted deployment environments, scopes mutable state and identity, coordinates switching, and reports redacted diagnostics.
 
 ## Requirements
 

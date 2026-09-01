@@ -1,7 +1,7 @@
 # apps-agent-runtime Specification
 
 ## Purpose
-TBD - created by archiving change extract-local-agent-runtime. Update Purpose after archive.
+Define the headless local Agent process, its backend and browser connections, single-instance supervision, health, shutdown, and sanitized diagnostics.
 ## Requirements
 ### Requirement: Headless local agent process
 The workspace SHALL provide an Electron-independent Node.js agent process that composes backend connectivity, browser capability hosting, configuration, profiles, and diagnostics.

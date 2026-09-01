@@ -1,7 +1,7 @@
 # apps-cli-update-experience Specification
 
 ## Purpose
-TBD - created by archiving change apps-cli-update-experience. Update Purpose after archive.
+Define update preflight, source resolution, availability checks, human and structured output, actionable failures, and credential-safe diagnostics.
 ## Requirements
 ### Requirement: Update Preflight Classification
 The CLI SHALL inspect the resolved installed source and selected target before changing the checkout worktree or global installation.

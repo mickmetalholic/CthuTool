@@ -1,7 +1,7 @@
 # codex-plugins-cthu-codex-notion-movie-library-skill Specification
 
 ## Purpose
-TBD - created by archiving change add-notion-movie-library-skill. Update Purpose after archive.
+Define the Movie Library skill's live Notion discovery, fuzzy metadata reconciliation, duplicate prevention, confirmation, creation, and verification workflow.
 ## Requirements
 ### Requirement: Movie Library skill invocation and boundaries
 The CthuCodex plugin SHALL provide an instruction-only

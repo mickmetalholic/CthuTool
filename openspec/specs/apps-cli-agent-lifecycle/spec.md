@@ -1,7 +1,7 @@
 # apps-cli-agent-lifecycle Specification
 
 ## Purpose
-TBD - created by archiving change add-cli-agent-lifecycle. Update Purpose after archive.
+Define CLI commands for installing, configuring, starting, updating, diagnosing, accessing, and safely uninstalling the user-scoped Agent.
 
 ## Requirements
 

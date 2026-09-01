@@ -1,7 +1,7 @@
 # apps-cli-codex-skill-management Specification
 
 ## Purpose
-TBD - created by archiving change apps-cli-interactive-codex-skills. Update Purpose after archive.
+Define the reviewed interactive and non-interactive lifecycle for manifest-managed Codex skills sourced through the supported skill backend.
 
 ## Requirements
 

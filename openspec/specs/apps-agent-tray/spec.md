@@ -1,7 +1,7 @@
 # apps-agent-tray Specification
 
 ## Purpose
-TBD - created by archiving change add-native-agent-tray. Update Purpose after archive.
+Define the windowless native tray application's environment-aware controls, Agent supervision, Web launch behavior, and coordinated shutdown.
 ## Requirements
 ### Requirement: Windowless native tray presence
 The product SHALL provide a single user-session native tray process without an application window, embedded browser, or WebView.
