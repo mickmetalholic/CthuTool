@@ -14920,6 +14920,7 @@ var sourceRegistryVersion = 1;
 var sourceSwitchWaitMs = 2000;
 var sourceSwitchPollMs = 50;
 var maxCommandDetailLength = 600;
+var cliManagedSourceState = Symbol("cliManagedSourceState");
 
 class CliSourceError extends Error {
   code;
@@ -15119,11 +15120,11 @@ async function registerCliSource(path, deps = createCliSourceManagerDeps()) {
     commonDir: registry.commonDir
   };
 }
-async function switchCliSource(selector, options = {}, deps = createCliSourceManagerDeps()) {
+async function switchCliSource(selector, deps = createCliSourceManagerDeps()) {
   const inventory = await discoverCliSources(deps);
   const selected = await resolveCliSourceSelector(selector, inventory, deps);
   const previous = inventory.active;
-  if (selected.kind === "managed" && options.bootstrap === true) {
+  if (selected.kind === "managed" && getCliManagedSourceState(selected) === "absent") {
     await rememberDevelopmentSource(previous, deps);
     return withSourceSwitchLock(deps, async () => {
       try {
@@ -15346,7 +15347,8 @@ async function inspectManagedCandidate(path, runtimeRoot, deps) {
       kind: "managed",
       path,
       active,
-      reason: "The managed source checkout does not exist."
+      reason: "The managed source checkout does not exist.",
+      managedState: "absent"
     });
   }
   const checkout = await tryResolveDevelopmentCheckout(path, deps);
@@ -15357,7 +15359,8 @@ async function inspectManagedCandidate(path, runtimeRoot, deps) {
       path,
       active,
       bundlePresent,
-      reason: "The managed source path is not a valid CthuTool Git checkout."
+      reason: "The managed source path is not a valid CthuTool Git checkout.",
+      managedState: "invalid"
     });
   }
   const record = checkout.worktrees.find((item) => sameSourcePath(item.path, checkout.root));
@@ -15383,6 +15386,7 @@ async function inspectManagedCandidate(path, runtimeRoot, deps) {
     dirty,
     locked: record?.locked,
     prunable: record?.prunable,
+    [cliManagedSourceState]: bundlePresent ? "ready" : "invalid",
     reason: bundlePresent ? undefined : `Missing committed CLI bundle: ${join22(path, committedCliBundlePath)}`
   };
 }
@@ -15414,8 +15418,14 @@ function unavailableCandidate(input) {
     active: input.active,
     available: false,
     bundlePresent: input.bundlePresent ?? false,
-    reason: input.reason
+    reason: input.reason,
+    [cliManagedSourceState]: input.managedState
   };
+}
+function getCliManagedSourceState(candidate) {
+  if (candidate.kind !== "managed")
+    return;
+  return candidate[cliManagedSourceState] ?? (candidate.available ? "ready" : "invalid");
 }
 function sourceUnavailableReason(input) {
   if (!input.exists || input.prunable)
@@ -15438,7 +15448,7 @@ function requiredCandidate(candidate, selector) {
 function assertAvailableSource(candidate) {
   if (candidate.available)
     return;
-  const hint = candidate.kind === "managed" ? "Run `chc source use remote --bootstrap` or use the public remote installer." : "Refresh apps/cli/dist/index.js or select another checkout.";
+  const hint = candidate.kind === "managed" ? "Repair or move the existing managed path, then retry; use `chc update` only for a valid checkout." : "Refresh apps/cli/dist/index.js or select another checkout.";
   throw new CliSourceError({
     code: "source_unavailable",
     message: `Source is unavailable: ${candidate.path}`,
@@ -15599,14 +15609,55 @@ function runProcess2(command, args) {
   });
 }
 
+// src/command/source-presentation.ts
+import { isAbsolute as isAbsolute6, relative as relative5, resolve as resolve12, sep as sep6 } from "node:path";
+function presentCliSourceCandidate(candidate, home) {
+  const managedState = getCliManagedSourceState(candidate);
+  const state = candidate.active ? "active" : managedState === "absent" ? "not installed" : candidate.available ? "ready" : "unavailable";
+  return {
+    selector: candidate.id,
+    kind: candidate.kind,
+    ref: candidate.branch ? `branch ${candidate.branch}` : candidate.detached ? "detached" : undefined,
+    state,
+    displayPath: abbreviateHomePath(candidate.path, home),
+    hint: managedState === "absent" ? "Selecting remote will install and switch to it." : state === "unavailable" && candidate.kind === "managed" ? "Repair or move the existing managed path before selecting remote." : state === "unavailable" ? "Refresh apps/cli/dist/index.js or select another checkout." : undefined,
+    actionable: candidate.available || managedState === "absent"
+  };
+}
+function sourcePresentationDescription(presentation) {
+  return [presentation.kind, presentation.ref, presentation.state].filter(Boolean).join(" · ");
+}
+function sourceChoiceLabel(candidate, home) {
+  const presentation = presentCliSourceCandidate(candidate, home);
+  return [
+    `${presentation.selector} — ${sourcePresentationDescription(presentation)}`,
+    presentation.hint
+  ].filter(Boolean).join(" · ");
+}
+function actionableCliSourceCandidates(candidates, home) {
+  return candidates.filter((candidate) => presentCliSourceCandidate(candidate, home).actionable);
+}
+function abbreviateHomePath(path, home) {
+  const resolvedHome = resolve12(home);
+  const resolvedPath = resolve12(path);
+  const relativePath = relative5(resolvedHome, resolvedPath);
+  if (relativePath === "")
+    return "~";
+  if (relativePath.startsWith(`..${sep6}`) || relativePath === "..")
+    return path;
+  if (isAbsolute6(relativePath))
+    return path;
+  return `~${sep6}${relativePath}`;
+}
+
 // src/command/source.command.ts
 var defaultInteraction = {
-  async chooseSource(candidates) {
+  async chooseSource(candidates, home) {
     const answer = await le2({
       message: "Choose the source for global chc",
       options: candidates.map((candidate) => ({
         value: candidate.id,
-        label: sourceChoiceLabel(candidate)
+        label: sourceChoiceLabel(candidate, home)
       }))
     });
     return lD2(answer) ? undefined : answer;
@@ -15614,7 +15665,10 @@ var defaultInteraction = {
 };
 var defaultDeps5 = {
   manager: createCliSourceManagerDeps(),
-  interaction: defaultInteraction
+  interaction: defaultInteraction,
+  isTty: () => process.stdin.isTTY === true,
+  discoverSources: discoverCliSources,
+  switchSource: switchCliSource
 };
 var useArgs = {
   ...cliContractArgs,
@@ -15622,10 +15676,6 @@ var useArgs = {
     type: "positional",
     description: "local, remote, ., a worktree id, or a checkout path",
     required: false
-  },
-  bootstrap: {
-    type: "boolean",
-    description: "Create or safely refresh the managed source explicitly"
   }
 };
 var registerArgs = {
@@ -15639,32 +15689,15 @@ var registerArgs = {
 function getStringArg4(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
-function sourceChoiceLabel(candidate) {
-  const ref = candidate.branch ?? (candidate.detached ? "detached" : "unknown");
-  return `${candidate.kind} · ${ref} · ${candidate.path}`;
-}
-function sourceStatusLabel(candidate) {
-  const parts = [candidate.kind];
-  if (candidate.branch)
-    parts.push(candidate.branch);
-  else if (candidate.detached)
-    parts.push("detached");
-  if (candidate.dirty === true)
-    parts.push("dirty");
-  if (!candidate.bundlePresent)
-    parts.push("bundle missing");
-  if (!candidate.available)
-    parts.push("unavailable");
-  return parts.join(", ");
-}
-function writeSourceCandidate(candidate) {
-  const marker = candidate.active ? import_picocolors9.default.green("●") : " ";
-  processOutput.stdout.write(`${marker} ${candidate.id.padEnd(23)} ${sourceStatusLabel(candidate)}
+function writeSourceCandidate(candidate, home) {
+  const presentation = presentCliSourceCandidate(candidate, home);
+  const marker = presentation.state === "active" ? import_picocolors9.default.green("●") : presentation.state === "ready" ? "○" : presentation.state === "not installed" ? "◌" : import_picocolors9.default.yellow("×");
+  processOutput.stdout.write(`${marker} ${presentation.selector.padEnd(23)} ${sourcePresentationDescription(presentation)}
 `);
-  processOutput.stdout.write(`  ${candidate.path}
+  processOutput.stdout.write(`  ${presentation.displayPath}
 `);
-  if (candidate.reason) {
-    processOutput.stdout.write(`  ${import_picocolors9.default.yellow(candidate.reason)}
+  if (presentation.hint) {
+    processOutput.stdout.write(`  ${import_picocolors9.default.yellow(presentation.hint)}
 `);
   }
 }
@@ -15692,7 +15725,7 @@ function createSourceListCommand(deps) {
     async run({ args }) {
       await runObservedCliCommand(args, { command: "source", subcommand: "list" }, async (scope) => {
         try {
-          const inventory = await discoverCliSources(deps.manager);
+          const inventory = await deps.discoverSources(deps.manager);
           if (scope.context.json) {
             writeJsonValue(processOutput, {
               ok: true,
@@ -15703,8 +15736,12 @@ function createSourceListCommand(deps) {
             });
           } else if (!scope.context.quiet) {
             writeHumanStatus(scope.context, processOutput, import_picocolors9.default.cyan("CthuTool sources"));
+            processOutput.stdout.write(`
+`);
             for (const candidate of inventory.candidates) {
-              writeSourceCandidate(candidate);
+              writeSourceCandidate(candidate, deps.manager.home());
+              processOutput.stdout.write(`
+`);
             }
           }
           if (!scope.context.quiet) {
@@ -15716,37 +15753,7 @@ function createSourceListCommand(deps) {
         } catch (error) {
           failSourceCommand(scope, error, { phase: "discovery" });
         }
-      });
-    }
-  });
-}
-function createSourceCurrentCommand(deps) {
-  return defineCommand({
-    meta: {
-      name: "current",
-      description: "Show the source that provides the running chc command."
-    },
-    args: cliContractArgs,
-    async run({ args }) {
-      await runObservedCliCommand(args, { command: "source", subcommand: "current" }, async (scope) => {
-        try {
-          const inventory = await discoverCliSources(deps.manager);
-          if (scope.context.json) {
-            writeJsonValue(processOutput, {
-              ok: true,
-              command: "source current",
-              source: inventory.active
-            });
-          } else {
-            writeHumanStatus(scope.context, processOutput, import_picocolors9.default.cyan("CthuTool source"));
-            if (!scope.context.quiet)
-              writeSourceCandidate(inventory.active);
-          }
-          process.exitCode = 0;
-        } catch (error) {
-          failSourceCommand(scope, error, { phase: "discovery" });
-        }
-      });
+      }, { isTty: deps.isTty });
     }
   });
 }
@@ -15764,8 +15771,12 @@ function createSourceUseCommand(deps) {
       description: "Switch global chc to a local, worktree, or managed source."
     },
     args: useArgs,
-    async run({ args }) {
+    async run({ args, rawArgs }) {
       await runObservedCliCommand(args, { command: "source", subcommand: "use" }, async (scope) => {
+        if (rawArgs.some((argument) => argument === "--bootstrap" || argument.startsWith("--bootstrap="))) {
+          failSourceCommand(scope, createCliError("invalid_option", "Unknown option: --bootstrap. Select remote directly; use `chc update` to update an existing managed checkout."), { phase: "validation" });
+          return;
+        }
         let selector = getStringArg4(args.selector);
         if (!selector) {
           if (!scope.context.interactive || scope.context.json) {
@@ -15773,8 +15784,8 @@ function createSourceUseCommand(deps) {
             return;
           }
           try {
-            const inventory = await discoverCliSources(deps.manager);
-            selector = await deps.interaction.chooseSource(inventory.candidates.filter((candidate) => candidate.available || args.bootstrap === true && candidate.kind === "managed"));
+            const inventory = await deps.discoverSources(deps.manager);
+            selector = await deps.interaction.chooseSource(actionableCliSourceCandidates(inventory.candidates, deps.manager.home()), deps.manager.home());
           } catch (error) {
             failSourceCommand(scope, error, { phase: "discovery" });
             return;
@@ -15785,7 +15796,7 @@ function createSourceUseCommand(deps) {
           }
         }
         try {
-          const result = await switchCliSource(selector, { bootstrap: args.bootstrap === true }, deps.manager);
+          const result = await deps.switchSource(selector, deps.manager);
           if (scope.context.json) {
             writeJsonValue(processOutput, {
               ok: true,
@@ -15804,11 +15815,10 @@ function createSourceUseCommand(deps) {
         } catch (error) {
           failSourceCommand(scope, error, {
             phase: "switch",
-            selector,
-            bootstrap: args.bootstrap === true
+            selector
           });
         }
-      });
+      }, { isTty: deps.isTty });
     }
   });
   return registerPositionalCandidates(command, (context) => shouldOfferSourceSelectors(context) ? getCliSourceSelectorCandidates(deps.manager) : []);
@@ -15846,7 +15856,7 @@ function createSourceRegisterCommand(deps) {
             path
           });
         }
-      });
+      }, { isTty: deps.isTty });
     }
   });
 }
@@ -15856,12 +15866,6 @@ function createSourceCommand(overrides = {}) {
     {
       name: "list",
       command: createSourceListCommand(deps),
-      visibility: "public",
-      bareBehavior: "run"
-    },
-    {
-      name: "current",
-      command: createSourceCurrentCommand(deps),
       visibility: "public",
       bareBehavior: "run"
     },

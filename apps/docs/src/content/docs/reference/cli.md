@@ -12,7 +12,6 @@ chc --help
 chc --version
 chc status
 chc source list
-chc source current
 chc update --check
 chc update
 chc update --ref v0.1.0
@@ -24,12 +23,10 @@ Use `chc --version` for the lightweight version-only check. `chc status` include
 
 ```bash
 chc source list
-chc source current
 chc source use local
 chc source use .
 chc source use worktree:<id>
 chc source use remote
-chc source use remote --bootstrap
 chc source register /path/to/CthuTool
 ```
 
@@ -41,9 +38,11 @@ the current directory; worktree ids come from the live Git worktree catalog.
 
 Local/worktree switches only validate the CthuTool package and committed bundle
 before relinking global npm state. They allow dirty worktrees and never mutate
-Git or build the bundle. Managed selection also avoids an implicit update;
-`--bootstrap` is required to create a missing managed checkout or explicitly run
-the managed refresh path.
+Git or build the bundle. Selecting `remote` automatically creates the managed
+checkout through the safe managed install flow when its path is absent. An
+existing valid checkout is only relinked and remains updateable through
+`chc update`. An existing invalid path is not overwritten automatically; repair
+or move it before selecting `remote` again.
 
 Switch away before deleting the active worktree. If the linked worktree is
 already gone and `chc` cannot start, recover by rerunning the public Bash or
