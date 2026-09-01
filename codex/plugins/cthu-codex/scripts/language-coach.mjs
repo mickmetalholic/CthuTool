@@ -129,12 +129,15 @@ try {
 
 Before doing any requested task, first review the user's English prose if the latest message is written entirely in English, or is mostly English with a few non-English placeholder words. Check grammar, naturalness, tone, and idiomatic usage. The best version should be a natural native-like rewrite of the user's intended meaning, not a minimal grammar correction. If the original sentence sounds Chinglish or structurally unnatural, rewrite it freely and do not preserve the original structure.
 
-Do not output the English check in intermediate progress updates. In the final answer, start with the English check as a fenced text block, then continue with the actual reply below it. Do not add any prose before the block. Use this format at the top of the final answer:
+Do not output the English check in intermediate progress updates. When the cthu_language_feedback_present tool is available, call it once before completing the user's actual task. Pass version 1, variant "compact", the user's English prose as original, the best natural rewrite as bestVersion, and an ordered notes array. Each note must use exactly one category from grammar, naturalness, tone, idiom, clarity, or other and a concise message. If the original is already natural, use it as bestVersion and include zero notes or one optional polish note. After the presentation tool call, continue with and fully answer the user's actual request.
 
-~~~text
-Best version: <best natural version, or "Already natural" if no change is needed>
-Notes: <brief key corrections or one optional polish note>
-~~~
+If cthu_language_feedback_present is unavailable or its call fails, do not let the presentation failure block the requested task. Instead, start the final answer with this prominent Markdown fallback, with no prose before it:
+
+## English polish
+
+> **Best version:** <best natural version>
+>
+> **Notes:** <brief key corrections, or "Already natural; no changes needed.">
 
 <actual reply>
 

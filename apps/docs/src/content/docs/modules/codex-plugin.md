@@ -8,6 +8,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 ## What It Includes
 
 - language coach hook
+- language-feedback MCP Apps server and compact correction card
 - Anki MCP server
 - Anki card-creation and mature-card conversion skills
 - Notion channel-library skill
@@ -43,6 +44,44 @@ Hermes source after plugin verification and final exact-path confirmation.
 Bundled, Hub-managed, protected, external, organization-managed, opted-out,
 and unprovenanced Hermes skills are excluded. Hermes-side absorption remains
 owned by the Hermes skill repository and local skill directory.
+
+## Language Feedback UI
+
+When the local language-coach detector recognizes English prose, it asks the
+active Codex model to generate structured feedback and call
+`cthu_language_feedback_present`. On hosts that render MCP Apps resources, the
+tool displays a prominent inline card: the original prose is muted, the best
+natural rewrite is emphasized, coaching notes keep stable categories, and a
+keyboard-accessible control copies only the best version.
+
+The version `1` contract currently supports the `compact` variant:
+
+```json
+{
+  "version": 1,
+  "variant": "compact",
+  "original": "User prose",
+  "bestVersion": "Natural rewrite",
+  "notes": [
+    {
+      "category": "naturalness",
+      "message": "Concise explanation"
+    }
+  ]
+}
+```
+
+The tool advertises `ui://cthu-language-feedback/v1.html`. Compatible clients
+read that self-contained resource with the MCP Apps media type. Clients without
+component rendering still receive a complete text result containing the best
+version and every note. If the presentation tool is missing or fails, the
+language-coach instruction falls back to a prominent Markdown section and then
+continues the user's actual task.
+
+This surface is local and read-only: it performs no external network requests,
+persists no correction history or preferences, records no telemetry, and does
+not mutate Anki or other user data. The only user-triggered side effect is a
+local clipboard attempt from the card's copy control.
 
 ## Anki MCP Server
 

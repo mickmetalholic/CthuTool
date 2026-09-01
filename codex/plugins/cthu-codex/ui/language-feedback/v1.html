@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>English polish</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family:
+          var(--font-sans, Inter),
+          ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        --surface: var(--color-background-primary, #ffffff);
+        --surface-muted: var(--color-background-secondary, #f6f7fb);
+        --surface-best: #f1efff;
+        --text: var(--color-text-primary, #17151f);
+        --text-muted: var(--color-text-secondary, #676271);
+        --border: var(--color-border-secondary, #e2dfea);
+        --accent: #6750e8;
+        --accent-deep: #4e38c7;
+        --accent-soft: #ded8ff;
+        --success: var(--color-text-success, #20744a);
+        --danger: var(--color-text-danger, #b2333f);
+        --focus: var(--color-ring-info, #5c7cfa);
+        --shadow: 0 16px 44px rgb(42 32 84 / 12%);
+      }
+
+      :root[data-theme="dark"] {
+        --surface: var(--color-background-primary, #1c1a22);
+        --surface-muted: var(--color-background-secondary, #26232c);
+        --surface-best: #292342;
+        --text: var(--color-text-primary, #f7f4fc);
+        --text-muted: var(--color-text-secondary, #b9b3c2);
+        --border: var(--color-border-secondary, #3b3644);
+        --accent: #ae9dff;
+        --accent-deep: #c7bcff;
+        --accent-soft: #483d76;
+        --success: var(--color-text-success, #76d6a1);
+        --danger: var(--color-text-danger, #ff9ca5);
+        --focus: var(--color-ring-info, #9aadff);
+        --shadow: 0 18px 48px rgb(0 0 0 / 28%);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 2px;
+        background: transparent;
+        color: var(--text);
+        font-size: 15px;
+        line-height: 1.55;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .loading {
+        display: flex;
+        align-items: center;
+        min-height: 88px;
+        padding: 20px;
+        color: var(--text-muted);
+        border: 1px dashed var(--border);
+        border-radius: 16px;
+        background: var(--surface-muted);
+      }
+
+      .coach-card {
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .coach-card::before {
+        position: absolute;
+        z-index: -1;
+        top: -70px;
+        right: -56px;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          color-mix(in srgb, var(--accent) 18%, transparent),
+          transparent 68%
+        );
+        content: "";
+        pointer-events: none;
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 18px 20px 15px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .mark {
+        display: grid;
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 11px;
+        color: white;
+        background: linear-gradient(145deg, #806df1, #5540cc);
+        box-shadow: 0 7px 18px rgb(103 80 232 / 28%);
+      }
+
+      .mark svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 17px;
+        font-weight: 720;
+        line-height: 1.25;
+        letter-spacing: -0.015em;
+      }
+
+      .header-copy p {
+        margin-top: 2px;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .content {
+        display: grid;
+        gap: 14px;
+        padding: 16px 20px 20px;
+      }
+
+      .section-label {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.3;
+        letter-spacing: 0.075em;
+        text-transform: uppercase;
+      }
+
+      .original-block {
+        display: grid;
+        gap: 6px;
+        padding: 0 2px;
+      }
+
+      .original-text {
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+
+      .best-block {
+        display: grid;
+        gap: 10px;
+        padding: 15px 16px 16px;
+        border: 1px solid var(--accent-soft);
+        border-radius: 14px;
+        background:
+          linear-gradient(
+            125deg,
+            color-mix(in srgb, var(--surface-best) 90%, transparent),
+            var(--surface-best)
+          );
+      }
+
+      .best-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .best-header .section-label {
+        color: var(--accent-deep);
+      }
+
+      .best-text {
+        color: var(--text);
+        font-size: clamp(17px, 3.7vw, 20px);
+        font-weight: 650;
+        line-height: 1.45;
+        letter-spacing: -0.012em;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+        user-select: text;
+      }
+
+      .copy-button {
+        display: inline-flex;
+        min-height: 32px;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border: 1px solid var(--accent-soft);
+        border-radius: 9px;
+        color: var(--accent-deep);
+        background: color-mix(in srgb, var(--surface) 75%, transparent);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 650;
+        transition:
+          transform 140ms ease,
+          background 140ms ease,
+          border-color 140ms ease;
+      }
+
+      .copy-button:hover {
+        border-color: var(--accent);
+        background: var(--surface);
+        transform: translateY(-1px);
+      }
+
+      .copy-button:active {
+        transform: translateY(0);
+      }
+
+      .copy-button:focus-visible {
+        outline: 3px solid color-mix(in srgb, var(--focus) 42%, transparent);
+        outline-offset: 2px;
+      }
+
+      .copy-button svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .copy-status {
+        min-height: 18px;
+        color: var(--success);
+        font-size: 12px;
+      }
+
+      .copy-status[data-state="error"] {
+        color: var(--danger);
+      }
+
+      .notes-block {
+        display: grid;
+        gap: 9px;
+        padding-top: 1px;
+      }
+
+      .notes-block[hidden] {
+        display: none;
+      }
+
+      .note-list {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .note-item {
+        display: grid;
+        grid-template-columns: minmax(88px, auto) 1fr;
+        gap: 10px;
+        align-items: start;
+        padding: 9px 11px;
+        border-radius: 11px;
+        background: var(--surface-muted);
+      }
+
+      .note-category {
+        width: fit-content;
+        padding: 2px 7px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--accent-deep);
+        background: var(--surface);
+        font-size: 10px;
+        font-weight: 720;
+        letter-spacing: 0.035em;
+        line-height: 1.6;
+        text-transform: uppercase;
+      }
+
+      .note-message {
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --surface: var(--color-background-primary, #1c1a22);
+          --surface-muted: var(--color-background-secondary, #26232c);
+          --surface-best: #292342;
+          --text: var(--color-text-primary, #f7f4fc);
+          --text-muted: var(--color-text-secondary, #b9b3c2);
+          --border: var(--color-border-secondary, #3b3644);
+          --accent: #ae9dff;
+          --accent-deep: #c7bcff;
+          --accent-soft: #483d76;
+          --success: var(--color-text-success, #76d6a1);
+          --danger: var(--color-text-danger, #ff9ca5);
+          --focus: var(--color-ring-info, #9aadff);
+          --shadow: 0 18px 48px rgb(0 0 0 / 28%);
+        }
+      }
+
+      @media (max-width: 420px) {
+        .card-header,
+        .content {
+          padding-right: 15px;
+          padding-left: 15px;
+        }
+
+        .best-header {
+          align-items: flex-start;
+        }
+
+        .note-item {
+          grid-template-columns: 1fr;
+          gap: 6px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .copy-button {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading" class="loading" role="status">
+      Waiting for language feedback…
+    </div>
+
+    <main id="app" hidden>
+      <article class="coach-card" aria-labelledby="coach-title">
+        <header class="card-header">
+          <span class="mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18l-1.8-5.4-5.7-1.8L10.2 9 12 3.5Z"
+                fill="currentColor"
+              />
+              <path
+                d="m18.2 15 .7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1Z"
+                fill="currentColor"
+                opacity=".75"
+              />
+            </svg>
+          </span>
+          <div class="header-copy">
+            <h1 id="coach-title">English polish</h1>
+            <p>A clearer, more natural way to say it</p>
+          </div>
+        </header>
+
+        <div class="content">
+          <section class="original-block" aria-labelledby="original-label">
+            <h2 id="original-label" class="section-label">Original</h2>
+            <p id="original-text" class="original-text"></p>
+          </section>
+
+          <section class="best-block" aria-labelledby="best-label">
+            <div class="best-header">
+              <h2 id="best-label" class="section-label">Best version</h2>
+              <button id="copy-button" class="copy-button" type="button">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  aria-hidden="true"
+                >
+                  <rect x="8" y="8" width="11" height="11" rx="2" />
+                  <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+                </svg>
+                <span>Copy</span>
+              </button>
+            </div>
+            <p id="best-text" class="best-text" tabindex="-1"></p>
+            <p
+              id="copy-status"
+              class="copy-status"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </section>
+
+          <section
+            id="notes-block"
+            class="notes-block"
+            aria-labelledby="notes-label"
+          >
+            <h2 id="notes-label" class="section-label">Why it works</h2>
+            <ol id="note-list" class="note-list"></ol>
+          </section>
+        </div>
+      </article>
+    </main>
+
+    <script>
+      (() => {
+        const MCP_APPS_PROTOCOL_VERSION = "2026-01-26";
+        const CATEGORY_LABELS = {
+          grammar: "Grammar",
+          naturalness: "Naturalness",
+          tone: "Tone",
+          idiom: "Idiom",
+          clarity: "Clarity",
+          other: "Other",
+        };
+        const pendingRequests = new Map();
+        let nextRequestId = 1;
+        let currentFeedback;
+        let initialized = false;
+        let resizeObserver;
+
+        const loading = document.getElementById("loading");
+        const app = document.getElementById("app");
+        const originalText = document.getElementById("original-text");
+        const bestText = document.getElementById("best-text");
+        const notesBlock = document.getElementById("notes-block");
+        const noteList = document.getElementById("note-list");
+        const copyButton = document.getElementById("copy-button");
+        const copyStatus = document.getElementById("copy-status");
+
+        function send(message) {
+          if (window.parent === window) return;
+          window.parent.postMessage(message, "*");
+        }
+
+        function request(method, params) {
+          const id = `cthu-language-feedback-${nextRequestId++}`;
+          send({ jsonrpc: "2.0", id, method, params });
+          return new Promise((resolve, reject) => {
+            pendingRequests.set(id, { resolve, reject });
+          });
+        }
+
+        function notify(method, params = {}) {
+          send({ jsonrpc: "2.0", method, params });
+        }
+
+        function isFeedback(value) {
+          return (
+            value &&
+            value.version === 1 &&
+            (value.variant === undefined || value.variant === "compact") &&
+            typeof value.original === "string" &&
+            value.original.trim() !== "" &&
+            typeof value.bestVersion === "string" &&
+            value.bestVersion.trim() !== "" &&
+            Array.isArray(value.notes)
+          );
+        }
+
+        function reportSize() {
+          if (initialized) {
+            notify("ui/notifications/size-changed", {
+              width: Math.ceil(document.documentElement.scrollWidth),
+              height: Math.ceil(document.documentElement.scrollHeight),
+            });
+          }
+
+        }
+
+        function renderFeedback(feedback) {
+          if (!isFeedback(feedback)) return;
+          currentFeedback = feedback;
+          originalText.textContent = feedback.original;
+          bestText.textContent = feedback.bestVersion;
+          noteList.replaceChildren();
+
+          for (const note of feedback.notes) {
+            if (
+              !note ||
+              typeof note.message !== "string" ||
+              !CATEGORY_LABELS[note.category]
+            ) {
+              continue;
+            }
+
+            const item = document.createElement("li");
+            item.className = "note-item";
+            const category = document.createElement("span");
+            category.className = "note-category";
+            category.textContent = CATEGORY_LABELS[note.category];
+            const message = document.createElement("span");
+            message.className = "note-message";
+            message.textContent = note.message;
+            item.append(category, message);
+            noteList.append(item);
+          }
+
+          notesBlock.hidden = noteList.children.length === 0;
+          copyStatus.textContent = "";
+          copyStatus.dataset.state = "";
+          loading.hidden = true;
+          app.hidden = false;
+          requestAnimationFrame(reportSize);
+        }
+
+        function applyHostContext(context) {
+          if (!context || typeof context !== "object") return;
+          if (context.theme === "light" || context.theme === "dark") {
+            document.documentElement.dataset.theme = context.theme;
+          }
+          if (context.styles && typeof context.styles === "object") {
+            for (const [name, value] of Object.entries(context.styles)) {
+              if (name.startsWith("--") && typeof value === "string") {
+                document.documentElement.style.setProperty(name, value);
+              }
+            }
+          }
+        }
+
+        function selectBestVersion() {
+          bestText.focus();
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(bestText);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+
+        function legacyCopy(value) {
+          const textarea = document.createElement("textarea");
+          textarea.value = value;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.append(textarea);
+          textarea.select();
+          const copied =
+            typeof document.execCommand === "function" &&
+            document.execCommand("copy");
+          textarea.remove();
+          return copied;
+        }
+
+        async function copyBestVersion() {
+          if (!currentFeedback) return;
+          try {
+            if (typeof navigator.clipboard?.writeText === "function") {
+              await navigator.clipboard.writeText(currentFeedback.bestVersion);
+            } else if (!legacyCopy(currentFeedback.bestVersion)) {
+              throw new Error("Clipboard access is unavailable.");
+            }
+            copyStatus.dataset.state = "success";
+            copyStatus.textContent = "Best version copied.";
+          } catch {
+            selectBestVersion();
+            copyStatus.dataset.state = "error";
+            copyStatus.textContent =
+              "Copy unavailable. The best version is selected for manual copying.";
+          }
+          reportSize();
+        }
+
+        copyButton.addEventListener("click", copyBestVersion);
+
+        window.addEventListener(
+          "message",
+          (event) => {
+            if (
+              window.parent !== window &&
+              event.source !== window.parent
+            ) {
+              return;
+            }
+            const message = event.data;
+            if (!message || message.jsonrpc !== "2.0") return;
+
+            if (
+              message.id !== undefined &&
+              pendingRequests.has(message.id)
+            ) {
+              const pending = pendingRequests.get(message.id);
+              pendingRequests.delete(message.id);
+              if (message.error) pending.reject(message.error);
+              else pending.resolve(message.result);
+              return;
+            }
+
+            if (message.method === "ui/notifications/tool-result") {
+              renderFeedback(message.params?.structuredContent);
+            } else if (
+              message.method === "ui/notifications/host-context-changed"
+            ) {
+              applyHostContext(message.params);
+            } else if (message.method === "ui/resource-teardown") {
+              resizeObserver?.disconnect();
+              if (message.id !== undefined) {
+                send({ jsonrpc: "2.0", id: message.id, result: {} });
+              }
+            }
+          },
+          { passive: true },
+        );
+
+        window.addEventListener(
+          "openai:set_globals",
+          (event) => {
+            const globals = event.detail?.globals;
+            applyHostContext(globals);
+            if (isFeedback(globals?.toolOutput)) {
+              renderFeedback(globals.toolOutput);
+            }
+          },
+          { passive: true },
+        );
+
+        const openai = window.openai;
+        applyHostContext({ theme: openai?.theme });
+        if (isFeedback(openai?.toolOutput)) {
+          renderFeedback(openai.toolOutput);
+        }
+
+        if (typeof ResizeObserver === "function") {
+          resizeObserver = new ResizeObserver(reportSize);
+          resizeObserver.observe(document.documentElement);
+        }
+
+        if (window.parent !== window) {
+          request("ui/initialize", {
+            protocolVersion: MCP_APPS_PROTOCOL_VERSION,
+            appInfo: {
+              name: "CthuCodex language feedback",
+              version: "1.0.0",
+            },
+            appCapabilities: {},
+          })
+            .then((result) => {
+              applyHostContext(result?.hostContext);
+              notify("ui/notifications/initialized");
+              initialized = true;
+              reportSize();
+            })
+            .catch(() => {
+              if (isFeedback(window.openai?.toolOutput)) {
+                renderFeedback(window.openai.toolOutput);
+              }
+            });
+        }
+      })();
+    </script>
+  </body>
+</html>
