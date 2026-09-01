@@ -1,7 +1,7 @@
 # apps-backend-single-user-agent-access Specification
 
 ## Purpose
-TBD - created by archiving change add-agent-environment-routing. Update Purpose after archive.
+Define the single-operator authorization and environment-scoped Agent authentication boundary for public machine-control backend endpoints.
 ## Requirements
 ### Requirement: Public machine-control operator boundary
 A Backend SHALL protect Agent status and machine-control APIs with a fixed

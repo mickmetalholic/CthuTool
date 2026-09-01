@@ -1,7 +1,7 @@
 # apps-agent-local-bridge Specification
 
 ## Purpose
-TBD - created by archiving change add-web-agent-local-bridge. Update Purpose after archive.
+Define the authenticated loopback bridge that lets the deployed Web console safely inspect and control same-user local Agent and browser resources.
 ## Requirements
 ### Requirement: Loopback-only JSON bridge
 The Agent SHALL expose a versioned JSON bridge only on operating-system loopback using a dynamically selected port and SHALL NOT serve Web application assets.

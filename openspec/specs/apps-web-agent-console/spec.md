@@ -1,7 +1,7 @@
 # apps-web-agent-console Specification
 
 ## Purpose
-TBD - created by archiving change add-web-agent-local-bridge. Update Purpose after archive.
+Define the deployed Web Agent console's secure local-bridge bootstrap, Local Network Access UX, management UI, transport, and route isolation.
 ## Requirements
 ### Requirement: Deployed Web Agent route
 Each supported environment Web deployment SHALL provide an Agent console/settings route that is served by the Web application rather than the local Agent.

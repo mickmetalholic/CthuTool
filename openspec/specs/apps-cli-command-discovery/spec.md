@@ -1,7 +1,7 @@
 # apps-cli-command-discovery Specification
 
 ## Purpose
-TBD - created by archiving change apps-cli-command-discovery. Update Purpose after archive.
+Define shared static and dynamic CLI command registration and discovery so help, bare commands, and runtime resolution remain consistent.
 ## Requirements
 ### Requirement: Shared command registration
 The CLI SHALL maintain one registration model for static command dispatch, visibility, help discovery, completion discovery, and bare-command behavior.
