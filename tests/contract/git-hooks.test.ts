@@ -110,6 +110,50 @@ describe('tracked repository hooks', () => {
     }
   });
 
+  it('keeps prepare dependencies available to the backend image install layer', async () => {
+    const dockerfile = readFileSync(
+      join(root, 'apps', 'backend', 'Dockerfile'),
+      'utf8',
+    );
+    const scriptsCopy =
+      'COPY scripts/install-git-hooks.mjs scripts/ensure-ai-tooling.mjs scripts/';
+    const dependencyInstall =
+      'RUN CTHUTOOL_DISABLE_GIT_HOOKS=1 pnpm install --frozen-lockfile';
+    const directory = temporaryDirectory('cthutool-hooks-image');
+
+    expect(dockerfile).toContain(scriptsCopy);
+    expect(dockerfile.indexOf(scriptsCopy)).toBeLessThan(
+      dockerfile.indexOf(dependencyInstall),
+    );
+
+    try {
+      mkdirSync(join(directory, 'scripts'), { recursive: true });
+      for (const script of [
+        'install-git-hooks.mjs',
+        'ensure-ai-tooling.mjs',
+      ]) {
+        copyFileSync(
+          join(root, 'scripts', script),
+          join(directory, 'scripts', script),
+        );
+      }
+      const copiedInstaller = (await import(
+        pathToFileURL(
+          join(directory, 'scripts', 'install-git-hooks.mjs'),
+        ).href
+      )) as InstallerModule;
+      await expect(
+        copiedInstaller.installGitHooks({
+          cwd: directory,
+          env: { CI: '1' },
+          logger: silentLogger,
+        }),
+      ).resolves.toMatchObject({ reason: 'ci' });
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
+  });
+
   it('propagates actionable current-checkout bootstrap failures', async () => {
     const { installGitHooks } = await loadInstaller();
     const repository = temporaryDirectory('cthutool-hooks-failure');

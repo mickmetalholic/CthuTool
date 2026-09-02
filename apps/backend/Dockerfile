@@ -11,7 +11,8 @@ COPY apps/backend/package.json apps/backend/
 COPY packages/agent-protocol/package.json packages/agent-protocol/
 COPY packages/browser-runtime-protocol/package.json packages/browser-runtime-protocol/
 COPY packages/config/package.json packages/config/
-RUN pnpm install --frozen-lockfile
+COPY scripts/install-git-hooks.mjs scripts/ensure-ai-tooling.mjs scripts/
+RUN CTHUTOOL_DISABLE_GIT_HOOKS=1 pnpm install --frozen-lockfile
 
 # Copy source and build workspace dependencies first, then backend
 COPY packages/agent-protocol/ packages/agent-protocol/

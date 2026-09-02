@@ -4,6 +4,12 @@ import { fileURLToPath } from 'node:url';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const repoRoot = join(cliRoot, '../..');
+const ESC = String.fromCharCode(27);
+const ansiPattern = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
+
+function stripAnsi(value: string): string {
+  return value.replace(ansiPattern, '');
+}
 
 async function runCli(
   args: string[],
@@ -59,12 +65,13 @@ describe('source command', () => {
   test('renders a human catalog and suppresses it in quiet mode', async () => {
     const human = await runCli(['source', 'list']);
     const quiet = await runCli(['source', 'list', '--quiet']);
+    const output = stripAnsi(human.out);
 
     expect(human.code).toBe(0);
-    expect(human.out).toContain('CthuTool sources');
-    expect(human.out).toMatch(/●\s+\S+.*active/);
-    expect(human.out).toMatch(/(main|worktree) ·/);
-    expect(human.out).toContain('~/');
+    expect(output).toContain('CthuTool sources');
+    expect(output).toMatch(/●\s+\S+.*active/);
+    expect(output).toMatch(/(main|worktree) ·/);
+    expect(output).toContain('~/');
     expect(quiet).toMatchObject({ code: 0, out: '', err: '' });
   });
 
