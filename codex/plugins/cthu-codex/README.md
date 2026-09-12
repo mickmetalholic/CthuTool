@@ -71,21 +71,17 @@ Keep repository-owned plugin source, manifests, and implementation assets under
 `codex/plugins/cthu-codex`. Keep generated command or skill adapters out of the
 repository; regenerate them per tool or platform.
 
-`$codex-skill-promoter` is the single Codex-side development workflow. It can
-adapt an explicitly selected Hermes skill only when a dedicated Evolution
-provenance marker is present, or start from an explicitly selected local Codex
-skill. It scans local skill trees read-only and then lets the user choose the
-promotion set and exact post-verification cleanup targets; every row defaults
-to Skip and every local copy defaults to Keep. It keeps an agent-neutral core
-with explicit Codex or Hermes adapters. For a Hermes candidate, the original
-eligible Evolution source and adapted Codex staging path are independent
-cleanup targets. The workflow validates and writes the clean feature checkout
-prepared by the user, installs and verifies that checkout, then deletes only
-confirmed unchanged targets after path, provenance, and fingerprint rechecks.
-It never edits or updates Hermes and never creates or switches a Git
-branch/worktree; final deletion of an explicitly selected eligible Hermes
-source is its only permitted Hermes mutation. Hermes-side skill absorption
-remains owned by the Hermes skill repository and local skill directory.
+`$codex-skill-promoter` scans eligible local Codex Skills and marked Hermes
+Evolution Skills read-only, regardless of the caller's Git state. It presents
+names, sources, provenance, files, compatibility, targets, collisions, and
+exact original-removal paths in one candidate table. Every row defaults to
+Skip. A confirmed selection runs in an isolated task branch through a scoped
+OpenSpec proposal, implementation, Codex installation, verified Hermes
+availability, guarded original retirement, archive, and PR without routine
+intermediate prompts. Promoted content retains an agent-neutral core with
+explicit Codex and Hermes adapters. If either replacement cannot be loaded,
+the original remains active and the run stops before archive or PR. Bundled,
+managed, protected, opted-out, and unprovenanced Skills remain excluded.
 
 ## TODO
 

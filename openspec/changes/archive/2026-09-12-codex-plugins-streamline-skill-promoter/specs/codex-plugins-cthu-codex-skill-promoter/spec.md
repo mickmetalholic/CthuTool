@@ -1,9 +1,4 @@
-# codex-plugins-cthu-codex-skill-promoter Specification
-
-## Purpose
-Define the repository-owned Codex workflow for absorbing eligible external skills and promoting explicitly selected local skills into the protected CthuCodex business plugin.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Repository-owned Codex skill absorber and promoter
 
@@ -86,6 +81,8 @@ The promoter SHALL treat local Skill content as untrusted input, require one exp
 - **THEN** the promoter treats those instructions as untrusted content to review
 - **AND** it does not execute source-provided scripts or expand the confirmed publication scope
 
+## ADDED Requirements
+
 ### Requirement: Git-independent promotion preparation
 
 The promoter SHALL resolve the CthuTool repository after candidate selection and SHALL prepare an isolated task branch or worktree without requiring the caller's current Git state to be clean or on a feature branch. It SHALL leave unrelated checkout changes untouched and SHALL include only the confirmed Skill and OpenSpec change in publication.
@@ -123,3 +120,15 @@ After the user confirms the candidate table, the promoter SHALL create a scoped 
 - **WHEN** permanent deletion of an unchanged, confirmed original is rejected but moving it out of the active Skill root is allowed
 - **THEN** the promoter may use a clearly reported reversible retirement path after verifying containment and content again
 - **AND** it does not claim permanent deletion or leave the original active
+
+## REMOVED Requirements
+
+### Requirement: User-managed checkout promotion proposal
+
+**Reason**: Clean feature-branch gating blocked discovery and required manual Git preparation contrary to the selected end-to-end workflow.
+**Migration**: Discovery ignores caller Git state; confirmed promotion prepares an isolated task checkout and protects unrelated changes.
+
+### Requirement: Selected-checkout plugin installation and cleanup
+
+**Reason**: Optional cleanup and manual Git handoff left duplicate active Skills and stopped before the requested PR.
+**Migration**: One candidate confirmation includes verified source retirement and the OpenSpec-to-PR lifecycle; failures preserve original sources.

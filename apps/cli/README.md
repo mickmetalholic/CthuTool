@@ -306,24 +306,18 @@ Skill discovery and local operations use the pinned
 `npx --yes skills@1.5.19` backend at Codex user scope. Updates are offered only
 for branch-tracked entries; pinned refs remain fixed until the manifest changes.
 
-The repository-owned `$codex-skill-promoter` skill is the single local
-development workflow. It considers explicitly selected Codex-local skills and
-eligible Evolution-created Hermes skills. A Hermes source is adapted into
-Codex-local staging first; both modes preserve a Codex/Hermes-compatible shared
-core and then use the clean feature checkout prepared by the user. The skill
-scans both local trees read-only, then lets the user choose which candidates to
-promote and which exact local copies to clean after verification. Every row
-defaults to Skip and every copy defaults to Keep. A Hermes candidate presents
-its original Evolution source and adapted Codex staging path independently.
-The skill never creates or switches a branch/worktree, installs the selected
-checkout for verification, and deletes only confirmed unchanged targets after
-a final path, provenance, and fingerprint check. It does not write
-`codex/skills.manifest.json`, edit or update Hermes, commit, or push; final
-deletion of an explicitly selected eligible Hermes source is its only permitted
-Hermes mutation.
-Hermes built-in, Hub-managed, external,
-organization-managed, opted-out, and unprovenanced skills are excluded; the
-Hermes-side workflow remains owned by Hermes.
+The repository-owned `$codex-skill-promoter` Skill scans eligible local Codex
+and Evolution-created Hermes Skills read-only, regardless of the caller's Git
+state. It shows one candidate table with name, source, provenance, files,
+compatibility, target/collision choice, and exact original-removal path; every
+row defaults to Skip. A confirmed selection creates an isolated task branch
+and a scoped OpenSpec change, promotes a Codex/Hermes-compatible shared core,
+verifies both agent entry points, retires unchanged originals, archives the
+change, and opens a PR. If verification fails, originals remain active and
+archive/PR do not proceed. The workflow does not write
+`codex/skills.manifest.json` or mirror Hermes directories. Hermes built-in,
+Hub-managed, external, organization-managed, opted-out, and unprovenanced
+Skills are excluded.
 
 `chc codex install` is plugin-only. It installs enabled repository plugins from
 `codex/plugins.manifest.json` (and discovered repository plugin directories),
