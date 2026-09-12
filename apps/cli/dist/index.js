@@ -10379,6 +10379,7 @@ async function followLogs(service, initialLines) {
 }
 
 // src/command/codex.command.ts
+import { resolve as resolve9 } from "node:path";
 import { emitKeypressEvents as emitKeypressEvents2 } from "node:readline";
 var import_picocolors3 = __toESM(require_picocolors(), 1);
 
@@ -10794,10 +10795,89 @@ function isMissingFileError(error) {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
+// src/domain/codex-plugin-source.ts
+import { randomUUID } from "node:crypto";
+import { existsSync as existsSync4, readFileSync as readFileSync4, statSync as statSync2 } from "node:fs";
+import { mkdir as mkdir6, readFile as readFile9, rename as rename2, rm as rm6, writeFile as writeFile5 } from "node:fs/promises";
+import { dirname as dirname7, join as join11, resolve as resolve7 } from "node:path";
+function pluginSourceConfigPath(homeRoot) {
+  return join11(homeRoot, ".cthutool", "codex", "plugin-source.json");
+}
+async function readCodexPluginSource(homeRoot) {
+  const path = pluginSourceConfigPath(homeRoot);
+  let raw;
+  try {
+    raw = await readFile9(path, "utf8");
+  } catch (error) {
+    if (isMissingFile(error))
+      return;
+    throw new Error(`Could not read saved Codex plugin source at ${path}.`, {
+      cause: error
+    });
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`Invalid saved Codex plugin source at ${path}.`);
+  }
+  if (!parsed || typeof parsed !== "object" || !("version" in parsed) || parsed.version !== 1 || !("repoRoot" in parsed) || typeof parsed.repoRoot !== "string" || !parsed.repoRoot.trim()) {
+    throw new Error(`Invalid saved Codex plugin source at ${path}.`);
+  }
+  return { repoRoot: resolve7(parsed.repoRoot) };
+}
+async function writeCodexPluginSource(homeRoot, repoRoot) {
+  const path = pluginSourceConfigPath(homeRoot);
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
+  await mkdir6(dirname7(path), { recursive: true });
+  try {
+    await writeFile5(temporaryPath, `${JSON.stringify({ version: 1, repoRoot: resolve7(repoRoot) }, null, 2)}
+`, "utf8");
+    await rename2(temporaryPath, path);
+  } finally {
+    await rm6(temporaryPath, { force: true });
+  }
+}
+function findCthuToolRoot(start) {
+  let current = resolve7(start);
+  while (true) {
+    try {
+      const pkg = JSON.parse(readFileSync4(join11(current, "package.json"), "utf8"));
+      if (pkg.name === "cthutool")
+        return current;
+    } catch {}
+    const parent = dirname7(current);
+    if (parent === current)
+      return;
+    current = parent;
+  }
+}
+function pluginSourceValidationError(repoRoot, pluginsRoot) {
+  const root = resolve7(repoRoot);
+  if (!isDirectory(root))
+    return `Repository path is not a directory: ${root}`;
+  const sourceRoot = resolve7(pluginsRoot ?? join11(root, "codex", "plugins"));
+  const manifest = join11(root, "codex", "plugins.manifest.json");
+  if (!isDirectory(sourceRoot) && !existsSync4(manifest)) {
+    return `No Codex plugin source found at ${sourceRoot} (or ${manifest}).`;
+  }
+  return;
+}
+function isDirectory(path) {
+  try {
+    return statSync2(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+function isMissingFile(error) {
+  return !!error && typeof error === "object" && "code" in error && error.code === "ENOENT";
+}
+
 // src/domain/codex-skills-backend.ts
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile as readFile9 } from "node:fs/promises";
-import { dirname as dirname7, join as join11 } from "node:path";
+import { readFile as readFile10 } from "node:fs/promises";
+import { dirname as dirname8, join as join12 } from "node:path";
 import { promisify } from "node:util";
 var execFile = promisify(execFileCallback);
 var pinnedSkillsCliVersion = "1.5.19";
@@ -10929,7 +11009,7 @@ function parseDiscoveredSkills(value) {
   return [...names].sort().map((name) => ({ name }));
 }
 async function runSkillsProcess(args, env2) {
-  const windowsNpxCli = env2.CHC_SKILLS_NPX_CLI_PATH ?? join11(dirname7(process.execPath), "node_modules", "npm", "bin", "npx-cli.js");
+  const windowsNpxCli = env2.CHC_SKILLS_NPX_CLI_PATH ?? join12(dirname8(process.execPath), "node_modules", "npm", "bin", "npx-cli.js");
   const executable = process.platform === "win32" ? process.execPath : "npx";
   const executableArgs = process.platform === "win32" ? [windowsNpxCli] : [];
   try {
@@ -10946,7 +11026,7 @@ async function runSkillsProcess(args, env2) {
 }
 async function readSkillLock(homeRoot) {
   try {
-    const parsed = JSON.parse(await readFile9(join11(homeRoot, ".agents", ".skill-lock.json"), "utf8"));
+    const parsed = JSON.parse(await readFile10(join12(homeRoot, ".agents", ".skill-lock.json"), "utf8"));
     if (!isRecord3(parsed) || parsed.version !== 3 || !isRecord3(parsed.skills)) {
       throw new Error("expected lock version 3 with a skills object");
     }
@@ -11081,12 +11161,12 @@ function isMissingFileError2(error) {
 }
 
 // src/domain/codex-skills-manager.ts
-import { mkdir as mkdir7, rename as rename3, rm as rm7 } from "node:fs/promises";
-import { dirname as dirname9, join as join13 } from "node:path";
+import { mkdir as mkdir8, rename as rename4, rm as rm8 } from "node:fs/promises";
+import { dirname as dirname10, join as join14 } from "node:path";
 
 // src/domain/codex-skills-manifest.ts
-import { mkdir as mkdir6, readFile as readFile10, rename as rename2, rm as rm6, writeFile as writeFile5 } from "node:fs/promises";
-import { dirname as dirname8, join as join12, resolve as resolve7 } from "node:path";
+import { mkdir as mkdir7, readFile as readFile11, rename as rename3, rm as rm7, writeFile as writeFile6 } from "node:fs/promises";
+import { dirname as dirname9, join as join13, resolve as resolve8 } from "node:path";
 var emptyCodexSkillsManifest = () => ({
   version: 2,
   skills: []
@@ -11095,7 +11175,7 @@ async function readCodexSkillsManifest(repoCodexRoot) {
   const path = getManifestPath(repoCodexRoot);
   let value;
   try {
-    value = JSON.parse(await readFile10(path, "utf8"));
+    value = JSON.parse(await readFile11(path, "utf8"));
   } catch (error) {
     if (isMissingFileError3(error)) {
       return { manifest: emptyCodexSkillsManifest(), legacyEntries: [] };
@@ -11134,16 +11214,16 @@ function validateCodexSkillsManifest(value) {
 async function writeCodexSkillsManifest(repoCodexRoot, manifest) {
   const validated = validateCodexSkillsManifest(manifest);
   const path = getManifestPath(repoCodexRoot);
-  const temporaryPath = join12(dirname8(path), `.skills.manifest.${process.pid}.${Date.now()}.tmp`);
+  const temporaryPath = join13(dirname9(path), `.skills.manifest.${process.pid}.${Date.now()}.tmp`);
   assertPathInside(repoCodexRoot, path);
   assertPathInside(repoCodexRoot, temporaryPath);
-  await mkdir6(dirname8(path), { recursive: true });
+  await mkdir7(dirname9(path), { recursive: true });
   try {
-    await writeFile5(temporaryPath, `${JSON.stringify(validated, null, 2)}
+    await writeFile6(temporaryPath, `${JSON.stringify(validated, null, 2)}
 `, "utf8");
-    await rename2(temporaryPath, path);
+    await rename3(temporaryPath, path);
   } finally {
-    await rm6(temporaryPath, { force: true });
+    await rm7(temporaryPath, { force: true });
   }
 }
 function upsertManagedSkill(manifest, skill) {
@@ -11165,7 +11245,7 @@ function isManagedGitHubSkill(skill) {
   return skill.source === "github";
 }
 function getManifestPath(repoCodexRoot) {
-  const path = resolve7(repoCodexRoot, "skills.manifest.json");
+  const path = resolve8(repoCodexRoot, "skills.manifest.json");
   assertPathInside(repoCodexRoot, path);
   return path;
 }
@@ -11377,15 +11457,15 @@ async function replaceSkillWithRollback(item, backend) {
   if (!skill || !installedPath) {
     throw new Error(`Missing replacement metadata for ${item.name}.`);
   }
-  const backupPath = join13(dirname9(installedPath), `.${item.name}.cthutool-backup-${process.pid}-${Date.now()}`);
-  await mkdir7(dirname9(backupPath), { recursive: true });
-  await rename3(installedPath, backupPath);
+  const backupPath = join14(dirname10(installedPath), `.${item.name}.cthutool-backup-${process.pid}-${Date.now()}`);
+  await mkdir8(dirname10(backupPath), { recursive: true });
+  await rename4(installedPath, backupPath);
   try {
     await backend.install(skill);
-    await rm7(backupPath, { recursive: true, force: true });
+    await rm8(backupPath, { recursive: true, force: true });
   } catch (error) {
-    await rm7(installedPath, { recursive: true, force: true });
-    await rename3(backupPath, installedPath);
+    await rm8(installedPath, { recursive: true, force: true });
+    await rename4(backupPath, installedPath);
     throw error;
   }
 }
@@ -11511,6 +11591,11 @@ var commonArgs = {
 };
 var installArgs = {
   ...commonArgs,
+  changeSource: {
+    type: "boolean",
+    alias: "change-source",
+    description: "Choose and remember a new default plugin repository"
+  },
   marketplace: {
     type: "string",
     description: "Override the personal marketplace.json path"
@@ -11545,6 +11630,78 @@ function failCommand(scope, message) {
   scope.fail(error);
   writeCommandError(scope.context, processOutput, error);
   process.exitCode = error.exitCode;
+}
+var defaultPluginSourceInteraction = {
+  async requestPath(initialValue) {
+    const answer = await ae({
+      message: "CthuTool repository containing codex/plugins",
+      initialValue,
+      placeholder: "Absolute path to CthuTool repository",
+      validate(value) {
+        if (!value.trim())
+          return "Enter a repository path.";
+        return pluginSourceValidationError(value.trim());
+      }
+    });
+    return lD2(answer) ? undefined : answer.trim();
+  }
+};
+async function selectCodexPluginSource(args, scope, interaction = defaultPluginSourceInteraction) {
+  const basePaths = createPaths(args);
+  const explicit = getStringArg(args.repoRoot);
+  const changing = args.changeSource === true;
+  let saved;
+  let savedError;
+  if (!explicit) {
+    try {
+      saved = await readCodexPluginSource(basePaths.homeRoot);
+    } catch (error2) {
+      savedError = error2 instanceof Error ? error2.message : String(error2);
+    }
+  }
+  const detected = findCthuToolRoot(process.cwd());
+  const promptNeeded = !explicit && scope.context.interactive && !scope.context.json && (changing || !saved || !!pluginSourceValidationError(saved.repoRoot));
+  if (changing && !explicit && (!scope.context.interactive || scope.context.json)) {
+    failCommand(scope, "`--change-source` needs an interactive terminal or `--repo-root <path>`.");
+    return;
+  }
+  if (savedError && !promptNeeded) {
+    failCommand(scope, `${savedError} Run 'chc codex install --change-source --repo-root <path>' to replace it.`);
+    return;
+  }
+  if (promptNeeded) {
+    writeHumanStatus(scope.context, processOutput, savedError ? `${savedError} Choose a valid replacement.` : saved ? `Saved plugin source: ${saved.repoRoot}${pluginSourceValidationError(saved.repoRoot) ? " (unavailable)" : ""}` : "No default Codex plugin source is saved yet.");
+    if (detected && !saved) {
+      writeHumanStatus(scope.context, processOutput, `Detected working tree: ${detected}`);
+    }
+    writeHumanStatus(scope.context, processOutput, "Select the repository to use and remember for future installs.");
+    const chosen = await interaction.requestPath(saved?.repoRoot ?? detected);
+    if (!chosen) {
+      writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("Cancelled."));
+      return;
+    }
+    const error2 = pluginSourceValidationError(chosen);
+    if (error2) {
+      failCommand(scope, error2);
+      return;
+    }
+    return { repoRoot: resolve9(chosen), origin: "selected", saveDefault: true };
+  }
+  const repoRoot = explicit ?? saved?.repoRoot ?? detected;
+  if (!repoRoot) {
+    failCommand(scope, "No Codex plugin source is configured. Run `chc codex install --change-source --repo-root <path>` or run interactively to choose one.");
+    return;
+  }
+  const error = pluginSourceValidationError(repoRoot, getStringArg(args.pluginsRoot));
+  if (error) {
+    failCommand(scope, `${error} Run 'chc codex install --change-source --repo-root <path>' to change the default.`);
+    return;
+  }
+  return {
+    repoRoot: resolve9(repoRoot),
+    origin: explicit ? "explicit" : saved ? "saved" : "working-tree",
+    saveDefault: changing
+  };
 }
 async function runSkills(args, scope, dependencies = {}) {
   if (!scope.context.json && !scope.context.interactive) {
@@ -11829,7 +11986,7 @@ async function promptManagedActionTable(rows) {
 `);
     renderedLines = lines.length;
   }
-  return await new Promise((resolve8) => {
+  return await new Promise((resolve10) => {
     const wasRaw = input.isRaw;
     const finish = (cancelled) => {
       input.off("keypress", onKeypress);
@@ -11839,10 +11996,10 @@ async function promptManagedActionTable(rows) {
       }
       process.stdout.write(`${control}[?25h`);
       if (cancelled) {
-        resolve8(undefined);
+        resolve10(undefined);
         return;
       }
-      resolve8(rows.flatMap((row, index) => {
+      resolve10(rows.flatMap((row, index) => {
         const action = row.availableActions[indexes[index] ?? 0] ?? "none";
         return action === "none" ? [] : [{ name: row.name, action }];
       }));
@@ -11927,17 +12084,42 @@ var codexCommand = defineCommand({
       },
       args: installArgs,
       async run({ args }) {
-        await runObservedCodexSubcommand("install", args, async ({ context }) => {
-          const result = await installRepositoryCodexPlugins(createPaths(args));
-          if (context.json) {
+        await runObservedCodexSubcommand("install", args, async (scope) => {
+          const selection = await selectCodexPluginSource(args, scope);
+          if (!selection)
+            return;
+          const paths = createPaths({ ...args, repoRoot: selection.repoRoot });
+          const result = await installRepositoryCodexPlugins(paths);
+          if (selection.saveDefault) {
+            await writeCodexPluginSource(paths.homeRoot, selection.repoRoot);
+          }
+          const source = {
+            repoRoot: selection.repoRoot,
+            origin: selection.origin,
+            defaultSaved: selection.saveDefault
+          };
+          if (scope.context.json) {
             writeJsonValue(processOutput, {
               ok: true,
               command: "codex install",
-              result
+              result: { source, ...result }
             });
           } else {
-            writeHumanStatus(context, processOutput, import_picocolors3.default.cyan("Codex install"));
-            writeHumanStatus(context, processOutput, `installed plugins: ${result.installedPlugins.map((plugin) => plugin.name).join(", ") || "(none)"}`);
+            writeHumanStatus(scope.context, processOutput, import_picocolors3.default.bold("Codex plugin install"));
+            writeHumanStatus(scope.context, processOutput, `Source  ${selection.repoRoot} (${selection.origin}${selection.saveDefault ? ", saved as default" : ""})`);
+            if (result.installedPlugins.length === 0) {
+              writeHumanStatus(scope.context, processOutput, "No enabled repository plugins found at this source.");
+              writeHumanStatus(scope.context, processOutput, "Check codex/plugins and codex/plugins.manifest.json, or run 'chc codex install --change-source'.");
+            } else {
+              writeHumanStatus(scope.context, processOutput, `Plugins ${result.installedPlugins.length} enabled`);
+              for (const plugin of result.installedPlugins) {
+                const cache = result.syncedPluginCaches.find((entry) => entry.name === plugin.name);
+                writeHumanStatus(scope.context, processOutput, `  ${plugin.name.padEnd(24)} ${plugin.action}${cache ? ` · cache ${cache.version} synced` : ""}`);
+              }
+            }
+            writeHumanStatus(scope.context, processOutput, `Marketplace  ${paths.marketplacePath}`);
+            writeHumanStatus(scope.context, processOutput, `Codex config ${resolve9(paths.localCodexRoot, "config.toml")}`);
+            writeHumanStatus(scope.context, processOutput, `Change default: chc codex install --change-source`);
           }
           process.exitCode = 0;
         });
@@ -11948,9 +12130,9 @@ var codexCommand = defineCommand({
 
 // src/command/completion.command.ts
 import { execFile as execFile2 } from "node:child_process";
-import { mkdir as mkdir8, readFile as readFile11, writeFile as writeFile6 } from "node:fs/promises";
+import { mkdir as mkdir9, readFile as readFile12, writeFile as writeFile7 } from "node:fs/promises";
 import { homedir as homedir6, platform as platform2 } from "node:os";
-import { dirname as dirname10, join as join14 } from "node:path";
+import { dirname as dirname11, join as join15 } from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // src/domain/completion-candidates.ts
@@ -12116,7 +12298,7 @@ function removeLegacyZshCompletionLine(content) {
 }
 async function readTextIfExists(path) {
   try {
-    return await readFile11(path, "utf8");
+    return await readFile12(path, "utf8");
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       return "";
@@ -12144,9 +12326,9 @@ async function resolvePowerShellProfilePath() {
     } catch {}
   }
   if (platform2() === "win32") {
-    return join14(process.env.USERPROFILE || homedir6(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
+    return join15(process.env.USERPROFILE || homedir6(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
   }
-  return join14(homedir6(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
+  return join15(homedir6(), ".config", "powershell", "Microsoft.PowerShell_profile.ps1");
 }
 function resolveZshProfilePath() {
   const override = process.env[zshProfileEnv]?.trim();
@@ -12154,7 +12336,7 @@ function resolveZshProfilePath() {
     return override;
   }
   const zdotdir = process.env.ZDOTDIR?.trim();
-  return join14(zdotdir || homedir6(), ".zshrc");
+  return join15(zdotdir || homedir6(), ".zshrc");
 }
 async function handlePowerShellProfileAction(action) {
   const profilePath = await resolvePowerShellProfilePath();
@@ -12173,7 +12355,7 @@ async function handlePowerShellProfileAction(action) {
   if (action === "disable") {
     const cleaned2 = removeManagedCompletionBlock(content);
     if (cleaned2.removed) {
-      await writeFile6(profilePath, cleaned2.content);
+      await writeFile7(profilePath, cleaned2.content);
     }
     process.stdout.write(`PowerShell completion disabled: ${profilePath}
 `);
@@ -12185,8 +12367,8 @@ async function handlePowerShellProfileAction(action) {
   const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
 `) ? migratedContent : `${migratedContent}
 `;
-  await mkdir8(dirname10(profilePath), { recursive: true });
-  await writeFile6(profilePath, `${prefix}${powershellCompletionBlock}
+  await mkdir9(dirname11(profilePath), { recursive: true });
+  await writeFile7(profilePath, `${prefix}${powershellCompletionBlock}
 `);
   process.stdout.write(`PowerShell completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
 `);
@@ -12212,7 +12394,7 @@ async function handleZshProfileAction(action) {
   if (action === "disable") {
     const cleaned2 = removeManagedCompletionBlock(content);
     if (cleaned2.removed) {
-      await writeFile6(profilePath, cleaned2.content);
+      await writeFile7(profilePath, cleaned2.content);
     }
     process.stdout.write(`zsh completion disabled: ${profilePath}
 `);
@@ -12224,8 +12406,8 @@ async function handleZshProfileAction(action) {
   const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
 `) ? migratedContent : `${migratedContent}
 `;
-  await mkdir8(dirname10(profilePath), { recursive: true });
-  await writeFile6(profilePath, `${prefix}${zshCompletionBlock}
+  await mkdir9(dirname11(profilePath), { recursive: true });
+  await writeFile7(profilePath, `${prefix}${zshCompletionBlock}
 `);
   process.stdout.write(`zsh completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
 `);
@@ -12339,13 +12521,13 @@ function createInternalCompleteCommand(resolveRootCommand) {
 }
 
 // src/command/obsidian.command.ts
-import { join as join18 } from "node:path";
+import { join as join19 } from "node:path";
 var import_picocolors4 = __toESM(require_picocolors(), 1);
 
 // src/domain/obsidian-agents-config.ts
-import { randomUUID } from "node:crypto";
-import { mkdir as mkdir9, readFile as readFile12, rename as rename4, writeFile as writeFile7 } from "node:fs/promises";
-import { isAbsolute as isAbsolute3, join as join15, relative as relative3, resolve as resolve8, sep as sep4 } from "node:path";
+import { randomUUID as randomUUID2 } from "node:crypto";
+import { mkdir as mkdir10, readFile as readFile13, rename as rename5, writeFile as writeFile8 } from "node:fs/promises";
+import { isAbsolute as isAbsolute3, join as join16, relative as relative3, resolve as resolve10, sep as sep4 } from "node:path";
 var OBSIDIAN_AGENTS_CONFIG_VERSION = 2;
 
 class ObsidianAgentsConfigError extends Error {
@@ -12366,8 +12548,8 @@ function normalizeObsidianAgentsProfile(input) {
     throw new ObsidianAgentsConfigError("Profile id must start with a lowercase letter or number and contain only lowercase letters, numbers, hyphens, or underscores.");
   }
   const vaultPath = normalizeAbsolutePath(input.vaultPath, "vault path");
-  const sourcePath = normalizeAbsolutePath(input.sourcePath?.trim() || join15(vaultPath, "Agents"), "visible source path");
-  const agentsPath = join15(vaultPath, ".agents");
+  const sourcePath = normalizeAbsolutePath(input.sourcePath?.trim() || join16(vaultPath, "Agents"), "visible source path");
+  const agentsPath = join16(vaultPath, ".agents");
   const sourceRelative = relative3(vaultPath, sourcePath);
   if (sourceRelative.length === 0 || sourceRelative === ".." || sourceRelative.startsWith(`..${sep4}`) || isAbsolute3(sourceRelative)) {
     throw new ObsidianAgentsConfigError("The visible source path must be a directory inside the Obsidian vault.");
@@ -12383,7 +12565,7 @@ function normalizeObsidianAgentsProfile(input) {
 async function readObsidianAgentsConfig(paths) {
   let raw;
   try {
-    raw = await readFile12(paths.configPath, "utf8");
+    raw = await readFile13(paths.configPath, "utf8");
   } catch (error) {
     if (isMissingFileError4(error))
       return;
@@ -12411,11 +12593,11 @@ async function writeObsidianAgentsConfig(paths, config) {
       }
     ]))
   };
-  await mkdir9(paths.dataRoot, { recursive: true });
-  const temporaryPath = `${paths.configPath}.tmp-${randomUUID()}`;
-  await writeFile7(temporaryPath, `${JSON.stringify(persisted, null, 2)}
+  await mkdir10(paths.dataRoot, { recursive: true });
+  const temporaryPath = `${paths.configPath}.tmp-${randomUUID2()}`;
+  await writeFile8(temporaryPath, `${JSON.stringify(persisted, null, 2)}
 `, "utf8");
-  await rename4(temporaryPath, paths.configPath);
+  await rename5(temporaryPath, paths.configPath);
 }
 function parseObsidianAgentsConfig(value) {
   if (!isRecord5(value) || value.version !== 1 && value.version !== 2) {
@@ -12463,7 +12645,7 @@ function normalizeAbsolutePath(value, label) {
   if (!trimmed || !isAbsolute3(trimmed)) {
     throw new ObsidianAgentsConfigError(`${label} must be an absolute path.`);
   }
-  return resolve8(trimmed);
+  return resolve10(trimmed);
 }
 function readString(value, label) {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -12481,11 +12663,11 @@ function isMissingFileError4(error) {
 // src/domain/obsidian-agents-service.ts
 import {
   lstat,
-  mkdir as mkdir10,
+  mkdir as mkdir11,
   readdir as readdir4,
   readlink,
   realpath as realpath2,
-  rename as rename5,
+  rename as rename6,
   rmdir,
   stat as stat5,
   symlink,
@@ -12493,12 +12675,12 @@ import {
 } from "node:fs/promises";
 import {
   basename as basename3,
-  dirname as dirname11,
+  dirname as dirname12,
   isAbsolute as isAbsolute4,
-  join as join16,
+  join as join17,
   normalize,
   relative as relative4,
-  resolve as resolve9,
+  resolve as resolve11,
   sep as sep5
 } from "node:path";
 class ObsidianAgentsServiceError extends Error {
@@ -12513,7 +12695,7 @@ class ObsidianAgentsServiceError extends Error {
 async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
   const profile = normalizeObsidianAgentsProfile(input);
   const platform3 = options.platform ?? process.platform;
-  if (!await isDirectory(profile.vaultPath)) {
+  if (!await isDirectory2(profile.vaultPath)) {
     throw new ObsidianAgentsServiceError("invalid_configuration", `Obsidian vault does not exist or is not a directory: ${profile.vaultPath}`);
   }
   if (!await isCanonicalSourceInsideVault(profile)) {
@@ -12530,12 +12712,12 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
   switch (topology.agents.kind) {
     case "absent":
       transition = topology.source.kind === "absent" ? "create" : "link_existing_source";
-      actions.push(topology.source.kind === "absent" ? `create visible source ${profile.sourcePath}` : `preserve visible source ${profile.sourcePath}`, `ensure ${join16(profile.sourcePath, "skills")} and ${join16(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
+      actions.push(topology.source.kind === "absent" ? `create visible source ${profile.sourcePath}` : `preserve visible source ${profile.sourcePath}`, `ensure ${join17(profile.sourcePath, "skills")} and ${join17(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
       break;
     case "directory":
       if (topology.source.kind === "absent" || topology.source.empty === true) {
         transition = "adopt_existing_agents";
-        actions.push(`move existing directory ${profile.agentsPath} to ${profile.sourcePath}`, `ensure ${join16(profile.sourcePath, "skills")} and ${join16(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
+        actions.push(`move existing directory ${profile.agentsPath} to ${profile.sourcePath}`, `ensure ${join17(profile.sourcePath, "skills")} and ${join17(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
       } else if (topology.agents.empty === true) {
         transition = "replace_empty_agents";
         actions.push(`remove empty directory ${profile.agentsPath}`, `preserve visible source ${profile.sourcePath}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
@@ -12547,11 +12729,11 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
       if (topology.linkStatus === "correct") {
         transition = "reuse";
         actions.push(`validate existing link ${profile.agentsPath}`);
-        if (!await isDirectory(join16(profile.sourcePath, "skills"))) {
-          actions.push(`create ${join16(profile.sourcePath, "skills")}`);
+        if (!await isDirectory2(join17(profile.sourcePath, "skills"))) {
+          actions.push(`create ${join17(profile.sourcePath, "skills")}`);
         }
-        if (!await isDirectory(join16(profile.sourcePath, "state"))) {
-          actions.push(`create ${join16(profile.sourcePath, "state")}`);
+        if (!await isDirectory2(join17(profile.sourcePath, "state"))) {
+          actions.push(`create ${join17(profile.sourcePath, "state")}`);
         }
       } else {
         transition = "repair_link";
@@ -12591,11 +12773,11 @@ async function applyObsidianAgentsSetup(paths, plan) {
         await createObsidianAgentsDirectoryLink(plan.profile.agentsPath, plan.profile.sourcePath, { platform: plan.platform });
         break;
       case "adopt_existing_agents":
-        await mkdir10(dirname11(plan.profile.sourcePath), { recursive: true });
+        await mkdir11(dirname12(plan.profile.sourcePath), { recursive: true });
         if (current.topology.source.kind === "directory") {
           await rmdir(plan.profile.sourcePath);
         }
-        await rename5(plan.profile.agentsPath, plan.profile.sourcePath);
+        await rename6(plan.profile.agentsPath, plan.profile.sourcePath);
         await ensureSourceDirectories(plan.profile.sourcePath);
         await createObsidianAgentsDirectoryLink(plan.profile.agentsPath, plan.profile.sourcePath, { platform: plan.platform });
         break;
@@ -12646,12 +12828,12 @@ async function inspectObsidianAgentsStatus(options) {
   if (!profile)
     return createMissingStatus();
   const topology = await inspectObsidianAgentsTopology(profile, { platform: platform3 });
-  const vaultExists = await isDirectory(profile.vaultPath);
+  const vaultExists = await isDirectory2(profile.vaultPath);
   const sourceInsideVault = vaultExists && await isCanonicalSourceInsideVault(profile);
   const sourceExists = topology.source.kind === "directory";
-  const skillsExists = sourceExists ? await isDirectory(join16(profile.sourcePath, "skills")) : false;
-  const stateExists = sourceExists ? await isDirectory(join16(profile.sourcePath, "state")) : false;
-  const gitMetadata = sourceExists ? await pathExists3(join16(profile.sourcePath, ".git")) : false;
+  const skillsExists = sourceExists ? await isDirectory2(join17(profile.sourcePath, "skills")) : false;
+  const stateExists = sourceExists ? await isDirectory2(join17(profile.sourcePath, "state")) : false;
+  const gitMetadata = sourceExists ? await pathExists3(join17(profile.sourcePath, ".git")) : false;
   const warnings = [];
   if (!vaultExists)
     warnings.push("The configured Obsidian vault is missing.");
@@ -12733,7 +12915,7 @@ async function inspectObsidianAgentsPath(path, platform3 = process.platform) {
   }
   if (details.isSymbolicLink()) {
     const rawTarget = await readlink(path);
-    const target = resolve9(dirname11(path), rawTarget);
+    const target = resolve11(dirname12(path), rawTarget);
     try {
       const resolvedTarget = await realpath2(path);
       return {
@@ -12771,7 +12953,7 @@ function getObsidianAgentsLinkType(platform3 = process.platform) {
 }
 async function createObsidianAgentsDirectoryLink(linkPath, sourcePath, options = {}) {
   const platform3 = options.platform ?? process.platform;
-  if (!await isDirectory(sourcePath)) {
+  if (!await isDirectory2(sourcePath)) {
     throw new ObsidianAgentsServiceError("invalid_configuration", `Cannot create the .agents link because its source is not a directory: ${sourcePath}`);
   }
   await symlink(sourcePath, linkPath, platform3 === "win32" ? "junction" : "dir");
@@ -12810,11 +12992,11 @@ function createMissingStatus() {
   };
 }
 async function ensureSourceDirectories(sourcePath) {
-  await mkdir10(join16(sourcePath, "skills"), { recursive: true });
-  await mkdir10(join16(sourcePath, "state"), { recursive: true });
+  await mkdir11(join17(sourcePath, "skills"), { recursive: true });
+  await mkdir11(join17(sourcePath, "state"), { recursive: true });
 }
 async function assertContentDirectory(sourcePath, name) {
-  const state = await inspectObsidianAgentsPath(join16(sourcePath, name));
+  const state = await inspectObsidianAgentsPath(join17(sourcePath, name));
   if (state.kind !== "absent" && state.kind !== "directory") {
     throw new ObsidianAgentsServiceError("invalid_configuration", `The visible source ${name}/ path is not a real directory: ${state.path}`);
   }
@@ -12832,23 +13014,23 @@ async function canonicalPath(path) {
     return await realpath2(path);
   } catch (error) {
     if (isMissingFileError5(error))
-      return resolve9(path);
+      return resolve11(path);
     throw error;
   }
 }
 async function canonicalDestinationPath(path) {
   const missingSegments = [];
-  let current = resolve9(path);
+  let current = resolve11(path);
   while (true) {
     try {
       const existing = await realpath2(current);
-      return resolve9(existing, ...missingSegments.reverse());
+      return resolve11(existing, ...missingSegments.reverse());
     } catch (error) {
       if (!isMissingFileError5(error))
         throw error;
-      const parent = dirname11(current);
+      const parent = dirname12(current);
       if (parent === current)
-        return resolve9(path);
+        return resolve11(path);
       missingSegments.push(basename3(current));
       current = parent;
     }
@@ -12890,7 +13072,7 @@ async function pathExists3(path) {
     throw error;
   }
 }
-async function isDirectory(path) {
+async function isDirectory2(path) {
   try {
     return (await stat5(path)).isDirectory();
   } catch (error) {
@@ -12905,27 +13087,27 @@ function isMissingFileError5(error) {
 
 // src/infra/obsidian-agents-paths.ts
 import { homedir as homedir7 } from "node:os";
-import { join as join17, resolve as resolve10 } from "node:path";
+import { join as join18, resolve as resolve12 } from "node:path";
 function resolveCthuToolChcDataRoot(options = {}) {
   const env2 = options.env ?? process.env;
   const explicit = options.dataRoot?.trim() || env2.CTHUTOOL_CHC_DATA_DIR;
   if (explicit?.trim())
-    return resolve10(explicit);
+    return resolve12(explicit);
   const homeRoot = options.homeRoot ?? homedir7();
   const platform3 = options.platform ?? process.platform;
   if (platform3 === "win32") {
-    return resolve10(join17(env2.APPDATA ?? join17(homeRoot, "AppData", "Roaming"), "CthuTool", "chc"));
+    return resolve12(join18(env2.APPDATA ?? join18(homeRoot, "AppData", "Roaming"), "CthuTool", "chc"));
   }
   if (platform3 === "darwin") {
-    return resolve10(join17(homeRoot, "Library", "Application Support", "CthuTool", "chc"));
+    return resolve12(join18(homeRoot, "Library", "Application Support", "CthuTool", "chc"));
   }
-  return resolve10(join17(env2.XDG_STATE_HOME ?? join17(homeRoot, ".local", "state"), "cthutool", "chc"));
+  return resolve12(join18(env2.XDG_STATE_HOME ?? join18(homeRoot, ".local", "state"), "cthutool", "chc"));
 }
 function createObsidianAgentsDataPaths(options = {}) {
   const dataRoot = resolveCthuToolChcDataRoot(options);
   return {
     dataRoot,
-    configPath: join17(dataRoot, "obsidian-agents.json")
+    configPath: join18(dataRoot, "obsidian-agents.json")
   };
 }
 
@@ -13057,7 +13239,7 @@ async function collectSetupInput(args, current, interactive) {
     return {
       id: suppliedProfile ?? current?.id ?? "obsidian-main",
       vaultPath: vaultPath2,
-      sourcePath: suppliedSource ?? current?.sourcePath ?? join18(vaultPath2, "Agents")
+      sourcePath: suppliedSource ?? current?.sourcePath ?? join19(vaultPath2, "Agents")
     };
   }
   if (current) {
@@ -13081,7 +13263,7 @@ async function collectSetupInput(args, current, interactive) {
   const vaultPath = suppliedVault ?? await promptString("Obsidian vault path", current?.vaultPath, (value) => value.trim() ? undefined : "A vault path is required.");
   if (!vaultPath)
     return;
-  const sourcePath = suppliedSource ?? await promptString("Visible Agents source path", current?.sourcePath ?? join18(vaultPath, "Agents"), (value) => value.trim() ? undefined : "A source path is required.");
+  const sourcePath = suppliedSource ?? await promptString("Visible Agents source path", current?.sourcePath ?? join19(vaultPath, "Agents"), (value) => value.trim() ? undefined : "A source path is required.");
   if (!sourcePath)
     return;
   return { id, vaultPath, sourcePath };
@@ -13220,11 +13402,11 @@ var createNeverThrowError = (message, result, config = defaultErrorConfig) => {
 };
 function __awaiter(thisArg, _arguments, P5, generator) {
   function adopt(value) {
-    return value instanceof P5 ? value : new P5(function(resolve11) {
-      resolve11(value);
+    return value instanceof P5 ? value : new P5(function(resolve13) {
+      resolve13(value);
     });
   }
-  return new (P5 || (P5 = Promise))(function(resolve11, reject) {
+  return new (P5 || (P5 = Promise))(function(resolve13, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -13240,7 +13422,7 @@ function __awaiter(thisArg, _arguments, P5, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve11(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve13(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -13328,14 +13510,14 @@ function __asyncValues(o3) {
   }, i3);
   function verb(n2) {
     i3[n2] = o3[n2] && function(v3) {
-      return new Promise(function(resolve11, reject) {
-        v3 = o3[n2](v3), settle(resolve11, reject, v3.done, v3.value);
+      return new Promise(function(resolve13, reject) {
+        v3 = o3[n2](v3), settle(resolve13, reject, v3.done, v3.value);
       });
     };
   }
-  function settle(resolve11, reject, d3, v3) {
+  function settle(resolve13, reject, d3, v3) {
     Promise.resolve(v3).then(function(v4) {
-      resolve11({ value: v4, done: d3 });
+      resolve13({ value: v4, done: d3 });
     }, reject);
   }
 }
@@ -13682,10 +13864,10 @@ var resolvePackage = (catalog, id) => {
 };
 
 // src/flow/run-bundled-script.ts
-import { join as join19 } from "node:path";
+import { join as join20 } from "node:path";
 import { pathToFileURL } from "node:url";
 function runBundledScript(pkg, args, context) {
-  const entryPath = join19(pkg.rootPath, pkg.entryRelative);
+  const entryPath = join20(pkg.rootPath, pkg.entryRelative);
   const href = pathToFileURL(entryPath).href;
   const startedAt = Date.now();
   const diagnostics = context.diagnostics?.child({ scriptId: pkg.id });
@@ -13765,22 +13947,22 @@ function runBundledScript(pkg, args, context) {
 var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
-import { existsSync as existsSync4 } from "node:fs";
-import { dirname as dirname12, join as join20 } from "node:path";
+import { existsSync as existsSync5 } from "node:fs";
+import { dirname as dirname13, join as join21 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 function getBundledScriptsRoot() {
-  const moduleDir = dirname12(fileURLToPath2(import.meta.url));
+  const moduleDir = dirname13(fileURLToPath2(import.meta.url));
   const candidates = [
-    join20(moduleDir, "scripts"),
-    join20(moduleDir, "../scripts"),
-    join20(moduleDir, "../src/scripts")
+    join21(moduleDir, "scripts"),
+    join21(moduleDir, "../scripts"),
+    join21(moduleDir, "../src/scripts")
   ];
-  return candidates.find((candidate) => existsSync4(candidate)) ?? candidates[0];
+  return candidates.find((candidate) => existsSync5(candidate)) ?? candidates[0];
 }
 
 // src/infra/discover-scripts.ts
-import { readdir as readdir5, readFile as readFile13, stat as stat6 } from "node:fs/promises";
-import { join as join21 } from "node:path";
+import { readdir as readdir5, readFile as readFile14, stat as stat6 } from "node:fs/promises";
+import { join as join22 } from "node:path";
 
 // src/domain/script-id.ts
 var KEBAB_CASE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -14134,18 +14316,18 @@ async function scanScriptsRoot(scriptsRoot) {
   }
   const names = entries.filter((e3) => e3.isDirectory()).map((e3) => e3.name).sort((a4, b5) => a4.localeCompare(b5));
   for (const name of names) {
-    const dirPath = join21(scriptsRoot, name);
+    const dirPath = join22(scriptsRoot, name);
     const dirIdResult = validateScriptId(name);
     if (dirIdResult.isErr()) {
       pushWarning(warnings, dirPath, `skip non-kebab-case script folder: ${dirIdResult.error.message}`);
       continue;
     }
-    const manifestPath = join21(dirPath, MANIFEST_FILE);
+    const manifestPath = join22(dirPath, MANIFEST_FILE);
     let entryRelative;
     let entryStat;
     for (const candidate of ENTRY_FILES) {
       try {
-        const candidateStat = await stat6(join21(dirPath, candidate));
+        const candidateStat = await stat6(join22(dirPath, candidate));
         if (candidateStat.isFile()) {
           entryRelative = candidate;
           entryStat = candidateStat;
@@ -14166,7 +14348,7 @@ async function scanScriptsRoot(scriptsRoot) {
     }
     let rawJson;
     try {
-      rawJson = await readFile13(manifestPath, "utf8");
+      rawJson = await readFile14(manifestPath, "utf8");
     } catch (e3) {
       const msg = e3 instanceof Error ? e3.message : String(e3);
       pushWarning(warnings, manifestPath, `cannot read manifest: ${msg}`);
@@ -14935,18 +15117,18 @@ var import_picocolors9 = __toESM(require_picocolors(), 1);
 
 // src/domain/cli-source-manager.ts
 import { spawn as spawn3 } from "node:child_process";
-import { randomUUID as randomUUID2 } from "node:crypto";
-import { existsSync as existsSync5, readFileSync as readFileSync4 } from "node:fs";
+import { randomUUID as randomUUID3 } from "node:crypto";
+import { existsSync as existsSync6, readFileSync as readFileSync5 } from "node:fs";
 import {
-  mkdir as mkdir11,
-  readFile as readFile14,
+  mkdir as mkdir12,
+  readFile as readFile15,
   realpath as realpath3,
-  rename as rename6,
-  rm as rm8,
-  writeFile as writeFile8
+  rename as rename7,
+  rm as rm9,
+  writeFile as writeFile9
 } from "node:fs/promises";
 import { homedir as homedir8 } from "node:os";
-import { dirname as dirname13, isAbsolute as isAbsolute5, join as join22, resolve as resolve11 } from "node:path";
+import { dirname as dirname14, isAbsolute as isAbsolute5, join as join23, resolve as resolve13 } from "node:path";
 var sourceRegistryVersion = 1;
 var sourceSwitchWaitMs = 2000;
 var sourceSwitchPollMs = 50;
@@ -15001,8 +15183,8 @@ var defaultDeps4 = {
     if (result.code !== 0 || result.stdout.trim().length === 0) {
       return;
     }
-    const packagePath = join22(result.stdout.trim(), "cthutool");
-    if (!existsSync5(packagePath)) {
+    const packagePath = join23(result.stdout.trim(), "cthutool");
+    if (!existsSync6(packagePath)) {
       return;
     }
     return realpath3(packagePath);
@@ -15015,10 +15197,10 @@ function createCliSourceManagerDeps(overrides = {}) {
   return { ...defaultDeps4, ...overrides };
 }
 function getCliSourceRegistryPath(home = homedir8()) {
-  return join22(home, ".cthutool", "cli", "source-registry.json");
+  return join23(home, ".cthutool", "cli", "source-registry.json");
 }
 function getCliSourceSwitchLockPath(home = homedir8()) {
-  return join22(home, ".cthutool", "locks", "cli-source-switch.lock");
+  return join23(home, ".cthutool", "locks", "cli-source-switch.lock");
 }
 function parseGitWorktreeList(value) {
   const records = [];
@@ -15237,8 +15419,8 @@ async function resolveCliSourceSelector(rawSelector, inventory, deps) {
   const discovered = inventory.candidates.find((candidate) => candidate.id === selector);
   if (discovered)
     return discovered;
-  const explicitPath = resolve11(deps.cwd(), selector);
-  if (existsSync5(explicitPath) || isAbsolute5(selector)) {
+  const explicitPath = resolve13(deps.cwd(), selector);
+  if (existsSync6(explicitPath) || isAbsolute5(selector)) {
     return candidateFromExplicitPath(explicitPath, inventory.active.path, deps);
   }
   throw new CliSourceError({
@@ -15263,7 +15445,7 @@ async function candidateFromExplicitPath(path, runtimeRoot, deps) {
   return inspectWorktreeCandidate(record, sameSourcePath(checkout.root, checkout.mainRoot) ? "main" : "worktree", checkout.mainRoot, runtimeRoot, deps);
 }
 async function resolveDevelopmentCheckout(path, deps) {
-  const requested = resolve11(path);
+  const requested = resolve13(path);
   const rootResult = await deps.runGit(requested, [
     "rev-parse",
     "--show-toplevel"
@@ -15289,7 +15471,7 @@ async function resolveDevelopmentCheckout(path, deps) {
     });
   }
   const rawCommonDir = commonResult.stdout.trim();
-  const commonDir = await canonicalExistingPath(isAbsolute5(rawCommonDir) ? rawCommonDir : resolve11(root, rawCommonDir));
+  const commonDir = await canonicalExistingPath(isAbsolute5(rawCommonDir) ? rawCommonDir : resolve13(root, rawCommonDir));
   const listResult = await deps.runGit(root, [
     "worktree",
     "list",
@@ -15311,7 +15493,7 @@ async function resolveDevelopmentCheckout(path, deps) {
   }
   const worktrees = await Promise.all(parsed.map(async (record) => ({
     ...record,
-    path: existsSync5(record.path) ? await canonicalExistingPath(record.path) : resolve11(record.path)
+    path: existsSync6(record.path) ? await canonicalExistingPath(record.path) : resolve13(record.path)
   })));
   const mainRoot = worktrees[0]?.path;
   if (!mainRoot) {
@@ -15332,9 +15514,9 @@ async function tryResolveDevelopmentCheckout(path, deps) {
 async function inspectWorktreeCandidate(record, kind, mainRoot, runtimeRoot, deps) {
   const path = record.path;
   const active = sameSourcePath(path, runtimeRoot);
-  const bundlePresent = existsSync5(join22(path, committedCliBundlePath));
+  const bundlePresent = existsSync6(join23(path, committedCliBundlePath));
   const packageValid = isCthuToolPackage(path);
-  const exists = existsSync5(path);
+  const exists = existsSync6(path);
   const available = exists && packageValid && bundlePresent && !record.prunable;
   let dirty;
   if (exists && packageValid) {
@@ -15371,8 +15553,8 @@ async function inspectWorktreeCandidate(record, kind, mainRoot, runtimeRoot, dep
 }
 async function inspectManagedCandidate(path, runtimeRoot, deps) {
   const active = sameSourcePath(path, runtimeRoot);
-  const bundlePresent = existsSync5(join22(path, committedCliBundlePath));
-  if (!existsSync5(path)) {
+  const bundlePresent = existsSync6(join23(path, committedCliBundlePath));
+  if (!existsSync6(path)) {
     return unavailableCandidate({
       id: "remote",
       kind: "managed",
@@ -15418,11 +15600,11 @@ async function inspectManagedCandidate(path, runtimeRoot, deps) {
     locked: record?.locked,
     prunable: record?.prunable,
     [cliManagedSourceState]: bundlePresent ? "ready" : "invalid",
-    reason: bundlePresent ? undefined : `Missing committed CLI bundle: ${join22(path, committedCliBundlePath)}`
+    reason: bundlePresent ? undefined : `Missing committed CLI bundle: ${join23(path, committedCliBundlePath)}`
   };
 }
 async function inspectFallbackRuntimeCandidate(path, deps) {
-  const bundlePresent = existsSync5(join22(path, committedCliBundlePath));
+  const bundlePresent = existsSync6(join23(path, committedCliBundlePath));
   const status = await deps.runGit(path, [
     "status",
     "--porcelain",
@@ -15437,7 +15619,7 @@ async function inspectFallbackRuntimeCandidate(path, deps) {
     available: isCthuToolPackage(path) && bundlePresent,
     bundlePresent,
     dirty: status.code === 0 ? status.stdout.trim().length > 0 : undefined,
-    reason: bundlePresent ? "The running source is not part of a discoverable Git worktree topology." : `Missing committed CLI bundle: ${join22(path, committedCliBundlePath)}`
+    reason: bundlePresent ? "The running source is not part of a discoverable Git worktree topology." : `Missing committed CLI bundle: ${join23(path, committedCliBundlePath)}`
   };
 }
 function unavailableCandidate(input) {
@@ -15505,11 +15687,11 @@ async function assertGlobalTarget(target, deps) {
 }
 async function withSourceSwitchLock(deps, run) {
   const lockPath = getCliSourceSwitchLockPath(deps.home());
-  await mkdir11(dirname13(lockPath), { mode: 448, recursive: true });
+  await mkdir12(dirname14(lockPath), { mode: 448, recursive: true });
   const deadline = deps.now() + sourceSwitchWaitMs;
   while (true) {
     try {
-      await mkdir11(lockPath, { mode: 448 });
+      await mkdir12(lockPath, { mode: 448 });
       break;
     } catch (error) {
       if (!isNodeError(error, "EEXIST"))
@@ -15527,15 +15709,15 @@ async function withSourceSwitchLock(deps, run) {
   try {
     return await run();
   } finally {
-    await rm8(lockPath, { force: true, recursive: true });
+    await rm9(lockPath, { force: true, recursive: true });
   }
 }
 async function readSourceRegistry(home) {
   const path = getCliSourceRegistryPath(home);
-  if (!existsSync5(path))
+  if (!existsSync6(path))
     return {};
   try {
-    const value = JSON.parse(await readFile14(path, "utf8"));
+    const value = JSON.parse(await readFile15(path, "utf8"));
     if (value.version !== sourceRegistryVersion || typeof value.mainRoot !== "string" || !isAbsolute5(value.mainRoot) || typeof value.commonDir !== "string" || !isAbsolute5(value.commonDir)) {
       throw new Error("unsupported or invalid registry fields");
     }
@@ -15554,16 +15736,16 @@ async function readSourceRegistry(home) {
 }
 async function writeSourceRegistry(registry, home) {
   const path = getCliSourceRegistryPath(home);
-  const temporary = `${path}.${process.pid}.${randomUUID2()}.tmp`;
-  await mkdir11(dirname13(path), { mode: 448, recursive: true });
+  const temporary = `${path}.${process.pid}.${randomUUID3()}.tmp`;
+  await mkdir12(dirname14(path), { mode: 448, recursive: true });
   try {
-    await writeFile8(temporary, `${JSON.stringify(registry, null, 2)}
+    await writeFile9(temporary, `${JSON.stringify(registry, null, 2)}
 `, {
       mode: 384
     });
-    await rename6(temporary, path);
+    await rename7(temporary, path);
   } finally {
-    await rm8(temporary, { force: true });
+    await rm9(temporary, { force: true });
   }
 }
 function assertCthuToolPackage(path) {
@@ -15576,17 +15758,17 @@ function assertCthuToolPackage(path) {
 }
 function isCthuToolPackage(path) {
   try {
-    const pkg = JSON.parse(readFileSync4(join22(path, "package.json"), "utf8"));
+    const pkg = JSON.parse(readFileSync5(join23(path, "package.json"), "utf8"));
     return pkg.name === "cthutool";
   } catch {
     return false;
   }
 }
 async function canonicalExistingPath(path) {
-  return realpath3(resolve11(path));
+  return realpath3(resolve13(path));
 }
 async function canonicalPath2(path) {
-  return existsSync5(path) ? canonicalExistingPath(path) : resolve11(path);
+  return existsSync6(path) ? canonicalExistingPath(path) : resolve13(path);
 }
 function deduplicateCandidates(candidates) {
   const seen = new Set;
@@ -15641,7 +15823,7 @@ function runProcess2(command, args) {
 }
 
 // src/command/source-presentation.ts
-import { isAbsolute as isAbsolute6, relative as relative5, resolve as resolve12, sep as sep6 } from "node:path";
+import { isAbsolute as isAbsolute6, relative as relative5, resolve as resolve14, sep as sep6 } from "node:path";
 function presentCliSourceCandidate(candidate, home) {
   const managedState = getCliManagedSourceState(candidate);
   const state = candidate.active ? "active" : managedState === "absent" ? "not installed" : candidate.available ? "ready" : "unavailable";
@@ -15669,8 +15851,8 @@ function actionableCliSourceCandidates(candidates, home) {
   return candidates.filter((candidate) => presentCliSourceCandidate(candidate, home).actionable);
 }
 function abbreviateHomePath(path, home) {
-  const resolvedHome = resolve12(home);
-  const resolvedPath = resolve12(path);
+  const resolvedHome = resolve14(home);
+  const resolvedPath = resolve14(path);
   const relativePath = relative5(resolvedHome, resolvedPath);
   if (relativePath === "")
     return "~";

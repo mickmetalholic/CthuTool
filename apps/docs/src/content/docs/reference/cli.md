@@ -248,4 +248,13 @@ enabled plugins, and synchronizes their cache. It does not manage standalone
 skills, prompts, or rules. The retired `codex status`, `export`, and `apply`
 subcommands are rejected as unknown commands.
 
+The first interactive install asks for the CthuTool repository path and saves
+it at `~/.cthutool/codex/plugin-source.json`. Later installs reuse that source
+from any working directory. `--change-source` prompts for a new default;
+`--change-source --repo-root <path>` changes it non-interactively. Plain
+`--repo-root <path>` is a one-run override. JSON and non-interactive runs fail
+with a repair command if no valid source is available. The human result names
+the source and each plugin action/cache version, while JSON includes source
+path and provenance.
+
 Source reference: `apps/cli/README.md`.

@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { emitKeypressEvents } from 'node:readline';
 import {
   confirm,
@@ -9,6 +10,12 @@ import {
 import { defineCommand } from 'citty';
 import pc from 'picocolors';
 import { installRepositoryCodexPlugins } from '../domain/codex-plugin-install-manager';
+import {
+  findCthuToolRoot,
+  pluginSourceValidationError,
+  readCodexPluginSource,
+  writeCodexPluginSource,
+} from '../domain/codex-plugin-source';
 import {
   createNpxSkillsBackend,
   type DiscoveredSkill,
@@ -55,6 +62,11 @@ const commonArgs = {
 
 const installArgs = {
   ...commonArgs,
+  changeSource: {
+    type: 'boolean',
+    alias: 'change-source',
+    description: 'Choose and remember a new default plugin repository',
+  },
   marketplace: {
     type: 'string',
     description: 'Override the personal marketplace.json path',
@@ -79,6 +91,7 @@ type CodexArgs = {
   readonly marketplace?: unknown;
   readonly pluginsRoot?: unknown;
   readonly cacheRoot?: unknown;
+  readonly changeSource?: unknown;
 };
 
 export type SkillsInteraction = {
@@ -145,6 +158,136 @@ function failCommand(scope: ObservedCliCommandScope, message: string): void {
   scope.fail(error);
   writeCommandError(scope.context, processOutput, error);
   process.exitCode = error.exitCode;
+}
+
+type PluginSourceSelection = {
+  readonly repoRoot: string;
+  readonly origin: 'explicit' | 'saved' | 'working-tree' | 'selected';
+  readonly saveDefault: boolean;
+};
+
+type PluginSourceInteraction = {
+  readonly requestPath: (initialValue?: string) => Promise<string | undefined>;
+};
+
+const defaultPluginSourceInteraction: PluginSourceInteraction = {
+  async requestPath(initialValue) {
+    const answer = await promptText({
+      message: 'CthuTool repository containing codex/plugins',
+      initialValue,
+      placeholder: 'Absolute path to CthuTool repository',
+      validate(value) {
+        if (!value.trim()) return 'Enter a repository path.';
+        return pluginSourceValidationError(value.trim());
+      },
+    });
+    return isCancel(answer) ? undefined : answer.trim();
+  },
+};
+
+export async function selectCodexPluginSource(
+  args: CodexArgs,
+  scope: ObservedCliCommandScope,
+  interaction: PluginSourceInteraction = defaultPluginSourceInteraction,
+): Promise<PluginSourceSelection | undefined> {
+  const basePaths = createPaths(args);
+  const explicit = getStringArg(args.repoRoot);
+  const changing = args.changeSource === true;
+  let saved: Awaited<ReturnType<typeof readCodexPluginSource>>;
+  let savedError: string | undefined;
+  if (!explicit) {
+    try {
+      saved = await readCodexPluginSource(basePaths.homeRoot);
+    } catch (error) {
+      savedError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  const detected = findCthuToolRoot(process.cwd());
+  const promptNeeded =
+    !explicit &&
+    scope.context.interactive &&
+    !scope.context.json &&
+    (changing || !saved || !!pluginSourceValidationError(saved.repoRoot));
+
+  if (
+    changing &&
+    !explicit &&
+    (!scope.context.interactive || scope.context.json)
+  ) {
+    failCommand(
+      scope,
+      '`--change-source` needs an interactive terminal or `--repo-root <path>`.',
+    );
+    return undefined;
+  }
+
+  if (savedError && !promptNeeded) {
+    failCommand(
+      scope,
+      `${savedError} Run 'chc codex install --change-source --repo-root <path>' to replace it.`,
+    );
+    return undefined;
+  }
+
+  if (promptNeeded) {
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      savedError
+        ? `${savedError} Choose a valid replacement.`
+        : saved
+          ? `Saved plugin source: ${saved.repoRoot}${pluginSourceValidationError(saved.repoRoot) ? ' (unavailable)' : ''}`
+          : 'No default Codex plugin source is saved yet.',
+    );
+    if (detected && !saved) {
+      writeHumanStatus(
+        scope.context,
+        processOutput,
+        `Detected working tree: ${detected}`,
+      );
+    }
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      'Select the repository to use and remember for future installs.',
+    );
+    const chosen = await interaction.requestPath(saved?.repoRoot ?? detected);
+    if (!chosen) {
+      writeHumanStatus(scope.context, processOutput, pc.dim('Cancelled.'));
+      return undefined;
+    }
+    const error = pluginSourceValidationError(chosen);
+    if (error) {
+      failCommand(scope, error);
+      return undefined;
+    }
+    return { repoRoot: resolve(chosen), origin: 'selected', saveDefault: true };
+  }
+
+  const repoRoot = explicit ?? saved?.repoRoot ?? detected;
+  if (!repoRoot) {
+    failCommand(
+      scope,
+      'No Codex plugin source is configured. Run `chc codex install --change-source --repo-root <path>` or run interactively to choose one.',
+    );
+    return undefined;
+  }
+  const error = pluginSourceValidationError(
+    repoRoot,
+    getStringArg(args.pluginsRoot),
+  );
+  if (error) {
+    failCommand(
+      scope,
+      `${error} Run 'chc codex install --change-source --repo-root <path>' to change the default.`,
+    );
+    return undefined;
+  }
+  return {
+    repoRoot: resolve(repoRoot),
+    origin: explicit ? 'explicit' : saved ? 'saved' : 'working-tree',
+    saveDefault: changing,
+  };
 }
 
 export async function runSkills(
@@ -640,34 +783,82 @@ export const codexCommand = defineCommand({
       },
       args: installArgs,
       async run({ args }) {
-        await runObservedCodexSubcommand(
-          'install',
-          args,
-          async ({ context }) => {
-            const result = await installRepositoryCodexPlugins(
-              createPaths(args),
+        await runObservedCodexSubcommand('install', args, async (scope) => {
+          const selection = await selectCodexPluginSource(args, scope);
+          if (!selection) return;
+          const paths = createPaths({ ...args, repoRoot: selection.repoRoot });
+          const result = await installRepositoryCodexPlugins(paths);
+          if (selection.saveDefault) {
+            await writeCodexPluginSource(paths.homeRoot, selection.repoRoot);
+          }
+          const source = {
+            repoRoot: selection.repoRoot,
+            origin: selection.origin,
+            defaultSaved: selection.saveDefault,
+          };
+          if (scope.context.json) {
+            writeJsonValue(processOutput, {
+              ok: true,
+              command: 'codex install',
+              result: { source, ...result },
+            });
+          } else {
+            writeHumanStatus(
+              scope.context,
+              processOutput,
+              pc.bold('Codex plugin install'),
             );
-            if (context.json) {
-              writeJsonValue(processOutput, {
-                ok: true,
-                command: 'codex install',
-                result,
-              });
+            writeHumanStatus(
+              scope.context,
+              processOutput,
+              `Source  ${selection.repoRoot} (${selection.origin}${selection.saveDefault ? ', saved as default' : ''})`,
+            );
+            if (result.installedPlugins.length === 0) {
+              writeHumanStatus(
+                scope.context,
+                processOutput,
+                'No enabled repository plugins found at this source.',
+              );
+              writeHumanStatus(
+                scope.context,
+                processOutput,
+                "Check codex/plugins and codex/plugins.manifest.json, or run 'chc codex install --change-source'.",
+              );
             } else {
               writeHumanStatus(
-                context,
+                scope.context,
                 processOutput,
-                pc.cyan('Codex install'),
+                `Plugins ${result.installedPlugins.length} enabled`,
               );
-              writeHumanStatus(
-                context,
-                processOutput,
-                `installed plugins: ${result.installedPlugins.map((plugin) => plugin.name).join(', ') || '(none)'}`,
-              );
+              for (const plugin of result.installedPlugins) {
+                const cache = result.syncedPluginCaches.find(
+                  (entry) => entry.name === plugin.name,
+                );
+                writeHumanStatus(
+                  scope.context,
+                  processOutput,
+                  `  ${plugin.name.padEnd(24)} ${plugin.action}${cache ? ` · cache ${cache.version} synced` : ''}`,
+                );
+              }
             }
-            process.exitCode = 0;
-          },
-        );
+            writeHumanStatus(
+              scope.context,
+              processOutput,
+              `Marketplace  ${paths.marketplacePath}`,
+            );
+            writeHumanStatus(
+              scope.context,
+              processOutput,
+              `Codex config ${resolve(paths.localCodexRoot, 'config.toml')}`,
+            );
+            writeHumanStatus(
+              scope.context,
+              processOutput,
+              `Change default: chc codex install --change-source`,
+            );
+          }
+          process.exitCode = 0;
+        });
       },
     }),
   },

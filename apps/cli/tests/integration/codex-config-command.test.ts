@@ -13,20 +13,28 @@ import { fileURLToPath } from 'node:url';
 import {
   runSkills,
   type SkillsInteraction,
+  selectCodexPluginSource,
 } from '../../src/command/codex.command';
 import type { SkillsBackend } from '../../src/domain/codex-skills-backend';
 import type { ObservedCliCommandScope } from '../../src/runtime/command-diagnostics';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
-async function runCli(args: string[], env: NodeJS.ProcessEnv = {}) {
-  const proc = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
-    cwd: cliRoot,
-    env: { ...process.env, ...env },
-    stdout: 'pipe',
-    stderr: 'pipe',
-    stdin: 'ignore',
-  });
+async function runCli(
+  args: string[],
+  env: NodeJS.ProcessEnv = {},
+  cwd = cliRoot,
+) {
+  const proc = Bun.spawn(
+    ['bun', 'run', join(cliRoot, 'src/index.ts'), ...args],
+    {
+      cwd,
+      env: { ...process.env, ...env },
+      stdout: 'pipe',
+      stderr: 'pipe',
+      stdin: 'ignore',
+    },
+  );
   return {
     out: await new Response(proc.stdout).text(),
     err: await new Response(proc.stderr).text(),
@@ -102,6 +110,222 @@ async function writePlugin(root: string, name: string) {
 }
 
 describe('codex command boundary', () => {
+  test('first interactive install selects a valid repository and marks it for saving', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    await writePlugin(join(repoRoot, 'codex', 'plugins'), 'sample-plugin');
+    let offeredPath: string | undefined;
+    const scope: ObservedCliCommandScope = {
+      context: { isTty: true, interactive: true, json: false, quiet: true },
+      complete() {},
+      fail() {},
+    };
+    const selection = await selectCodexPluginSource({ home: homeRoot }, scope, {
+      async requestPath(initialValue) {
+        offeredPath = initialValue;
+        return repoRoot;
+      },
+    });
+    expect(offeredPath).toBeTruthy();
+    expect(selection).toEqual({
+      repoRoot,
+      origin: 'selected',
+      saveDefault: true,
+    });
+  });
+
+  test('interactive change offers the saved path and selects a replacement', async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const previousRepo = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    const nextRepo = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    await writePlugin(join(previousRepo, 'codex', 'plugins'), 'old-plugin');
+    await writePlugin(join(nextRepo, 'codex', 'plugins'), 'new-plugin');
+    await writeJson(
+      join(homeRoot, '.cthutool', 'codex', 'plugin-source.json'),
+      { version: 1, repoRoot: previousRepo },
+    );
+    const scope: ObservedCliCommandScope = {
+      context: { isTty: true, interactive: true, json: false, quiet: true },
+      complete() {},
+      fail() {},
+    };
+    const reused = await selectCodexPluginSource({ home: homeRoot }, scope, {
+      async requestPath() {
+        throw new Error('saved source should not prompt');
+      },
+    });
+    expect(reused?.repoRoot).toBe(previousRepo);
+    expect(reused?.origin).toBe('saved');
+
+    let offeredPath: string | undefined;
+    const changed = await selectCodexPluginSource(
+      { home: homeRoot, changeSource: true },
+      scope,
+      {
+        async requestPath(initialValue) {
+          offeredPath = initialValue;
+          return nextRepo;
+        },
+      },
+    );
+    expect(offeredPath).toBe(previousRepo);
+    expect(changed).toEqual({
+      repoRoot: nextRepo,
+      origin: 'selected',
+      saveDefault: true,
+    });
+  });
+
+  test('requires a source outside a repository and can remember, reuse, and override it', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'cthutool-other-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    const otherRepo = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    await writePlugin(join(repoRoot, 'codex', 'plugins'), 'first-plugin');
+    await writePlugin(join(otherRepo, 'codex', 'plugins'), 'second-plugin');
+
+    const missing = await runCli(
+      ['codex', 'install', '--home', homeRoot, '--json'],
+      {},
+      cwd,
+    );
+    expect(missing.code).not.toBe(0);
+    expect(JSON.parse(missing.out).error.message).toContain('--change-source');
+
+    const selected = await runCli(
+      [
+        'codex',
+        'install',
+        '--home',
+        homeRoot,
+        '--change-source',
+        '--repo-root',
+        repoRoot,
+        '--json',
+      ],
+      {},
+      cwd,
+    );
+    expect(selected.code).toBe(0);
+    expect(JSON.parse(selected.out).result.source).toEqual({
+      repoRoot,
+      origin: 'explicit',
+      defaultSaved: true,
+    });
+    const configPath = join(
+      homeRoot,
+      '.cthutool',
+      'codex',
+      'plugin-source.json',
+    );
+    expect(JSON.parse(await readFile(configPath, 'utf8')).repoRoot).toBe(
+      repoRoot,
+    );
+
+    const reused = await runCli(
+      ['codex', 'install', '--home', homeRoot, '--json'],
+      {},
+      cwd,
+    );
+    expect(reused.code).toBe(0);
+    expect(JSON.parse(reused.out).result.source.origin).toBe('saved');
+    expect(JSON.parse(reused.out).result.installedPlugins[0].name).toBe(
+      'first-plugin',
+    );
+
+    const human = await runCli(
+      ['codex', 'install', '--home', homeRoot],
+      {},
+      cwd,
+    );
+    expect(human.code).toBe(0);
+    expect(human.out).toContain(`Source  ${repoRoot} (saved)`);
+    expect(human.out).toContain('first-plugin');
+    expect(human.out).toContain('cache 0.1.0 synced');
+    expect(human.out).toContain('Marketplace');
+    expect(human.out).not.toContain('installed plugins: (none)');
+
+    const overridden = await runCli(
+      [
+        'codex',
+        'install',
+        '--home',
+        homeRoot,
+        '--repo-root',
+        otherRepo,
+        '--json',
+      ],
+      {},
+      cwd,
+    );
+    expect(overridden.code).toBe(0);
+    expect(JSON.parse(overridden.out).result.source.origin).toBe('explicit');
+    expect(JSON.parse(overridden.out).result.installedPlugins[0].name).toBe(
+      'second-plugin',
+    );
+    expect(JSON.parse(await readFile(configPath, 'utf8')).repoRoot).toBe(
+      repoRoot,
+    );
+  });
+
+  test('reports a stale saved source and repairs it with an explicit change', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'cthutool-other-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    await writePlugin(join(repoRoot, 'codex', 'plugins'), 'sample-plugin');
+    const configPath = join(
+      homeRoot,
+      '.cthutool',
+      'codex',
+      'plugin-source.json',
+    );
+    await writeJson(configPath, { version: 1, repoRoot: join(cwd, 'missing') });
+    const stale = await runCli(
+      ['codex', 'install', '--home', homeRoot, '--json'],
+      {},
+      cwd,
+    );
+    expect(stale.code).not.toBe(0);
+    expect(JSON.parse(stale.out).error.message).toContain('--change-source');
+    const repaired = await runCli(
+      [
+        'codex',
+        'install',
+        '--home',
+        homeRoot,
+        '--change-source',
+        '--repo-root',
+        repoRoot,
+        '--json',
+      ],
+      {},
+      cwd,
+    );
+    expect(repaired.code).toBe(0);
+    expect(JSON.parse(await readFile(configPath, 'utf8')).repoRoot).toBe(
+      repoRoot,
+    );
+  });
+
+  test('explains an empty repository plugin source in human output', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'cthutool-other-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
+    await writeJson(join(repoRoot, 'codex', 'plugins.manifest.json'), {
+      version: 1,
+      plugins: [],
+    });
+    const result = await runCli(
+      ['codex', 'install', '--home', homeRoot, '--repo-root', repoRoot],
+      {},
+      cwd,
+    );
+    expect(result.code).toBe(0);
+    expect(result.out).toContain(`Source  ${repoRoot} (explicit)`);
+    expect(result.out).toContain('No enabled repository plugins found');
+    expect(result.out).toContain('codex/plugins.manifest.json');
+  });
+
   test('bare help exposes exactly skills and install', async () => {
     const result = await runCli(['codex']);
     expect(result.code).toBe(0);

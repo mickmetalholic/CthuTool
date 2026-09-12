@@ -28,6 +28,13 @@ User Codex environment, with local dependencies such as Anki and AnkiConnect whe
 chc codex install
 ```
 
+On first interactive use, enter the CthuTool repository path. The CLI saves it
+for future installs from any directory. Run `chc codex install --change-source`
+to select another default, or add `--repo-root <path>` for a one-run override.
+For scripts, `--change-source --repo-root <path>` sets a new default without a
+prompt. Install output identifies the selected source, installed or updated
+plugins, and synchronized cache versions.
+
 Restart Codex after install so plugin-provided tools are loaded.
 
 `$codex-skill-promoter` scans eligible local Hermes and Codex Skills read-only
