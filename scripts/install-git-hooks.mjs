@@ -3,7 +3,6 @@
 import { spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ensureAiTooling } from './ensure-ai-tooling.mjs';
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = resolve(dirname(scriptPath), '..');
@@ -45,7 +44,6 @@ export async function installGitHooks({
   cwd = repoRoot,
   env = process.env,
   runner = runGitHookCommand,
-  ensure = ensureAiTooling,
   logger = console,
 } = {}) {
   if (enabled(env.CTHUTOOL_DISABLE_GIT_HOOKS)) {
@@ -91,8 +89,7 @@ export async function installGitHooks({
     logger.log(`core.hooksPath is already ${trackedHooksPath}.`);
   }
 
-  const bootstrap = await ensure({ cwd, env, logger });
-  return { status, bootstrap: bootstrap.status };
+  return { status };
 }
 
 async function main() {

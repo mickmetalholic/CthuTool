@@ -15,7 +15,6 @@ const targets = {
       'package.json',
       'pnpm-lock.yaml',
       'pnpm-workspace.yaml',
-      'scripts/ensure-ai-tooling.mjs',
       'scripts/install-git-hooks.mjs',
       'tsconfig.json',
     ],
