@@ -24,6 +24,10 @@ Workspace: <absolute or repository-relative workspace>
 
 - <safety, compatibility, time, permissions, or user preferences>
 
+## Risks
+
+- <material risk and mitigation, or None>
+
 ## Definition of Done
 
 - [ ] <observable completion condition>
@@ -33,18 +37,20 @@ Workspace: <absolute or repository-relative workspace>
 
 - [ ] P1 — <phase>; verify: <observable evidence>
 - [ ] P2 — <phase>; verify: <observable evidence>
-- [ ] Final — complete Definition of Done verification
+- [ ] P3 — <last phase including Definition of Done verification, or a separate final-verification phase>
 
-## Current Step
+## Current Phase
 
 ID: none
-Step State: clarification
-Target: <exact target or none>
-Proposed Action: <one logical action>
+Phase State: clarification
+Objective: <one bounded outcome>
+Target and Exclusions: <exact targets, scope limits, and excluded items>
+Included Work: <related actions and bounded batches>
 Expected Result: <observable result>
 Verification: <checks and evidence>
-Rollback: <rollback or None>
-Confirmation: <pending / user-confirmed / not applicable>
+Risk / Backup / Rollback: <material risks, pre-state, and recovery path>
+Stop Conditions: <decisions or material changes that require a pause>
+Approval: <pending / user-confirmed at timestamp / not applicable>
 
 ## Pending Questions
 
@@ -69,7 +75,7 @@ Evidence: <short path, command, test, or log entry>
 
 ## Next Action
 
-<Answer Q1 / approve plan / wait for step confirmation / perform final verification / None>
+<Answer Q1 / wait for 继续 to approve current phase / resume approved phase / None>
 ```
 
 Allowed task statuses:
@@ -77,16 +83,15 @@ Allowed task statuses:
 ```text
 draft
 awaiting_plan_approval
-awaiting_step_approval
+awaiting_phase_approval
 in_progress
 blocked
-awaiting_final_verification
 completed
 completed_with_followups
 cancelled
 ```
 
-Allowed step states:
+Allowed phase states:
 
 ```text
 clarification

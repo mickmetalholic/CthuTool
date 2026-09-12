@@ -1,15 +1,15 @@
 ---
 name: persistent-task
-description: Manage explicitly requested long-running, multi-step, cross-session tasks with durable Markdown state. Use only when the user explicitly invokes the registered persistent-task skill or explicitly asks to enter persistent-task mode for system changes, migrations, large file operations, environment setup, or complex troubleshooting; create and maintain PLAN.md and LOG.md, require plan approval and one user confirmation per logical step, verify before completion, and report residual issues.
+description: Manage explicitly requested long-running, cross-session tasks with durable Markdown state. Use only when the user explicitly invokes the registered persistent-task skill or asks to enter persistent-task mode for system changes, migrations, large file operations, environment setup, or complex troubleshooting; maintain PLAN.md and LOG.md, obtain one confirmation per bounded phase, execute included work autonomously, verify phase results, and report residual issues.
 ---
 
 # Persistent Task
 
 ## Mission
 
-Treat the conversation as temporary reasoning space and the filesystem as durable task state. Keep the current plan small and operational in `PLAN.md`; keep execution evidence and history append-only in `LOG.md`.
+Treat the conversation as temporary reasoning space and the filesystem as durable task state. Keep the current plan small in `PLAN.md` and execution evidence append-only in `LOG.md`.
 
-This is a human-gated workflow. Pause at every approval boundary, record the checkpoint, and wait for the user's next explicit instruction.
+A phase is the user-facing unit of approval and delivery. Review one bounded phase, then finish its included work and verification without routine pauses. At its boundary, report the result before previewing the next phase. Pause within a phase only when the user must resolve a blocker, a material scope/risk change needs a new preview, or an external action was not included in the approval.
 
 ## Explicit activation
 
@@ -22,9 +22,7 @@ Use the invocation name provided by the current agent. In the forms below, `<inv
 - `<invoke> resume <task-id>` — run the resume protocol.
 - `<invoke> status <task-id>` — read and summarize state without mutating the target.
 
-After activation, a response such as `执行 P2` confirms only the exact step preview currently shown. `继续` is sufficient only when exactly one step is awaiting confirmation and its scope has not changed. Never treat a vague continuation as approval for a new, changed, or destructive action.
-
-After context compaction or a new session, require an explicit `<invoke> resume ...`; do not rely on the old conversation.
+After activation, `继续` approves only the one unchanged `Current Phase` preview waiting in `PLAN.md` and the most recent message. At the first boundary, it may approve both the coherent plan and its fully previewed first phase. A phase ID such as `执行 P2` is also valid when it matches the preview. A bare `继续` never chooses among unresolved options or approves newly enlarged scope. After context compaction, reconstruct from durable files; if the task and pending preview are still unambiguous, `继续` remains sufficient. In a new session without an identified task, require `<invoke> resume <task-id>`.
 
 ## Durable files
 
@@ -37,9 +35,7 @@ For each task, use a separate directory under the workspace being acted on:
 
 Use the repository/workspace root as `<workspace>`. If the target is not in a repository, use the directory that contains the main target. If the root is ambiguous, ask before creating files. Never store task state inside the Skill installation directory.
 
-Use a short lowercase hyphenated `<task-id>`, preferably prefixed with the date when useful. If multiple active plans exist, identify them explicitly; never silently choose one.
-
-Read `PLAN.md` before every execution decision. Normally read only the relevant recent entries of `LOG.md`; read the full log only when reconstructing uncertain history.
+Use a short lowercase hyphenated `<task-id>`, preferably prefixed with the date when useful. If multiple active plans exist, identify them explicitly; never silently choose one. Read `PLAN.md` before every phase execution decision. Normally read only the relevant recent `LOG.md` entries; read the full log only when reconstructing uncertain history.
 
 Use [references/plan-template.md](references/plan-template.md) and [references/log-template.md](references/log-template.md) when creating the files.
 
@@ -47,106 +43,82 @@ Use [references/plan-template.md](references/plan-template.md) and [references/l
 
 ### 1. Initialize and clarify
 
-- Locate the workspace and inspect existing `.agent/tasks/*/PLAN.md` files read-only.
-- If another task has the same target or an unresolved active plan, report the conflict and ask which task to use.
-- Create `PLAN.md` and `LOG.md` before changing the target. Creating these task-state files is allowed before plan approval; target mutations are not.
-- Set `Status: draft` and `Plan Approval: pending`.
-- Fill in `Goal`, `Scope`, `Out of Scope`, `Constraints`, `Risks`, and `Definition of Done` from the request.
-- Ask numbered clarification questions for every unresolved item that can change scope, safety, cost, target, rollback, verification, or completion. Ask only a small batch of high-value questions at a time.
-- Record each answer as a `DECISION` in `LOG.md` and update the relevant current section of `PLAN.md`.
-- Keep the target read-only during clarification and planning.
+- Locate the workspace and inspect existing `.agent/tasks/*/PLAN.md` files read-only. If another task has the same target or an unresolved active plan, report the conflict and ask which task to use.
+- Create `PLAN.md` and `LOG.md` before changing the target. Creating task-state files is allowed before approval; target mutations are not.
+- Set `Status: draft` and `Plan Approval: pending`. Fill in `Goal`, `Scope`, `Out of Scope`, `Constraints`, `Risks`, and `Definition of Done`.
+- Ask only high-value clarification questions for unresolved facts that affect target, scope, safety, cost, rollback, verification, or completion. Record answers as `DECISION` events and update `PLAN.md`.
+- Keep the target read-only during clarification. Do not present an approval prompt until critical questions and verification criteria are resolved.
 
-Do not request plan approval while critical questions, missing targets, undefined verification, or unsafe assumptions remain. When the plan is coherent, set `Status: awaiting_plan_approval`, show the compact plan, and ask explicitly for plan approval. Plan approval never authorizes target mutation.
+When the plan is coherent, prepare the first phase using step 2, then show a compact plan and the full first-phase preview together. Set `Status: awaiting_plan_approval` and `Phase State: proposed`. Tell the user that `继续` approves the plan **and this first phase only**; no second confirmation is needed for its included subtasks.
 
-### 2. Propose exactly one step
+### 2. Preview one bounded phase
 
-Before asking for execution approval, update `PLAN.md` with the proposed step and append `STEP_PROPOSED` to `LOG.md`.
+Before asking to continue, update `Current Phase` in `PLAN.md` and append `PHASE_PROPOSED` to `LOG.md`. Show:
 
-Show exactly one bounded logical step containing:
+- Phase ID, objective, and why its included actions form one coherent unit
+- Exact target paths/resources, exclusions, included actions, and batch bounds where relevant
+- Expected result and observable verification checks, including final Definition-of-Done checks when this is the last phase
+- Material risks, pre-state/backup, rollback or recovery plan, and decisions that would stop the phase
 
-- Step ID and objective
-- Exact target paths/resources and exclusions
-- Actions or commands to perform
-- Expected result
-- Verification checks and evidence to collect
-- Risk, backup, and rollback plan
-- Any decision that would cause the step to stop
+Set `Status: awaiting_phase_approval` for later phases, `Phase State: proposed`, and `Next Action: wait for 继续`. The preview must be concrete enough to review, but need not script every routine subtask. Split a phase when its targets, risks, or rollback cannot be reviewed as one bounded unit. Do not execute a proposed phase before confirmation.
 
-Set `Status: awaiting_step_approval`, `Step State: proposed`, and `Next Action: wait for confirmation`. Do not execute while the step is merely proposed.
+### 3. Execute the approved phase
 
-### 3. Execute only after confirmation
+When the user confirms the exact pending preview, record plan approval if this is the first phase, then set `Status: in_progress` and `Phase State: running`. Append `PHASE_APPROVED` before target work.
 
-When the user confirms the exact proposal:
+Perform all included actions, read-only preflight, corrections within the approved scope, and their checks without asking for another routine confirmation. Do not stop after each command or logical subtask. Stay within the displayed targets, exclusions, and risk bound. If real state shows an unplanned mutation or materially different risk is needed, stop and re-preview the affected phase; prior approval does not cover that change.
 
-- Update `PLAN.md` to `Status: in_progress`, `Step State: running`, and record the approval.
-- Append `STEP_APPROVED` to `LOG.md` before acting.
-- Execute only the displayed scope. If reality requires an unplanned mutation, stop and replan.
-- Do not run multiple independent logical steps under one confirmation. Split a step if it becomes too broad.
+For high-impact operations, establish the pre-state and backup/rollback path before mutation. A phase can include several bounded batches if its preview defines the batch set and stop conditions. Verify during execution where needed to avoid compounding an error.
 
-A read-only preflight may be part of the confirmed step. Any newly discovered mutation, broader scope, or higher risk requires a new preview and confirmation.
+### 4. Verify and checkpoint at the phase boundary
 
-### 4. Verify and checkpoint immediately
+After the included work, verify the phase's expected result against real state; command exit alone is insufficient. Append `PHASE_RESULT`, `VERIFICATION`, and `CHECKPOINT` with actual actions, targets, changed files, evidence, partial results, and redacted errors. Update `PLAN.md` before reporting to the user.
 
-After the action:
+Mark the phase `[x]` only after its required checks pass. For a verified phase, collapse its details in the phase list to a concise verified line, keep evidence in `LOG.md`, and prepare exactly one next-phase preview. A failed or unknown required check keeps the phase incomplete. Record a recoverable issue as a residual only when the Definition of Done and user decisions permit it; otherwise set `Status: blocked`.
 
-- Append `STEP_RESULT` to `LOG.md` with the actual action, targets, result, changed files, output summary, and redacted errors/secrets.
-- Verify the real state using checks tied to the step's expected result. A successful command exit code alone is not verification.
-- Append `VERIFICATION` and `CHECKPOINT` to `LOG.md`.
-- Update `PLAN.md` before reporting the result to the user.
+The user-facing checkpoint order is mandatory:
 
-For a verified success, mark the step `[x]`, record evidence, clear or update `Current Step`, and prepare the next proposed step with `Status: awaiting_step_approval`. For failure, partial success, or unknown state, set `Status: blocked`, preserve the actual state, and record the decision required. Never mark `[x]` without verification.
+1. **Completed phase summary:** outcome, verified evidence, actual changes, and residual/unknown items.
+2. **Next phase plan summary:** phase ID, included work and targets, expected result, verification, and risk/rollback.
+3. Ask for `继续` to start only that next phase. If there is no next phase, give the final report instead.
 
-This document checkpoint is mandatory after every logical step, including read-only steps, failed attempts, deferred steps, cancellations, and plan changes. No state may exist only in the conversation.
+Checkpoint at each phase boundary, blocker, cancellation, plan change, or interruption that can be recorded. Individual routine subtasks do not each need a user-facing checkpoint. If execution stops after target action but before a checkpoint, leave `in_progress`; on resume reconcile real state before retrying.
 
-If execution is interrupted after the target action but before the final checkpoint, leave the plan as `in_progress`. On resume, reconcile the real state and log before retrying anything.
+### 5. Handle blockers and changes
 
-### 5. Handle decisions and errors
+When user input is genuinely needed mid-phase, stop the affected target work and update both documents first. Set `Status: blocked`, record observable facts, the exact decision question, options/consequences, and what remains of the approved phase. Append `DECISION_REQUIRED` or `PHASE_BLOCKED`. A bare `继续` does not resolve an ambiguous choice.
 
-When user input is needed, stop target changes and update both documents first:
-
-- Set `Status: blocked`.
-- Record the observable facts, the decision question, options, consequences, and the exact reply needed in `PLAN.md`.
-- Append `DECISION_REQUIRED` or `STEP_BLOCKED` to `LOG.md`.
-- Do not infer a choice from silence or a vague `继续`.
-
-For an error or failed verification, record the command/action, target, observed result, partial state, impact, attempted recovery, rollback status, and next action. Do not blindly retry the same mutation. Reinspect reality, update the plan, and obtain a new confirmation when the action or risk changes.
+After a clear answer, record `DECISION`, reconcile reality, and resume remaining work if it is still inside the approved phase. If the answer changes targets, actions, risk, or rollback materially, replace the preview and await a new phase confirmation. For errors, record partial state, impact, recovery and rollback status; do not blindly repeat a mutation.
 
 ### 6. Resume after context loss
 
 On explicit resume:
 
-1. Locate the task directory and read all of `PLAN.md`.
-2. Identify `Goal`, `Status`, `Current Step`, `Next Action`, blockers, and last verification.
-3. Read the relevant recent `LOG.md` entries, not the entire history by default.
-4. Inspect important real-world state for the current step and recently completed high-impact steps.
-5. Compare reality with `PLAN.md`. Reality wins; repair the plan and append a `RECONCILIATION` entry when they differ.
-6. Treat an interrupted `in_progress` step as uncertain until verified. Do not repeat it automatically.
-7. Present one new step preview and wait for confirmation.
+1. Read all of `PLAN.md` and relevant recent `LOG.md` entries; identify `Goal`, `Status`, `Current Phase`, blockers, `Next Action`, and last verification.
+2. Inspect real state for interrupted or recently completed high-impact work. Reality wins; append `RECONCILIATION` and repair the plan when they differ.
+3. Treat an interrupted `in_progress` phase as uncertain. Do not replay it automatically. Identify completed and remaining actions from evidence.
+4. If an unchanged phase is already awaiting approval, show its preview again. A `继续` received in an ongoing task may approve it after reconciliation when it still matches the latest reviewed scope; otherwise wait for `继续`. If a previously approved phase remains safe to finish within scope, resume after reconciliation; if a decision or material change is needed, use the blocker/preview rules above.
+5. For a legacy step-based plan, reconcile its actual state and convert the next bounded work into a phase preview before mutation.
 
 ### 7. Finish and report residuals
 
-When all planned phases are complete, create a separate final-verification step. Set `Status: awaiting_final_verification`, show the complete DoD-to-check mapping, and ask for confirmation before running it.
+Include final Definition-of-Done checks in the last approved phase, or preview a separate final-verification phase when the work requires one. Do not request a second step-level confirmation after a phase is approved.
 
-After final verification:
-
-- Use `completed` only when every required DoD item passes and no required in-scope issue remains.
-- Use `completed_with_followups` only when the DoD passes and the user explicitly accepts listed residual work.
+- Use `completed` only when every required Definition-of-Done item passes and no required in-scope issue remains.
+- Use `completed_with_followups` only when the Definition of Done passes and the user explicitly accepts listed residual work.
 - Use `blocked` when required verification, a required decision, or an in-scope issue remains unresolved.
-- Update `PLAN.md` and append a final `CHECKPOINT` before reporting completion.
 
-Always report completed items, verification evidence, changed targets, errors and recovery, rollback status, residual/unknown issues, deferred decisions, and recommended next actions. Never report a bare “完成”.
+Update `PLAN.md` and append a final `CHECKPOINT`/`FINAL` before reporting completion. Report completed items, verification evidence, changed targets, errors and recovery, rollback status, residual/unknown issues, deferred decisions, and recommended next actions. Never report a bare “完成”.
 
 ## Safety rules
 
-Require explicit step confirmation after showing exact scope and rollback for deletion, overwrite, mass move/rename, permission changes, system configuration, service restart, uninstall, migrations, data conversion, or any action that could cause irreversible or broad impact. Split risky operations into smaller steps when possible.
+Show exact scope, risk, and rollback within the phase preview for deletion, overwrite, mass move/rename, permission changes, system configuration, service restart, uninstall, migration, data conversion, or other broad or irreversible impact. Bound risky phases to a reviewable batch when possible. Do not add such work mid-phase without a revised preview and confirmation.
 
-Before destructive work, establish the pre-state and backup/rollback path in the plan. Preserve ambiguous, conflicting, damaged, or unverified items; record them as residuals or blockers instead of forcing a choice.
-
-Do not send external messages, publish changes, or make external account/service changes without a separately shown and confirmed step.
+Preserve ambiguous, conflicting, damaged, or unverified items; record them as residuals or blockers instead of forcing a choice. Do not send external messages, publish changes, or change an external account/service unless that action and destination were explicitly included in the approved phase or are separately previewed and confirmed.
 
 ## Keep PLAN small
 
-Use `PLAN.md` as working memory, not a transcript. Keep only the current goal, constraints, decisions that still affect execution, active blockers, current step, next action, and compact phase summaries. After a phase is fully verified, collapse its detailed checklist to one verified summary line and retain details in `LOG.md`. Do not rewrite or truncate `LOG.md`; append history and redact secrets.
+Use `PLAN.md` as working memory, not a transcript. Keep the goal, current constraints and decisions, blockers, current phase, next action, and compact phase summaries. Keep detailed history in append-only `LOG.md`; redact secrets.
 
 ## References
 

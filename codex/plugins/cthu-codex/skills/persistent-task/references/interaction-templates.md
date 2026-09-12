@@ -1,79 +1,85 @@
 # Interaction Templates
 
-Use concise, explicit messages. Adapt wording to the user's language.
+Use concise, explicit messages. Adapt wording to the user's language. These are output shapes, not scripts to repeat verbatim.
 
 ## After creating a draft
 
 ```text
 已创建持久任务：<path>
-当前只进行澄清和只读检查，不修改目标。
+当前进行澄清和只读检查，尚未修改目标。
 
 未决问题：
 Q1. <question>
 Q2. <question>
 
-回答后我会更新 PLAN.md；计划完善前不会执行目标变更。
+回答后我会更新 PLAN.md，并展示计划及首阶段。
 ```
 
-## Plan approval
+## Initial plan and first phase preview
 
 ```text
 PLAN.md 已完善，状态为 awaiting_plan_approval。
 
-Goal: <goal>
-Scope: <scope>
-DoD: <short list>
-Risk: <short list>
-Plan: <phase list>
+目标与范围：<goal, targets, exclusions>
+完成标准：<observable DoD>
+主要风险：<risks>
+阶段安排：<short phase list>
 
-请确认计划：回复“确认计划，开始逐步执行”。
-计划确认不等于任何具体步骤的执行确认。
+首阶段 P1：<objective>
+包含的工作：<related actions and bounded batch>
+目标及排除项：<exact targets/exclusions>
+预期结果与验证：<result and evidence>
+风险、备份与回滚：<risk and recovery>
+
+回复“继续”即可批准计划并启动上述 P1；P1 中列出的工作会连续执行并验证。
 ```
 
-## Step preview
+## Later phase preview
 
 ```text
-步骤 P<n>：<objective>
+下一阶段 P<n>：<objective>
+包含的工作：<related actions and bounded batch>
+目标及排除项：<exact targets/exclusions>
+预期结果与验证：<result and evidence>
+风险、备份与回滚：<risk and recovery>
 
-本步将：<exact action and scope>
-目标：<paths/services/data>
-预期结果：<observable result>
-验证：<checks and evidence>
-风险/回滚：<risk and rollback>
-
-PLAN.md 已更新为 awaiting_step_approval。
-请回复“执行 P<n>”。本次确认只授权上述步骤。
+PLAN.md 状态：awaiting_phase_approval。
+回复“继续”即批准上述 P<n>；范围变化时我会重新展示，不沿用本次确认。
 ```
 
-## Checkpoint
+## Phase checkpoint
 
 ```text
-P<n> 已执行并完成文档 checkpoint。
-
-结果：<success / partial / failed>
+P<n> 阶段结果：<success / partial / failed>
+已完成的工作：<actual actions and targets>
 验证：<PASS / FAIL / UNKNOWN + evidence>
-PLAN.md：<current status>
-LOG.md：已追加 <event>
-残留问题：<None or list>
+问题与恢复：<residuals, rollback, or None>
+PLAN.md / LOG.md：<current status and checkpoint event>
 
-下一步预览：<next step or waiting reason>
-当前暂停，等待你的确认。
+下一阶段计划 P<n+1>：<objective, included work, exact scope>
+预期结果与验证：<result and checks>
+风险、备份与回滚：<risk and recovery>
+
+回复“继续”即可启动上面展示的下一阶段。
 ```
 
-## Decision required
+If there is no next phase, use the final report instead of asking to continue. Do not put the next-phase plan ahead of the completed-phase result.
+
+## Decision required mid-phase
 
 ```text
-任务已暂停，状态为 blocked。
+P<n> 已暂停，状态为 blocked。
 
-事实：<observed reality>
-问题：<decision needed>
-选项：
-A. <consequence>
-B. <consequence>
-建议：<optional recommendation>
+已完成及验证：<actual progress>
+阻塞事实：<observed reality>
+需要你的决定：<exact question>
+选项及后果：<options and consequences>
+当前目标状态：<partial changes and rollback status>
 
-我已先更新 PLAN.md 和 LOG.md。请回复选项或给出明确决定；决定确认后仍会重新展示受影响的执行步骤。
+PLAN.md 和 LOG.md 已记录。请明确选择；单独回复“继续”不会替你作决定。
 ```
+
+After a clear decision, finish the previously approved phase if its scope is unchanged. If the decision changes scope or risk materially, show a revised preview before acting.
 
 ## Final report
 

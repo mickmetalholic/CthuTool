@@ -1,7 +1,7 @@
 interface:
   display_name: "Persistent Task"
-  short_description: "Human-gated durable plans for long-running tasks"
-  default_prompt: "Use $cthu-codex:persistent-task to manage this long-running task with a durable plan, one confirmed step at a time."
+  short_description: "Durable phase plans for long-running tasks"
+  default_prompt: "Use $cthu-codex:persistent-task to manage this long-running task one confirmed phase at a time."
 
 policy:
   allow_implicit_invocation: false
