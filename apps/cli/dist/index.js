@@ -11591,9 +11591,8 @@ var commonArgs = {
 };
 var installArgs = {
   ...commonArgs,
-  changeSource: {
+  "change-source": {
     type: "boolean",
-    alias: "change-source",
     description: "Choose and remember a new default plugin repository"
   },
   marketplace: {
@@ -11649,7 +11648,7 @@ var defaultPluginSourceInteraction = {
 async function selectCodexPluginSource(args, scope, interaction = defaultPluginSourceInteraction) {
   const basePaths = createPaths(args);
   const explicit = getStringArg(args.repoRoot);
-  const changing = args.changeSource === true;
+  const changing = args["change-source"] === true;
   let saved;
   let savedError;
   if (!explicit) {

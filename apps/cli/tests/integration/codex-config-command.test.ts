@@ -159,7 +159,7 @@ describe('codex command boundary', () => {
 
     let offeredPath: string | undefined;
     const changed = await selectCodexPluginSource(
-      { home: homeRoot, changeSource: true },
+      { home: homeRoot, 'change-source': true },
       scope,
       {
         async requestPath(initialValue) {
@@ -335,6 +335,13 @@ describe('codex command boundary', () => {
     for (const retired of ['status', 'export', 'apply']) {
       expect(result.out).not.toMatch(new RegExp(`\\b${retired}\\b`));
     }
+  });
+
+  test('install help presents the change-source flag consistently', async () => {
+    const result = await runCli(['codex', 'install', '--help']);
+    expect(result.code).toBe(0);
+    expect(result.out).toContain('--change-source');
+    expect(result.out).not.toContain('--changeSource');
   });
 
   test('rejects every retired subcommand without touching state', async () => {
