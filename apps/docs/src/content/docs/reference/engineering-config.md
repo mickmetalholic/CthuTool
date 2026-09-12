@@ -43,20 +43,17 @@ Biome checks root-managed source under `apps/**` and `packages/**`, excluding ge
 
 The repository does not use the legacy `reasonix.toml`. Reasonix 0.53.2
 discovers project skills from the shared `.agents/skills` surface, which is
-generated and refreshed by the repository setup command.
+committed to this repository.
 
-OpenSpec workflow skills are generated under `.agents/skills`,
-`.cursor/skills`, and `.opencode/skills`; these generated directories are
-ignored and must not be hand-edited.
+OpenSpec workflow skills are committed under `.agents/skills` for Codex,
+Cursor, OpenCode, and Pi, and under `.zcode/skills` for ZCode. Do not hand-edit
+generated workflow files.
 
-From the repository root, install and verify the selected toolchain with:
+Install the OpenSpec CLI to run the committed workflows:
 
 ```bash
-npm install -g @fission-ai/openspec@1.8.0
-openspec config profile core
-openspec config set delivery skills
-pnpm setup:ai-tooling
-pnpm check:ai-tooling
+npm install -g @fission-ai/openspec@latest
+openspec doctor --json
 ```
 
 See `docs/ai-tooling.md` for ownership boundaries, tool-specific invocation

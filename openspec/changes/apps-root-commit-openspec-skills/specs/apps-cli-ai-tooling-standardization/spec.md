@@ -1,31 +1,4 @@
-# apps-cli-ai-tooling-standardization Specification
-
-## Purpose
-Define repository-wide ownership, generation, validation, and lifecycle rules for portable AI tooling while protecting intentionally maintained business plugins.
-
-## Requirements
-
-### Requirement: AI tooling ownership is explicit
-
-The repository SHALL document and enforce separate ownership for OpenSpec workflow artifacts, third-party skills installed through `npx skills`, and repository-owned business plugins.
-
-#### Scenario: A developer identifies a skill source
-
-- **WHEN** a developer inspects the AI tooling documentation or setup instructions
-- **THEN** the documentation identifies whether the skill is OpenSpec-generated, third-party, or business-plugin-owned
-- **AND** it identifies the canonical source and the command responsible for updating that source
-
-#### Scenario: OpenSpec workflow skills are managed
-
-- **WHEN** a developer adds, removes, or upgrades an OpenSpec workflow
-- **THEN** the developer uses `openspec init` or `openspec update`
-- **AND** the developer does not add the workflow to the third-party `npx skills` manifest or copy it manually between agent directories
-
-#### Scenario: The business plugin remains isolated
-
-- **WHEN** the AI tooling setup or documentation is changed
-- **THEN** `codex/plugins/cthu-codex` remains outside the project-level skill standardization scope
-- **AND** its existing plugin installation and OpenCode synchronization behavior is unchanged
+## MODIFIED Requirements
 
 ### Requirement: OpenSpec skills are available to the five project agents
 
@@ -58,29 +31,6 @@ The repository SHALL commit the OpenSpec core workflow skills for Codex, Cursor,
 - **THEN** the durable policy is updated in OpenSpec configuration or other repository-owned policy sources
 - **AND** the affected OpenSpec adapter files are regenerated
 - **AND** unrelated custom skills and instructions are preserved
-
-### Requirement: Third-party skills use source-based lifecycle management
-
-Third-party skills SHALL be installed from an explicit source and skill selector through `npx skills`; the repository SHALL NOT treat manually copied third-party skill directories as its source of truth.
-
-#### Scenario: The UI/UX skill is removed from the repository
-
-- **WHEN** this change is implemented
-- **THEN** the repository contains no project-local `ui-ux-pro-max` copies under `.codex/skills`, `.cursor/skills`, or `.claude/skills`
-- **AND** `ui-ux-pro-max` is not installed by default
-
-#### Scenario: A developer explicitly installs UI/UX Pro Max
-
-- **WHEN** a developer chooses to use the UI/UX skill
-- **THEN** the documented command identifies `nextlevelbuilder/ui-ux-pro-max-skill` as the source
-- **AND** it selects only `ui-ux-pro-max` rather than installing the entire repository skill collection
-- **AND** it names the target agents explicitly or uses a documented all-agent option
-
-#### Scenario: Codex skill management is not confused with project adapters
-
-- **WHEN** a developer runs `chc codex skills`
-- **THEN** the command continues to manage only its existing Codex user-scope, manifest-backed GitHub skill lifecycle
-- **AND** it does not import or remove OpenSpec-generated project adapters
 
 ### Requirement: Reasonix configuration matches the installed runtime
 
