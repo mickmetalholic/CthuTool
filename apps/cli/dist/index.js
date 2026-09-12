@@ -10785,7 +10785,7 @@ function isMissingFileError(error) {
 // src/domain/codex-skills-backend.ts
 import { execFile as execFileCallback } from "node:child_process";
 import { readFile as readFile9 } from "node:fs/promises";
-import { join as join11 } from "node:path";
+import { dirname as dirname7, join as join11 } from "node:path";
 import { promisify } from "node:util";
 var execFile = promisify(execFileCallback);
 var pinnedSkillsCliVersion = "1.5.19";
@@ -10917,9 +10917,11 @@ function parseDiscoveredSkills(value) {
   return [...names].sort().map((name) => ({ name }));
 }
 async function runSkillsProcess(args, env2) {
-  const executable = process.platform === "win32" ? "npx.cmd" : "npx";
+  const windowsNpxCli = env2.CHC_SKILLS_NPX_CLI_PATH ?? join11(dirname7(process.execPath), "node_modules", "npm", "bin", "npx-cli.js");
+  const executable = process.platform === "win32" ? process.execPath : "npx";
+  const executableArgs = process.platform === "win32" ? [windowsNpxCli] : [];
   try {
-    const result = await execFile(executable, ["--yes", `skills@${pinnedSkillsCliVersion}`, ...args], {
+    const result = await execFile(executable, [...executableArgs, "--yes", `skills@${pinnedSkillsCliVersion}`, ...args], {
       encoding: "utf8",
       env: env2,
       maxBuffer: 10 * 1024 * 1024
@@ -11068,11 +11070,11 @@ function isMissingFileError2(error) {
 
 // src/domain/codex-skills-manager.ts
 import { mkdir as mkdir7, rename as rename3, rm as rm7 } from "node:fs/promises";
-import { dirname as dirname8, join as join13 } from "node:path";
+import { dirname as dirname9, join as join13 } from "node:path";
 
 // src/domain/codex-skills-manifest.ts
 import { mkdir as mkdir6, readFile as readFile10, rename as rename2, rm as rm6, writeFile as writeFile5 } from "node:fs/promises";
-import { dirname as dirname7, join as join12, resolve as resolve7 } from "node:path";
+import { dirname as dirname8, join as join12, resolve as resolve7 } from "node:path";
 var emptyCodexSkillsManifest = () => ({
   version: 2,
   skills: []
@@ -11120,10 +11122,10 @@ function validateCodexSkillsManifest(value) {
 async function writeCodexSkillsManifest(repoCodexRoot, manifest) {
   const validated = validateCodexSkillsManifest(manifest);
   const path = getManifestPath(repoCodexRoot);
-  const temporaryPath = join12(dirname7(path), `.skills.manifest.${process.pid}.${Date.now()}.tmp`);
+  const temporaryPath = join12(dirname8(path), `.skills.manifest.${process.pid}.${Date.now()}.tmp`);
   assertPathInside(repoCodexRoot, path);
   assertPathInside(repoCodexRoot, temporaryPath);
-  await mkdir6(dirname7(path), { recursive: true });
+  await mkdir6(dirname8(path), { recursive: true });
   try {
     await writeFile5(temporaryPath, `${JSON.stringify(validated, null, 2)}
 `, "utf8");
@@ -11363,8 +11365,8 @@ async function replaceSkillWithRollback(item, backend) {
   if (!skill || !installedPath) {
     throw new Error(`Missing replacement metadata for ${item.name}.`);
   }
-  const backupPath = join13(dirname8(installedPath), `.${item.name}.cthutool-backup-${process.pid}-${Date.now()}`);
-  await mkdir7(dirname8(backupPath), { recursive: true });
+  const backupPath = join13(dirname9(installedPath), `.${item.name}.cthutool-backup-${process.pid}-${Date.now()}`);
+  await mkdir7(dirname9(backupPath), { recursive: true });
   await rename3(installedPath, backupPath);
   try {
     await backend.install(skill);
@@ -11936,7 +11938,7 @@ var codexCommand = defineCommand({
 import { execFile as execFile2 } from "node:child_process";
 import { mkdir as mkdir8, readFile as readFile11, writeFile as writeFile6 } from "node:fs/promises";
 import { homedir as homedir6, platform as platform2 } from "node:os";
-import { dirname as dirname9, join as join14 } from "node:path";
+import { dirname as dirname10, join as join14 } from "node:path";
 import { promisify as promisify2 } from "node:util";
 
 // src/domain/completion-candidates.ts
@@ -12171,7 +12173,7 @@ async function handlePowerShellProfileAction(action) {
   const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
 `) ? migratedContent : `${migratedContent}
 `;
-  await mkdir8(dirname9(profilePath), { recursive: true });
+  await mkdir8(dirname10(profilePath), { recursive: true });
   await writeFile6(profilePath, `${prefix}${powershellCompletionBlock}
 `);
   process.stdout.write(`PowerShell completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
@@ -12210,7 +12212,7 @@ async function handleZshProfileAction(action) {
   const prefix = migratedContent.length === 0 || migratedContent.endsWith(`
 `) ? migratedContent : `${migratedContent}
 `;
-  await mkdir8(dirname9(profilePath), { recursive: true });
+  await mkdir8(dirname10(profilePath), { recursive: true });
   await writeFile6(profilePath, `${prefix}${zshCompletionBlock}
 `);
   process.stdout.write(`zsh completion ${installed ? "already enabled" : "enabled"}: ${profilePath}
@@ -12479,7 +12481,7 @@ import {
 } from "node:fs/promises";
 import {
   basename as basename3,
-  dirname as dirname10,
+  dirname as dirname11,
   isAbsolute as isAbsolute4,
   join as join16,
   normalize,
@@ -12577,7 +12579,7 @@ async function applyObsidianAgentsSetup(paths, plan) {
         await createObsidianAgentsDirectoryLink(plan.profile.agentsPath, plan.profile.sourcePath, { platform: plan.platform });
         break;
       case "adopt_existing_agents":
-        await mkdir10(dirname10(plan.profile.sourcePath), { recursive: true });
+        await mkdir10(dirname11(plan.profile.sourcePath), { recursive: true });
         if (current.topology.source.kind === "directory") {
           await rmdir(plan.profile.sourcePath);
         }
@@ -12719,7 +12721,7 @@ async function inspectObsidianAgentsPath(path, platform3 = process.platform) {
   }
   if (details.isSymbolicLink()) {
     const rawTarget = await readlink(path);
-    const target = resolve9(dirname10(path), rawTarget);
+    const target = resolve9(dirname11(path), rawTarget);
     try {
       const resolvedTarget = await realpath2(path);
       return {
@@ -12832,7 +12834,7 @@ async function canonicalDestinationPath(path) {
     } catch (error) {
       if (!isMissingFileError5(error))
         throw error;
-      const parent = dirname10(current);
+      const parent = dirname11(current);
       if (parent === current)
         return resolve9(path);
       missingSegments.push(basename3(current));
@@ -13752,10 +13754,10 @@ var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
 import { existsSync as existsSync4 } from "node:fs";
-import { dirname as dirname11, join as join20 } from "node:path";
+import { dirname as dirname12, join as join20 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 function getBundledScriptsRoot() {
-  const moduleDir = dirname11(fileURLToPath2(import.meta.url));
+  const moduleDir = dirname12(fileURLToPath2(import.meta.url));
   const candidates = [
     join20(moduleDir, "scripts"),
     join20(moduleDir, "../scripts"),
@@ -14932,7 +14934,7 @@ import {
   writeFile as writeFile8
 } from "node:fs/promises";
 import { homedir as homedir8 } from "node:os";
-import { dirname as dirname12, isAbsolute as isAbsolute5, join as join22, resolve as resolve11 } from "node:path";
+import { dirname as dirname13, isAbsolute as isAbsolute5, join as join22, resolve as resolve11 } from "node:path";
 var sourceRegistryVersion = 1;
 var sourceSwitchWaitMs = 2000;
 var sourceSwitchPollMs = 50;
@@ -15491,7 +15493,7 @@ async function assertGlobalTarget(target, deps) {
 }
 async function withSourceSwitchLock(deps, run) {
   const lockPath = getCliSourceSwitchLockPath(deps.home());
-  await mkdir11(dirname12(lockPath), { mode: 448, recursive: true });
+  await mkdir11(dirname13(lockPath), { mode: 448, recursive: true });
   const deadline = deps.now() + sourceSwitchWaitMs;
   while (true) {
     try {
@@ -15541,7 +15543,7 @@ async function readSourceRegistry(home) {
 async function writeSourceRegistry(registry, home) {
   const path = getCliSourceRegistryPath(home);
   const temporary = `${path}.${process.pid}.${randomUUID2()}.tmp`;
-  await mkdir11(dirname12(path), { mode: 448, recursive: true });
+  await mkdir11(dirname13(path), { mode: 448, recursive: true });
   try {
     await writeFile8(temporary, `${JSON.stringify(registry, null, 2)}
 `, {

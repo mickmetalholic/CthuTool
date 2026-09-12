@@ -37,24 +37,30 @@ async function runCli(args: string[], env: NodeJS.ProcessEnv = {}) {
 async function createFakeNpx(
   root: string,
   installed: readonly { readonly name: string; readonly path: string }[],
-): Promise<string> {
+): Promise<{ binRoot: string; scriptPath: string }> {
   const binRoot = join(root, 'bin');
   const scriptPath = join(binRoot, 'fake-npx.mjs');
-  const script = `const args = process.argv.slice(2);\nif (args.includes('list')) {\n  process.stdout.write(${JSON.stringify(JSON.stringify(installed))});\n} else {\n  process.stderr.write('unexpected fake npx args: ' + args.join(' '));\n  process.exitCode = 1;\n}\n`;
+  const script = `const args = process.argv.slice(2);\nif (args[0] === '--yes' && args[1] === 'skills@1.5.19' && args.includes('list')) {\n  process.stdout.write(${JSON.stringify(JSON.stringify(installed))});\n} else {\n  process.stderr.write('unexpected fake npx args: ' + args.join(' '));\n  process.exitCode = 1;\n}\n`;
   await mkdir(binRoot, { recursive: true });
   await writeFile(scriptPath, script, 'utf8');
-  if (process.platform === 'win32') {
-    await writeFile(
-      join(binRoot, 'npx.cmd'),
-      `@"${process.execPath}" "${scriptPath}" %*\r\n`,
-      'utf8',
-    );
-  } else {
+  if (process.platform !== 'win32') {
     const executable = join(binRoot, 'npx');
     await writeFile(executable, `#!/usr/bin/env node\n${script}`, 'utf8');
     await chmod(executable, 0o755);
   }
-  return binRoot;
+  return { binRoot, scriptPath };
+}
+
+function fakeNpxEnv(fake: {
+  binRoot: string;
+  scriptPath: string;
+}): NodeJS.ProcessEnv {
+  return {
+    PATH: `${fake.binRoot}${delimiter}${process.env.PATH ?? ''}`,
+    ...(process.platform === 'win32'
+      ? { CHC_SKILLS_NPX_CLI_PATH: fake.scriptPath }
+      : {}),
+  };
 }
 
 async function writeJson(path: string, value: unknown) {
@@ -124,7 +130,7 @@ describe('codex command boundary', () => {
       version: 2,
       skills: [],
     });
-    const binRoot = await createFakeNpx(homeRoot, []);
+    const fakeNpx = await createFakeNpx(homeRoot, []);
 
     const before = await readFile(
       join(repoRoot, 'codex', 'skills.manifest.json'),
@@ -140,7 +146,7 @@ describe('codex command boundary', () => {
         homeRoot,
         '--json',
       ],
-      { PATH: `${binRoot}${delimiter}${process.env.PATH ?? ''}` },
+      fakeNpxEnv(fakeNpx),
     );
 
     expect(result.code).toBe(0);
@@ -182,7 +188,7 @@ describe('codex command boundary', () => {
         },
       },
     });
-    const binRoot = await createFakeNpx(homeRoot, [
+    const fakeNpx = await createFakeNpx(homeRoot, [
       { name: 'grill-me', path: join(homeRoot, '.codex/skills/grill-me') },
       { name: 'well-known', path: join(homeRoot, '.codex/skills/well-known') },
       { name: 'manual', path: join(homeRoot, '.codex/skills/manual') },
@@ -199,7 +205,7 @@ describe('codex command boundary', () => {
         homeRoot,
         '--json',
       ],
-      { PATH: `${binRoot}${delimiter}${process.env.PATH ?? ''}` },
+      fakeNpxEnv(fakeNpx),
     );
 
     expect(result.code).toBe(0);
@@ -306,7 +312,7 @@ describe('codex command boundary', () => {
         { name: 'old-skill', source: 'external', path: 'skill:old-skill' },
       ],
     });
-    const binRoot = await createFakeNpx(homeRoot, []);
+    const fakeNpx = await createFakeNpx(homeRoot, []);
 
     const result = await runCli(
       [
@@ -318,7 +324,7 @@ describe('codex command boundary', () => {
         homeRoot,
         '--json',
       ],
-      { PATH: `${binRoot}${delimiter}${process.env.PATH ?? ''}` },
+      fakeNpxEnv(fakeNpx),
     );
     const parsed = JSON.parse(result.out);
     expect(result.code).toBe(0);

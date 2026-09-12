@@ -1,6 +1,6 @@
 import { execFile as execFileCallback } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import type {
   ManagedCodexSkill,
@@ -263,11 +263,17 @@ async function runSkillsProcess(
   args: readonly string[],
   env: NodeJS.ProcessEnv,
 ): Promise<SkillsProcessResult> {
-  const executable = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  // Windows cannot execute a .cmd shim with execFile. Run npm's npx entrypoint
+  // through the current Node installation so arguments stay separate from a shell.
+  const windowsNpxCli =
+    env.CHC_SKILLS_NPX_CLI_PATH ??
+    join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npx-cli.js');
+  const executable = process.platform === 'win32' ? process.execPath : 'npx';
+  const executableArgs = process.platform === 'win32' ? [windowsNpxCli] : [];
   try {
     const result = await execFile(
       executable,
-      ['--yes', `skills@${pinnedSkillsCliVersion}`, ...args],
+      [...executableArgs, '--yes', `skills@${pinnedSkillsCliVersion}`, ...args],
       {
         encoding: 'utf8',
         env,
