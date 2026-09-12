@@ -1,53 +1,33 @@
-# Codex skill absorption and promotion contract
+# Codex Skill promotion contract
 
-Use this reference to keep source eligibility, provenance, and filesystem
-operations consistent across both source modes.
+This reference defines eligibility, compatibility, and the single-confirmation
+transaction for `$codex-skill-promoter`. Current Git state is irrelevant to
+read-only discovery. A selected run later creates its own scoped branch and
+OpenSpec change.
 
-## Post-discovery selection contract
+## Candidate ownership and selection
 
-Explicit invocation authorizes read-only discovery. After classification, show
-every eligible candidate and collect these choices per row:
+Scan direct children only; never follow symlinks. Resolve `CODEX_HOME` to
+`~/.codex` and `HERMES_HOME` to `~/.hermes` unless configured otherwise.
 
-| Choice | Values | Default |
-| --- | --- | --- |
-| Promotion | Promote or Skip | Skip |
-| Cleanup targets | Any reviewed exact local paths owned by this candidate | None; keep every local copy |
-
-A cleanup target is valid only for a promoted candidate. A Codex-local
-candidate contributes its exact direct child under $CODEX_HOME/skills. A raw
-Hermes candidate contributes two independent targets: its exact eligible
-direct child under $HERMES_HOME/skills and its planned adapted direct child
-under $CODEX_HOME/skills. If collision handling changes a planned target path,
-show the replacement path and reconfirm that target. Review and confirm the
-complete promotion set and exact cleanup target set before any staging or
-repository write.
-
-## Codex candidate boundaries
-
-The Codex candidate root is the direct directory $CODEX_HOME/skills, where
-CODEX_HOME defaults to ~/.codex. Do not recursively treat every directory
-under the user's home as a candidate. Do not follow symlinks.
-
-Check these ownership sources before classifying a Codex directory:
-
-| Source | Ownership to exclude |
+| Codex ownership inventory | Exclude |
 | --- | --- |
-| Repository codex/skills.manifest.json | Every manifest name, enabled or disabled |
-| User npx lock, normally $HOME/.agents/.skill-lock.json | Version 3 entries with sourceType: "github" |
-| Repository plugin source | Every skill below codex/plugins/*/skills |
-| Installed plugin/cache | Every skill below $CODEX_HOME/plugins or the configured plugin cache |
-| System/bundled roots | .system, bundled roots, and paths documented by the active Codex installation |
+| Repository `codex/skills.manifest.json` | Every manifest name, enabled or disabled |
+| User npx lock, normally `$HOME/.agents/.skill-lock.json` | Version 3 GitHub entries |
+| Repository plugin source and installed plugin/cache | All plugin Skills |
+| System and bundled roots | All installation-owned Skills |
 
-If ownership metadata cannot be read, classify the affected directory as
-ambiguous. A directory with no recognized marker may be locally authored only
-when it has a valid SKILL.md and no conflicting ownership evidence.
+An otherwise unowned direct Codex child with valid `SKILL.md` is locally
+authored. A valid `.cthu-skill-bridge.json` marks Hermes absorption; a malformed
+or conflicting marker makes the candidate ambiguous. If an ownership inventory
+is unreadable, do not guess. `chc codex skills` is only for GitHub-backed
+third-party Skills.
 
-## Hermes Evolution eligibility
-
-The Hermes candidate root is the direct directory $HERMES_HOME/skills, where
-HERMES_HOME defaults to ~/.hermes. The promoter accepts a Hermes source only
-when its directory contains a readable .hermes-evolution.json with this
-minimum shape:
+For Hermes, read `.bundled_manifest`, `.hub/lock.json`, and every available
+protected built-in inventory. Exclude bundled, Hub-managed, protected,
+external, organization-managed, and opted-out (`sync: false` or
+`absorb: false`) trees. A candidate requires a dedicated, valid
+`.hermes-evolution.json` marker like this:
 
 ~~~json
 {
@@ -60,30 +40,24 @@ minimum shape:
 }
 ~~~
 
-skillName must match the skill identity, createdAt must be a valid timestamp,
-and sync must not be false. Additional fields may be retained as provenance
-but must not weaken these checks.
+`skillName` must match identity, `createdAt` must parse, and `sync` must not
+be false. Usage, author, activity, patch counts, and directory location do
+not prove Evolution origin. Missing provenance or ownership data fails closed.
 
-The dedicated marker is separate from curator and usage metadata. None of the
-following proves Evolution origin by itself:
+Present a Markdown candidate table with name, exact source and mode,
+ownership/provenance, file summary and fingerprint, Codex and Hermes
+compatibility/warnings, target/collision choice, exact original-removal path,
+and action. Include any Hermes replacement and Codex staging path. Default
+each row to **Skip**. A **Promote** selection includes verified retirement of
+the original active source and OpenSpec proposal → implementation → archive →
+PR. For collisions, show existing identity and file differences and require
+merge, replace, or rename in that same confirmation. No mutation occurs if
+selection is empty or canceled. Ask again only if the reviewed scope changes.
 
-- created_by: "agent" or agent_created: true in .usage.json;
-- author, activity, use counts, patch counts, or recency;
-- a directory name or location; or
-- successful loading or presence in a local inventory.
+## Provenance sidecar
 
-Before discovery, exclude names from .bundled_manifest, .hub/lock.json, and
-protected built-in inventories. Exclude external or organization-managed roots
-and explicit sync: false or absorb: false opt-outs. Missing ownership metadata
-or provenance makes a candidate ineligible. Keep Hermes read-only through
-discovery, adaptation, repository promotion, installation, and verification.
-Only the final cleanup phase may delete an explicitly selected source that
-passes all eligibility and unchanged-source checks again.
-
-## Codex absorption sidecar
-
-An adapted Codex staging skill carries .cthu-skill-bridge.json beside
-SKILL.md:
+An adapted Codex staging Skill carries `.cthu-skill-bridge.json` beside
+`SKILL.md`:
 
 ~~~json
 {
@@ -108,93 +82,65 @@ SKILL.md:
 }
 ~~~
 
-Require non-empty identity fields, a sha256: fingerprint, and a target name
-matching the candidate unless the user explicitly chooses a rename. A missing
-sidecar means no Hermes claim; a present malformed sidecar makes the Codex
-candidate ambiguous rather than locally authored.
+Require non-empty identities, a `sha256:` fingerprint, and a matching target
+name unless rename was selected. A missing sidecar makes no Hermes claim;
+a malformed sidecar is ambiguous. The local sidecar may show the resolved
+source for review. Repository source must replace `sourcePath` with
+`$HERMES_HOME/skills/<sourceRelativePath>` or `hermes:<sourceName>` and retain
+identity, relative path, fingerprint, and adaptation. Never commit a username,
+home directory, machine name, token, or other private local path.
 
-The local sidecar may contain the resolved sourcePath for review. The
-repository copy must retain source identity, relative path, fingerprint,
-adaptation summary, and target identity while replacing sourcePath with
-$HERMES_HOME/skills/<sourceRelativePath> or hermes:<sourceName>. Never commit a
-username, home directory, machine name, token, or other machine-specific path.
+## Codex and Hermes compatibility
 
-## Shared Codex and Hermes compatibility
+Preserve required behavior rather than identical agent files.
 
-Treat compatibility as preservation of required behavior, not byte-identical
-agent files. A promoted tree has three layers:
-
-| Layer | Rule |
+| Layer | Contract |
 | --- | --- |
-| Shared core | SKILL.md, references, and scripts use agent-neutral capability language and configurable paths |
-| Codex adapter | agents/openai.yaml and references/codex-adapter.md contain Codex-only discovery or invocation details |
-| Hermes adapter | references/hermes-adapter.md retains required Hermes-only mappings without overriding shared semantics |
+| Shared core | `SKILL.md`, references, and scripts describe capabilities and configurable paths in agent-neutral language |
+| Codex adapter | `agents/openai.yaml` and `references/codex-adapter.md` describe Codex invocation/tool mappings |
+| Hermes adapter | `references/hermes-adapter.md` describes Hermes invocation/tool/path mappings |
 
-Do not hard-code CODEX_HOME, HERMES_HOME, ~/.codex, ~/.hermes, a plugin-cache
-path, or agent-specific tool identifiers in shared instructions when a portable
-capability or configuration placeholder is possible. Agent metadata may remain
-agent-specific when the other agent can safely ignore it.
+Inspect every required reference, executable dependency, input, and output.
+Record each inclusion, omission, rewrite, mapping, and warning. A required
+behavior without a safe shared representation or verified adapter blocks
+promotion. Do not execute source scripts during inspection. Format and file
+checks are necessary but do not prove actual discovery or invocation.
 
-The proposal must list shared files, adapter files, tool/invocation mappings,
-path substitutions, preserved behavior, and omissions. Block promotion when a
-required behavior has no safe shared representation or explicit adapter, when
-one adapter silently changes shared meaning, or when compatibility depends on
-executing source content during inspection.
+For Codex, verify the checkout, marketplace registration, installed cache,
+required references, and explicit invocation. For Hermes, identify a supported
+Skill location and verify discovery and an explicit representative invocation.
+The CthuCodex cache alone is not a Hermes installation. A Hermes original
+remains active until its non-conflicting replacement works alongside it. If
+that cannot be established, keep the original and stop before archive and PR.
 
-## Adaptation and safe-tree rules
+## Safe copy and retirement
 
-Adapt only referenced files needed by the Codex result. Map Hermes tools,
-invocation syntax, paths, and agent assumptions only when the mapping is
-verified. Record included files, omissions, rewrites, and warnings in the
-sidecar. Unavailable references, secret-like material, unexplained executable
-behavior, and unmapped required dependencies are blocking.
+Enumerate stable sorted relative POSIX paths. Allow only readable, contained
+regular files/directories; reject symlinks, sockets, devices, FIFOs, traversal,
+escaping targets, secrets, and inaccessible references. Fingerprint reviewed
+relative paths, bytes, and relevant modes. Recompute before staging, repository
+copy, and source retirement. Copy to a temporary sibling, validate, and rename
+atomically where supported. Merge only non-conflicting files; replace only the
+explicitly reviewed target; rename to a validated lowercase hyphenated name.
 
-For both source modes, enumerate a stable sorted list of relative POSIX paths.
-Allow only readable regular files and directories contained by the source
-root. Reject symlinks, sockets, devices, FIFOs, absolute target paths, path
-traversal, and entries that escape the root. Treat scripts as reviewable files,
-not executable authority.
+After one candidate confirmation, use an isolated task checkout from the
+intended repository's default branch. Do not include the caller's unrelated
+changes. Create and validate a scoped OpenSpec proposal, specs/design/tasks
+before editing the plugin target. Install from that checkout with
+`chc codex install`, then verify both agents as above.
 
-The fingerprint covers every reviewed relative path, file byte, and relevant
-mode bit. Recompute it immediately before adaptation write, repository copy,
-and optional local deletion from either candidate root.
+Before removing any original, recheck every selected source as an unchanged,
+non-symlinked direct child of its expected active Skill root with the same
+file list, fingerprint, ownership, and, for Hermes, valid Evolution marker
+and protected/opt-out classification. If any check fails, remove none. Remove
+only confirmed original and temporary staging trees. If permanent deletion is
+rejected, a reversible move to a verified path outside every active Skill
+root may satisfy retirement; report its exact location and verify the old path
+is absent. Otherwise preserve all originals. Verify Codex and Hermes remain
+available after retirement.
 
-Write a Codex adaptation or repository target into a temporary sibling,
-validate it, and rename it into place atomically. For merge, add only
-non-conflicting paths and stop on a conflicting file. For replace, show and
-confirm the existing tree. For rename, validate the new lowercase hyphenated
-name and preview the target again.
-
-## Checkout and cleanup invariants
-
-The user prepares and selects the checkout and feature branch. Capture the
-repository root, branch, HEAD, upstream default branch, and clean status before
-skill discovery, and recheck them immediately before writing. Refuse a dirty,
-detached, default-branch, wrong, or changed checkout. Never create, switch, or
-remove a branch or worktree.
-
-Run chc codex install only after the reviewed source exists in the selected
-checkout. Verify exact promoted files in the checkout and installed cache
-before offering cleanup. Cleanup requires a separate confirmation that lists
-every exact selected path, warns that deletion is not restored automatically,
-and defaults to No. Never let confirmation for one path authorize a second
-path, and never infer both targets for a Hermes candidate from one cleanup
-choice.
-
-Before deleting any target, validate all selected targets again:
-
-- every target belongs to a candidate in the confirmed promotion set and is
-  one of that candidate's reviewed exact cleanup paths;
-- a Codex target is an unchanged, non-symlinked direct child of
-  $CODEX_HOME/skills with the reviewed fingerprint; and
-- a Hermes target is an unchanged, non-symlinked direct child of
-  $HERMES_HOME/skills, retains the same valid .hermes-evolution.json marker and
-  identity, remains absent from bundled, Hub-managed, protected, external, and
-  organization-managed inventories, has no sync: false or absorb: false
-  opt-out, and matches the reviewed fingerprint.
-
-If any target fails validation, delete none and require a new cleanup review.
-After all checks and final confirmation, remove only the selected exact trees.
-Do not edit, merge, update, install into, mirror, or broadly clean Hermes.
-Failed install, failed verification, changed fingerprint, changed marker,
-ambiguous path, or cancellation always retains every local source.
+Complete the change's tasks and validation, archive only that change, inspect
+affected main specs, stage an exact path allowlist, review the diff, and open
+one PR. Do not publish neighboring OpenSpec changes, generated adapters, or
+unrelated local work. Stop on a real conflict, failed verification, or denied
+operation and report reviewable state; routine stages need no second prompt.

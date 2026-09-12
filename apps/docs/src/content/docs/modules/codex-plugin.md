@@ -30,20 +30,17 @@ chc codex install
 
 Restart Codex after install so plugin-provided tools are loaded.
 
-`$codex-skill-promoter` is the single Codex-side development workflow. It reads
-eligible local Hermes and Codex skills read-only, then shows every candidate so
-the user can choose the promotion set and exact post-verification cleanup
-targets. Every candidate defaults to Skip and every local copy defaults to
-Keep. Hermes still requires a dedicated Evolution provenance marker; its
-original source and adapted Codex staging path are independent cleanup targets.
-Promoted content keeps an agent-neutral core with explicit Codex or Hermes
-adapters. The user prepares the clean feature checkout; the skill validates and
-writes it but never creates or switches a branch/worktree. It never edits or
-updates Hermes, and may delete only an explicitly selected eligible unchanged
-Hermes source after plugin verification and final exact-path confirmation.
-Bundled, Hub-managed, protected, external, organization-managed, opted-out,
-and unprovenanced Hermes skills are excluded. Hermes-side absorption remains
-owned by the Hermes skill repository and local skill directory.
+`$codex-skill-promoter` scans eligible local Hermes and Codex Skills read-only
+without checking the caller's Git state. It shows a candidate table with names,
+sources, provenance, files, compatibility, targets, collisions, and exact
+original-removal paths; every row defaults to Skip. Hermes candidates require
+a dedicated Evolution marker. One confirmed selection starts an isolated task
+branch, proposes a scoped OpenSpec change, implements and validates the
+agent-neutral Skill with Codex and Hermes adapters, installs and verifies both
+agent entry points, retires unchanged originals, archives the change, and opens
+a PR. If either agent cannot load the replacement, the original stays active
+and the run stops. Bundled, Hub-managed, protected, external,
+organization-managed, opted-out, and unprovenanced Hermes Skills are excluded.
 
 ## Language Feedback UI
 
