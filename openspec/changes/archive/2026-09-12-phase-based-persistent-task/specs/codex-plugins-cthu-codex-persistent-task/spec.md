@@ -1,24 +1,4 @@
-# codex-plugins-cthu-codex-persistent-task Specification
-
-## Purpose
-Define the CthuCodex persistent-task Skill's explicit activation, durable task-state protocol, human approval boundaries, and portable behavior for Codex and Hermes.
-
-## Requirements
-
-### Requirement: Persistent tasks require explicit activation
-
-The `persistent-task` Skill SHALL activate only when the user explicitly invokes its registered name or explicitly requests persistent-task mode. A bare invocation SHALL show usage without reading a target or creating task files.
-
-#### Scenario: Bare invocation is side-effect free
-
-- **WHEN** the user invokes `persistent-task` without a task description
-- **THEN** the agent shows concise usage
-- **AND** it does not inspect a target, create task state, or execute work
-
-#### Scenario: Ordinary complex work does not activate the Skill
-
-- **WHEN** a task looks long-running but the user has not explicitly invoked the Skill or requested persistent-task mode
-- **THEN** the agent follows its ordinary workflow and does not create persistent-task files
+## MODIFIED Requirements
 
 ### Requirement: Task state is durable and checkpointed
 
@@ -51,6 +31,16 @@ The Skill SHALL keep the durable-task workflow in shared instructions and templa
 - **WHEN** the shared Skill is installed in a supported Hermes Skill location and explicitly invoked there
 - **THEN** its Hermes adapter supplies the invocation mapping without changing plan, phase, or checkpoint semantics
 - **AND** a Codex-only plugin installation is not claimed as Hermes availability
+
+## REMOVED Requirements
+
+### Requirement: Target mutations are approved one step at a time
+
+**Reason**: Requiring a separate confirmation for each logical subtask makes long-running work unnecessarily fragmented.
+
+**Migration**: Replace step proposals and step approvals with the phase review and continuation protocol below; preserve durable state and verification.
+
+## ADDED Requirements
 
 ### Requirement: Task phases are reviewed and completed one at a time
 

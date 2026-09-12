@@ -9,8 +9,8 @@ Created: <YYYY-MM-DD HH:mm TZ>
 
 ## <YYYY-MM-DD HH:mm TZ> — <event type>
 
-Event: STEP_PROPOSED | STEP_APPROVED | STEP_RESULT | VERIFICATION | CHECKPOINT | DECISION | DECISION_REQUIRED | STEP_BLOCKED | RECONCILIATION | FINAL
-Step: <step ID>
+Event: PHASE_PROPOSED | PHASE_APPROVED | PHASE_RESULT | VERIFICATION | CHECKPOINT | DECISION | DECISION_REQUIRED | PHASE_BLOCKED | RECONCILIATION | FINAL
+Phase: <phase ID>
 Actor: agent / user
 
 ### Intended action
@@ -19,7 +19,7 @@ Actor: agent / user
 
 ### Actual action and targets
 
-<What actually happened; include commands or concise operation details.>
+<What actually happened within the phase; include significant actions, targets, and concise operation details.>
 
 ### Result
 
@@ -38,4 +38,4 @@ Actor: agent / user
 <What happens next, or the exact user decision required.>
 ```
 
-For failed or interrupted work, preserve enough detail to reconstruct the real state: attempt number, exit/result summary, partial changes, recovery attempted, and whether the original action is safe to retry.
+Checkpoint at phase boundaries and when work stops for a blocker, cancellation, plan change, or interruption. Routine included subtasks do not each need a checkpoint. For failed or interrupted work, preserve enough detail to reconstruct the real state: attempt number, exit/result summary, partial changes, recovery attempted, and whether the original action is safe to retry.
