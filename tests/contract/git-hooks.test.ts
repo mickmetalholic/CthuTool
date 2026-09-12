@@ -32,7 +32,7 @@ function runInstaller(directory: string, env: NodeJS.ProcessEnv = {}): string {
   return execFileSync(process.execPath, [join(directory, 'scripts', 'install-git-hooks.mjs')], {
     cwd: directory,
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    env: { ...process.env, CI: '', CTHUTOOL_DISABLE_GIT_HOOKS: '', ...env },
   });
 }
 
