@@ -62,9 +62,8 @@ const commonArgs = {
 
 const installArgs = {
   ...commonArgs,
-  changeSource: {
+  'change-source': {
     type: 'boolean',
-    alias: 'change-source',
     description: 'Choose and remember a new default plugin repository',
   },
   marketplace: {
@@ -91,7 +90,7 @@ type CodexArgs = {
   readonly marketplace?: unknown;
   readonly pluginsRoot?: unknown;
   readonly cacheRoot?: unknown;
-  readonly changeSource?: unknown;
+  readonly 'change-source'?: unknown;
 };
 
 export type SkillsInteraction = {
@@ -192,7 +191,7 @@ export async function selectCodexPluginSource(
 ): Promise<PluginSourceSelection | undefined> {
   const basePaths = createPaths(args);
   const explicit = getStringArg(args.repoRoot);
-  const changing = args.changeSource === true;
+  const changing = args['change-source'] === true;
   let saved: Awaited<ReturnType<typeof readCodexPluginSource>>;
   let savedError: string | undefined;
   if (!explicit) {
