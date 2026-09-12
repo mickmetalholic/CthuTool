@@ -2,7 +2,9 @@
 
 ## Purpose
 CthuTool provides an Astro Starlight documentation site under `apps/docs` as the primary user and operator documentation surface for homelab deployment, client installation, module usage, operations, architecture, reference material, and OpenSpec capability discovery.
+
 ## Requirements
+
 ### Requirement: Docs workspace application
 The repository SHALL include a first-class documentation site package under `apps/docs`.
 
@@ -125,13 +127,13 @@ The docs site SHALL document how users install, inspect, safely update, switch, 
 
 #### Scenario: Reader updates managed CLI tooling
 - **WHEN** a reader needs to update a default remote managed installation
-- **THEN** the documentation presents `chc update --check` and `chc update` as source-aware managed update commands
+- **THEN** the documentation presents `chc source update --check` and `chc source update` as source-aware managed update commands
 - **AND** explains that repository and ref defaults follow the installed managed checkout
 
 #### Scenario: Reader updates local-linked CLI tooling
 - **WHEN** a reader uses a local-linked installation
-- **THEN** the documentation explains that default `chc update` does not mutate the local or managed checkout
-- **AND** shows the manual Git and committed-bundle development workflow
+- **THEN** the documentation explains that default `chc source update` checks and fast-forwards the linked local checkout without mutating the managed checkout or relinking the global command
+- **AND** shows that locally edited CLI source still requires a committed-bundle rebuild
 - **AND** shows how to restore the global command to remote managed mode explicitly
 
 #### Scenario: Reader updates an explicit custom checkout

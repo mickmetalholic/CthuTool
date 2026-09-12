@@ -87,23 +87,25 @@ also shows the checked-out commit's absolute committer time and bounded subject;
 
 `chc source update --check` resolves the selected remote ref and reports
 `install_required`, `update_available`, or `up_to_date` without changing
-checkout files or the global installation. For the default managed source, the
-repository and ref default to the checkout's existing origin and symbolic
+checkout files or the global installation. For the running managed or local
+source, the repository and ref default to the checkout's existing origin and symbolic
 branch, exact tag, or detached commit. A normal clean update proceeds directly,
 shows TTY-aware phase progress and a bounded commit summary, validates the
 target bundle before checkout, and skips checkout plus `npm install -g` when
 already current.
 
-For `mode: local`, default update and check commands stop with development
-guidance and do not touch either the linked checkout or the default managed
-checkout. Update the linked repository with its normal Git workflow and refresh
-the committed bundle with `pnpm --filter @cthutool/cli dev`. Run either
-installer with `CHC_INSTALL_MODE=remote` to switch back to managed mode.
+For `mode: local`, default update/check uses the linked Git checkout. A safe
+update fast-forwards it to the planned commit without touching the managed
+checkout or reinstalling global `chc`. Unrelated untracked files are preserved;
+tracked edits, a divergent branch, or a path Git would overwrite block the
+update. After editing CLI source locally, refresh the committed bundle with
+`pnpm --filter @cthutool/cli dev`. Run either installer with
+`CHC_INSTALL_MODE=remote` to switch back to managed mode.
 `--install-dir`, `--repo`, and `--ref` (or their environment equivalents) remain
 advanced explicit source overrides; a successful update relinks global `chc` to
 the selected install directory.
 
-The updater refuses dirty, diverged, or invalid-bundle targets and never
+The updater refuses unsafe dirty, diverged, or invalid-bundle targets and never
 automatically stashes, resets, cleans, or rebases local work. Use output modes
 as needed:
 

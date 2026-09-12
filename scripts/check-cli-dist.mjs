@@ -21,6 +21,7 @@ const runCommand = async (command, args, failureLabel) => {
     const child = spawn(command, args, {
       cwd: repoRoot,
       stdio: 'inherit',
+      shell: process.platform === 'win32' && command === pnpmCommand,
     });
     child.on('error', reject);
     child.on('close', (code) => {

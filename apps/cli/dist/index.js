@@ -7574,6 +7574,16 @@ var maxChangeHighlights = 5;
 var maxSubjectLength = 120;
 var maxDetailLines = 8;
 var maxDetailLineLength = 240;
+function isLinkedLocalSource(source) {
+  return source.mode === "local" && resolve2(source.installDir) === resolve2(source.runtimeRoot);
+}
+function checkoutStatusArgs(source) {
+  return [
+    "status",
+    "--porcelain",
+    isLinkedLocalSource(source) ? "--untracked-files=no" : "--untracked-files=normal"
+  ];
+}
 
 class SelfUpdateError extends Error {
   phase;
@@ -7780,15 +7790,15 @@ async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
   };
   const phases = [];
   const gitRoot = join(resolved.installDir, ".git");
-  if (resolved.mode === "local" && !resolved.explicitInstallDir) {
+  if (isLinkedLocalSource(resolved) && !deps.exists(gitRoot)) {
     phases.push("preflight");
     return finishPlan(deps, {
       status: "blocked",
       ...publicResolved,
       block: {
-        kind: "local_linked_source",
-        message: `The running chc command is linked to the local checkout at ${resolved.runtimeRoot}.`,
-        hint: "Update that checkout and rebuild apps/cli/dist/index.js, or run CHC_INSTALL_MODE=remote scripts/install-chc.sh to switch back to managed mode."
+        kind: "local_source_not_git",
+        message: `The running chc command is linked to a non-Git local source at ${resolved.runtimeRoot}.`,
+        hint: "Use a Git checkout as the local source, or select a different checkout with --install-dir."
       },
       phases
     });
@@ -7797,7 +7807,7 @@ async function planSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
     if (!deps.exists(gitRoot)) {
       return;
     }
-    const status = await execute(deps, "preflight", "git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: resolved.installDir });
+    const status = await execute(deps, "preflight", "git", checkoutStatusArgs(resolved), { cwd: resolved.installDir });
     if (status.stdout.trim().length > 0) {
       return "dirty";
     }
@@ -7980,7 +7990,7 @@ async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
     steps.push("clone");
   } else {
     await runPhase(deps, "preflight", async () => {
-      const status = await execute(deps, "preflight", "git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: plan.installDir });
+      const status = await execute(deps, "preflight", "git", checkoutStatusArgs(resolved), { cwd: plan.installDir });
       if (status.stdout.trim().length > 0) {
         throw new SelfUpdateError({
           phase: "preflight",
@@ -8031,16 +8041,18 @@ async function runSelfUpdate(options = {}, deps = createSelfUpdateDeps()) {
   });
   phases.push("verify_bundle");
   steps.push("verify-bundle");
-  await runPhase(deps, "install_global", async () => {
-    await execute(deps, "install_global", "npm", [
-      "install",
-      "-g",
-      "--ignore-scripts",
-      plan.installDir
-    ]);
-  });
-  phases.push("install_global");
-  steps.push("install-global");
+  if (!isLinkedLocalSource(resolved)) {
+    await runPhase(deps, "install_global", async () => {
+      await execute(deps, "install_global", "npm", [
+        "install",
+        "-g",
+        "--ignore-scripts",
+        plan.installDir
+      ]);
+    });
+    phases.push("install_global");
+    steps.push("install-global");
+  }
   const after = await readIdentity(deps, "checkout", plan.installDir, plan.ref);
   return {
     status: isInstall ? "installed" : "updated",
@@ -14788,7 +14800,7 @@ function createUpdateCommand(route) {
   return defineCommand({
     meta: {
       name: "update",
-      description: "Update the global chc command from the CthuTool Git repository."
+      description: "Update the running chc source checkout from its Git repository."
     },
     args: selfUpdateArgs,
     async run({ args }) {

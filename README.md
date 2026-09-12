@@ -139,22 +139,24 @@ chc source update --ref v0.1.0
 
 Use `chc --version` for the lightweight version-only check. `chc source status`
 includes that version together with the detected installation mode and source
-checkout diagnostics. For the default remote managed installation,
-`chc source update --check` and `chc source update` follow that checkout's
-existing origin and checked-out branch, exact tag, or commit. A safe managed
-update reports the planned commit, validates the committed bundle before
-checkout, and skips the global reinstall when already current.
+checkout diagnostics. `chc source update --check` and `chc source update`
+follow the checkout that provides the running command, using its existing
+origin and checked-out branch, exact tag, or commit. A safe update reports the
+planned commit, validates the committed bundle before checkout, and skips the
+global reinstall when already current.
 
 When `chc source status` reports `mode: local`, the command follows that
-development checkout and default update/check commands do not mutate it or the
-separate managed checkout. Update the repository with the normal Git workflow
-and refresh `apps/cli/dist/index.js` with `pnpm --filter @cthutool/cli dev`. Use
-either installer with `CHC_INSTALL_MODE=remote` to switch the global command
-back to managed mode. Advanced callers can explicitly select another source
-with `--install-dir`, `--repo`, and `--ref`; a successful apply relinks the
-global command to that directory. Dirty, diverged, or invalid-bundle targets are
-blocked without automatic stash, reset, clean, or rebase. Update checks are
-explicit; the CLI does not run a periodic background checker.
+development checkout. Default update/check commands fetch its remote and a safe
+update fast-forwards that checkout without changing the separate managed
+checkout or reinstalling the global command. Unrelated untracked local files
+remain; tracked edits, a diverged branch, an invalid bundle, or an untracked
+file that Git would overwrite block the update. After editing CLI source
+locally, refresh `apps/cli/dist/index.js` with
+`pnpm --filter @cthutool/cli dev`. Use either installer with
+`CHC_INSTALL_MODE=remote` to switch back to managed mode. Advanced callers can
+select another source with `--install-dir`, `--repo`, and `--ref`; a successful
+apply relinks the global command to that directory. Update checks are explicit;
+the CLI does not run a periodic background checker.
 
 The older `chc status` and `chc update` forms remain accepted as undiscoverable
 compatibility aliases during migration; new scripts and documentation should use

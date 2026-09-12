@@ -25,6 +25,7 @@ type FakeOptions = {
   readonly targetCommit?: string;
   readonly targetKind?: 'branch' | 'tag' | 'raw';
   readonly dirty?: boolean;
+  readonly untracked?: boolean;
   readonly dirtyOnRecheck?: boolean;
   readonly diverged?: boolean;
   readonly bundlePresent?: boolean;
@@ -96,7 +97,12 @@ function createDeps(options: FakeOptions = {}) {
         const dirty =
           options.dirty === true ||
           (options.dirtyOnRecheck === true && statusCalls > 1);
-        stdout = dirty ? '?? local-change\n' : '';
+        stdout = dirty
+          ? ' M tracked-change\n'
+          : options.untracked === true &&
+              args.includes('--untracked-files=normal')
+            ? '?? local-change\n'
+            : '';
       } else if (command === 'git' && args[0] === 'cat-file') {
         code = options.targetBundlePresent === false ? 1 : 0;
       } else if (
@@ -313,7 +319,7 @@ describe('self-update manager', () => {
     expect(commands).toEqual([]);
   });
 
-  test('blocks a default local-linked source before remote or mutating commands', async () => {
+  test('plans a safe default update for the linked local checkout', async () => {
     const installDir = '/worktrees/local/CthuTool';
     const { commands, deps } = createDeps({
       installDir,
@@ -323,27 +329,73 @@ describe('self-update manager', () => {
     const plan = await planSelfUpdate({}, deps);
 
     expect(plan).toMatchObject({
-      status: 'blocked',
+      status: 'update_available',
       installDir,
-      block: {
-        kind: 'local_linked_source',
-        message: expect.stringContaining(installDir),
-        hint: expect.stringContaining('CHC_INSTALL_MODE=remote'),
-      },
+      before: { commit: currentCommit },
+      target: { commit: targetCommit },
     });
+    expect(signatures(commands)).toContain(
+      'git status --porcelain --untracked-files=no',
+    );
     expect(signatures(commands).join('\n')).not.toMatch(
-      /fetch|checkout|merge|pull|npm/,
+      /git checkout|git merge --ff-only|git pull|npm install/,
     );
   });
 
-  test('allows an explicit local install directory to use the updater', async () => {
+  test('blocks a linked local source that is not a Git checkout', async () => {
     const installDir = '/worktrees/local/CthuTool';
-    const { deps } = createDeps({ installDir, runtimeRoot: installDir });
-
-    await expect(planSelfUpdate({ installDir }, deps)).resolves.toMatchObject({
-      status: 'update_available',
+    const { commands, deps } = createDeps({
       installDir,
+      runtimeRoot: installDir,
+      existingCheckout: false,
     });
+
+    await expect(planSelfUpdate({}, deps)).resolves.toMatchObject({
+      status: 'blocked',
+      block: { kind: 'local_source_not_git' },
+    });
+    expect(commands).toEqual([]);
+  });
+
+  test('updates its linked local checkout without globally reinstalling', async () => {
+    const installDir = '/worktrees/local/CthuTool';
+    const { commands, deps } = createDeps({
+      installDir,
+      runtimeRoot: installDir,
+      untracked: true,
+    });
+
+    const result = await runSelfUpdate({}, deps);
+
+    expect(result).toMatchObject({
+      status: 'updated',
+      installDir,
+      before: { commit: currentCommit },
+      after: { commit: targetCommit },
+      steps: ['fetch', 'checkout', 'pull', 'verify-bundle'],
+    });
+    expect(signatures(commands)).toContain(
+      'git status --porcelain --untracked-files=no',
+    );
+    expect(signatures(commands)).toContain(
+      `git merge --ff-only ${targetCommit}`,
+    );
+    expect(signatures(commands).join('\n')).not.toMatch(/npm install/);
+  });
+
+  test('blocks tracked edits in the linked local checkout before fetching', async () => {
+    const installDir = '/worktrees/local/CthuTool';
+    const { commands, deps } = createDeps({
+      installDir,
+      runtimeRoot: installDir,
+      dirty: true,
+    });
+
+    await expect(planSelfUpdate({}, deps)).resolves.toMatchObject({
+      status: 'blocked',
+      block: { kind: 'dirty_checkout' },
+    });
+    expect(signatures(commands).join('\n')).not.toMatch(/fetch|checkout|npm/);
   });
 
   test('classifies an equal branch target as already current', async () => {
