@@ -1,9 +1,9 @@
 ## Agent Adapter Policy
 
 - Keep intentionally shared, portable project instructions (for example `AGENTS.md` and authored Cursor skills such as `commit` / `create-pull-request`).
-- Treat OpenSpec-generated adapters under `.agents/skills`, `.cursor/skills`, and `.opencode/skills` as reproducible outputs. Do not hand-edit them for project policy; regenerate with `pnpm setup:ai-tooling`.
-- Do not commit generated `openspec-*` adapter trees; they remain ignored and are recreated by setup.
-- Standard Git checkouts repair generated adapters through tracked `.githooks`; after `--ignore-scripts` run `pnpm setup:git-hooks`, and after `git worktree add --no-checkout` run `pnpm setup:ai-tooling` in the completed checkout.
+- Keep OpenSpec-generated `openspec-*` skills under `.agents/skills` and `.zcode/skills` in Git so new checkouts can use them directly. Regenerate them with the OpenSpec CLI when upgrading; do not hand-edit generated workflows for project policy.
+- Codex, Cursor, OpenCode, and Pi read the shared `.agents/skills` tree. ZCode uses its generated `.zcode/skills` tree.
+- Git hooks handle commit checks only. After `pnpm install --ignore-scripts`, run `pnpm setup:git-hooks` if hooks are wanted; no Skill bootstrap is required.
 - See `docs/ai-tooling.md` for ownership, invocation forms, and third-party skill lifecycle.
 
 ## OpenSpec Naming

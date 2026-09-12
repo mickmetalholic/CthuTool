@@ -75,9 +75,12 @@ Thumbs.db
 !.cursor/commands/
 !.cursor/commands/**
 
-# Generated OpenSpec / shared agent skill surfaces (regenerate with pnpm setup:ai-tooling)
-.agents/
+# Keep project skills in Git; ignore other local agent state.
+.agents/*
+!.agents/skills/
 .opencode/
+.zcode/*
+!.zcode/skills/
 
 # Legacy generated OpenSpec copies under agent dirs (do not reintroduce)
 .codex/skills/

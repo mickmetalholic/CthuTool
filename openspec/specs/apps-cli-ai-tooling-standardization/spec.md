@@ -27,16 +27,16 @@ The repository SHALL document and enforce separate ownership for OpenSpec workfl
 - **THEN** `codex/plugins/cthu-codex` remains outside the project-level skill standardization scope
 - **AND** its existing plugin installation and OpenCode synchronization behavior is unchanged
 
-### Requirement: OpenSpec supports the four project agents
+### Requirement: OpenSpec skills are available to the five project agents
 
-The repository SHALL provide a reproducible OpenSpec setup for Codex, Cursor, OpenCode, and the vendor-neutral `agents` target using the core workflow set: `explore`, `propose`, `apply`, `update`, `sync`, and `archive`.
+The repository SHALL commit the OpenSpec core workflow skills for Codex, Cursor, OpenCode, Pi, and ZCode: `explore`, `propose`, `apply`, `update`, `sync`, and `archive`.
 
-#### Scenario: OpenSpec setup generates the selected surfaces
+#### Scenario: A fresh checkout contains the selected skills
 
-- **WHEN** a developer initializes or regenerates OpenSpec using the documented setup path
-- **THEN** OpenSpec generates shared `openspec-*` skills under `.agents/skills`
-- **AND** it generates the native Cursor skill/command surface under `.cursor/`
-- **AND** it generates the native OpenCode skill/command surface under `.opencode/`
+- **WHEN** a developer clones the repository or creates a worktree
+- **THEN** shared `openspec-*` skills are already present under `.agents/skills` for Codex, Cursor, OpenCode, and Pi
+- **AND** ZCode skills are already present under `.zcode/skills`
+- **AND** no repository setup script or checkout hook is needed to generate them
 
 #### Scenario: Codex and Reasonix use the shared skills
 
@@ -48,8 +48,8 @@ The repository SHALL provide a reproducible OpenSpec setup for Codex, Cursor, Op
 #### Scenario: OpenSpec is upgraded
 
 - **WHEN** the OpenSpec CLI is upgraded or the selected profile/workflows change
-- **THEN** `openspec update` regenerates the OpenSpec-managed instruction files from the installed CLI and current configuration
-- **AND** the generated files contain the selected workflow set and current tool-specific references
+- **THEN** `openspec init` or `openspec update` regenerates the OpenSpec-managed instruction files from the selected CLI version and current configuration
+- **AND** the regenerated files are reviewed and committed with the selected workflow set and current tool-specific references
 - **AND** the command does not modify product source code, existing OpenSpec specs, or unrelated change artifacts
 
 #### Scenario: Generated files are regenerated rather than hand-edited
@@ -95,7 +95,7 @@ The repository SHALL use the configuration and project skill-discovery paths sup
 
 #### Scenario: Reasonix discovers the shared OpenSpec skills
 
-- **WHEN** Reasonix starts in the repository after setup
+- **WHEN** Reasonix starts in a checkout of the repository
 - **THEN** its project skill inventory includes the shared `.agents/skills/openspec-*` workflows
 - **AND** the documentation gives the correct Reasonix invocation form
 
@@ -107,29 +107,29 @@ The repository SHALL use the configuration and project skill-discovery paths sup
 
 ### Requirement: AI tooling documentation matches the repository
 
-The repository SHALL document the actual AI tooling directories, installation commands, invocation forms, generated-file policy, and validation checks for Codex, Cursor, OpenCode, and Reasonix.
+The repository SHALL document the actual AI tooling directories, installation commands, invocation forms, generated-file policy, and validation checks for Codex, Cursor, OpenCode, Pi, ZCode, and Reasonix.
 
 #### Scenario: Directory ownership is documented
 
 - **WHEN** a developer reads the root agent policy, OpenSpec configuration, or AI tooling reference
-- **THEN** the documentation distinguishes canonical sources from generated `.agents/`, `.cursor/`, `.opencode/`, `.codex/`, `.claude/`, and `.reasonix/` state
+- **THEN** the documentation distinguishes committed generated `.agents/skills` and `.zcode/skills` from authored `.cursor/skills` and local `.opencode/`, `.codex/`, `.claude/`, and `.reasonix/` state
 - **AND** it identifies which files must not be hand-edited
 
 #### Scenario: Tool invocation is documented
 
 - **WHEN** a developer wants to start an OpenSpec workflow
-- **THEN** the documentation provides the correct native invocation for Codex, Cursor, OpenCode, and Reasonix
+- **THEN** the documentation provides the correct native invocation for Codex, Cursor, OpenCode, Pi, ZCode, and Reasonix
 - **AND** it does not present a command from one tool as if it were supported by all tools
 
 #### Scenario: Setup is repeatable
 
 - **WHEN** a developer clones the repository or changes the selected tools
-- **THEN** the documentation provides an idempotent setup path for installing the selected OpenSpec adapters
-- **AND** a second run does not create duplicate skill entries or unrelated configuration changes
+- **THEN** the checked-in skills are immediately available and the documentation provides a direct OpenSpec CLI regeneration command
+- **AND** a second regeneration does not create duplicate skill entries or unrelated configuration changes
 
 ### Requirement: AI tooling setup is verifiable
 
-The repository SHALL provide read-only checks that confirm OpenSpec health, generated-path ownership, skill discovery, and the absence of excluded or stale project configuration.
+The repository SHALL document read-only checks that confirm OpenSpec health, checked-in skill paths, skill discovery, and the absence of excluded or stale project configuration.
 
 #### Scenario: OpenSpec health is checked
 
@@ -137,15 +137,15 @@ The repository SHALL provide read-only checks that confirm OpenSpec health, gene
 - **THEN** it checks `openspec doctor` and reports the resolved OpenSpec root
 - **AND** it checks that the configured workflow artifacts match the selected profile
 
-#### Scenario: All four agent surfaces are checked
+#### Scenario: All five agents can discover the skills
 
-- **WHEN** verification runs after setup
-- **THEN** it checks the Codex, Cursor, OpenCode, and shared `.agents` OpenSpec surfaces
+- **WHEN** verification runs after checkout or regeneration
+- **THEN** it checks the shared `.agents` OpenSpec skills for Codex, Cursor, OpenCode, and Pi and the native `.zcode` skills for ZCode
 - **AND** it checks that Reasonix can see the shared skills
-- **AND** it reports missing or stale generated files without silently repairing them
+- **AND** it reports missing or stale committed files without silently repairing them
 
 #### Scenario: Business plugin scope is checked
 
 - **WHEN** verification reports changed or generated AI files
-- **THEN** it confirms that `codex/plugins/cthu-codex` was not modified by the project-level setup
+- **THEN** it confirms that `codex/plugins/cthu-codex` was not modified by OpenSpec regeneration
 - **AND** any difference in that plugin remains an explicit, separately scoped change

@@ -13,20 +13,12 @@ Generated OpenSpec workflow skills for Codex live under the shared surface:
 .agents/skills/openspec-*
 ```
 
-Regenerate them with:
-
-```bash
-pnpm setup:ai-tooling
-```
+These generated Skills are committed. To upgrade them, use the OpenSpec CLI as
+documented in `docs/ai-tooling.md`; no checkout setup is required.
 
 Normal root dependency installation configures the tracked `.githooks`
-directory and initializes the current checkout. Standard Git branch/worktree
-checkouts then verify and repair these generated adapters through
-`post-checkout`, independently of Codex. If package scripts were suppressed,
-run `pnpm setup:git-hooks`; if checkout hooks were suppressed (for example
-`git worktree add --no-checkout`), finish checkout and run
-`pnpm setup:ai-tooling` in the affected worktree. The required global OpenSpec
-version/profile/delivery commands are documented in `docs/ai-tooling.md`.
+directory for commit checks. If package scripts were suppressed, run
+`pnpm setup:git-hooks` when those checks are wanted.
 
 Do not hand-edit generated `openspec-*` skills. Do not recreate a parallel OpenSpec tree under `.codex/skills`.
 
