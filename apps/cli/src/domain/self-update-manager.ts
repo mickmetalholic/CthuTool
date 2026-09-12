@@ -66,7 +66,7 @@ export type SelfUpdateChangeSummary = {
 
 export type SelfUpdateBlock = {
   readonly kind:
-    | 'local_linked_source'
+    | 'local_source_not_git'
     | 'dirty_checkout'
     | 'diverged_branch'
     | 'missing_target_bundle';
@@ -172,6 +172,23 @@ export type ResolvedSelfUpdateSource = Required<SelfUpdateOptions> & {
   readonly mode: 'local' | 'remote';
   readonly explicitInstallDir: boolean;
 };
+
+function isLinkedLocalSource(source: ResolvedSelfUpdateSource): boolean {
+  return (
+    source.mode === 'local' &&
+    resolve(source.installDir) === resolve(source.runtimeRoot)
+  );
+}
+
+function checkoutStatusArgs(source: ResolvedSelfUpdateSource): string[] {
+  return [
+    'status',
+    '--porcelain',
+    isLinkedLocalSource(source)
+      ? '--untracked-files=no'
+      : '--untracked-files=normal',
+  ];
+}
 
 export class SelfUpdateError extends Error {
   readonly phase: SelfUpdatePhase;
@@ -494,15 +511,15 @@ export async function planSelfUpdate(
   const phases: SelfUpdatePhase[] = [];
   const gitRoot = join(resolved.installDir, '.git');
 
-  if (resolved.mode === 'local' && !resolved.explicitInstallDir) {
+  if (isLinkedLocalSource(resolved) && !deps.exists(gitRoot)) {
     phases.push('preflight');
     return finishPlan(deps, {
       status: 'blocked',
       ...publicResolved,
       block: {
-        kind: 'local_linked_source',
-        message: `The running chc command is linked to the local checkout at ${resolved.runtimeRoot}.`,
-        hint: 'Update that checkout and rebuild apps/cli/dist/index.js, or run CHC_INSTALL_MODE=remote scripts/install-chc.sh to switch back to managed mode.',
+        kind: 'local_source_not_git',
+        message: `The running chc command is linked to a non-Git local source at ${resolved.runtimeRoot}.`,
+        hint: 'Use a Git checkout as the local source, or select a different checkout with --install-dir.',
       },
       phases,
     });
@@ -516,7 +533,7 @@ export async function planSelfUpdate(
       deps,
       'preflight',
       'git',
-      ['status', '--porcelain', '--untracked-files=normal'],
+      checkoutStatusArgs(resolved),
       { cwd: resolved.installDir },
     );
     if (status.stdout.trim().length > 0) {
@@ -782,7 +799,7 @@ export async function runSelfUpdate(
         deps,
         'preflight',
         'git',
-        ['status', '--porcelain', '--untracked-files=normal'],
+        checkoutStatusArgs(resolved),
         { cwd: plan.installDir },
       );
       if (status.stdout.trim().length > 0) {
@@ -870,16 +887,18 @@ export async function runSelfUpdate(
   phases.push('verify_bundle');
   steps.push('verify-bundle');
 
-  await runPhase(deps, 'install_global', async () => {
-    await execute(deps, 'install_global', 'npm', [
-      'install',
-      '-g',
-      '--ignore-scripts',
-      plan.installDir,
-    ]);
-  });
-  phases.push('install_global');
-  steps.push('install-global');
+  if (!isLinkedLocalSource(resolved)) {
+    await runPhase(deps, 'install_global', async () => {
+      await execute(deps, 'install_global', 'npm', [
+        'install',
+        '-g',
+        '--ignore-scripts',
+        plan.installDir,
+      ]);
+    });
+    phases.push('install_global');
+    steps.push('install-global');
+  }
 
   const after = await readIdentity(deps, 'checkout', plan.installDir, plan.ref);
   return {

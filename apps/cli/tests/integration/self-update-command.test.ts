@@ -3,16 +3,22 @@ import {
   chmod,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  createSelfUpdateDeps,
+  planSelfUpdate,
+  runSelfUpdate,
+  type SelfUpdateDeps,
+} from '../../src/domain/self-update-manager';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
-const repoRoot = join(cliRoot, '../..');
 const scriptExecutable = Bun.which('script');
 
 async function runProcess(command: string, args: string[], cwd: string) {
@@ -54,6 +60,7 @@ async function createFixture() {
   const installDir = join(root, 'managed', 'CthuTool');
   const fakeBin = join(root, 'bin');
   const npmLog = join(root, 'npm.log');
+  const npmCache = join(root, 'npm-cache');
   await mkdir(join(source, 'apps/cli/dist'), { recursive: true });
   await mkdir(fakeBin, { recursive: true });
   await writeFile(
@@ -61,17 +68,22 @@ async function createFixture() {
     JSON.stringify({ name: 'cthutool', version: '0.0.0' }),
   );
   await writeFile(join(source, 'apps/cli/dist/index.js'), 'first bundle\n');
-  const fakeNpm = join(fakeBin, 'npm');
+  const fakeNpm = join(
+    fakeBin,
+    process.platform === 'win32' ? 'npm.cmd' : 'npm',
+  );
   await writeFile(
     fakeNpm,
-    [
-      '#!/bin/sh',
-      'printf \'%s\\n\' "$*" >> "$' + '{FAKE_NPM_LOG:?}"',
-      'exit 0',
-      '',
-    ].join('\n'),
+    process.platform === 'win32'
+      ? '@echo off\r\n>> "%FAKE_NPM_LOG%" echo %*\r\nexit /b 0\r\n'
+      : [
+          '#!/bin/sh',
+          'printf \'%s\\n\' "$*" >> "$' + '{FAKE_NPM_LOG:?}"',
+          'exit 0',
+          '',
+        ].join('\n'),
   );
-  await chmod(fakeNpm, 0o755);
+  if (process.platform !== 'win32') await chmod(fakeNpm, 0o755);
 
   await runProcess('git', ['init', '-b', 'main'], source);
   await runProcess('git', ['config', 'user.name', 'CthuTool Test'], source);
@@ -84,8 +96,10 @@ async function createFixture() {
   await runProcess('git', ['commit', '-m', 'Initial CLI bundle'], source);
 
   const env = {
-    PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+    PATH: `${fakeBin}${delimiter}${process.env.PATH ?? ''}`,
     FAKE_NPM_LOG: npmLog,
+    npm_config_prefix: join(root, 'npm-prefix'),
+    npm_config_cache: npmCache,
   };
   const clone = async () => {
     await mkdir(dirname(installDir), { recursive: true });
@@ -116,7 +130,13 @@ async function createFixture() {
         .split(/\r?\n/)
         .filter(Boolean);
     } catch {
-      return [];
+      try {
+        return (await readdir(join(npmCache, '_logs'))).filter((name) =>
+          name.endsWith('-debug-0.log'),
+        );
+      } catch {
+        return [];
+      }
     }
   };
   return {
@@ -149,37 +169,96 @@ function updateArgs(
   ];
 }
 
-describe('self-update command', () => {
-  test('blocks default local-linked update and check without touching managed state', async () => {
-    const fixture = await createFixture();
-    const env = {
-      ...fixture.env,
+function linkedLocalDeps(fixture: {
+  readonly root: string;
+  readonly installDir: string;
+}): SelfUpdateDeps {
+  const defaults = createSelfUpdateDeps();
+  return {
+    ...defaults,
+    home: () => fixture.root,
+    runtimeRoot: () => fixture.installDir,
+    env: {
+      ...defaults.env,
       CHC_INSTALL_DIR: undefined,
       CHC_REPO_URL: undefined,
       CHC_REPO: undefined,
       CHC_REF: undefined,
-    };
-    try {
-      for (const args of [
-        ['update', '--json'],
-        ['update', '--check', '--json'],
-      ]) {
-        const result = await runCli(args, env);
-        expect(result.code).not.toBe(0);
-        expect(JSON.parse(result.out)).toMatchObject({
-          ok: false,
-          error: {
-            code: 'update_failed',
-            phase: 'preflight',
-            message: expect.stringContaining(repoRoot),
-            hint: expect.stringContaining('CHC_INSTALL_MODE=remote'),
-          },
-        });
+    },
+    run: (command, args, options) => {
+      if (command === 'npm') {
+        throw new Error('A linked local update must not run npm.');
       }
-      expect(await fixture.npmInvocations()).toEqual([]);
-      expect(await Bun.file(join(fixture.installDir, '.git')).exists()).toBe(
-        false,
+      return defaults.run(command, args, options);
+    },
+  };
+}
+
+describe('self-update command', () => {
+  test('checks and fast-forwards its linked local checkout while preserving unrelated untracked files', async () => {
+    const fixture = await createFixture();
+    try {
+      await fixture.clone();
+      const before = await runProcess(
+        'git',
+        ['rev-parse', 'HEAD'],
+        fixture.installDir,
       );
+      await fixture.advanceSource('Local source update');
+      const localNote = join(fixture.installDir, 'local-note.txt');
+      await writeFile(localNote, 'preserve me');
+      const deps = linkedLocalDeps(fixture);
+
+      const plan = await planSelfUpdate({}, deps);
+      expect(plan).toMatchObject({
+        status: 'update_available',
+        installDir: fixture.installDir,
+        before: { commit: before },
+      });
+      expect(
+        await runProcess('git', ['rev-parse', 'HEAD'], fixture.installDir),
+      ).toBe(before);
+
+      const result = await runSelfUpdate({}, deps);
+      expect(result).toMatchObject({
+        status: 'updated',
+        after: { commit: expect.any(String) },
+      });
+      expect(result.phases).not.toContain('install_global');
+      expect(await readFile(localNote, 'utf8')).toBe('preserve me');
+      expect(
+        await runProcess('git', ['rev-parse', 'HEAD'], fixture.installDir),
+      ).toBe(await runProcess('git', ['rev-parse', 'HEAD'], fixture.source));
+      expect(await fixture.npmInvocations()).toEqual([]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('does not overwrite an untracked path that collides with a local update', async () => {
+    const fixture = await createFixture();
+    try {
+      await fixture.clone();
+      const before = await runProcess(
+        'git',
+        ['rev-parse', 'HEAD'],
+        fixture.installDir,
+      );
+      const collision = join(fixture.installDir, 'incoming.txt');
+      await writeFile(collision, 'local copy');
+      await writeFile(join(fixture.source, 'incoming.txt'), 'remote copy');
+      await fixture.advanceSource('Add incoming file');
+
+      await expect(
+        runSelfUpdate({}, linkedLocalDeps(fixture)),
+      ).rejects.toMatchObject({
+        phase: 'checkout',
+      });
+      expect(await readFile(collision, 'utf8')).toBe('local copy');
+      expect(
+        await runProcess('git', ['rev-parse', 'HEAD'], fixture.installDir),
+      ).toBe(before);
+      expect(await fixture.npmInvocations()).toEqual([]);
     } finally {
       await fixture.cleanup();
     }

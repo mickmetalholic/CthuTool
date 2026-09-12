@@ -96,7 +96,7 @@ export function createUpdateCommand(route: LifecycleCommandRoute) {
     meta: {
       name: 'update',
       description:
-        'Update the global chc command from the CthuTool Git repository.',
+        'Update the running chc source checkout from its Git repository.',
     },
     args: selfUpdateArgs,
     async run({ args }) {
