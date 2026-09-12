@@ -327,6 +327,17 @@ registers them in the personal marketplace, enables them in Codex, normalizes
 plugin metadata, and synchronizes the personal plugin cache. It does not read or
 install skills and does not synchronize prompts or rules.
 
+On the first interactive run, choose the CthuTool repository containing
+`codex/plugins`. The chosen path is saved in
+`~/.cthutool/codex/plugin-source.json` and reused on later runs, even from a
+different working directory. Use `chc codex install --change-source` to choose a
+new default. For a non-interactive change, use
+`chc codex install --change-source --repo-root <path>`. A plain
+`--repo-root <path>` overrides the source for one run without changing the
+saved default. In non-interactive or JSON mode, a missing or unavailable source
+produces an actionable error. Human output shows the source, each plugin action,
+cache version, and marketplace/config paths; `--json` includes source metadata.
+
 ### Obsidian Skill and state synchronization
 
 Use the interactive setup once on each machine that has the Obsidian vault:
