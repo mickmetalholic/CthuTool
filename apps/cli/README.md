@@ -337,6 +337,8 @@ new default. For a non-interactive change, use
 saved default. In non-interactive or JSON mode, a missing or unavailable source
 produces an actionable error. Human output shows the source, each plugin action,
 cache version, and marketplace/config paths; `--json` includes source metadata.
+If the plugin cache is busy, exit Codex completely and rerun the install
+command; `--json` reports `codex_plugin_cache_busy` with the locked path.
 
 ### Obsidian Skill and state synchronization
 

@@ -256,5 +256,7 @@ from any working directory. `--change-source` prompts for a new default;
 with a repair command if no valid source is available. The human result names
 the source and each plugin action/cache version, while JSON includes source
 path and provenance.
+If cache synchronization reports that a plugin cache path is busy, exit Codex
+completely and rerun `chc codex install`.
 
 Source reference: `apps/cli/README.md`.

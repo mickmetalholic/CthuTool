@@ -25,6 +25,7 @@ export type CliErrorCode =
   | 'source_unavailable'
   | 'source_busy'
   | 'source_switch_failed'
+  | 'codex_plugin_cache_busy'
   | 'update_failed';
 
 export type CliError = {
