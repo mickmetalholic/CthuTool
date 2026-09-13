@@ -14,6 +14,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - Notion channel-library skill
 - Notion album-maintenance skill
 - Notion movie-library skill
+- Notion book-library maintenance skill
 - unified Hermes-to-Codex absorption and local skill promotion skill
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
@@ -318,7 +319,24 @@ Public metadata can populate `Name`, `Genres`, `Release Date`, `IMDB ID`, and `T
 
 The current version does not write the `Rating` or `In Library` formulas, does not write the `Director` or `Cast` relations, does not update existing entries, and does not perform batch additions. The plugin README tracks future use of CthuTool backend movie metadata while preserving candidate disambiguation and explicit confirmation before every Notion write.
 
+## Notion Book Library
+
+Use `$notion-maintain-books`, or ask unambiguously about the personal Book
+Library, to search, filter, or audit its entries. Additions and updates operate
+on one book at a time. They first show the specific edition or Notion page,
+source evidence, and exact field changes; writing requires a separate explicit
+confirmation and a fresh duplicate/schema check.
+
+The skill treats a catalog `Reference` as the strongest available matching key,
+not a universal cross-site edition identifier. Same-title books remain separate
+until the user identifies the right page. Public catalogs never set personal
+reading status, score, finished date, access, or notes. New entries do not add a
+duplicated bibliographic body block or an external cover; cover uploads remain
+manual. Requests to remove a book receive an exact, read-only target preview,
+but this version does not trash, archive, or permanently delete pages.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
+- Book Library skill: `codex/plugins/cthu-codex/skills/notion-maintain-books/SKILL.md`
 - Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-album-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-movie-library-skill/spec.md`
