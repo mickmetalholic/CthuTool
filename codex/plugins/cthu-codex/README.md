@@ -65,6 +65,12 @@ page mutation still requires a field-level preview and explicit confirmation.
 Its MusicBrainz and Discogs resolver is a skill-local script; it does not add a
 second MCP server.
 
+`$notion-maintain-books` searches and audits the personal Book Library, and
+prepares edition-aware single-book additions or updates. It confirms an exact
+field-level preview before writing, preserves user notes and uploaded covers,
+and never merges same-title editions automatically. Removal is preview-only in
+this version; it does not trash or permanently delete pages.
+
 ## Source Boundary
 
 Keep repository-owned plugin source, manifests, and implementation assets under

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Maintain Books"
+  short_description: "Search, audit, add, or update the personal Book Library."
+  default_prompt: "Use $notion-maintain-books to find a book in my Notion Book Library or prepare one reviewed addition or update."
+policy:
+  allow_implicit_invocation: true
