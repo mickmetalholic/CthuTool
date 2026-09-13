@@ -10,6 +10,7 @@ import {
 import { defineCommand } from 'citty';
 import pc from 'picocolors';
 import { installRepositoryCodexPlugins } from '../domain/codex-plugin-install-manager';
+import { CodexPluginCacheBusyError } from '../domain/codex-plugin-manager';
 import {
   findCthuToolRoot,
   pluginSourceValidationError,
@@ -38,7 +39,7 @@ import {
 import { parseSkillSource } from '../domain/codex-skills-source';
 import { createCodexConfigPaths } from '../infra/codex-config-paths';
 import { cliContractArgs } from '../runtime/cli-context';
-import { createCliError } from '../runtime/cli-error';
+import { type CliErrorCode, createCliError } from '../runtime/cli-error';
 import {
   type ObservedCliCommandScope,
   runObservedCliCommand,
@@ -152,8 +153,12 @@ async function runObservedCodexSubcommand(
   await runObservedCliCommand(args, { command: 'codex', subcommand }, run);
 }
 
-function failCommand(scope: ObservedCliCommandScope, message: string): void {
-  const error = createCliError('invalid_option', message);
+function failCommand(
+  scope: ObservedCliCommandScope,
+  message: string,
+  code: CliErrorCode = 'invalid_option',
+): void {
+  const error = createCliError(code, message);
   scope.fail(error);
   writeCommandError(scope.context, processOutput, error);
   process.exitCode = error.exitCode;
@@ -786,7 +791,16 @@ export const codexCommand = defineCommand({
           const selection = await selectCodexPluginSource(args, scope);
           if (!selection) return;
           const paths = createPaths({ ...args, repoRoot: selection.repoRoot });
-          const result = await installRepositoryCodexPlugins(paths);
+          let result: Awaited<ReturnType<typeof installRepositoryCodexPlugins>>;
+          try {
+            result = await installRepositoryCodexPlugins(paths);
+          } catch (error) {
+            if (error instanceof CodexPluginCacheBusyError) {
+              failCommand(scope, error.message, 'codex_plugin_cache_busy');
+              return;
+            }
+            throw error;
+          }
           if (selection.saveDefault) {
             await writeCodexPluginSource(paths.homeRoot, selection.repoRoot);
           }

@@ -63,6 +63,23 @@ export type SyncCodexPluginCacheResult = {
   readonly action: 'synced';
 };
 
+export class CodexPluginCacheBusyError extends Error {
+  readonly cachePath: string;
+
+  constructor(cachePath: string, cause: unknown) {
+    super(
+      `Codex plugin cache is busy: ${cachePath}. Exit Codex completely, then run 'chc codex install' again to finish syncing.`,
+      { cause },
+    );
+    this.name = 'CodexPluginCacheBusyError';
+    this.cachePath = cachePath;
+  }
+}
+
+export type SyncCodexPluginCacheDependencies = {
+  readonly removeExistingCache?: (path: string) => Promise<void>;
+};
+
 export async function discoverCodexPlugins(
   pluginsRoot: string,
 ): Promise<CodexPlugin[]> {
@@ -231,6 +248,7 @@ export function withMarketplacePaths(
 
 export async function syncCodexPluginCache(
   options: SyncCodexPluginCacheOptions,
+  dependencies: SyncCodexPluginCacheDependencies = {},
 ): Promise<SyncCodexPluginCacheResult> {
   const version = options.bumpPatch
     ? await bumpPluginPatchVersion(options.plugin.root)
@@ -242,21 +260,48 @@ export async function syncCodexPluginCache(
   assertPathInside(cacheRoot, pluginCacheRoot);
   assertPathInside(pluginCacheRoot, versionCacheRoot);
 
-  await mkdir(cacheRoot, { recursive: true });
-  await rm(pluginCacheRoot, { recursive: true, force: true });
-  await mkdir(pluginCacheRoot, { recursive: true });
-  await cp(options.plugin.root, versionCacheRoot, {
-    recursive: true,
-    force: true,
-  });
-  await normalizePluginHookCommands(versionCacheRoot, options.plugin.root);
-  await normalizePluginMcpServers(versionCacheRoot);
+  try {
+    await mkdir(cacheRoot, { recursive: true });
+    if (dependencies.removeExistingCache) {
+      await dependencies.removeExistingCache(pluginCacheRoot);
+    } else {
+      await rm(pluginCacheRoot, { recursive: true, force: true });
+    }
+    await mkdir(pluginCacheRoot, { recursive: true });
+    await cp(options.plugin.root, versionCacheRoot, {
+      recursive: true,
+      force: true,
+    });
+    await normalizePluginHookCommands(versionCacheRoot, options.plugin.root);
+    await normalizePluginMcpServers(versionCacheRoot);
+  } catch (error) {
+    if (isBusyFileError(error)) {
+      throw new CodexPluginCacheBusyError(
+        typeof error.path === 'string' && error.path.length > 0
+          ? error.path
+          : pluginCacheRoot,
+        error,
+      );
+    }
+    throw error;
+  }
 
   return {
     name: options.plugin.name,
     version,
     action: 'synced',
   };
+}
+
+function isBusyFileError(
+  error: unknown,
+): error is { readonly code: 'EBUSY'; readonly path?: unknown } {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === 'EBUSY'
+  );
 }
 
 function createMarketplaceEntry(plugin: CodexPlugin): CodexMarketplaceEntry {

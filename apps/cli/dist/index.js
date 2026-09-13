@@ -10442,6 +10442,15 @@ function isWorkspaceRoot(path) {
 // src/domain/codex-plugin-manager.ts
 import { cp, mkdir as mkdir5, readdir as readdir3, readFile as readFile7, rm as rm5, writeFile as writeFile4 } from "node:fs/promises";
 import { dirname as dirname6, isAbsolute as isAbsolute2, relative as relative2, resolve as resolve5 } from "node:path";
+
+class CodexPluginCacheBusyError extends Error {
+  cachePath;
+  constructor(cachePath, cause) {
+    super(`Codex plugin cache is busy: ${cachePath}. Exit Codex completely, then run 'chc codex install' again to finish syncing.`, { cause });
+    this.name = "CodexPluginCacheBusyError";
+    this.cachePath = cachePath;
+  }
+}
 async function discoverCodexPlugins(pluginsRoot) {
   let entries;
   try {
@@ -10514,27 +10523,41 @@ async function installCodexPlugins(options) {
   await enableCodexPlugins(options.configPath, results.map((result) => `${result.name}@personal`));
   return results;
 }
-async function syncCodexPluginCache(options) {
+async function syncCodexPluginCache(options, dependencies = {}) {
   const version = options.bumpPatch ? await bumpPluginPatchVersion(options.plugin.root) : await readPluginVersion(options.plugin.root);
   const cacheRoot = resolve5(options.cacheRoot);
   const pluginCacheRoot = resolve5(cacheRoot, options.plugin.name);
   const versionCacheRoot = resolve5(pluginCacheRoot, version);
   assertPathInside2(cacheRoot, pluginCacheRoot);
   assertPathInside2(pluginCacheRoot, versionCacheRoot);
-  await mkdir5(cacheRoot, { recursive: true });
-  await rm5(pluginCacheRoot, { recursive: true, force: true });
-  await mkdir5(pluginCacheRoot, { recursive: true });
-  await cp(options.plugin.root, versionCacheRoot, {
-    recursive: true,
-    force: true
-  });
-  await normalizePluginHookCommands(versionCacheRoot, options.plugin.root);
-  await normalizePluginMcpServers(versionCacheRoot);
+  try {
+    await mkdir5(cacheRoot, { recursive: true });
+    if (dependencies.removeExistingCache) {
+      await dependencies.removeExistingCache(pluginCacheRoot);
+    } else {
+      await rm5(pluginCacheRoot, { recursive: true, force: true });
+    }
+    await mkdir5(pluginCacheRoot, { recursive: true });
+    await cp(options.plugin.root, versionCacheRoot, {
+      recursive: true,
+      force: true
+    });
+    await normalizePluginHookCommands(versionCacheRoot, options.plugin.root);
+    await normalizePluginMcpServers(versionCacheRoot);
+  } catch (error) {
+    if (isBusyFileError(error)) {
+      throw new CodexPluginCacheBusyError(typeof error.path === "string" && error.path.length > 0 ? error.path : pluginCacheRoot, error);
+    }
+    throw error;
+  }
   return {
     name: options.plugin.name,
     version,
     action: "synced"
   };
+}
+function isBusyFileError(error) {
+  return !!error && typeof error === "object" && "code" in error && error.code === "EBUSY";
 }
 function createMarketplaceEntry(plugin) {
   return {
@@ -11624,8 +11647,8 @@ function createPaths(args) {
 async function runObservedCodexSubcommand(subcommand, args, run) {
   await runObservedCliCommand(args, { command: "codex", subcommand }, run);
 }
-function failCommand(scope, message) {
-  const error = createCliError("invalid_option", message);
+function failCommand(scope, message, code = "invalid_option") {
+  const error = createCliError(code, message);
   scope.fail(error);
   writeCommandError(scope.context, processOutput, error);
   process.exitCode = error.exitCode;
@@ -12088,7 +12111,16 @@ var codexCommand = defineCommand({
           if (!selection)
             return;
           const paths = createPaths({ ...args, repoRoot: selection.repoRoot });
-          const result = await installRepositoryCodexPlugins(paths);
+          let result;
+          try {
+            result = await installRepositoryCodexPlugins(paths);
+          } catch (error) {
+            if (error instanceof CodexPluginCacheBusyError) {
+              failCommand(scope, error.message, "codex_plugin_cache_busy");
+              return;
+            }
+            throw error;
+          }
           if (selection.saveDefault) {
             await writeCodexPluginSource(paths.homeRoot, selection.repoRoot);
           }

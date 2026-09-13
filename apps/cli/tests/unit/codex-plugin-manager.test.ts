@@ -222,6 +222,55 @@ describe('codex plugin manager', () => {
     expect(syncedHooks).not.toContain('packages/codex-plugins');
   });
 
+  test('explains a busy cache path without mislabeling other filesystem errors', async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const pluginRoot = await writeCodexPlugin(
+      join(homeRoot, 'repo', 'codex', 'plugins'),
+      'cthu-codex',
+      'CthuCodex',
+    );
+    const cacheRoot = join(homeRoot, '.codex', 'plugins', 'cache', 'personal');
+    const lockedPath = join(cacheRoot, 'cthu-codex', '0.1.0');
+    const options = {
+      cacheRoot,
+      plugin: {
+        name: 'cthu-codex',
+        displayName: 'CthuCodex',
+        root: pluginRoot,
+        marketplacePath: '',
+      },
+    };
+    const busy = Object.assign(new Error('resource busy or locked'), {
+      code: 'EBUSY',
+      path: lockedPath,
+    });
+
+    await expect(
+      syncCodexPluginCache(options, {
+        async removeExistingCache() {
+          throw busy;
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: 'CodexPluginCacheBusyError',
+      cachePath: lockedPath,
+      message: expect.stringContaining(
+        "Exit Codex completely, then run 'chc codex install' again",
+      ),
+    });
+
+    const unrelated = Object.assign(new Error('access denied'), {
+      code: 'EACCES',
+    });
+    await expect(
+      syncCodexPluginCache(options, {
+        async removeExistingCache() {
+          throw unrelated;
+        },
+      }),
+    ).rejects.toBe(unrelated);
+  });
+
   test('preserves bundled MCP server metadata during install and cache sync', async () => {
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
     const pluginsRoot = join(homeRoot, 'repo', 'codex', 'plugins');
