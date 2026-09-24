@@ -9,10 +9,15 @@
 
 - [x] 2.1 Run the skill-creator `quick_validate.py` validator on the skill folder and review the spec scenarios against the final instructions, including limited query access, unsupported reversible deletion, and uncertain-write retries; record results without mutating live Notion records.
 - [x] 2.2 Run `openspec validate codex-plugins-cthu-codex-add-notion-book-skill --strict` and whitespace checks covering new files; confirm both pass.
-- [x] 2.3 Inspect Git status and the scoped diff to confirm only this change and its book skill are affected; verify the separate `notion-maintain-books`, generated adapters, neighboring changes, and live database configuration remain unchanged. Do not run OpenSpec regeneration or let it modify business-plugin files.
+- [x] 2.3 Inspect Git status and the scoped diff to confirm only this change and its book skill are affected; verify generated adapters, neighboring changes, and live database configuration remain unchanged. Do not run OpenSpec regeneration or let it modify business-plugin files.
+
+## 3. Replace the former book skill
+
+- [x] 3.1 Remove the three `notion-maintain-books` source files and migrate README/docs to `notion-manage-books`; verify no active old entrypoint remains.
+- [x] 3.2 Preserve the personal-notes convention in the new skill and synchronize replacement requirements in the delta and main specs; validate the skill, spec, and scoped diff.
 
 ## Verification results
 
 - Reviewed all specification scenarios against the final skill instructions, including template failure, existing notes, missing/batch covers, partial queries, unsupported deletion, and uncertain writes.
 - Skill validator, parsed invocation metadata, plugin discovery path, change strict validation, and new-file whitespace checks passed.
-- Scope review found only this skill and its OpenSpec artifacts changed; no live Notion mutation tests or adapter regeneration were performed.
+- Scope review found only the book skills, their documentation, and this change's OpenSpec artifacts changed; no live Notion mutation tests or adapter regeneration were performed.

@@ -45,6 +45,9 @@ response rather than hard-coding them.
 
 ## Care points
 
+- Keep the page body for personal notes. Do not automatically insert catalog
+  blurbs or duplicate bibliographic sections; preserve unrelated blocks and
+  use targeted edits when the user requests a note change.
 - For creates and updates, fetch the database's current default template and
   use its icon as the shared book icon. Create with that template; for existing
   entries, retain an already-applied template and apply it only where needed,

@@ -321,22 +321,28 @@ The current version does not write the `Rating` or `In Library` formulas, does n
 
 ## Notion Book Library
 
-Use `$notion-maintain-books`, or ask unambiguously about the personal Book
-Library, to search, filter, or audit its entries. Additions and updates operate
-on one book at a time. They first show the specific edition or Notion page,
-source evidence, and exact field changes; writing requires a separate explicit
-confirmation and a fresh duplicate/schema check.
+Invoke `$notion-manage-books` explicitly to create, find, update, or reversibly
+delete entries in the personal Book Library. The skill accepts natural-language
+requests without a fixed format or a mandatory second confirmation. Ambiguous
+books or editions are clarified before changing the affected record.
 
-The skill treats a catalog `Reference` as the strongest available matching key,
-not a universal cross-site edition identifier. Same-title books remain separate
-until the user identifies the right page. Public catalogs never set personal
-reading status, score, finished date, access, or notes. New entries do not add a
-duplicated bibliographic body block or an external cover; cover uploads remain
-manual. Requests to remove a book receive an exact, read-only target preview,
-but this version does not trash, archive, or permanently delete pages.
+The skill checks the live schema, prevents duplicates, and reuses authors,
+series, and access channels. Public metadata never supplies personal scores,
+completion dates, or ownership. The page body remains for personal notes; the
+skill does not automatically insert catalog blurbs or duplicate book details.
+
+New entries use the default book template. Updates preserve existing content,
+and failed template application falls back to repairing the shared book icon.
+Every new book's result includes a verified cover image or direct image link
+for manual addition, or states that no verified cover was found. Query limits,
+unresolved writes, and unsupported deletion are reported explicitly.
+
+This replaces the former `$notion-maintain-books` entrypoint. Use
+`$notion-manage-books` after updating the plugin; it does not activate implicitly.
 
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
-- Book Library skill: `codex/plugins/cthu-codex/skills/notion-maintain-books/SKILL.md`
+- Book Library skill: `codex/plugins/cthu-codex/skills/notion-manage-books/SKILL.md`
+- Book Library requirements: `openspec/specs/codex-plugins-cthu-codex-notion-book-library-skill/spec.md`
 - Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-album-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-movie-library-skill/spec.md`

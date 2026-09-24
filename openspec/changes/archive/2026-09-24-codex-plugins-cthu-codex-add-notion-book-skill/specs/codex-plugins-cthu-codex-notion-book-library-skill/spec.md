@@ -74,3 +74,18 @@ The skill SHALL verify writes, return affected Notion links, and inspect state b
 #### Scenario: Create result is uncertain
 - **WHEN** creation times out or returns an ambiguous outcome
 - **THEN** the skill checks for an existing created entry before retrying and reports the verified outcome
+
+### Requirement: Single book maintenance entrypoint
+The plugin SHALL replace `notion-maintain-books` with `notion-manage-books` and update user documentation to the new explicit-only entrypoint.
+
+#### Scenario: Updated plugin exposes one book skill
+- **WHEN** the plugin is updated with this change
+- **THEN** the old book skill is absent and documentation directs users to `$notion-manage-books`
+- **AND** no legacy alias restores implicit book maintenance
+
+### Requirement: Personal notes remain user-authored
+The skill SHALL reserve page bodies for personal notes and preserve unrelated blocks during targeted note edits.
+
+#### Scenario: Add metadata without generating notes
+- **WHEN** the user creates a book or requests bibliographic enrichment without requesting page prose
+- **THEN** the skill does not insert catalog blurbs or duplicate bibliographic sections into the page body

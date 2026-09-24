@@ -65,11 +65,12 @@ page mutation still requires a field-level preview and explicit confirmation.
 Its MusicBrainz and Discogs resolver is a skill-local script; it does not add a
 second MCP server.
 
-`$notion-maintain-books` searches and audits the personal Book Library, and
-prepares edition-aware single-book additions or updates. It confirms an exact
-field-level preview before writing, preserves user notes and uploaded covers,
-and never merges same-title editions automatically. Removal is preview-only in
-this version; it does not trash or permanently delete pages.
+`$notion-manage-books` is the explicit-only entrypoint for creating, reading,
+updating, and reversibly deleting personal Book Library entries. It preserves
+personal notes and shared relations, uses the book template with verified icon
+repair, and returns a cover image or direct link for each new book. Clear
+requests do not require a second confirmation; ambiguous targets are clarified.
+Deletion depends on the connected Notion tools supporting trash/archive.
 
 ## Source Boundary
 
