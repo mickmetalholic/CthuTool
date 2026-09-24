@@ -58,8 +58,9 @@ The first pass is always read-only: it shows note IDs and exact before/after
 of at most 20, through stale-value-protected Anki MCP calls. The conversion
 does not add or remove tags.
 
-The plugin also includes guarded Notion workflows. `$notion-add-channel` adds
-channels only when explicitly invoked. `notion-maintain-album` can recognize a
+The plugin also includes Notion workflows. `$notion-manage-channels` manages
+channel entries only when explicitly invoked, with scoped CRUD, tag edits,
+platform templates/icons, and per-item batch results. `notion-maintain-album` can recognize a
 specific personal Album-library maintenance request, but every Album schema or
 page mutation still requires a field-level preview and explicit confirmation.
 Its MusicBrainz and Discogs resolver is a skill-local script; it does not add a
