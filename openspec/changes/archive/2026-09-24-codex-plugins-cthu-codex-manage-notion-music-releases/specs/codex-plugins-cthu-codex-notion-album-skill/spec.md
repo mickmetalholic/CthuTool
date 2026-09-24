@@ -1,10 +1,4 @@
-# codex-plugins-cthu-codex-notion-album-skill Specification
-
-## Purpose
-
-Define lightweight, manually invoked management of the personal Notion Music Release library, preserving canonical metadata, template conventions, and user-controlled listening data.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Manual Music Release skill entry point
 CthuCodex SHALL replace `notion-maintain-album` with `notion-manage-music-releases`, displayed under `Notion ·`, for manual-only management of the configured Music Release database.
@@ -120,3 +114,41 @@ The skill SHALL preserve personal listening data during metadata enrichment and 
 #### Scenario: Creation has no personal values
 - **WHEN** a new record is created without explicit listening data
 - **THEN** the skill SHALL retain template defaults and SHALL NOT infer a listening date or score
+
+## REMOVED Requirements
+
+### Requirement: Plugin-local Notion album skill
+**Reason**: Implicit activation and the old name are replaced.
+**Migration**: Use `notion-manage-music-releases` under the replacement "Manual Music Release skill entry point" requirement.
+
+### Requirement: Album and People Vault schema contract
+**Reason**: Historical schema migration is outside record CRUD.
+**Migration**: Use `notion-manage-music-releases` under the replacement "Live Music Release schema boundaries" requirement.
+
+### Requirement: Album input and operation resolution
+**Reason**: Single-album metadata operations are replaced by general record management.
+**Migration**: Use `notion-manage-music-releases` under the replacement "Music Release CRUD operations" requirement.
+
+### Requirement: MusicBrainz Release Group resolution
+**Reason**: Mandatory scored previews are replaced with optional enrichment and preserved identity safeguards.
+**Migration**: Use `notion-manage-music-releases` under the replacement "Music Release canonical metadata" requirement.
+
+### Requirement: Discogs Master matching and Genre option expansion
+**Reason**: Automatic option expansion is retired.
+**Migration**: Use `notion-manage-music-releases` under the replacement "Music Release Discogs provenance and existing options" requirement.
+
+### Requirement: People Vault Artist relation resolution
+**Reason**: Incidental People Vault identifier updates are retired.
+**Migration**: Use `notion-manage-music-releases` under the replacement "Music Release artist identity preservation" requirement.
+
+### Requirement: Read-only preview and conflict authorization
+**Reason**: Mandatory repeated preview approval is replaced by clear-request authorization.
+**Migration**: Use `notion-manage-music-releases` under the replacement "Music Release scoped authorization" requirement.
+
+### Requirement: Idempotent Album write and verification
+**Reason**: One-record preview gating is replaced with CRUD verification and template/icon/cover handling.
+**Migration**: Use `notion-manage-music-releases` under the replacement "Music Release templates covers and write verification" requirement.
+
+### Requirement: Personal listening data protection
+**Reason**: Exclusion of explicitly requested personal-field edits is retired.
+**Migration**: Use `notion-manage-music-releases` under the replacement "Music Release personal field handling" requirement.

@@ -58,12 +58,13 @@ The first pass is always read-only: it shows note IDs and exact before/after
 of at most 20, through stale-value-protected Anki MCP calls. The conversion
 does not add or remove tags.
 
-The plugin also includes guarded Notion workflows. `$notion-add-channel` adds
-channels only when explicitly invoked. `notion-maintain-album` can recognize a
-specific personal Album-library maintenance request, but every Album schema or
-page mutation still requires a field-level preview and explicit confirmation.
-Its MusicBrainz and Discogs resolver is a skill-local script; it does not add a
-second MCP server.
+The plugin also includes Notion workflows. `$notion-add-channel` adds channels
+only when explicitly invoked. `$notion-manage-music-releases` replaces
+`notion-maintain-album` with manual-only query, create, update, and reversible
+removal for the Music Release library. It preserves canonical release identity,
+uses the live template with icon repair, and returns cover images or links for
+manual addition. Its MusicBrainz/Discogs resolver is optional; personal listening
+fields can be edited explicitly. No second MCP server is added.
 
 `$notion-maintain-books` searches and audits the personal Book Library, and
 prepares edition-aware single-book additions or updates. It confirms an exact

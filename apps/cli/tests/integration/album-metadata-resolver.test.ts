@@ -11,7 +11,7 @@ const skillRoot = join(
   'plugins',
   'cthu-codex',
   'skills',
-  'notion-maintain-album',
+  'notion-manage-music-releases',
 );
 const resolverPath = join(skillRoot, 'scripts', 'resolve-album.mjs');
 const fixtureRoot = join(
@@ -387,7 +387,11 @@ describe('Notion album metadata resolver', () => {
     await cp(join(repoRoot, 'codex', 'plugins', 'cthu-codex'), installRoot, {
       recursive: true,
     });
-    const installedSkill = join(installRoot, 'skills', 'notion-maintain-album');
+    const installedSkill = join(
+      installRoot,
+      'skills',
+      'notion-manage-music-releases',
+    );
     const installedResolver = join(
       installedSkill,
       'scripts',

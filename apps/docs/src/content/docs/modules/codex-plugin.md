@@ -247,54 +247,31 @@ Only channels without effective user-supplied tags require content inspection an
 
 Browser input is optional and exact-tab-only. URL-only invocations do not connect to a browser. The skill never navigates or mutates the selected tab and never inspects other tab contents or browser-private state; claiming an exact attachment may use one metadata-only tab listing solely to match its full ID, title, and URL tuple. If browser control is unavailable, no tab is selected, authentication or verification blocks the page, the page is unsupported, or its URL changes during the read, the workflow stops before reading Notion and asks for a ready homepage tab or canonical URL.
 
-## Notion Album Library
+## Notion Music Release Library
 
-Use `$notion-maintain-album`, or make an unambiguous personal Album-library
-maintenance request, to add one album, complete missing metadata, or audit whether
-MusicBrainz and Discogs identify the same album. Ordinary album discussion does
-not invoke the workflow. Examples include:
+Use `$notion-manage-music-releases` for lightweight query, creation, updates, and
+reversible removal in Music Release, including albums, singles, and EPs. It replaces
+`notion-maintain-album` and runs only when manually invoked. Natural-language
+requests are sufficient; clear instructions do not require a second confirmation.
 
-```text
-添加 Paranoid by Black Sabbath 到我的 Notion Album
-补全 The Black Parade 的专辑库元信息
-检查这张专辑的 MusicBrainz 和 Discogs 是否匹配
-把这个 MusicBrainz Release 链接加入专辑库
-```
+MusicBrainz Release Group identifies the work and supplies core metadata; Discogs
+Master provides cross-validation and Genre/Style. Concrete editions and reissue
+dates never replace the original release identity/date, and partial dates are not
+padded. Artist relations use verified existing People Vault pages. Ambiguous
+identities are clarified, and existing options are reused without schema changes.
 
-The workflow uses MusicBrainz Release Group as the canonical album identity and
-authority for standard title, artist credit, primary release type, and earliest
-release date. A concrete MusicBrainz Release URL is converted to its owning Release
-Group; a regional issue, reissue, or remaster date is never written as the original
-`Release Date`. Partial MusicBrainz dates remain visibly partial and are not padded
-with invented month or day values.
+Creation uses the live template, repairs its consistent icon when necessary, and
+returns a verified cover image or direct link for manual addition. Updates preserve
+unrequested fields, notes, and covers. Explicit requests can change Status,
+Listened Date, and Score; Rating remains a read-only formula. Removal uses
+reversible trash/archive when supported, otherwise the skill provides manual links.
+Query coverage and incomplete write verification are disclosed.
 
-Discogs Master is used to cross-check title, artist, and year and to supply Genre
-and Style values. A direct MusicBrainz-to-Discogs Master relationship is preferred
-over Discogs search. Confirmed new Genre/Style values are shown in the preview and
-added as live `Genre` options only after confirmation. The same rule applies if
-MusicBrainz introduces a new primary `Release Type` beyond the initial Album,
-Single, EP, Broadcast, and Other options.
+The existing skill-local MusicBrainz/Discogs resolver remains an optional enrichment
+helper. It is not required for routine queries or listening-field edits. Discogs
+search through that helper requires `DISCOGS_TOKEN`; unavailable sources are
+reported rather than invented.
 
-MusicBrainz lookup is anonymous and uses the required identifying User-Agent.
-Direct Discogs Master lookup can run without stored credentials; deterministic
-Discogs search fallback requires `DISCOGS_TOKEN`. If it is absent, the workflow
-reports the blocked fallback instead of substituting an untraceable web result.
-
-Album `Artist` relations must resolve to existing People Vault pages. The workflow
-matches `MusicBrainz Artist` URL first, then permits exactly one normalized exact
-name whose identifier is empty. It can preview filling that missing URL, but it
-never creates a People Vault page or replaces a conflicting artist identifier.
-
-Every mutation starts with a read-only candidate and field-change preview. Tied
-candidates, mismatched artists, edition qualifiers, conflicting dates, ambiguous
-People Vault pages, and differing non-empty Notion values block the write. A
-generic confirmation never authorizes replacing a non-empty value; approval must
-name that field and produces a new plan. Before execution, the workflow refetches
-the live schema and pages to reject stale plans, then verifies each approved write.
-
-Normal album metadata maintenance never writes personal listening fields:
-`Status`, `Listened Date`, `Score`, or the `Rating` formula. Streaming services may
-be retained as listening links, but are not authority for core metadata.
 ## Notion Movie Library
 
 Use `$notion-manage-movies` to retrieve entries from the personal Notion Movie Library or to prepare one reviewed movie addition. The skill also allows implicit invocation for requests that clearly target this database, such as:
