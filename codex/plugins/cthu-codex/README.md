@@ -71,6 +71,11 @@ field-level preview before writing, preserves user notes and uploaded covers,
 and never merges same-title editions automatically. Removal is preview-only in
 this version; it does not trash or permanently delete pages.
 
+`$notion-manage-comics` provides explicit-only CRUD for the personal Comic Book
+Library. It preserves work/part/volume identity, multiple creators, and personal
+notes, uses the comic template with icon repair, and returns cover images or
+links for manual addition. Reversible removal depends on connector support.
+
 ## Source Boundary
 
 Keep repository-owned plugin source, manifests, and implementation assets under

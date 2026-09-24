@@ -335,6 +335,27 @@ duplicated bibliographic body block or an external cover; cover uploads remain
 manual. Requests to remove a book receive an exact, read-only target preview,
 but this version does not trash, archive, or permanently delete pages.
 
+## Notion Comic Book Library
+
+Invoke `$notion-manage-comics` explicitly to create, find, update, or reversibly
+remove comic entries. Natural-language requests need no fixed format or redundant
+confirmation when the target and operation are clear.
+
+The skill uses the live schema and preserves multiple authors, access relations,
+notes, and personal scores. Whole works, parts, volumes, and editions are distinct:
+a volume reference alone does not authorize splitting or renaming a work-level
+entry. Publication completion and finishing one volume do not imply that you have
+read the entire work. No absent classification, series, finish-date, or progress
+fields are added automatically.
+
+Creation uses the comic template and verifies its shared icon, repairing it when
+application fails. Each new entry returns a verified cover image or direct link
+for manual addition, or states that no cover was found. Representative volume art
+is labeled for work-level entries. Deletion uses supported reversible Notion
+trash/archive only; incomplete queries and unverified writes are reported.
+
+Skill source: `codex/plugins/cthu-codex/skills/notion-manage-comics/SKILL.md`.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
