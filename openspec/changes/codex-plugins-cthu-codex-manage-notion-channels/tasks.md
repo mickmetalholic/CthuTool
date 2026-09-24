@@ -7,9 +7,10 @@
 ## 2. Validate and deliver
 
 - [x] 2.1 Run strict OpenSpec change validation, skill/YAML validation, and whitespace checks; record results and confirm generated adapters and unrelated changes remain untouched without regeneration.
-- [ ] 2.2 Commit the scoped changes and open an independent PR; verify its base is main, its diff excludes book-library changes, and PR #81 remains unmerged.
+- [x] 2.2 Commit the scoped changes and open an independent PR; verify its base is main, its diff excludes book-library changes, and PR #81 remains unmerged.
 
 ## Verification results
 
 - Reviewed CRUD, tag add/remove/replace, delegated classification, duplicate identities, template fallback, blocked/changing tabs, independent batch outcomes, and uncertain-write scenarios against the final instructions.
 - Skill and YAML validation, strict change validation, whitespace checks, and comparison of unchanged documentation sections passed. No live Notion mutations or adapter regeneration were performed.
+- PR #82 targets main and contains only channel changes; book PR #81 was verified OPEN and unmerged.
