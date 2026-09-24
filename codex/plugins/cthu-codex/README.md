@@ -71,6 +71,11 @@ field-level preview before writing, preserves user notes and uploaded covers,
 and never merges same-title editions automatically. Removal is preview-only in
 this version; it does not trash or permanently delete pages.
 
+`$notion-manage-movies` provides manual-only Movie Library CRUD with canonical
+IMDb/TMDB URLs, verified Director/Cast relations, personal-field protection,
+template/icon repair, and poster images or links for manual addition. Removal is
+reversible when the connector supports it; clear requests authorize scoped writes.
+
 ## Source Boundary
 
 Keep repository-owned plugin source, manifests, and implementation assets under
@@ -92,6 +97,6 @@ managed, protected, opted-out, and unprovenanced Skills remain excluded.
 ## TODO
 
 - Integrate the future Notion Movie Library workflow with CthuTool's backend
-  movie-metadata capability. Keep candidate disambiguation and explicit
-  confirmation before every Notion write; use the backend only as the metadata
+  movie-metadata capability. Keep candidate disambiguation and user-authorized
+  write scope; use the backend only as the metadata
   source.

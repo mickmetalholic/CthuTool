@@ -1,10 +1,4 @@
-# codex-plugins-cthu-codex-notion-movie-library-skill Specification
-
-## Purpose
-
-Define lightweight, manually invoked Movie Library management with verified movie identities, current Notion fields, personal-data preservation, and template/poster handling.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Manual Movie Library CRUD entry point
 The plugin SHALL expose `notion-manage-movies` under `Notion ·` for manually invoked query, create, update, and reversible removal, using the authorized Notion connector and agent-native public web tools only.
@@ -108,3 +102,49 @@ The skill SHALL limit deletion to clearly identified records and connector-suppo
 - **THEN** the skill SHALL verify the targeted records and reversible removal result
 - **AND** unsupported removal SHALL be reported with manual page links
 - **AND** the skill SHALL NOT substitute permanent deletion
+
+## REMOVED Requirements
+
+### Requirement: Movie Library skill invocation and boundaries
+**Reason**: Implicit activation and add-only scope are replaced by manual CRUD.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Live Movie Library discovery
+**Reason**: Discovery is consolidated with live-schema and query coverage handling.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Read-only Movie Library retrieval
+**Reason**: Retrieval gains capability-aware query fallback while retaining read-only boundaries.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Agent-native fuzzy movie candidate discovery
+**Reason**: Candidate evidence remains required but repeated final confirmation is retired.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Movie metadata reconciliation
+**Reason**: Metadata reconciliation now targets canonical URL properties and precise release context.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Live Notion property mapping
+**Reason**: Obsolete ID field names and blanket relation-write prohibition are retired.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Personal Movie Library properties
+**Reason**: Watched Date and live template defaults replace the old Date field and fixed preview defaults.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Movie duplicate prevention
+**Reason**: Duplicate protection is retained while explicit existing-record updates become supported.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Explicit final write confirmation
+**Reason**: Clear user requests authorize scoped writes; mandatory second confirmation is retired.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Movie entry creation and verification
+**Reason**: Single reviewed additions are replaced by CRUD with template/icon repair and poster output.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.
+
+### Requirement: Future backend metadata integration remains deferred
+**Reason**: Runtime remains independent; future integration preserves authorization rather than mandatory repeated approval.
+**Migration**: Use the replacement manual Movie Library CRUD contracts in this capability with the existing `notion-manage-movies` name.

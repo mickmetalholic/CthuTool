@@ -297,27 +297,27 @@ Normal album metadata maintenance never writes personal listening fields:
 be retained as listening links, but are not authority for core metadata.
 ## Notion Movie Library
 
-Use `$notion-manage-movies` to retrieve entries from the personal Notion Movie Library or to prepare one reviewed movie addition. The skill also allows implicit invocation for requests that clearly target this database, such as:
+Use `$notion-manage-movies` explicitly to query, add, update, or reversibly remove
+movies. Natural-language requests are sufficient; clear instructions authorize
+scoped changes without a mandatory second confirmation.
 
-```text
-查询我看过的科幻片
-```
+The skill discovers live data sources, fields, options, and templates. Metadata
+uses `Name`, `Genres`, `Release Date`, and canonical `IMDb`/`TMDB` URLs. Movie
+identity is checked against remakes, sequels, and TV entries before writing;
+existing identities are deduplicated and incomplete query coverage is disclosed.
+Public metadata comes from agent-native web tools, with no backend or direct API
+requirement. Ordinary library queries stay within Notion unless enrichment is requested.
 
-Retrieval stays inside the authorized Notion connector. Structured filters use parameterized data-source queries, fuzzy title retrieval uses data-source-scoped Notion search, and every result includes its Notion page URL. The skill reports pagination, connector limits, and non-queryable properties instead of presenting partial data as complete.
+Director and Cast can link verified existing People Vault records; missing or
+ambiguous people require clarification. Personal Status, Watched Date, Score, and
+Is in Library change only as requested; Rating and In Library remain formulas.
+Public ratings never become personal scores, and release dates are distinct from
+viewing dates. Unrequested values, notes, and uploaded covers are preserved.
 
-For a fuzzy add request:
-
-```text
-新增 星际穿越
-```
-
-the skill uses the agent's built-in web search and page-reading capabilities to find public movie candidates. It does not call a CthuTool backend, direct movie API, helper script, local service, or additional MCP server. Public pages are treated as untrusted evidence, and external IDs are included only when directly evidenced.
-
-When multiple movies remain plausible, the skill shows a numbered list with available title, original title, year, director, and stable IDs, then waits for a selection. Selecting a candidate is not write authorization. After metadata reconciliation, live genre mapping, and duplicate checks, the skill shows a separate final Notion property preview and requires explicit confirmation even when only one candidate was found.
-
-Public metadata can populate `Name`, `Genres`, `Release Date`, `IMDB ID`, and `TMDB ID`. Personal properties remain user-owned. When omitted, the preview proposes `Status` as `Want to watch` when that option still exists, leaves `Score` and `Date` unset, and proposes `Is in Library` as false. Public ratings never populate `Score`.
-
-The current version does not write the `Rating` or `In Library` formulas, does not write the `Director` or `Cast` relations, does not update existing entries, and does not perform batch additions. The plugin README tracks future use of CthuTool backend movie metadata while preserving candidate disambiguation and explicit confirmation before every Notion write.
+Creation uses the live template, repairs the consistent icon when necessary, and
+returns a verified poster image or direct image link for manual addition. Removal
+uses reversible trash/archive if supported, otherwise the skill returns manual
+page links. Writes are verified and uncertain results are reconciled before retry.
 
 ## Notion Book Library
 
