@@ -194,58 +194,43 @@ The `Sentence` field uses Anki cloze syntax with a short synonym or paraphrase h
 
 ## Notion Channel Library
 
-Use `$notion-add-channel` to add one or more YouTube, Bilibili, or Xiaohongshu channels to the personal Notion Channel Library. It accepts supported homepage URLs and, when explicitly requested, one exact attached or selected browser tab. The explicit-only skill validates current tags, checks for input and database duplicates, selects each platform-specific template, verifies created entries, and returns per-channel Notion URLs.
-
-Use the canonical Xiaohongshu creator homepage form; note, board, search, and unresolved share-link pages are not supported:
-
-```text
-$notion-add-channel https://www.xiaohongshu.com/user/profile/creator-id
-```
-
-Use the selected Chrome tab only when you request it explicitly:
+Invoke `$notion-manage-channels` explicitly to add, find, update, or reversibly
+remove YouTube, Bilibili, and Xiaohongshu entries in the personal Channel Library.
+This replaces `$notion-add-channel`; the old entrypoint is removed. Requests use
+natural language, without a required format or a second confirmation for clear
+operations. Examples:
 
 ```text
-$notion-add-channel Chrome current tab
+$notion-manage-channels 找出我收藏的 YouTube 科技频道
+$notion-manage-channels 给这个频道加上 AI 标签，保留原来的标签
+$notion-manage-channels 把这个主页加入频道库，自动选择合适的现有标签
+$notion-manage-channels 把 Chrome 当前标签页的频道加入频道库
 ```
 
-An exact tag supplied by the user is used without inspecting the channel description or recent content and without a second confirmation. The skill still reads the minimum channel metadata required for its name and duplicate identity.
+Creation needs a supported channel homepage or an explicitly selected homepage
+tab. Existing entries can be found by name, platform, tags, or Notion link.
+Duplicate checks use platform identity; names and renamed handles alone do not
+prove that two accounts are the same. Videos, notes, search pages, and unresolved
+short links require a channel homepage instead.
 
-Apply the same tags to a batch with a standalone `tags:` line:
+Tag additions and removals preserve other tags; explicit replacement uses the
+requested set. Shared batch tags and per-item overrides are supported. Valid
+supplied tags need no further confirmation or content-based reconsideration.
+Explicitly delegated automatic classification uses existing options when clear;
+otherwise missing, invalid, or ambiguous tags are clarified for the affected item.
 
-```text
-$notion-add-channel
-tags: Technology, AI
+Creation uses the matching platform template. Updates preserve existing notes,
+and failed or unsupported template application falls back to a verified platform
+icon where possible. Batches report each item's outcome and allow independent
+ready items to complete. Uncertain writes are checked before retries.
 
-https://www.youtube.com/@channel-a
-https://space.bilibili.com/123456
-https://www.xiaohongshu.com/user/profile/creator-id
-```
-
-One current tab can participate in the same batch and inherit the shared tags:
-
-```text
-$notion-add-channel
-tags: Technology, AI
-
-Chrome current tab
-https://www.youtube.com/@channel-a
-https://space.bilibili.com/123456
-```
-
-Put `tags:` on an item line to replace the batch default for that item:
-
-```text
-$notion-add-channel
-tags: Technology
-
-https://www.youtube.com/@channel-a | tags: AI
-https://space.bilibili.com/123456 | tags: Japanese, Education
-Chrome current tab | tags: Lifestyle
-```
-
-Only channels without effective user-supplied tags require content inspection and inferred-tag confirmation. In a mixed batch, the skill consolidates those decisions before it creates any new entries.
-
-Browser input is optional and exact-tab-only. URL-only invocations do not connect to a browser. The skill never navigates or mutates the selected tab and never inspects other tab contents or browser-private state; claiming an exact attachment may use one metadata-only tab listing solely to match its full ID, title, and URL tuple. If browser control is unavailable, no tab is selected, authentication or verification blocks the page, the page is unsupported, or its URL changes during the read, the workflow stops before reading Notion and asks for a ready homepage tab or canonical URL.
+Browser access is optional and limited to an explicitly selected or attached tab.
+It is read-only, without navigation, unrelated tab content, or private browser
+state. A blocked, unsupported, or changing tab requires a ready homepage or URL
+for that item. Pasted URLs and Notion-only queries do not access browser state.
+Deletion affects only Notion records through available reversible trash/archive;
+it never follows, unfollows, or changes platform accounts. Unsupported operations
+and incomplete query coverage are reported explicitly.
 
 ## Notion Album Library
 
