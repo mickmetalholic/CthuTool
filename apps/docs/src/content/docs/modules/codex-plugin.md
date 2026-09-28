@@ -335,6 +335,29 @@ duplicated bibliographic body block or an external cover; cover uploads remain
 manual. Requests to remove a book receive an exact, read-only target preview,
 but this version does not trash, archive, or permanently delete pages.
 
+## Notion Video Game Library
+
+Use `$notion-manage-games` explicitly for query, create, update, and reversible
+removal. Clear natural-language instructions authorize scoped changes without a
+mandatory second confirmation. The skill discovers the live schema and template,
+checks duplicates, and discloses incomplete query coverage.
+
+Game identity distinguishes base games, DLC, remakes, remasters, ports, and editions.
+IGDB links and release dates must match the selected scope. Developer and Series
+link verified existing records. Owned On reflects only user-specified ownership;
+adding another owned platform does not automatically create a duplicate game.
+
+My Score, Playtime (h), Purchase Price, Last Played At, Finished At, and Status stay
+under user control. Public scores, store prices, and completion estimates are not
+personal values. Hours and currency must be clear. Rating, Playable On, and
+Emulators are read-only, and related databases are not modified incidentally.
+
+Creation uses the live template and checks its consistent icon, returning a verified
+cover image or direct link for manual addition. Updates preserve unrequested values,
+notes, and covers. Removal uses supported reversible trash/archive or returns manual
+links; removing ownership is distinct from deleting the game. Writes are verified
+and uncertain outcomes are reconciled before retrying.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`

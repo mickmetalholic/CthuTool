@@ -71,6 +71,12 @@ field-level preview before writing, preserves user notes and uploaded covers,
 and never merges same-title editions automatically. Removal is preview-only in
 this version; it does not trash or permanently delete pages.
 
+`$notion-manage-games` provides manual-only Video Game Library CRUD. It preserves
+game/edition identity, separates owned platforms from public availability, and
+protects personal price, playtime, score, and dates. It uses the live template with
+icon repair and returns cover images or links for manual addition. Removal is
+reversible when supported by the connector.
+
 ## Source Boundary
 
 Keep repository-owned plugin source, manifests, and implementation assets under
