@@ -335,6 +335,29 @@ duplicated bibliographic body block or an external cover; cover uploads remain
 manual. Requests to remove a book receive an exact, read-only target preview,
 but this version does not trash, archive, or permanently delete pages.
 
+## Notion Drama Library
+
+Use `$notion-manage-dramas` explicitly for lightweight query, creation, updates,
+and reversible removal. Clear natural-language requests authorize scoped changes
+without a mandatory second confirmation. The skill discovers the live schema,
+options, and template and discloses incomplete query coverage.
+
+Series, seasons, parts, and specials remain distinct. Shared series-level IMDb or
+TMDB TV URLs do not alone prove duplicates; title, year, and season scope are
+reconciled. Reference supports a verified fallback such as Douban. Episodes and
+Release Date match the selected unit; aired counts are not silently treated as
+final totals, and partial dates are not padded.
+
+Category and Genres reuse current options. Director, Cast, and Writer link verified
+existing People Vault records without incidental people creation. Status, Watched
+Date, Score, and Is in Library stay under user control; Rating and In Library are
+read-only formulas. Research & Archive is a status, not a removal operation.
+
+Creation uses the live template and checks its consistent icon, returning a verified
+poster image or direct link for manual addition. Updates preserve unrequested
+values, notes, and covers. Removal uses reversible trash/archive if supported,
+otherwise returns manual page links. Mutations are verified before reporting success.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`

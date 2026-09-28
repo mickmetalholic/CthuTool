@@ -71,6 +71,12 @@ field-level preview before writing, preserves user notes and uploaded covers,
 and never merges same-title editions automatically. Removal is preview-only in
 this version; it does not trash or permanently delete pages.
 
+`$notion-manage-dramas` provides manual-only CRUD for Drama Library, preserving
+series/season identity, scoped episode counts, and personal viewing data. It uses
+the live template with icon repair and returns poster images or links for manual
+addition. Director, Cast, and Writer link verified existing People Vault records;
+removal is reversible when supported by the connector.
+
 ## Source Boundary
 
 Keep repository-owned plugin source, manifests, and implementation assets under
