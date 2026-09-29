@@ -398,6 +398,20 @@ changes. Status Archived is distinct from deletion; ambiguous archive requests a
 clarified. Queries disclose incomplete coverage and writes are verified before success
 is reported.
 
+## Notion Documentary Library
+
+Use `$notion-manage-documentaries` explicitly for lightweight query, creation,
+scoped updates, and reversible removal in the Documentary Library.
+
+The skill distinguishes films, series, seasons, and episodes, verifies IMDb and
+contextual title matches, and does not treat a shared parent-series URL as a duplicate.
+It discovers live Type, Series, and Topics options. Status, Watched Date, and Is in
+Library are personal fields; In Library is a read-only formula.
+
+Creation uses the live template, verifies the uniform gray document icon, and
+returns a verified poster/image link for manual addition. Updates preserve unrelated
+content and covers; unsupported icon repair or removal is reported with page links.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
