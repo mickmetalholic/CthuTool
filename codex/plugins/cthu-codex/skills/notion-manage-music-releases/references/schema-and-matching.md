@@ -29,3 +29,8 @@ personal fields, `buildFieldPreview` can illustrate differences, and artist or
 option helpers can suggest missing values. Do not execute suggested People Vault
 updates or option creation. Follow SKILL.md for authorization, current schema,
 existing options, template/icon, covers, and direct personal-field CRUD.
+
+The resolver does not resolve `Conductors`, `Ensembles`, `Soloists`, or `Works`.
+Handle requested changes to these relations against the live related databases;
+missing helper output is not a reason to clear them. `Composers` and `Work Type`
+are derived rollups, not resolver mutation fields.
