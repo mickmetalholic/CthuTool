@@ -412,6 +412,21 @@ Creation uses the live template, verifies the uniform gray document icon, and
 returns a verified poster/image link for manual addition. Updates preserve unrelated
 content and covers; unsupported icon repair or removal is reported with page links.
 
+## Notion Animation Library
+
+Use `$notion-manage-animation` explicitly for lightweight query, creation, scoped
+updates, and reversible removal in the Animation Library.
+
+The skill distinguishes series, seasons, films, specials, and adaptations; IMDb
+matches and episode counts must describe the requested unit. Director, Writer, and
+Cast link verified existing People Vault records, preserving voice-language versions.
+Status, Watched Date, Score, and Has Document remain personal fields; Rating is a
+read-only formula. Research & archive status is distinct from page removal.
+
+Creation uses the live template and verifies its gray movie-clapboard-play icon,
+repairing it where supported. A verified poster/image link is returned for manual
+addition. Updates preserve unrelated fields, notes, covers, and credits.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`

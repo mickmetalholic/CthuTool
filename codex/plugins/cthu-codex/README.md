@@ -58,7 +58,7 @@ The first pass is always read-only: it shows note IDs and exact before/after
 of at most 20, through stale-value-protected Anki MCP calls. The conversion
 does not add or remove tags.
 
-The plugin includes nine lightweight, manually invoked Notion management skills.
+The plugin includes ten lightweight, manually invoked Notion management skills.
 They support query, creation, scoped updates, and reversible removal when the
 connector supports it. Clear requests authorize their operations; ambiguous
 identities are clarified. Creation uses live templates with verified icon repair
@@ -75,6 +75,7 @@ and returns relevant images or direct links for manual addition.
 | `$notion-manage-games` | Video Game Library; game/edition identity, owned platforms, and personal play history. |
 | `$notion-manage-knowledge` | Knowledge Vault; type-specific templates, resource versions, and scoped note edits. |
 | `$notion-manage-documentaries` | Documentary Library; film/series/season/episode identity and personal viewing/collection data. |
+| `$notion-manage-animation` | Animation Library; work/season identity, voice credits, and personal viewing data. |
 
 These replace `notion-maintain-books`, `notion-add-channel`, and
 `notion-maintain-album`. The MusicBrainz/Discogs resolver remains an optional
