@@ -427,6 +427,21 @@ Creation uses the live template and verifies its gray movie-clapboard-play icon,
 repairing it where supported. A verified poster/image link is returned for manual
 addition. Updates preserve unrelated fields, notes, covers, and credits.
 
+## Notion App Vault
+
+Use `$notion-manage-apps` explicitly for lightweight query, creation, scoped updates,
+and reversible removal of App Vault records. It does not install or uninstall apps.
+
+The app URL is currently exposed as userDefined:URL, distinct from the Notion page
+URL. Platform and Tag reuse live options and preserve unrelated memberships;
+Knowledges links verified existing Knowledge Vault records. Product and publisher
+identity distinguish similarly named apps, editions, extensions, and shared domains.
+
+No template was returned during discovery. The skill rechecks availability, uses a
+live template when available, and reports absence otherwise. Existing branded icons
+are preserved; missing icons use the verified template icon or gray window fallback.
+Creation returns a verified app image/link for manual addition, or reports its absence.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
