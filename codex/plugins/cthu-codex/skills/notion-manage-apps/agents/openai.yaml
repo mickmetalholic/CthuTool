@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Manage Apps"
+  short_description: "Manage app records in the personal Notion App Vault."
+  default_prompt: "Use $notion-manage-apps to query, add, update, or remove records in my Notion App Vault."
+policy:
+  allow_implicit_invocation: false

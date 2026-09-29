@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Manage Books"
+  short_description: "Create, read, update, and delete Notion book entries."
+  default_prompt: "Use $notion-manage-books to manage entries in my Notion Book Library."
+policy:
+  allow_implicit_invocation: false

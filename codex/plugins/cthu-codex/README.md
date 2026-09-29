@@ -58,18 +58,29 @@ The first pass is always read-only: it shows note IDs and exact before/after
 of at most 20, through stale-value-protected Anki MCP calls. The conversion
 does not add or remove tags.
 
-The plugin also includes guarded Notion workflows. `$notion-add-channel` adds
-channels only when explicitly invoked. `notion-maintain-album` can recognize a
-specific personal Album-library maintenance request, but every Album schema or
-page mutation still requires a field-level preview and explicit confirmation.
-Its MusicBrainz and Discogs resolver is a skill-local script; it does not add a
-second MCP server.
+The plugin includes eleven lightweight, manually invoked Notion management skills.
+They support query, creation, scoped updates, and reversible removal when the
+connector supports it. Clear requests authorize their operations; ambiguous
+identities are clarified. Creation uses available live templates with verified icon repair
+and returns relevant images or direct links for manual addition.
 
-`$notion-maintain-books` searches and audits the personal Book Library, and
-prepares edition-aware single-book additions or updates. It confirms an exact
-field-level preview before writing, preserves user notes and uploaded covers,
-and never merges same-title editions automatically. Removal is preview-only in
-this version; it does not trash or permanently delete pages.
+| Skill | Library and key safeguards |
+| --- | --- |
+| `$notion-manage-books` | Book Library; edition identity, author relations, and personal reading data. |
+| `$notion-manage-channels` | Channel Library; platform identity, tag edits, existing video relations, and read-only selected-tab input. |
+| `$notion-manage-comics` | Comic Book Library; work/part/volume identity and multiple creators. |
+| `$notion-manage-music-releases` | Music Release; MusicBrainz Release Groups, Discogs Masters, and personal listening data. |
+| `$notion-manage-movies` | Movie Library; canonical IMDb/TMDB identity and verified people relations. |
+| `$notion-manage-dramas` | Drama Library; series/season identity, episode counts, and personal viewing data. |
+| `$notion-manage-games` | Video Game Library; game/edition identity, owned platforms, and personal play history. |
+| `$notion-manage-knowledge` | Knowledge Vault; type-specific templates, resource versions, and scoped note edits. |
+| `$notion-manage-documentaries` | Documentary Library; film/series/season/episode identity and personal viewing/collection data. |
+| `$notion-manage-animation` | Animation Library; work/season identity, voice credits, and personal viewing data. |
+| `$notion-manage-apps` | App Vault; product identity, platform/tag membership, and existing knowledge links. |
+
+These replace `notion-maintain-books`, `notion-add-channel`, and
+`notion-maintain-album`. The MusicBrainz/Discogs resolver remains an optional
+skill-local helper; no additional MCP server is required.
 
 ## Source Boundary
 
@@ -92,6 +103,6 @@ managed, protected, opted-out, and unprovenanced Skills remain excluded.
 ## TODO
 
 - Integrate the future Notion Movie Library workflow with CthuTool's backend
-  movie-metadata capability. Keep candidate disambiguation and explicit
-  confirmation before every Notion write; use the backend only as the metadata
+  movie-metadata capability. Keep candidate disambiguation and user-authorized
+  write scope; use the backend only as the metadata
   source.

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Manage Channels"
+  short_description: "Manage channel records in the Notion Channel Library."
+  default_prompt: "Use $notion-manage-channels to manage entries in my Notion Channel Library."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Manage Animation"
+  short_description: "Manage the personal Notion Animation Library."
+  default_prompt: "Use $notion-manage-animation to query, add, update, or remove entries in my Notion Animation Library."
+policy:
+  allow_implicit_invocation: false

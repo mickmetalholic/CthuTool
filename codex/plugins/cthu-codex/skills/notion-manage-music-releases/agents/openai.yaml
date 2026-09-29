@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Manage Music Releases"
+  short_description: "Manage the personal Notion Music Release library."
+  default_prompt: "Use $notion-manage-music-releases to query, add, update, or remove records in my Notion Music Release library."
+policy:
+  allow_implicit_invocation: false
