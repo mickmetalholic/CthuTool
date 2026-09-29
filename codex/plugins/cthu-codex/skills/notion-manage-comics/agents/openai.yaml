@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Manage Comics"
+  short_description: "Manage comic records in the Notion Comic Book Library."
+  default_prompt: "Use $notion-manage-comics to manage entries in my Notion Comic Book Library."
+policy:
+  allow_implicit_invocation: false
