@@ -192,148 +192,188 @@ get past the maze of
 
 The `Sentence` field uses Anki cloze syntax with a short synonym or paraphrase hint. The `Explanation` field uses the existing English style with `Definition`, `Synonyms`, and `Other Examples` sections.
 
-## Notion Channel Library
-
-Use `$notion-add-channel` to add one or more YouTube, Bilibili, or Xiaohongshu channels to the personal Notion Channel Library. It accepts supported homepage URLs and, when explicitly requested, one exact attached or selected browser tab. The explicit-only skill validates current tags, checks for input and database duplicates, selects each platform-specific template, verifies created entries, and returns per-channel Notion URLs.
-
-Use the canonical Xiaohongshu creator homepage form; note, board, search, and unresolved share-link pages are not supported:
-
-```text
-$notion-add-channel https://www.xiaohongshu.com/user/profile/creator-id
-```
-
-Use the selected Chrome tab only when you request it explicitly:
-
-```text
-$notion-add-channel Chrome current tab
-```
-
-An exact tag supplied by the user is used without inspecting the channel description or recent content and without a second confirmation. The skill still reads the minimum channel metadata required for its name and duplicate identity.
-
-Apply the same tags to a batch with a standalone `tags:` line:
-
-```text
-$notion-add-channel
-tags: Technology, AI
-
-https://www.youtube.com/@channel-a
-https://space.bilibili.com/123456
-https://www.xiaohongshu.com/user/profile/creator-id
-```
-
-One current tab can participate in the same batch and inherit the shared tags:
-
-```text
-$notion-add-channel
-tags: Technology, AI
-
-Chrome current tab
-https://www.youtube.com/@channel-a
-https://space.bilibili.com/123456
-```
-
-Put `tags:` on an item line to replace the batch default for that item:
-
-```text
-$notion-add-channel
-tags: Technology
-
-https://www.youtube.com/@channel-a | tags: AI
-https://space.bilibili.com/123456 | tags: Japanese, Education
-Chrome current tab | tags: Lifestyle
-```
-
-Only channels without effective user-supplied tags require content inspection and inferred-tag confirmation. In a mixed batch, the skill consolidates those decisions before it creates any new entries.
-
-Browser input is optional and exact-tab-only. URL-only invocations do not connect to a browser. The skill never navigates or mutates the selected tab and never inspects other tab contents or browser-private state; claiming an exact attachment may use one metadata-only tab listing solely to match its full ID, title, and URL tuple. If browser control is unavailable, no tab is selected, authentication or verification blocks the page, the page is unsupported, or its URL changes during the read, the workflow stops before reading Notion and asks for a ready homepage tab or canonical URL.
-
-## Notion Album Library
-
-Use `$notion-maintain-album`, or make an unambiguous personal Album-library
-maintenance request, to add one album, complete missing metadata, or audit whether
-MusicBrainz and Discogs identify the same album. Ordinary album discussion does
-not invoke the workflow. Examples include:
-
-```text
-添加 Paranoid by Black Sabbath 到我的 Notion Album
-补全 The Black Parade 的专辑库元信息
-检查这张专辑的 MusicBrainz 和 Discogs 是否匹配
-把这个 MusicBrainz Release 链接加入专辑库
-```
-
-The workflow uses MusicBrainz Release Group as the canonical album identity and
-authority for standard title, artist credit, primary release type, and earliest
-release date. A concrete MusicBrainz Release URL is converted to its owning Release
-Group; a regional issue, reissue, or remaster date is never written as the original
-`Release Date`. Partial MusicBrainz dates remain visibly partial and are not padded
-with invented month or day values.
-
-Discogs Master is used to cross-check title, artist, and year and to supply Genre
-and Style values. A direct MusicBrainz-to-Discogs Master relationship is preferred
-over Discogs search. Confirmed new Genre/Style values are shown in the preview and
-added as live `Genre` options only after confirmation. The same rule applies if
-MusicBrainz introduces a new primary `Release Type` beyond the initial Album,
-Single, EP, Broadcast, and Other options.
-
-MusicBrainz lookup is anonymous and uses the required identifying User-Agent.
-Direct Discogs Master lookup can run without stored credentials; deterministic
-Discogs search fallback requires `DISCOGS_TOKEN`. If it is absent, the workflow
-reports the blocked fallback instead of substituting an untraceable web result.
-
-Album `Artist` relations must resolve to existing People Vault pages. The workflow
-matches `MusicBrainz Artist` URL first, then permits exactly one normalized exact
-name whose identifier is empty. It can preview filling that missing URL, but it
-never creates a People Vault page or replaces a conflicting artist identifier.
-
-Every mutation starts with a read-only candidate and field-change preview. Tied
-candidates, mismatched artists, edition qualifiers, conflicting dates, ambiguous
-People Vault pages, and differing non-empty Notion values block the write. A
-generic confirmation never authorizes replacing a non-empty value; approval must
-name that field and produces a new plan. Before execution, the workflow refetches
-the live schema and pages to reject stale plans, then verifies each approved write.
-
-Normal album metadata maintenance never writes personal listening fields:
-`Status`, `Listened Date`, `Score`, or the `Rating` formula. Streaming services may
-be retained as listening links, but are not authority for core metadata.
-## Notion Movie Library
-
-Use `$notion-manage-movies` to retrieve entries from the personal Notion Movie Library or to prepare one reviewed movie addition. The skill also allows implicit invocation for requests that clearly target this database, such as:
-
-```text
-查询我看过的科幻片
-```
-
-Retrieval stays inside the authorized Notion connector. Structured filters use parameterized data-source queries, fuzzy title retrieval uses data-source-scoped Notion search, and every result includes its Notion page URL. The skill reports pagination, connector limits, and non-queryable properties instead of presenting partial data as complete.
-
-For a fuzzy add request:
-
-```text
-新增 星际穿越
-```
-
-the skill uses the agent's built-in web search and page-reading capabilities to find public movie candidates. It does not call a CthuTool backend, direct movie API, helper script, local service, or additional MCP server. Public pages are treated as untrusted evidence, and external IDs are included only when directly evidenced.
-
-When multiple movies remain plausible, the skill shows a numbered list with available title, original title, year, director, and stable IDs, then waits for a selection. Selecting a candidate is not write authorization. After metadata reconciliation, live genre mapping, and duplicate checks, the skill shows a separate final Notion property preview and requires explicit confirmation even when only one candidate was found.
-
-Public metadata can populate `Name`, `Genres`, `Release Date`, `IMDB ID`, and `TMDB ID`. Personal properties remain user-owned. When omitted, the preview proposes `Status` as `Want to watch` when that option still exists, leaves `Score` and `Date` unset, and proposes `Is in Library` as false. Public ratings never populate `Score`.
-
-The current version does not write the `Rating` or `In Library` formulas, does not write the `Director` or `Cast` relations, does not update existing entries, and does not perform batch additions. The plugin README tracks future use of CthuTool backend movie metadata while preserving candidate disambiguation and explicit confirmation before every Notion write.
-
 ## Notion Book Library
 
-Use `$notion-maintain-books`, or ask unambiguously about the personal Book
-Library, to search, filter, or audit its entries. Additions and updates operate
-on one book at a time. They first show the specific edition or Notion page,
-source evidence, and exact field changes; writing requires a separate explicit
-confirmation and a fresh duplicate/schema check.
+Invoke `$notion-manage-books` explicitly to create, find, update, or reversibly
+delete entries in the personal Book Library. The skill accepts natural-language
+requests without a fixed format or a mandatory second confirmation. Ambiguous
+books or editions are clarified before changing the affected record.
 
-The skill treats a catalog `Reference` as the strongest available matching key,
-not a universal cross-site edition identifier. Same-title books remain separate
-until the user identifies the right page. Public catalogs never set personal
-reading status, score, finished date, access, or notes. New entries do not add a
-duplicated bibliographic body block or an external cover; cover uploads remain
-manual. Requests to remove a book receive an exact, read-only target preview,
-but this version does not trash, archive, or permanently delete pages.
+The skill checks the live schema, prevents duplicates, and reuses authors,
+series, and access channels. Public metadata never supplies personal scores,
+completion dates, or ownership. The page body remains for personal notes; the
+skill does not automatically insert catalog blurbs or duplicate book details.
+
+New entries use the default book template. Updates preserve existing content,
+and failed template application falls back to repairing the shared book icon.
+Every new book's result includes a verified cover image or direct image link
+for manual addition, or states that no verified cover was found. Query limits,
+unresolved writes, and unsupported deletion are reported explicitly.
+
+This replaces the former `$notion-maintain-books` entrypoint. Use
+`$notion-manage-books` after updating the plugin; it does not activate implicitly.
+
+## Notion Channel Library
+
+Invoke `$notion-manage-channels` explicitly to add, find, update, or reversibly
+remove YouTube, Bilibili, and Xiaohongshu entries in the personal Channel Library.
+This replaces `$notion-add-channel`; the old entrypoint is removed. Requests use
+natural language, without a required format or a second confirmation for clear
+operations. Examples:
+
+```text
+$notion-manage-channels 找出我收藏的 YouTube 科技频道
+$notion-manage-channels 给这个频道加上 AI 标签，保留原来的标签
+$notion-manage-channels 把这个主页加入频道库，自动选择合适的现有标签
+$notion-manage-channels 把 Chrome 当前标签页的频道加入频道库
+```
+
+Creation needs a supported channel homepage or an explicitly selected homepage
+tab. Existing entries can be found by name, platform, tags, or Notion link.
+Duplicate checks use platform identity; names and renamed handles alone do not
+prove that two accounts are the same. Videos, notes, search pages, and unresolved
+short links require a channel homepage instead.
+
+Tag additions and removals preserve other tags; explicit replacement uses the
+requested set. Shared batch tags and per-item overrides are supported. Valid
+supplied tags need no further confirmation or content-based reconsideration.
+Explicitly delegated automatic classification uses existing options when clear;
+otherwise missing, invalid, or ambiguous tags are clarified for the affected item.
+
+Creation uses the matching platform template. Updates preserve existing notes,
+and failed or unsupported template application falls back to a verified platform
+icon where possible. Batches report each item's outcome and allow independent
+ready items to complete. Uncertain writes are checked before retries.
+
+Browser access is optional and limited to an explicitly selected or attached tab.
+It is read-only, without navigation, unrelated tab content, or private browser
+state. A blocked, unsupported, or changing tab requires a ready homepage or URL
+for that item. Pasted URLs and Notion-only queries do not access browser state.
+Deletion affects only Notion records through available reversible trash/archive;
+it never follows, unfollows, or changes platform accounts. Unsupported operations
+and incomplete query coverage are reported explicitly.
+
+Creation also returns a verified channel avatar/cover image or direct image link
+for manual addition, or states that none was available. The platform icon and
+existing covers are preserved. Explicit Videos relation edits resolve existing
+records and change only requested memberships; no video import or related-page
+creation is performed.
+
+## Notion Comic Book Library
+
+Invoke `$notion-manage-comics` explicitly to create, find, update, or reversibly
+remove comic entries. Natural-language requests need no fixed format or redundant
+confirmation when the target and operation are clear.
+
+The skill uses the live schema and preserves multiple authors, access relations,
+notes, and personal scores. Whole works, parts, volumes, and editions are distinct:
+a volume reference alone does not authorize splitting or renaming a work-level
+entry. Publication completion and finishing one volume do not imply that you have
+read the entire work. No absent classification, series, finish-date, or progress
+fields are added automatically.
+
+Creation uses the comic template and verifies its shared icon, repairing it when
+application fails. Each new entry returns a verified cover image or direct link
+for manual addition, or states that no cover was found. Representative volume art
+is labeled for work-level entries. Deletion uses supported reversible Notion
+trash/archive only; incomplete queries and unverified writes are reported.
+
+Skill source: `codex/plugins/cthu-codex/skills/notion-manage-comics/SKILL.md`.
+
+## Notion Music Release Library
+
+Use `$notion-manage-music-releases` for lightweight query, creation, updates, and
+reversible removal in Music Release, including albums, singles, and EPs. It replaces
+`notion-maintain-album` and runs only when manually invoked. Natural-language
+requests are sufficient; clear instructions do not require a second confirmation.
+
+MusicBrainz Release Group identifies the work and supplies core metadata; Discogs
+Master provides cross-validation and Genre/Style. Concrete editions and reissue
+dates never replace the original release identity/date, and partial dates are not
+padded. Artist relations use verified existing People Vault pages. Ambiguous
+identities are clarified, and existing options are reused without schema changes.
+
+Creation uses the live template, repairs its consistent icon when necessary, and
+returns a verified cover image or direct link for manual addition. Updates preserve
+unrequested fields, notes, and covers. Explicit requests can change Status,
+Listened Date, and Score; Rating remains a read-only formula. Removal uses
+reversible trash/archive when supported, otherwise the skill provides manual links.
+Query coverage and incomplete write verification are disclosed.
+
+The existing skill-local MusicBrainz/Discogs resolver remains an optional enrichment
+helper. It is not required for routine queries or listening-field edits. Discogs
+search through that helper requires `DISCOGS_TOKEN`; unavailable sources are
+reported rather than invented.
+
+## Notion Movie Library
+
+Use `$notion-manage-movies` explicitly to query, add, update, or reversibly remove
+movies. Natural-language requests are sufficient; clear instructions authorize
+scoped changes without a mandatory second confirmation.
+
+The skill discovers live data sources, fields, options, and templates. Metadata
+uses `Name`, `Genres`, `Release Date`, and canonical `IMDb`/`TMDB` URLs. Movie
+identity is checked against remakes, sequels, and TV entries before writing;
+existing identities are deduplicated and incomplete query coverage is disclosed.
+Public metadata comes from agent-native web tools, with no backend or direct API
+requirement. Ordinary library queries stay within Notion unless enrichment is requested.
+
+Director and Cast can link verified existing People Vault records; missing or
+ambiguous people require clarification. Personal Status, Watched Date, Score, and
+Is in Library change only as requested; Rating and In Library remain formulas.
+Public ratings never become personal scores, and release dates are distinct from
+viewing dates. Unrequested values, notes, and uploaded covers are preserved.
+
+Creation uses the live template, repairs the consistent icon when necessary, and
+returns a verified poster image or direct image link for manual addition. Removal
+uses reversible trash/archive if supported, otherwise the skill returns manual
+page links. Writes are verified and uncertain results are reconciled before retry.
+
+## Notion Drama Library
+
+Use `$notion-manage-dramas` explicitly for lightweight query, creation, updates,
+and reversible removal. Clear natural-language requests authorize scoped changes
+without a mandatory second confirmation. The skill discovers the live schema,
+options, and template and discloses incomplete query coverage.
+
+Series, seasons, parts, and specials remain distinct. Shared series-level IMDb or
+TMDB TV URLs do not alone prove duplicates; title, year, and season scope are
+reconciled. Reference supports a verified fallback such as Douban. Episodes and
+Release Date match the selected unit; aired counts are not silently treated as
+final totals, and partial dates are not padded.
+
+Category and Genres reuse current options. Director, Cast, and Writer link verified
+existing People Vault records without incidental people creation. Status, Watched
+Date, Score, and Is in Library stay under user control; Rating and In Library are
+read-only formulas. Research & Archive is a status, not a removal operation.
+
+Creation uses the live template and checks its consistent icon, returning a verified
+poster image or direct link for manual addition. Updates preserve unrequested
+values, notes, and covers. Removal uses reversible trash/archive if supported,
+otherwise returns manual page links. Mutations are verified before reporting success.
+
+## Notion Video Game Library
+
+Use `$notion-manage-games` explicitly for query, create, update, and reversible
+removal. Clear natural-language instructions authorize scoped changes without a
+mandatory second confirmation. The skill discovers the live schema and template,
+checks duplicates, and discloses incomplete query coverage.
+
+Game identity distinguishes base games, DLC, remakes, remasters, ports, and editions.
+IGDB links and release dates must match the selected scope. Developer and Series
+link verified existing records. Owned On reflects only user-specified ownership;
+adding another owned platform does not automatically create a duplicate game.
+
+My Score, Playtime (h), Purchase Price, Last Played At, Finished At, and Status stay
+under user control. Public scores, store prices, and completion estimates are not
+personal values. Hours and currency must be clear. Rating, Playable On, and
+Emulators are read-only, and related databases are not modified incidentally.
+
+Creation uses the live template and checks its consistent icon, returning a verified
+cover image or direct link for manual addition. Updates preserve unrequested values,
+notes, and covers. Removal uses supported reversible trash/archive or returns manual
+links; removing ownership is distinct from deleting the game. Writes are verified
+and uncertain outcomes are reconciled before retrying.
 
 ## Notion Knowledge Vault
 
@@ -361,5 +401,5 @@ is reported.
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
-- Book Library skill: `codex/plugins/cthu-codex/skills/notion-maintain-books/SKILL.md`
+- Book Library skill: `codex/plugins/cthu-codex/skills/notion-manage-books/SKILL.md`
 - Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-album-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-movie-library-skill/spec.md`
