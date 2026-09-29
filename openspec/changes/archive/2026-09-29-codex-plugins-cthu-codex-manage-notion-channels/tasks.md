@@ -14,3 +14,8 @@
 - Reviewed CRUD, tag add/remove/replace, delegated classification, duplicate identities, template fallback, blocked/changing tabs, independent batch outcomes, and uncertain-write scenarios against the final instructions.
 - Skill and YAML validation, strict change validation, whitespace checks, and comparison of unchanged documentation sections passed. No live Notion mutations or adapter regeneration were performed.
 - PR #82 targets main and contains only channel changes; book PR #81 was verified OPEN and unmerged.
+
+## 3. Complete management alignment
+
+- [x] 3.1 Add creation image output and scoped Videos relation guidance to the skill and docs; verify metadata, format, and consistency against the live schema.
+- [x] 3.2 Validate and sync only the channel capability, verify all delta additions/removals, prepare this completed change for archive; keep PR #82 unmerged.

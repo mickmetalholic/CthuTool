@@ -232,6 +232,12 @@ Deletion affects only Notion records through available reversible trash/archive;
 it never follows, unfollows, or changes platform accounts. Unsupported operations
 and incomplete query coverage are reported explicitly.
 
+Creation also returns a verified channel avatar/cover image or direct image link
+for manual addition, or states that none was available. The platform icon and
+existing covers are preserved. Explicit Videos relation edits resolve existing
+records and change only requested memberships; no video import or related-page
+creation is performed.
+
 ## Notion Album Library
 
 Use `$notion-maintain-album`, or make an unambiguous personal Album-library

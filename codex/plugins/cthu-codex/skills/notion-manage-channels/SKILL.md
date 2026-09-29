@@ -19,6 +19,7 @@ contracts rather than assuming a particular query, parent, or icon API works.
 
 - `Name`: channel display name; `Link`: normalized channel homepage.
 - `Source`: `YouTube`, `Bilibili`, or `Xiaohongshu`, verified against live options.
+- `Videos`: relation to existing video records; preserve unless explicitly requested.
 - `Tags`: existing category options. Do not change schema or views during CRUD.
 
 ## Operations
@@ -26,7 +27,9 @@ contracts rather than assuming a particular query, parent, or icon API works.
 - **Create:** Resolve a supported homepage, current name, and platform identity;
   check existing records and repeated inputs before creating. Return existing
   entries without silently updating them. Shared batch tags are optional;
-  per-item overrides replace the shared default for that item.
+  per-item overrides replace the shared default for that item. Return a verified
+  channel avatar/cover image or direct image link for manual addition, or say none
+  was available. Do not invent URLs or replace the platform icon or existing cover.
 - **Read:** Find entries by name, platform, tags, homepage, or Notion page link.
   A new homepage URL is not required for existing-record lookup. Return useful
   fields and Notion links; disclose incomplete query coverage.
@@ -36,9 +39,13 @@ contracts rather than assuming a particular query, parent, or icon API works.
   changes rather than silently retargeting an entry.
 - **Delete:** Use supported reversible Notion trash/archive for resolved,
   explicitly requested entries. If unavailable, report the limitation; never
-  empty a page as a substitute. Do not follow, unfollow, or alter platform accounts.
+  empty a page or permanently delete it as a substitute. Provide manual page links. Do not follow, unfollow, or alter platform accounts.
 
 ## Care points
+
+- For explicitly requested Videos edits, verify the live relation target and existing
+  video identities. Change only requested memberships and clarify missing/ambiguous
+  targets; never import, create, or modify related videos as a side effect.
 
 - Identify channels by platform plus stable ID where available: YouTube channel
   ID (resolve handle/legacy aliases when needed), Bilibili UID, or Xiaohongshu
@@ -65,7 +72,7 @@ contracts rather than assuming a particular query, parent, or icon API works.
   report unresolved presentation failures separately from successful field writes.
 - Read browser state only for an explicitly requested or attached tab, preferring
   the exact attachment. Otherwise use public URL metadata and Notion tools.
-  Do not guess the browser or tab. If the tool requires metadata enumeration to
+  Image retrieval does not authorize browser access. Do not guess the browser or tab. If the tool requires metadata enumeration to
   claim an attachment, use it only to match the exact reference and discard
   unrelated metadata. Read minimal identity data, plus a bounded already-loaded
   description/recent-content sample only when classification is needed.

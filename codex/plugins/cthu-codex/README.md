@@ -60,7 +60,7 @@ does not add or remove tags.
 
 The plugin also includes Notion workflows. `$notion-manage-channels` manages
 channel entries only when explicitly invoked, with scoped CRUD, tag edits,
-platform templates/icons, and per-item batch results. `notion-maintain-album` can recognize a
+platform templates/icons, manual image output, and per-item batch results. `notion-maintain-album` can recognize a
 specific personal Album-library maintenance request, but every Album schema or
 page mutation still requires a field-level preview and explicit confirmation.
 Its MusicBrainz and Discogs resolver is a skill-local script; it does not add a

@@ -9,6 +9,7 @@ Channel Library maintenance currently has an add-only skill with a rigid multi-s
 - Preserve platform identity matching, live schema discovery, existing tag options, and read-only access to explicitly selected browser tabs.
 - Distinguish tag addition, removal, and replacement; permit explicitly delegated automatic classification without redundant confirmation, clarifying ambiguous choices.
 - Use platform templates and repair their icons when application fails. Report batch outcomes individually; unresolved items do not block independent ready items.
+- Return verified channel avatar/cover images or direct links on creation for manual addition; preserve and explicitly manage existing Videos relations without importing videos.
 - Scope removal to reversible Notion trash/archive where supported; never follow/unfollow or change platform accounts.
 
 ## Capabilities

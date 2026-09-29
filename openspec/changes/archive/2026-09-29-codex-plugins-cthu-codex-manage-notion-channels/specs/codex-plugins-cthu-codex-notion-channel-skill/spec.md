@@ -138,3 +138,16 @@ The skill SHALL verify mutations and report every batch item as created, updated
 #### Scenario: Uncertain write
 - **WHEN** a create/update/delete result is uncertain
 - **THEN** existing state is checked before retrying and success is reported only when verified
+
+### Requirement: Channel images and existing video relations
+The skill SHALL return verified channel imagery for manual addition on creation and preserve existing Videos relations unless explicitly asked to change them.
+
+#### Scenario: Image output
+- **WHEN** a channel is created
+- **THEN** the skill returns a verified avatar or cover image or direct image link, or explicitly reports that none was available
+- **AND** it does not invent image URLs, replace the platform icon or existing cover, or access unrequested browser state
+
+#### Scenario: Video membership update
+- **WHEN** the user explicitly asks to change Videos memberships
+- **THEN** the skill verifies the live relation target and existing video identities, changes only requested memberships, and clarifies missing or ambiguous targets
+- **AND** it does not create, import, or modify related video pages as a side effect

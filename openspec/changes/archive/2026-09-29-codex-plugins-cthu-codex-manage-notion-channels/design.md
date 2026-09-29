@@ -1,12 +1,12 @@
 ## Context
 
-See proposal.md for motivation. The current authored channel skill spans a rigid add-only sequence, and its main spec encodes that sequence, all-or-nothing preflight, and confirmation of every inferred tag. The plugin discovers its skills directory without a per-skill manifest entry. Channel Library currently uses Name, Link, Source, and Tags with platform-specific templates.
+See proposal.md for motivation. The current authored channel skill spans a rigid add-only sequence, and its main spec encodes that sequence, all-or-nothing preflight, and confirmation of every inferred tag. The plugin discovers its skills directory without a per-skill manifest entry. Channel Library currently uses Name, Link, Source, Tags, and a Videos relation with platform-specific templates.
 
 ## Goals / Non-Goals
 
 **Goals:** One concise SKILL.md plus explicit-only UI metadata, one active channel entrypoint, live schema-aware CRUD, and precise tag and identity semantics.
 
-**Non-Goals:** Platform account actions, database schema/view management, automatic cover output, browser navigation, new scripts/services, plugin installation, or changes to the book PR.
+**Non-Goals:** Platform account actions, database schema/view management, automatic cover application, browser navigation, new scripts/services, plugin installation, or changes to the book PR.
 
 ## Decisions
 
@@ -17,7 +17,8 @@ See proposal.md for motivation. The current authored channel skill spans a rigid
 5. Keep browser input confined to an explicitly attached or selected tab, read-only, without unrelated page content or private browser state. If an API requires metadata enumeration to claim an attachment, use it only for exact matching. Changed or blocked tabs invalidate only the dependent item.
 6. Apply a verified matching platform template on create, and preserve body content on update. Repair the icon from the matching template or an observed same-platform convention when application fails; do not guess an ambiguous platform icon. Report unresolved icon failures separately from successful property writes.
 7. Reversible deletion applies only to requested Notion entries. Partial batches report each outcome; retry uncertain mutations only after checking state. No automatic rollback of independent successful entries.
-8. Keep this business guidance in the authored skill and change spec, never generated adapters. No OpenSpec regeneration is needed.
+8. Return verified channel avatar/cover images for manual addition without replacing the platform icon or accessing unrequested browser state. Resolve explicitly requested Videos memberships to existing related records; preserve other members and never import videos as a side effect.
+9. Keep this business guidance in the authored skill and change spec, never generated adapters. No OpenSpec regeneration is needed.
 
 ## Risks / Trade-offs
 
@@ -28,4 +29,4 @@ See proposal.md for motivation. The current authored channel skill spans a rigid
 
 ## Migration Plan
 
-Replace the old skill directory and update channel documentation only. Users invoke `$notion-manage-channels` after a separately requested plugin update. No Notion records are migrated. Rollback restores the old skill and docs; it does not alter library data. Keep this change active for review and open a separate PR without merging.
+Replace the old skill directory and update channel documentation only. Users invoke `$notion-manage-channels` after a separately requested plugin update. No Notion records are migrated. Rollback restores the old skill and docs; it does not alter library data. Sync and archive this completed change, then update the existing PR #82 without merging.
