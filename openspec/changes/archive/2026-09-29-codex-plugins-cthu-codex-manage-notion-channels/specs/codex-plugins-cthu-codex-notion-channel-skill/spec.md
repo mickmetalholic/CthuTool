@@ -1,10 +1,30 @@
-# codex-plugins-cthu-codex-notion-channel-skill Specification
+## REMOVED Requirements
 
-## Purpose
+### Requirement: Plugin-local Notion channel skill
+**Reason**: The add-only workflow is replaced by the scoped management contracts below, including explicit CRUD, delegated classification, independent batch outcomes, and preserved browser boundaries.
+**Migration**: Use `$notion-manage-channels` and the new channel management requirements.
 
-Define lightweight, manually invoked Channel Library management with stable platform identity, scoped tag and video relations, verified images, and reversible record operations.
+### Requirement: Channel input and platform resolution
+**Reason**: The add-only workflow is replaced by the scoped management contracts below, including explicit CRUD, delegated classification, independent batch outcomes, and preserved browser boundaries.
+**Migration**: Use `$notion-manage-channels` and the new channel management requirements.
 
-## Requirements
+### Requirement: Live database discovery and duplicate prevention
+**Reason**: The add-only workflow is replaced by the scoped management contracts below, including explicit CRUD, delegated classification, independent batch outcomes, and preserved browser boundaries.
+**Migration**: Use `$notion-manage-channels` and the new channel management requirements.
+
+### Requirement: Existing category resolution
+**Reason**: The add-only workflow is replaced by the scoped management contracts below, including explicit CRUD, delegated classification, independent batch outcomes, and preserved browser boundaries.
+**Migration**: Use `$notion-manage-channels` and the new channel management requirements.
+
+### Requirement: Platform-template creation and verification
+**Reason**: The add-only workflow is replaced by the scoped management contracts below, including explicit CRUD, delegated classification, independent batch outcomes, and preserved browser boundaries.
+**Migration**: Use `$notion-manage-channels` and the new channel management requirements.
+
+### Requirement: Explicit browser-tab acquisition
+**Reason**: The add-only workflow is replaced by the scoped management contracts below, including explicit CRUD, delegated classification, independent batch outcomes, and preserved browser boundaries.
+**Migration**: Use `$notion-manage-channels` and the new channel management requirements.
+
+## ADDED Requirements
 
 ### Requirement: Explicit channel management entrypoint
 The plugin SHALL provide `notion-manage-channels` with a `Notion ·` display name and implicit invocation disabled, replacing the old add-channel entrypoint and its documentation. It SHALL accept natural-language CRUD requests without mandatory fixed syntax or redundant confirmation of clear authorized operations.
