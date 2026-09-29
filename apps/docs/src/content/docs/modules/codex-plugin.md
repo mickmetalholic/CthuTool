@@ -335,6 +335,29 @@ duplicated bibliographic body block or an external cover; cover uploads remain
 manual. Requests to remove a book receive an exact, read-only target preview,
 but this version does not trash, archive, or permanently delete pages.
 
+## Notion Knowledge Vault
+
+Use `$notion-manage-knowledge` explicitly for lightweight query, create, scoped
+property/body updates, and reversible removal. Clear natural-language requests
+authorize scoped changes without mandatory repeated confirmation.
+
+The skill discovers live fields and templates. The source URL property is distinct
+from the Notion page URL; Type(Manual) is writable and Type is a formula. Category,
+Source, and status use existing options. Resource identity preserves lesson,
+version, release, and edition distinctions; personal notes can have no source URL.
+
+Templates are selected by their type defaults, not their identical names. Creation
+uses the matching template and checks its icon; missing templates or repair support
+are reported without guessing. A verified cover/thumbnail image or link is returned
+for manual addition, or its unavailability is disclosed.
+
+Ordinary metadata collection preserves body content. Explicit note edits or summaries
+stay within the requested scope and cite sources without inventing personal insights.
+App, Magazine, and Podcast link existing records without incidental related-page
+changes. Status Archived is distinct from deletion; ambiguous archive requests are
+clarified. Queries disclose incomplete coverage and writes are verified before success
+is reported.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`

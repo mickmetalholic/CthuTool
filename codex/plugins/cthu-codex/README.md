@@ -71,6 +71,12 @@ field-level preview before writing, preserves user notes and uploaded covers,
 and never merges same-title editions automatically. Removal is preview-only in
 this version; it does not trash or permanently delete pages.
 
+`$notion-manage-knowledge` provides manual-only Knowledge Vault CRUD, including
+scoped note edits. It preserves resource/version identity, uses type-specific
+templates with icon repair, and returns verified images for manual addition.
+Type is read-only; Type(Manual) is writable. Learning-status archival is distinct
+from reversible page removal, and unrelated notes/relations are preserved.
+
 ## Source Boundary
 
 Keep repository-owned plugin source, manifests, and implementation assets under
