@@ -71,11 +71,11 @@ The skill SHALL use the current comic template for creation and ensure its share
 - **AND** unresolved template or icon failures are reported honestly
 
 ### Requirement: Cover handoff and mutation verification
-The skill SHALL return a verified cover image or direct image link for every newly created comic, or explicitly report its absence. Writes SHALL be verified and uncertain outcomes checked before retries.
+The skill SHALL follow the shared Notion Management cover workflow for every newly created comic and report its outcome. Writes SHALL be verified and uncertain outcomes checked before retries.
 
 #### Scenario: Cover corresponds to the entry
 - **WHEN** a cover is available for a new entry
-- **THEN** the result includes the image or direct image link matched to the work and identified edition
+- **THEN** the skill SHALL follow the shared Notion Management cover workflow and report the verified cover result or the local file for manual setup, or disclose that no image could be obtained
 - **AND** representative volume artwork for a work-level entry is labeled as such, with per-comic labels in batches
 
 #### Scenario: Missing cover or uncertain write

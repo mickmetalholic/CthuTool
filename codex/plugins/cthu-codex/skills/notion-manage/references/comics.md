@@ -43,11 +43,8 @@ targets and option/template IDs live and reuse them for the request.
   fails, or omits the icon, explicitly repair the shared icon via a supported
   operation. The observed fallback is gray `book`, not `book-closed`. Verify
   the icon on creates/updates and report unresolved presentation failures.
-- For each new comic, return a verified cover image or direct image link for
-  manual addition, even if an automatic cover update succeeds. Match the work
-  and identified edition; label representative volume art for work-level entries
-  and label each comic in batch results. Prefer stable source URLs. If no verified
-  image is found, say so; never invent a link or substitute a catalog page for it.
+- Follow [cover handling](covers.md), matching the work and identified edition.
+
 - Keep the body for personal notes. Do not insert catalog blurbs or duplicate
   bibliographic sections automatically; use targeted edits for requested notes.
 

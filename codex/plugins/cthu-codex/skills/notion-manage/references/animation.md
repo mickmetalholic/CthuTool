@@ -49,8 +49,7 @@ change schema, formulas, options, or views as a side effect.
 - Verify template application and the consistent icon after creation/update. If
   application fails or the icon is missing, apply the verified template icon using
   supported tools; preserve content and disclose missing templates or repair support.
-- Verify poster identity against the selected work/season and output it for manual
-  addition. Do not invent image URLs, automatically replace covers, or use art as the icon.
+- Follow [cover handling](covers.md) for the selected work/season.
 
 Keep Research & archive status distinct from actual removal; clarify ambiguous archive requests.
 

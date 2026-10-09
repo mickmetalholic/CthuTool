@@ -106,7 +106,7 @@ The skill SHALL avoid duplicate canonical identities, create with the live templ
 #### Scenario: Creation or mutation completes
 - **WHEN** a write completes
 - **THEN** the skill SHALL refetch the affected record and return its link and verification outcome
-- **AND** on creation it SHALL return a verified cover image or direct image link for manual addition, or explicitly disclose that no usable image was found
+- **AND** on creation the skill SHALL follow the shared Notion Management cover workflow and report the verified cover result or the local file for manual setup, or disclose that no image could be obtained
 - **AND** uncertain outcomes SHALL be reconciled before retrying
 
 ### Requirement: Music Release personal field handling

@@ -32,7 +32,7 @@ The skill MUST preserve Status, Watched Date, and Is in Library unless requested
 - **THEN** it fills verified empty metadata without inventing viewing history, collection ownership, personal notes, or formula values
 
 ### Requirement: Template icon and image output
-The skill SHALL use the live template on creation, verify conventions on updates without resetting content, repair missing icons from the verified template when supported, and return a verified poster or image link for manual addition on creation.
+The skill SHALL use the live template on creation, verify conventions on updates without resetting content, repair missing icons from the verified template when supported, and follow the shared Notion Management cover workflow on creation.
 
 #### Scenario: Template failure
 - **WHEN** template application fails or leaves an icon missing

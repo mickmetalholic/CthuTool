@@ -54,8 +54,7 @@ writes; do not change schemas, options, views, or related People & Organizations
   For pending application, refetch briefly. If the template fails or the icon is
   missing, manually apply the verified template icon using supported tools without
   repeating creation or overwriting content. Disclose unavailable templates or repairs.
-- Verify poster identity and image URLs. Do not invent URLs, overwrite an uploaded
-  cover, or automatically apply the returned image; it is for manual addition.
+- Follow [cover handling](covers.md), matching the selected movie.
 
 For shared entity matching and required creation templates, read
 [People & Organizations](people-organizations.md). Keep this library's existing

@@ -60,11 +60,11 @@ Creates and updates SHALL follow the current default book template's conventions
 - **AND** an unresolved icon failure is reported explicitly
 
 ### Requirement: Cover handoff for new books
-Every newly created book SHALL have a verified cover image or direct image link included in the result for manual addition, even if an automatic cover update succeeds. If no verified cover is available, the result SHALL state that limitation.
+Every newly created book SHALL follow the shared Notion Management cover workflow, matching the selected edition and reporting its outcome.
 
 #### Scenario: Cover available
 - **WHEN** a verified cover for the identified book and edition is available
-- **THEN** the creation result displays the image or links directly to it, labeled with the book in a batch
+- **THEN** the skill SHALL follow the shared Notion Management cover workflow and report the verified cover result or the local file for manual setup, or disclose that no image could be obtained
 
 #### Scenario: Cover unavailable
 - **WHEN** no verified cover image is found

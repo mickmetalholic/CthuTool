@@ -40,5 +40,4 @@ Do not change schema, options, formulas, or views as a side effect.
 - Create with the live template and verify its icon after creation or update. If
   application fails or the icon is missing, manually apply the verified template
   icon using supported tools. Preserve content and report any repair limitation.
-- Verify image identity and output it for manual addition; do not automatically
-  replace covers or icons with posters, invent URLs, or claim unavailable art was found.
+- Follow [cover handling](covers.md) for the selected documentary scope.

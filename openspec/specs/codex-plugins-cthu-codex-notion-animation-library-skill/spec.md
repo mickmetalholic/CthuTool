@@ -40,7 +40,7 @@ The skill MUST preserve Status, Watched Date, Score, and Has Document unless req
 - **THEN** the skill clarifies the intended operation before mutation
 
 ### Requirement: Template icon and poster output
-The skill SHALL use the live template for creation, verify template conventions on updates without resetting content, repair a missing icon from the verified template when supported, and output a verified poster/image or direct image link for manual addition on creation.
+The skill SHALL use the live template for creation, verify template conventions on updates without resetting content, repair a missing icon from the verified template when supported, and follow the shared Notion Management cover workflow on creation.
 
 #### Scenario: Failed template application
 - **WHEN** the template fails or its icon is missing

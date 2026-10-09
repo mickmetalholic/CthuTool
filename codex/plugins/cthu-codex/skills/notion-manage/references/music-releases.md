@@ -57,8 +57,8 @@ page/rollup reads when needed rather than querying nonexistent columns.
 - Verify template application and the consistent icon after creation or update.
   If application fails or the icon is missing, manually copy the live template icon
   using supported tools. Preserve unrelated content; disclose any repair limitation.
-- Verify cover identity and image URL against the selected release. Return the image
-  or link, without replacing uploaded covers or inventing URLs when access fails.
+- Follow [cover handling](covers.md), matching the selected release; cover sourcing
+  does not change MusicBrainz/Discogs metadata authority.
 
 For requested `Works` matching, read [Classical Work](classical-works.md).
 For optional MusicBrainz/Discogs enrichment, read [resolver notes](music-resolver.md).

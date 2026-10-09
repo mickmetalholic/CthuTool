@@ -82,7 +82,7 @@ The skill SHALL support explicit personal-field edits and verified Director/Cast
 - **AND** it SHALL clarify missing or ambiguous people before affected relation writes without creating or editing People Vault pages incidentally
 
 ### Requirement: Movie template poster and result verification
-The skill SHALL create using the live default template, maintain its consistent icon, return poster images for manual use, and verify mutations.
+The skill SHALL create using the live default template, maintain its consistent icon, follow the shared Notion Management cover workflow, and verify mutations.
 
 #### Scenario: Template application
 - **WHEN** a record is created or updated
@@ -92,7 +92,7 @@ The skill SHALL create using the live default template, maintain its consistent 
 
 #### Scenario: Poster output
 - **WHEN** a movie is created
-- **THEN** the skill SHALL return a verified poster image or direct image link, or state that no usable image was found
+- **THEN** the skill SHALL follow the shared Notion Management cover workflow and report the verified cover result or the local file for manual setup, or disclose that no image could be obtained
 - **AND** it SHALL NOT invent a URL or replace an uploaded cover
 
 #### Scenario: Write verification

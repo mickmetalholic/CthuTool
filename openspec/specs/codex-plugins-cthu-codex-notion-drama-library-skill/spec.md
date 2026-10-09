@@ -84,7 +84,7 @@ The skill SHALL resolve Director, Cast, and Writer to verified existing People V
 - **AND** Research & Archive SHALL be treated as a status value, not a deletion command
 
 ### Requirement: Drama template poster and verification
-The skill SHALL use the live default template on creation, maintain its consistent icon on creation/update, output usable poster references, and verify mutations.
+The skill SHALL use the live default template on creation, maintain its consistent icon on creation/update, follow the shared Notion Management cover workflow, and verify mutations.
 
 #### Scenario: Template and icon
 - **WHEN** creating or updating a record
@@ -94,7 +94,7 @@ The skill SHALL use the live default template on creation, maintain its consiste
 
 #### Scenario: Poster and result
 - **WHEN** a record is created
-- **THEN** the skill SHALL return a verified image or direct image link appropriate to the selected series/season for manual addition, or disclose that none was found
+- **THEN** the skill SHALL follow the shared Notion Management cover workflow and report the verified cover result or the local file for manual setup, or disclose that no image could be obtained
 - **AND** it SHALL NOT invent image URLs or replace uploaded covers
 
 #### Scenario: Mutation verification

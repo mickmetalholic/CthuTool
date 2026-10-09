@@ -40,12 +40,8 @@ response rather than hard-coding them.
   fallback is Notion's gray `book-closed` icon. Verify the resulting icon on
   every create/update; report any unresolved failure rather than claiming it
   was applied. Do not reapply a template merely to repair the icon.
-- For every newly created book, include its cover image or a direct image link
-  in the result so the user can add it manually. Match the cover to the book
-  and identified edition, prefer a stable source URL, and label covers by book
-  in batch results. If no verified image is available, state that explicitly;
-  do not invent an image URL or substitute a book-detail page for an image.
-  Providing the image is required even if an automatic cover update succeeds.
+- Follow [cover handling](covers.md), matching the work and identified edition.
+
 - Different titles, translations, or editions can describe the same work;
   identical titles can describe different works. Do not automatically merge
   editions or invent a permanent work-versus-edition policy for the user.

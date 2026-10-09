@@ -67,7 +67,7 @@ The skill SHALL prevent duplicate creation, preserve unrequested values, and rec
 - **AND** intervening conflicts SHALL be clarified
 
 ### Requirement: Game templates covers and verification
-The skill SHALL use the live template, maintain its consistent icon, return verified covers for manual addition, and verify mutations.
+The skill SHALL use the live template, maintain its consistent icon, follow the shared Notion Management cover workflow, and verify mutations.
 
 #### Scenario: Template conventions
 - **WHEN** a game is created or updated
@@ -77,7 +77,7 @@ The skill SHALL use the live template, maintain its consistent icon, return veri
 
 #### Scenario: Cover and mutation results
 - **WHEN** creation completes
-- **THEN** the skill SHALL return a verified game/edition cover image or direct image link for manual addition, or disclose that none was found
+- **THEN** the skill SHALL follow the shared Notion Management cover workflow and report the verified cover result or the local file for manual setup, or disclose that no image could be obtained
 - **AND** it SHALL NOT invent image URLs or replace uploaded covers
 - **AND** all mutations SHALL be refetched to verify relevant fields, icon, or removal state, returning links and unresolved details
 - **AND** uncertain outcomes SHALL be reconciled before retrying

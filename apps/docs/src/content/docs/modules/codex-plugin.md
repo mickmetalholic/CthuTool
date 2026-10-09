@@ -228,8 +228,7 @@ skill does not automatically insert catalog blurbs or duplicate book details.
 
 New entries use the default book template. Updates preserve existing content,
 and failed template application falls back to repairing the shared book icon.
-Every new book's result includes a verified cover image or direct image link
-for manual addition, or states that no verified cover was found. Query limits,
+New books follow the shared cover workflow below. Query limits,
 unresolved writes, and unsupported deletion are reported explicitly.
 
 This replaces the former `$notion-maintain-books` entrypoint. Use
@@ -293,8 +292,7 @@ read the entire work. No absent classification, series, finish-date, or progress
 fields are added automatically.
 
 Creation uses the comic template and verifies its shared icon, repairing it when
-application fails. Each new entry returns a verified cover image or direct link
-for manual addition, or states that no cover was found. Representative volume art
+application fails. Each new entry follows the shared cover workflow below. Representative volume art
 is labeled for work-level entries. Deletion uses supported reversible Notion
 trash/archive only; incomplete queries and unverified writes are reported.
 
@@ -314,7 +312,7 @@ padded. Artist relations use verified existing People Vault pages. Ambiguous
 identities are clarified, and existing options are reused without schema changes.
 
 Creation uses the live template, repairs its consistent icon when necessary, and
-returns a verified cover image or direct link for manual addition. Updates preserve
+sets its cover through the shared cover workflow below. Updates preserve
 unrequested fields, notes, and covers. Explicit requests can change Status,
 Listened Date, and Score; Rating remains a read-only formula. Removal uses
 reversible trash/archive when supported, otherwise the skill provides manual links.
@@ -345,7 +343,7 @@ Public ratings never become personal scores, and release dates are distinct from
 viewing dates. Unrequested values, notes, and uploaded covers are preserved.
 
 Creation uses the live template, repairs the consistent icon when necessary, and
-returns a verified poster image or direct image link for manual addition. Removal
+sets its cover through the shared cover workflow below. Removal
 uses reversible trash/archive if supported, otherwise the skill returns manual
 page links. Writes are verified and uncertain results are reconciled before retry.
 
@@ -367,8 +365,7 @@ existing People Vault records without incidental people creation. Status, Watche
 Date, Score, and Is in Library stay under user control; Rating and In Library are
 read-only formulas. Research & Archive is a status, not a removal operation.
 
-Creation uses the live template and checks its consistent icon, returning a verified
-poster image or direct link for manual addition. Updates preserve unrequested
+Creation uses the live template and checks its consistent icon, following the shared cover workflow below. Updates preserve unrequested
 values, notes, and covers. Removal uses reversible trash/archive if supported,
 otherwise returns manual page links. Mutations are verified before reporting success.
 
@@ -389,8 +386,7 @@ under user control. Public scores, store prices, and completion estimates are no
 personal values. Hours and currency must be clear. Rating, Playable On, and
 Emulators are read-only, and related databases are not modified incidentally.
 
-Creation uses the live template and checks its consistent icon, returning a verified
-cover image or direct link for manual addition. Updates preserve unrequested values,
+Creation uses the live template and checks its consistent icon, following the shared cover workflow below. Updates preserve unrequested values,
 notes, and covers. Removal uses supported reversible trash/archive or returns manual
 links; removing ownership is distinct from deleting the game. Writes are verified
 and uncertain outcomes are reconciled before retrying.
@@ -428,7 +424,7 @@ It discovers live Type, Series, and Topics options. Status, Watched Date, and Is
 Library are personal fields; In Library is a read-only formula.
 
 Creation uses the live template, verifies the uniform gray document icon, and
-returns a verified poster/image link for manual addition. Updates preserve unrelated
+sets its cover through the shared cover workflow below. Updates preserve unrelated
 content and covers; unsupported icon repair or removal is reported with page links.
 
 ## Notion Animation Library
@@ -443,8 +439,7 @@ Status, Watched Date, Score, and Has Document remain personal fields; Rating is 
 read-only formula. Research & archive status is distinct from page removal.
 
 Creation uses the live template and verifies its gray movie-clapboard-play icon,
-repairing it where supported. A verified poster/image link is returned for manual
-addition. Updates preserve unrelated fields, notes, covers, and credits.
+repairing it where supported. Covers follow the shared workflow below. Updates preserve unrelated fields, notes, covers, and credits.
 
 ## Notion App Vault
 
@@ -479,3 +474,20 @@ permission limits and unrelated cross-library memberships remain intact.
 - Plugin README: `codex/plugins/cthu-codex/README.md`
 - Book Library skill: `codex/plugins/cthu-codex/skills/notion-manage/references/books.md`
 - Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-album-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-movie-library-skill/spec.md`
+
+## Notion cover workflow
+
+New media entries and requested cover completion use verified direct image URLs:
+Goodreads for English books; TMDB Movie then IMDb for movies; TMDB TV then IMDb
+for dramas; IGDB for games; IMDb for documentaries and animation. Other cases,
+including Chinese books, comics, music releases, and missing direct-link covers,
+use the matching Douban cover downloaded as an image file.
+
+Douban images are uploaded using the native Notion File Upload API and assigned
+as page covers. Configure `NOTION_TOKEN` in the local process environment with
+access to the target pages; never store it in the skill or repository. If the token
+or API is unavailable, keep the image in `~/downloads` and provide its absolute
+file path and the Notion page link for manual setup. Download failures are reported
+without claiming a file was saved. Cover writes are refetched to verify success.
+Existing covers are preserved unless replacement is requested. Knowledge, channels,
+apps, and people/organizations need no covers; their icon rules remain separate.

@@ -45,3 +45,20 @@ Creation SHALL explicitly apply the selected live template using the connector's
 #### Scenario: Recovery after creation
 - **WHEN** an existing newly created page has unresolved template application
 - **THEN** the skill inspects that page, preserves content, reports icon repair separately, and does not recreate it
+
+### Requirement: Cover source and delivery workflow
+For new media entries and requested cover completion or replacement, the skill SHALL use verified direct image links from Goodreads for English books, TMDB Movie then IMDb for movies, TMDB TV then IMDb for dramas, IGDB where possible for games, and IMDb for documentaries and animation. Other cases SHALL use matching Douban cover files, including Chinese books, comics, music releases, and unavailable direct-link covers. Existing covers SHALL be preserved unless replacement is requested. Knowledge, channels, apps, and people/organizations SHALL have no cover requirement.
+
+#### Scenario: Direct-link cover
+- **WHEN** a matching image from an applicable direct-link source is available
+- **THEN** the skill SHALL set the page cover using that image URL and refetch to verify the result, preserving the template icon
+
+#### Scenario: Douban file upload
+- **WHEN** a verified Douban image is downloaded and native Notion API access is available through NOTION_TOKEN
+- **THEN** the skill SHALL upload the file, assign the uploaded file ID as the page cover, and verify the cover independently of upload success
+- **AND** it SHALL keep credentials out of source files, command arguments, and logs, without extracting MCP credentials
+
+#### Scenario: API or token unavailable
+- **WHEN** native API access is unavailable, the token is missing, or upload or cover assignment fails
+- **THEN** the skill SHALL retain the verified downloaded image under ~/downloads and return its absolute path and the Notion page link for manual setup without blocking successful record creation
+- **AND** if image download failed, it SHALL report the failure without claiming a local file exists
