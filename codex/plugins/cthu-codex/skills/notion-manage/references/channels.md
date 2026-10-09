@@ -6,7 +6,9 @@ Database: `https://app.notion.com/p/2c52c070ae2f42dbad20a3b4ff7764f3`
 
 - `Name`: channel display name; `Link`: normalized channel homepage.
 - `Source`: `YouTube`, `Bilibili`, or `Xiaohongshu`, verified against live options.
-- `Videos`: relation to existing video records; preserve unless explicitly requested.
+- `Videos`: relation to Knowledge Vault,
+  `collection://94d3d31a-68e8-4966-bd0c-4bddf8e19ee0` (checked 2026-10-09).
+  Keep the property name `Videos`; do not infer a separate video database from it.
 - `Tags`: existing category options. Do not change schema or views during CRUD.
 
 Template hints verified on 2026-10-09 (refetch before use):
@@ -27,8 +29,9 @@ Process each identity once per batch; clarify conflicting instructions for repea
 Ready items can complete independently of those needing clarification.
 
 - For explicitly requested Videos edits, verify the live relation target and existing
-  video identities. Change only requested memberships and clarify missing/ambiguous
-  targets; never import, create, or modify related videos as a side effect.
+  Knowledge Vault record identities. Read [Knowledge](knowledge.md) when resolving
+  those records. Change only requested memberships and clarify missing/ambiguous
+  targets; never import, create, or modify related knowledge pages as a side effect.
 
 - Identify channels by platform plus stable ID where available: YouTube channel
   ID (resolve handle/legacy aliases when needed), Bilibili UID, or Xiaohongshu

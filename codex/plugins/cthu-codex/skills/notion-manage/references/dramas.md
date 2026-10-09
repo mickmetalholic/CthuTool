@@ -17,7 +17,7 @@ template. Last observed template: blank body, gray `tv` icon, `Want to watch`,
 and false `Is in Library`; verify live rather than force cached defaults.
 
 - Metadata: `Name` (title), `Category` (select), `Genres` (multi-select), `Episodes`
-  (number), `Release Date` (date), `IMDb`, `TMDB`, and `Reference` (URLs).
+  (number), `Release Date` (date), `IMDb`, `TMDB`, and `Douban` (URLs).
 - People: `Director`, `Cast`, and `Writer` are People & Organizations relations.
 - Personal: `Status`, `Watched Date` (date), `Score` (number), `Is in Library`
   (checkbox). `Rating` and `In Library` are read-only formulas.
@@ -44,8 +44,8 @@ and false `Is in Library`; verify live rather than force cached defaults.
   series-level IMDb/TMDB URL is not proof that two season records are duplicates.
   Do not merge seasons or silently convert a seasonal record into an entire series.
 - Use evidenced canonical IMDb title and TMDB **TV** URLs, never movie/person links
-  or invented IDs. `Reference` is a verified fallback catalog link such as Douban
-  when IMDb/TMDB is unavailable. Check cross-source series/season scope rather than
+  or invented IDs. Store verified Douban subject URLs in `Douban`; the live schema
+  has no `Reference` field (checked 2026-10-09). Check cross-source series/season scope rather than
   assume all URLs describe the same unit. Preserve existing valid references.
 - `Episodes` describes the selected unit's episode count, not watched progress.
   Verify whether counts cover one season, the whole series, or include specials.

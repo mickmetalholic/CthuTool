@@ -46,7 +46,9 @@ Ignore `To Be Downloaded`; it is outside this skill's scope.
 - **Query:** Use supported scoped search or structured queries, fetch candidates,
   and return useful fields and Notion links. Paginate where possible; disclose partial
   coverage and unavailable derived values. Queries remain read-only and need no
-  public enrichment. Parameterize SQL values when SQL is used.
+  public enrichment. Parameterize SQL values when SQL is used. Use only columns
+  present in the live SQL schema; formula/rollup fields listed in
+  `notAvailableInQuerySql` require supported page/property reads, not guessed columns.
 - **Create:** Resolve identity using the selected library's rules and check duplicates
   by stable source identity plus contextual candidates. Return exact existing matches
   without silently updating them. Insufficient duplicate checking is not proof of

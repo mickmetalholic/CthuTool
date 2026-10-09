@@ -282,7 +282,8 @@ Deletion affects only Notion records through available reversible trash/archive;
 it never follows, unfollows, or changes platform accounts. Unsupported operations
 and incomplete query coverage are reported explicitly.
 
-The platform icon and existing covers are preserved. Explicit Videos relation edits resolve existing
+The platform icon and existing covers are preserved. Videos currently targets Knowledge
+Vault, not a separate video database. Explicit relation edits resolve existing
 records and change only requested memberships; no video import or related-page
 creation is performed.
 
@@ -370,7 +371,8 @@ Existing whole-series records are not migrated incidentally; specials require a 
 
 Series, seasons, parts, and specials remain distinct. Shared series-level IMDb or
 TMDB TV URLs do not alone prove duplicates; title, year, and season scope are
-reconciled. Reference supports a verified fallback such as Douban. Episodes and
+reconciled. The live `Douban` URL field stores verified Douban references; the old
+`Reference` field is absent. Episodes and
 Release Date match the selected unit; aired counts are not silently treated as
 final totals, and partial dates are not padded.
 

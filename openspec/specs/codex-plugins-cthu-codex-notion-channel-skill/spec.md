@@ -120,9 +120,9 @@ The skill SHALL verify mutations and report every batch item as created, updated
 - **THEN** existing state is checked before retrying and success is reported only when verified
 
 ### Requirement: Existing video relations
-The skill SHALL preserve existing Videos relations unless explicitly asked to change them.
+The skill SHALL preserve existing Videos relations unless explicitly asked to change them. The observed target is Knowledge Vault (`collection://94d3d31a-68e8-4966-bd0c-4bddf8e19ee0`); the skill SHALL verify that target rather than infer a separate video database from the property name.
 
 #### Scenario: Video membership update
 - **WHEN** the user explicitly asks to change Videos memberships
 - **THEN** the skill verifies the live relation target and existing video identities, changes only requested memberships, and clarifies missing or ambiguous targets
-- **AND** it does not create, import, or modify related video pages as a side effect
+- **AND** it does not create, import, or modify related Knowledge Vault pages as a side effect

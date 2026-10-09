@@ -41,7 +41,7 @@ The skill SHALL preserve the intended series, season, part, or special identity,
 
 #### Scenario: Canonical source mapping
 - **WHEN** metadata is written
-- **THEN** IMDb SHALL contain an evidenced title URL, TMDB an evidenced TV URL, and Reference a verified fallback canonical reference such as Douban
+- **THEN** IMDb SHALL contain an evidenced title URL, TMDB an evidenced TV URL, and Douban a verified Douban subject URL; the obsolete Reference property SHALL NOT be written
 - **AND** movie/person URLs, invented identifiers, and cross-source scope assumptions SHALL NOT be used
 
 #### Scenario: Episode and release metadata
