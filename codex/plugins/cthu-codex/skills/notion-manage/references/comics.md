@@ -8,7 +8,7 @@ Fetch the current schema and default template on invocation; discover relation
 targets and option/template IDs live and reuse them for the request.
 
 - `Name`, `Reference`, page cover: comic identity and source information.
-- `Author`: multiple related People Vault entries; `Access`: shared Book Access.
+- `Author`: multiple related People & Organizations entries; `Access`: shared Book Access.
 - `Status`, `Score`: personal reading records. `Rating` is a read-only formula.
 - The observed schema has no `Genres`, `Series`, `Finished`, or progress field.
   Do not assume these exist, add them, or change views during record maintenance.
@@ -21,7 +21,7 @@ targets and option/template IDs live and reuse them for the request.
   renaming, or merging entries. Same titles and translated names are candidates,
   not duplicate proof. Clarify scope when it materially affects the operation.
 - Preserve multiple creators, including verified original-story and art credits.
-  Reuse existing People Vault records; create a missing related record only when
+  Reuse existing People & Organizations records; create a missing related record only when
   needed for the requested change and its identity is clear. Do not invent role
   fields or overwrite shared records' other library relations.
 - Publication completion is not personal reading completion. Finishing one
@@ -43,3 +43,7 @@ targets and option/template IDs live and reuse them for the request.
   bibliographic sections automatically; use targeted edits for requested notes.
 
 Default new comics to `Want to Read` unless requested otherwise. Preserve related people and access channels on removal.
+
+For shared entity matching and required creation templates, read
+[People & Organizations](people-organizations.md). Keep this library's existing
+related-record permission limits.

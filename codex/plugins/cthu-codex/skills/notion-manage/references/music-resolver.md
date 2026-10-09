@@ -26,7 +26,7 @@ expands the user's request.
 
 Legacy helper exports remain metadata-only: `buildAlbumMutationPayload` excludes
 personal fields, `buildFieldPreview` can illustrate differences, and artist or
-option helpers can suggest missing values. Do not execute suggested People Vault
+option helpers can suggest missing values. Do not execute suggested People & Organizations
 updates or option creation. Follow SKILL.md for authorization, current schema,
 existing options, template/icon, covers, and direct personal-field CRUD.
 
@@ -34,3 +34,7 @@ The resolver does not resolve `Conductors`, `Performers`, or `Works`.
 Handle requested changes to these relations against the live related databases;
 missing helper output is not a reason to clear them. `Composers` and `Work Type`
 are derived rollups, not resolver mutation fields.
+
+For shared entity matching and required creation templates, read
+[People & Organizations](people-organizations.md). Keep this library's existing
+related-record permission limits.

@@ -4,7 +4,7 @@
 
 - Database: `https://app.notion.com/p/e50b0eeaf5f14a858c93c5442c0f9d66`
 - Data source: `collection://4bc30fee-e028-4593-a505-4c4bfc6cf062`
-- People relations (`Artist`, `Conductors`, `Performers`): People Vault,
+- People relations (`Artist`, `Conductors`, `Performers`): People & Organizations,
   `collection://0beb941d-d073-4079-a207-c8126201d1eb`.
 - `Works` relation: Classical Work, `collection://97d2982c-2812-48ef-ab37-e919a80a5e4f`.
 - Template hint: `01f4c2fa-1bf3-4ca8-a436-a1f609558dd6`; last observed with a gray
@@ -22,7 +22,7 @@ all former soloist links. Never send obsolete property names.
 Last observed release types:
 Album, Single, EP, Broadcast, Other; statuses: Want to listen, Listening, Listened.
 Reuse current options. Report incompatible fields before writing them; do not
-change schema, views, options, or related People Vault/Classical Work pages as a side effect.
+change schema, views, options, or related People & Organizations/Classical Work pages as a side effect.
 The current SQL schema omits `Composers`, `Work Type`, and `Rating`; use supported
 page/rollup reads when needed rather than querying nonexistent columns.
 
@@ -37,7 +37,7 @@ page/rollup reads when needed rather than querying nonexistent columns.
   Prefer a linked Master, verify identity, and reuse existing normalized options.
   Report missing options and source conflicts; do not substitute a concrete Release
   or streaming-service metadata for these authorities.
-- Resolve all artist credits against existing People Vault pages: MusicBrainz Artist
+- Resolve all artist credits against existing People & Organizations pages: MusicBrainz Artist
   URL first, then a unique exact normalized name without a conflicting identifier.
   Fetch the relation schema and candidate pages; clarify missing or ambiguous artists
   before the affected write. Do not create artists or fill their identifiers here.
@@ -63,3 +63,7 @@ page/rollup reads when needed rather than querying nonexistent columns.
 For requested `Works` matching, read [Classical Work](classical-works.md).
 For optional MusicBrainz/Discogs enrichment, read [resolver notes](music-resolver.md).
 Routine queries and personal-field updates need neither resolver nor public enrichment.
+
+For shared entity matching and required creation templates, read
+[People & Organizations](people-organizations.md). Keep this library's existing
+related-record permission limits.

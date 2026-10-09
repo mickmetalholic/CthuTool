@@ -9,7 +9,7 @@ and false `Is in Library`; verify live rather than force cached defaults.
 
 - Metadata: `Name` (title), `Category` (select), `Genres` (multi-select), `Episodes`
   (number), `Release Date` (date), `IMDb`, `TMDB`, and `Reference` (URLs).
-- People: `Director`, `Cast`, and `Writer` are People Vault relations.
+- People: `Director`, `Cast`, and `Writer` are People & Organizations relations.
 - Personal: `Status`, `Watched Date` (date), `Score` (number), `Is in Library`
   (checkbox). `Rating` and `In Library` are read-only formulas.
 - Observed categories: American Drama, Japanese Drama, English Drama, Korean Drama,
@@ -35,7 +35,7 @@ and false `Is in Library`; verify live rather than force cached defaults.
 - Reuse live Category/Genres options with evidence or user direction; title language
   alone does not establish Category. Report unmapped values. Do not change schemas,
   options, views, or create new season/episode properties as a side effect.
-- Verify live People Vault targets and existing Director/Cast/Writer identities.
+- Verify live People & Organizations targets and existing Director/Cast/Writer identities.
   Prefer evidenced stable identifiers where available; reconcile names and credits
   otherwise. Preserve multiple credits, clarify missing/ambiguous people before
   affected relation writes, and do not create or edit related pages incidentally.
@@ -52,3 +52,7 @@ and false `Is in Library`; verify live rather than force cached defaults.
   or conflicting sources instead of guessing. No scripts or backend are required.
 
 Keep Research & Archive status distinct from actual removal; clarify ambiguous archive requests.
+
+For shared entity matching and required creation templates, read
+[People & Organizations](people-organizations.md). Keep this library's existing
+related-record permission limits.

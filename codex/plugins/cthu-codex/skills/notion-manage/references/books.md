@@ -11,7 +11,7 @@ response rather than hard-coding them.
 - Book metadata: `Name`, `Author`, `Genres`, `Series`, `Reference`, page cover.
 - Personal records: `Status`, `Finished`, `Score`, `Access`, page notes.
 - `Rating` is a formula; update `Score`, never write the formula result.
-- `Author` relates to People Vault, `Series` to Book Series, and `Access`
+- `Author` relates to People & Organizations, `Series` to Book Series, and `Access`
   to Book Access. Fetch the relevant related schema when needed.
 
 ## Care points
@@ -40,7 +40,7 @@ response rather than hard-coding them.
   editions or invent a permanent work-versus-edition policy for the user.
 - Reuse matching authors, series, and access channels. Create a missing related
   entry only when needed for the requested change and its identity is clear.
-  People Vault is shared with other libraries; preserve unrelated information.
+  People & Organizations is shared with other libraries; preserve unrelated information.
 - Never infer a personal score, completion date, ownership, or access channel
   from public metadata. Do not assume a score scale or substitute a public
   rating. Keep `Research & Archive` distinct from `Read`.
@@ -49,3 +49,7 @@ response rather than hard-coding them.
 - Operate on records, not database views or their configuration.
 
 Default new books to `Want to Read` unless requested otherwise. Delete only requested book records, not related people, series, or access channels.
+
+For shared entity matching and required creation templates, read
+[People & Organizations](people-organizations.md). Keep this library's existing
+related-record permission limits.

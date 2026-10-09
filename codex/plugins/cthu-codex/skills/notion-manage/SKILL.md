@@ -31,6 +31,11 @@ documentary, or another library could fit, clarify rather than write to several.
 | Animation / 动画 | [animation.md](references/animation.md) |
 | Apps / 应用 | [apps.md](references/apps.md) |
 
+When resolving a relation to People & Organizations (formerly People Vault), also
+read [people-organizations.md](references/people-organizations.md). Authorized entity
+creation must use its type-appropriate template; icon copying alone is not template
+application. Reading this shared reference does not expand relation permissions.
+
 References describe observed schemas, not immutable contracts. Fetch live fields,
 relation targets, options, and templates relevant to the request. Use exact connector
 keys and report incompatible fields. Record CRUD does not change schemas or views.

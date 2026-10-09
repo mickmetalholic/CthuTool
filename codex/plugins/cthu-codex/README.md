@@ -64,7 +64,8 @@ movies, dramas, games, knowledge, documentaries, animation, and apps.
 
 The entry point contains common CRUD rules and a library index. It reads only the
 relevant `references/<library>.md`; Classical Work matching and music resolver notes
-are loaded only when needed. Each reference retains its schema hints, identity rules,
+are loaded only when needed. People & Organizations is a shared relation reference;
+authorized creation applies the person/band template and verifies its icon. Each reference retains its schema hints, identity rules,
 and template/icon conventions. Live schema remains authoritative.
 
 Creation uses available templates, verifies icons, and returns images for manual

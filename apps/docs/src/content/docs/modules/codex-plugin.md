@@ -451,6 +451,19 @@ live template when available, and reports absence otherwise. Existing branded ic
 are preserved; missing icons use the verified template icon or gray window fallback.
 Creation returns a verified app image/link for manual addition, or reports its absence.
 
+## Shared People & Organizations
+
+The unified skill reads `references/people-organizations.md` when a requested library
+operation needs entity matching or creation. This is the former People Vault, shared
+by books, comics, film/TV, animation, music, and Classical Work relations.
+
+Authorized creation must apply a live template: individuals, including musicians,
+use the gray user template; bands use the gray electric-guitar template. Both are
+named New page, so selection uses verified IDs/icons. Other organizations need an
+applicable convention rather than being treated as bands. Template and icon results
+are verified; missing/failed application is disclosed. Existing related-record
+permission limits and unrelated cross-library memberships remain intact.
+
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`

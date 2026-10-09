@@ -10,13 +10,13 @@ verify these live instead of forcing cached defaults.
 
 - Metadata: `Name` (title), `Genres` (multi-select), `Release Date` (date),
   `IMDb` and `TMDB` (canonical URL properties).
-- People: `Director` and `Cast` are relations to People Vault; verify their live target.
+- People: `Director` and `Cast` are relations to People & Organizations; verify their live target.
 - Personal: `Status` (Want to watch / Watching / Watched), `Watched Date` (date),
   `Score` (number), `Is in Library` (checkbox).
 - Read-only formulas: `Rating`, `In Library`.
 
 Use current names, types, and options. Report incompatible fields before affected
-writes; do not change schemas, options, views, or related People Vault pages.
+writes; do not change schemas, options, views, or related People & Organizations pages.
 
 ## Essential safeguards
 
@@ -46,3 +46,7 @@ writes; do not change schemas, options, views, or related People Vault pages.
   repeating creation or overwriting content. Disclose unavailable templates or repairs.
 - Verify poster identity and image URLs. Do not invent URLs, overwrite an uploaded
   cover, or automatically apply the returned image; it is for manual addition.
+
+For shared entity matching and required creation templates, read
+[People & Organizations](people-organizations.md). Keep this library's existing
+related-record permission limits.
