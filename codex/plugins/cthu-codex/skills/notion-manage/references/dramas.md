@@ -28,6 +28,18 @@ and false `Is in Library`; verify live rather than force cached defaults.
 
 ## Essential safeguards
 
+- For multi-season dramas, create one record per season, named with the verified
+  original series title plus `Season N` (for example, `Dark — Season 2`). Keep each
+  season's status, score, episode count, and premiere date separate. A request for
+  the whole multi-season series maps to its verified regular seasons; a request for
+  specific seasons creates only those. Do not add specials/Season 0 unless requested.
+  Preserve existing whole-series records rather than splitting or migrating them
+  incidentally; clarify overlap before creating duplicate coverage.
+- Use TMDB TV's matching season poster as that season's cover, verified against the
+  series identity and season number. Do not use the general series poster or another
+  season's poster. This seasonal rule overrides the shared IMDb/Douban fallback:
+  if the matching TMDB season poster is unavailable, report the gap rather than
+  silently substituting artwork. Use verified season URLs when available.
 - Preserve series, season, part, and special identity. Reconcile remakes, adaptations,
   and similarly named works using title, year, people, and source evidence. A shared
   series-level IMDb/TMDB URL is not proof that two season records are duplicates.

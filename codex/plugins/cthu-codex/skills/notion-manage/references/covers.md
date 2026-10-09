@@ -11,16 +11,20 @@ Knowledge, channels, apps, and people/organizations are outside this workflow.
 | --- | --- |
 | English-language books | Goodreads, matching the selected edition |
 | Movies | TMDB Movie, then IMDb |
-| Dramas | TMDB TV, then IMDb, matching the selected series/season |
+| Dramas | Multi-season entries: TMDB TV matching season poster; other dramas: TMDB TV, then IMDb |
 | Games | IGDB wherever possible, matching the game/edition |
 | Documentaries / Animation | IMDb, matching the selected work/season/episode |
+
+For multi-season drama entries, follow [drama rules](dramas.md): each season uses
+its own TMDB TV season poster. If unavailable, report it; do not automatically fall
+back to IMDb, Douban, a general series poster, or another season's image.
 
 Use a verified actual image URL from the matching source record, not its detail-page
 URL or a guessed image path. Set it through the supported Notion page `cover` URL
 operation and refetch to verify. If retrieval or application fails, follow the
 Douban route below; inspect uncertain writes before retrying or replacing anything.
 
-For all other cases, use the corresponding Douban cover: this includes Chinese books,
+Except for the seasonal-drama rule above, use the corresponding Douban cover for all other cases: this includes Chinese books,
 comics, music releases, and unavailable direct-link covers above. Match the work and
 edition/release/season; label representative volume art used for a whole comic work.
 This cover policy does not change metadata-source priorities. Do not use unrelated

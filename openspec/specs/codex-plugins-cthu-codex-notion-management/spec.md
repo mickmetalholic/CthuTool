@@ -47,7 +47,7 @@ Creation SHALL explicitly apply the selected live template using the connector's
 - **THEN** the skill inspects that page, preserves content, reports icon repair separately, and does not recreate it
 
 ### Requirement: Cover source and delivery workflow
-For new media entries and requested cover completion or replacement, the skill SHALL use verified direct image links from Goodreads for English books, TMDB Movie then IMDb for movies, TMDB TV then IMDb for dramas, IGDB where possible for games, and IMDb for documentaries and animation. Other cases SHALL use matching Douban cover files, including Chinese books, comics, music releases, and unavailable direct-link covers. Existing covers SHALL be preserved unless replacement is requested. Knowledge, channels, apps, and people/organizations SHALL have no cover requirement.
+For new media entries and requested cover completion or replacement, the skill SHALL use verified direct image links from Goodreads for English books, TMDB Movie then IMDb for movies, TMDB TV matching season posters for multi-season dramas and TMDB TV then IMDb for other dramas, IGDB where possible for games, and IMDb for documentaries and animation. Missing TMDB posters for multi-season dramas SHALL be reported without automatic substitution. Other cases SHALL use matching Douban cover files, including Chinese books, comics, music releases, and unavailable direct-link covers. Existing covers SHALL be preserved unless replacement is requested. Knowledge, channels, apps, and people/organizations SHALL have no cover requirement.
 
 #### Scenario: Direct-link cover
 - **WHEN** a matching image from an applicable direct-link source is available

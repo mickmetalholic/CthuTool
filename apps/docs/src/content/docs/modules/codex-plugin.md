@@ -359,6 +359,12 @@ and reversible removal. Clear natural-language requests authorize scoped changes
 without a mandatory second confirmation. The skill discovers the live schema,
 options, and template and discloses incomplete query coverage.
 
+Multi-season dramas use one entry per season, named with the original series title
+plus Season N, with separate episode counts, premiere dates, statuses, and scores.
+Each season uses its matching TMDB TV season poster. Missing season posters are
+reported without substituting a general series poster or another source automatically.
+Existing whole-series records are not migrated incidentally; specials require a request.
+
 Series, seasons, parts, and specials remain distinct. Shared series-level IMDb or
 TMDB TV URLs do not alone prove duplicates; title, year, and season scope are
 reconciled. Reference supports a verified fallback such as Douban. Episodes and
@@ -484,7 +490,8 @@ permission limits and unrelated cross-library memberships remain intact.
 
 New media entries and requested cover completion use verified direct image URLs:
 Goodreads for English books; TMDB Movie then IMDb for movies; TMDB TV then IMDb
-for dramas; IGDB for games; IMDb for documentaries and animation. Other cases,
+for other dramas; matching TMDB TV season posters for multi-season dramas; IGDB for
+games; IMDb for documentaries and animation. Except for missing seasonal TMDB posters, other cases,
 including Chinese books, comics, music releases, and missing direct-link covers,
 use the matching Douban cover downloaded as an image file.
 

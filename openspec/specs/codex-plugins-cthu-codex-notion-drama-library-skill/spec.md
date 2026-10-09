@@ -117,3 +117,15 @@ The skill SHALL follow this source policy: Use metadata sources in order: TMDB T
 - **WHEN** creating an entry or completing its factual metadata
 - **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
 - **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers
+
+### Requirement: One record and TMDB poster per season
+Multi-season dramas SHALL use one record per season, named with the verified original series title plus Season N. Each record SHALL hold that season's episode count, premiere date, status, and score. A whole-series creation request SHALL resolve to verified regular seasons; explicit season requests SHALL remain scoped to those seasons. Specials SHALL require a request. Existing whole-series records SHALL NOT be split or migrated incidentally.
+
+#### Scenario: Create multiple seasons
+- **WHEN** a multi-season drama is added
+- **THEN** the skill SHALL check each requested season for duplicates and use its matching TMDB TV season poster, verified by series identity and season number
+- **AND** it SHALL clarify overlap with an existing whole-series record rather than duplicate coverage
+
+#### Scenario: Missing season poster
+- **WHEN** the matching TMDB TV season poster is unavailable
+- **THEN** the skill SHALL disclose the gap without substituting a series poster, another season, IMDb, or Douban artwork automatically
