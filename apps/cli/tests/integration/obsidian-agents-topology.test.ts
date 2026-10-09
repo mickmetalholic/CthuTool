@@ -35,7 +35,6 @@ async function createFixture(name = 'cthutool-obsidian-topology-') {
 
 function input(fixture: Awaited<ReturnType<typeof createFixture>>) {
   return {
-    id: 'obsidian-main',
     vaultPath: fixture.vaultPath,
     sourcePath: fixture.sourcePath,
   };
@@ -94,40 +93,40 @@ describe('Obsidian agents vault topology', () => {
     ).toBe('keep\n');
   });
 
-  test('adopts a real .agents directory and preserves hidden legacy metadata', async () => {
-    const fixture = await createFixture();
-    await mkdir(join(fixture.agentsPath, '.git'), { recursive: true });
-    await mkdir(join(fixture.agentsPath, 'skills'), { recursive: true });
-    await writeFile(
-      join(fixture.agentsPath, '.git', 'config'),
-      '[core]\n',
-      'utf8',
-    );
-    await writeFile(
-      join(fixture.agentsPath, 'skills', 'legacy.md'),
-      'legacy\n',
-      'utf8',
-    );
+  test('blocks empty and populated .agents directories without mutation', async () => {
+    for (const populated of [false, true]) {
+      const fixture = await createFixture();
+      await mkdir(fixture.agentsPath);
+      if (populated)
+        await writeFile(join(fixture.agentsPath, 'keep.txt'), 'keep');
+      const before = await readdir(fixture.vaultPath);
+      await expect(
+        createObsidianAgentsSetupPlan(fixture.paths, input(fixture)),
+      ).rejects.toThrow(/Relocate it manually/);
+      expect(await readdir(fixture.vaultPath)).toEqual(before);
+      expect(await Bun.file(fixture.paths.configPath).exists()).toBe(false);
+      if (populated)
+        expect(
+          await readFile(join(fixture.agentsPath, 'keep.txt'), 'utf8'),
+        ).toBe('keep');
+    }
+  });
 
+  test('unrelated Git metadata produces no diagnostics or special behavior', async () => {
+    const fixture = await createFixture();
     const plan = await createObsidianAgentsSetupPlan(
       fixture.paths,
       input(fixture),
     );
-    expect(plan.transition).toBe('adopt_existing_agents');
     await applyObsidianAgentsSetup(fixture.paths, plan);
+    const before = await inspectObsidianAgentsStatus({ paths: fixture.paths });
+    await mkdir(join(fixture.sourcePath, '.git'));
+    await writeFile(join(fixture.sourcePath, '.git', 'config'), 'untouched');
+    const after = await inspectObsidianAgentsStatus({ paths: fixture.paths });
+    expect(after).toEqual(before);
     expect(
       await readFile(join(fixture.sourcePath, '.git', 'config'), 'utf8'),
-    ).toBe('[core]\n');
-    expect(
-      await readFile(join(fixture.agentsPath, 'skills', 'legacy.md'), 'utf8'),
-    ).toBe('legacy\n');
-
-    const status = await inspectObsidianAgentsStatus({ paths: fixture.paths });
-    expect(status).toMatchObject({
-      healthy: true,
-      legacy: { gitMetadata: true },
-      consistency: { provider: 'obsidian_sync', model: 'eventual' },
-    });
+    ).toBe('untouched');
   });
 
   test('repairs a mismatched link without touching its old target', async () => {
@@ -162,9 +161,9 @@ describe('Obsidian agents vault topology', () => {
 
     const status = await inspectObsidianAgentsStatus({
       paths: fixture.paths,
-      profileId: 'obsidian-main',
+      vaultPath: fixture.vaultPath,
     });
-    expect(status.configured).toBe(false);
+    expect(status.vaults[0]?.configured).toBe(false);
 
     const plan = await createObsidianAgentsSetupPlan(
       fixture.paths,
@@ -175,7 +174,7 @@ describe('Obsidian agents vault topology', () => {
     const configuredBefore = await readdir(fixture.vaultPath);
     const broken = await inspectObsidianAgentsStatus({ paths: fixture.paths });
     const configuredAfter = await readdir(fixture.vaultPath);
-    expect(broken.link.status).toBe('broken');
+    expect(broken.vaults[0]?.link.status).toBe('broken');
     expect(configuredAfter).toEqual(configuredBefore);
     expect(before).toContain('.agents');
   });
@@ -189,7 +188,7 @@ describe('Obsidian agents vault topology', () => {
 
     await expect(
       createObsidianAgentsSetupPlan(fixture.paths, input(fixture)),
-    ).rejects.toThrow(/Both agents directories contain data/);
+    ).rejects.toThrow(/Relocate it manually/);
     expect(await readFile(join(fixture.sourcePath, 'source.txt'), 'utf8')).toBe(
       'source\n',
     );
@@ -208,7 +207,6 @@ describe('Obsidian agents vault topology', () => {
 
     await expect(
       createObsidianAgentsSetupPlan(fixture.paths, {
-        id: 'obsidian-main',
         vaultPath: fixture.vaultPath,
         sourcePath: escapedSource,
       }),
@@ -253,7 +251,6 @@ describe('Obsidian agents vault topology', () => {
 
 function setupProfile(fixture: Awaited<ReturnType<typeof createFixture>>) {
   return {
-    id: 'obsidian-main',
     vaultPath: fixture.vaultPath,
     sourcePath: fixture.sourcePath,
     agentsPath: fixture.agentsPath,

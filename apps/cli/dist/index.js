@@ -6837,7 +6837,7 @@ async function runMain(cmd, opts = {}) {
 }
 
 // src/index.ts
-var import_picocolors10 = __toESM(require_picocolors(), 1);
+var import_picocolors11 = __toESM(require_picocolors(), 1);
 
 // src/command/command-discovery.ts
 function stripAnsi3(value) {
@@ -12553,13 +12553,13 @@ function createInternalCompleteCommand(resolveRootCommand) {
 
 // src/command/obsidian.command.ts
 import { join as join19 } from "node:path";
-var import_picocolors4 = __toESM(require_picocolors(), 1);
+var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // src/domain/obsidian-agents-config.ts
 import { randomUUID as randomUUID2 } from "node:crypto";
-import { mkdir as mkdir10, readFile as readFile13, rename as rename5, writeFile as writeFile8 } from "node:fs/promises";
+import { mkdir as mkdir10, readFile as readFile13, realpath as realpath2, rename as rename5, writeFile as writeFile8 } from "node:fs/promises";
 import { isAbsolute as isAbsolute3, join as join16, relative as relative3, resolve as resolve10, sep as sep4 } from "node:path";
-var OBSIDIAN_AGENTS_CONFIG_VERSION = 2;
+var OBSIDIAN_AGENTS_CONFIG_VERSION = 3;
 
 class ObsidianAgentsConfigError extends Error {
   constructor(message, options) {
@@ -12570,14 +12570,10 @@ class ObsidianAgentsConfigError extends Error {
 function createEmptyObsidianAgentsConfig() {
   return {
     version: OBSIDIAN_AGENTS_CONFIG_VERSION,
-    profiles: {}
+    vaults: []
   };
 }
 function normalizeObsidianAgentsProfile(input) {
-  const id = input.id.trim();
-  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(id)) {
-    throw new ObsidianAgentsConfigError("Profile id must start with a lowercase letter or number and contain only lowercase letters, numbers, hyphens, or underscores.");
-  }
   const vaultPath = normalizeAbsolutePath(input.vaultPath, "vault path");
   const sourcePath = normalizeAbsolutePath(input.sourcePath?.trim() || join16(vaultPath, "Agents"), "visible source path");
   const agentsPath = join16(vaultPath, ".agents");
@@ -12591,7 +12587,7 @@ function normalizeObsidianAgentsProfile(input) {
   if (sourcePath === agentsPath) {
     throw new ObsidianAgentsConfigError("The visible source path must be different from the vault .agents compatibility path.");
   }
-  return { id, vaultPath, sourcePath, agentsPath };
+  return { vaultPath, sourcePath, agentsPath };
 }
 async function readObsidianAgentsConfig(paths) {
   let raw;
@@ -12603,26 +12599,22 @@ async function readObsidianAgentsConfig(paths) {
     throw new ObsidianAgentsConfigError(`Unable to read Obsidian agents configuration: ${paths.configPath}`, { cause: error });
   }
   try {
-    return parseObsidianAgentsConfig(JSON.parse(raw));
+    return await parseObsidianAgentsConfig(JSON.parse(raw));
   } catch (error) {
-    if (error instanceof ObsidianAgentsConfigError)
-      throw error;
+    if (error instanceof ObsidianAgentsConfigError) {
+      throw new ObsidianAgentsConfigError(`${error.message} Configuration: ${paths.configPath}`, { cause: error });
+    }
     throw new ObsidianAgentsConfigError(`Invalid Obsidian agents configuration: ${paths.configPath}`, { cause: error });
   }
 }
 async function writeObsidianAgentsConfig(paths, config) {
-  const normalized = parseObsidianAgentsConfig(config);
+  const normalized = await parseObsidianAgentsConfig(config);
   const persisted = {
     version: normalized.version,
-    ...normalized.defaultProfile ? { defaultProfile: normalized.defaultProfile } : {},
-    profiles: Object.fromEntries(Object.entries(normalized.profiles).map(([id, profile]) => [
-      id,
-      {
-        id: profile.id,
-        vaultPath: profile.vaultPath,
-        sourcePath: profile.sourcePath
-      }
-    ]))
+    vaults: normalized.vaults.map(({ vaultPath, sourcePath }) => ({
+      vaultPath,
+      sourcePath
+    }))
   };
   await mkdir10(paths.dataRoot, { recursive: true });
   const temporaryPath = `${paths.configPath}.tmp-${randomUUID2()}`;
@@ -12630,46 +12622,73 @@ async function writeObsidianAgentsConfig(paths, config) {
 `, "utf8");
   await rename5(temporaryPath, paths.configPath);
 }
-function parseObsidianAgentsConfig(value) {
-  if (!isRecord5(value) || value.version !== 1 && value.version !== 2) {
-    throw new ObsidianAgentsConfigError("Obsidian agents configuration must use version 1 or 2.");
+async function canonicalVaultPath(value) {
+  const path = normalizeAbsolutePath(value, "vault path");
+  try {
+    return await realpath2(path);
+  } catch (error) {
+    if (isMissingFileError4(error))
+      return path;
+    throw error;
   }
-  if (!isRecord5(value.profiles)) {
-    throw new ObsidianAgentsConfigError("Obsidian agents configuration must contain a profiles object.");
-  }
-  const profiles = {};
-  for (const [id, rawProfile] of Object.entries(value.profiles)) {
-    if (!isRecord5(rawProfile)) {
-      throw new ObsidianAgentsConfigError(`Profile "${id}" is invalid.`);
-    }
-    profiles[id] = normalizeObsidianAgentsProfile({
-      id,
-      vaultPath: readString(rawProfile.vaultPath, `Profile "${id}" vaultPath`),
-      sourcePath: value.version === 2 ? readString(rawProfile.sourcePath, `Profile "${id}" sourcePath`) : undefined
-    });
-  }
-  const defaultProfile = value.defaultProfile === undefined ? undefined : readString(value.defaultProfile, "defaultProfile");
-  if (defaultProfile && !profiles[defaultProfile]) {
-    throw new ObsidianAgentsConfigError(`Default profile "${defaultProfile}" does not exist.`);
-  }
-  return {
-    version: OBSIDIAN_AGENTS_CONFIG_VERSION,
-    ...defaultProfile ? { defaultProfile } : {},
-    profiles
-  };
 }
-function selectObsidianAgentsProfile(config, profileId) {
-  const selectedId = profileId?.trim() || config.defaultProfile;
-  if (selectedId)
-    return config.profiles[selectedId];
-  return Object.values(config.profiles)[0];
+async function canonicalizeObsidianAgentsProfile(input) {
+  const originalPath = normalizeAbsolutePath(input.vaultPath, "vault path");
+  const vaultPath = await canonicalVaultPath(originalPath);
+  const sourcePath = normalizeAbsolutePath(input.sourcePath ?? join16(originalPath, "Agents"), "visible source path");
+  const sourceRelative = relative3(originalPath, sourcePath);
+  const throughOriginalPath = sourceRelative.length > 0 && sourceRelative !== ".." && !sourceRelative.startsWith(`..${sep4}`) && !isAbsolute3(sourceRelative);
+  return normalizeObsidianAgentsProfile({
+    vaultPath,
+    sourcePath: throughOriginalPath ? join16(vaultPath, sourceRelative) : sourcePath
+  });
+}
+async function parseObsidianAgentsConfig(value) {
+  if (!isRecord5(value) || value.version !== 2 && value.version !== 3) {
+    throw new ObsidianAgentsConfigError("Unsupported Obsidian agents configuration. Back up and move the local configuration file aside, then rerun chc obsidian agents setup --vault <path>. Supported versions: 2 and 3.");
+  }
+  let entries;
+  if (value.version === 2 && isRecord5(value.profiles)) {
+    entries = Object.values(value.profiles);
+  } else if (value.version === 3 && Array.isArray(value.vaults)) {
+    entries = value.vaults;
+  } else {
+    throw new ObsidianAgentsConfigError("Obsidian agents configuration must contain vault entries.");
+  }
+  const vaults = [];
+  for (const entry of entries) {
+    if (!isRecord5(entry))
+      throw new ObsidianAgentsConfigError("Invalid vault configuration.");
+    const profile = await canonicalizeObsidianAgentsProfile({
+      vaultPath: readString(entry.vaultPath, "vaultPath"),
+      sourcePath: readString(entry.sourcePath, "sourcePath")
+    });
+    const existing = selectObsidianAgentsProfile({ version: 3, vaults }, profile.vaultPath);
+    if (existing) {
+      if (pathKey(existing.sourcePath) !== pathKey(profile.sourcePath)) {
+        throw new ObsidianAgentsConfigError(`Conflicting sources for ${profile.vaultPath}: ${existing.sourcePath} and ${profile.sourcePath}. Reconcile the local configuration entries before retrying.`);
+      }
+    } else {
+      vaults.push(profile);
+    }
+  }
+  vaults.sort((left, right) => left.vaultPath < right.vaultPath ? -1 : left.vaultPath > right.vaultPath ? 1 : 0);
+  return { version: OBSIDIAN_AGENTS_CONFIG_VERSION, vaults };
+}
+function selectObsidianAgentsProfile(config, vaultPath) {
+  return config.vaults.find((entry) => pathKey(entry.vaultPath) === pathKey(vaultPath));
 }
 function upsertObsidianAgentsProfile(config, profile) {
   return {
-    ...config,
-    defaultProfile: profile.id,
-    profiles: { ...config.profiles, [profile.id]: profile }
+    version: OBSIDIAN_AGENTS_CONFIG_VERSION,
+    vaults: [
+      ...config.vaults.filter((entry) => pathKey(entry.vaultPath) !== pathKey(profile.vaultPath)),
+      profile
+    ]
   };
+}
+function pathKey(path) {
+  return process.platform === "win32" ? path.toLowerCase() : path;
 }
 function normalizeAbsolutePath(value, label) {
   const trimmed = value.trim();
@@ -12695,11 +12714,8 @@ function isMissingFileError4(error) {
 import {
   lstat,
   mkdir as mkdir11,
-  readdir as readdir4,
   readlink,
-  realpath as realpath2,
-  rename as rename6,
-  rmdir,
+  realpath as realpath3,
   stat as stat5,
   symlink,
   unlink
@@ -12724,7 +12740,7 @@ class ObsidianAgentsServiceError extends Error {
   }
 }
 async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
-  const profile = normalizeObsidianAgentsProfile(input);
+  const profile = await canonicalizeObsidianAgentsProfile(input);
   const platform3 = options.platform ?? process.platform;
   if (!await isDirectory2(profile.vaultPath)) {
     throw new ObsidianAgentsServiceError("invalid_configuration", `Obsidian vault does not exist or is not a directory: ${profile.vaultPath}`);
@@ -12746,24 +12762,15 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
       actions.push(topology.source.kind === "absent" ? `create visible source ${profile.sourcePath}` : `preserve visible source ${profile.sourcePath}`, `ensure ${join17(profile.sourcePath, "skills")} and ${join17(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
       break;
     case "directory":
-      if (topology.source.kind === "absent" || topology.source.empty === true) {
-        transition = "adopt_existing_agents";
-        actions.push(`move existing directory ${profile.agentsPath} to ${profile.sourcePath}`, `ensure ${join17(profile.sourcePath, "skills")} and ${join17(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
-      } else if (topology.agents.empty === true) {
-        transition = "replace_empty_agents";
-        actions.push(`remove empty directory ${profile.agentsPath}`, `preserve visible source ${profile.sourcePath}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
-      } else {
-        throw new ObsidianAgentsServiceError("conflict", `Both agents directories contain data. Reconcile them manually before setup: ${profile.agentsPath} and ${profile.sourcePath}`);
-      }
-      break;
+      throw new ObsidianAgentsServiceError("conflict", `A real directory occupies ${profile.agentsPath}. Relocate it manually before rerunning setup; automatic directory migration is not supported.`);
     case "link":
       if (topology.linkStatus === "correct") {
         transition = "reuse";
         actions.push(`validate existing link ${profile.agentsPath}`);
-        if (!await isDirectory2(join17(profile.sourcePath, "skills"))) {
+        if ((await inspectObsidianAgentsPath(join17(profile.sourcePath, "skills"))).kind !== "directory") {
           actions.push(`create ${join17(profile.sourcePath, "skills")}`);
         }
-        if (!await isDirectory2(join17(profile.sourcePath, "state"))) {
+        if ((await inspectObsidianAgentsPath(join17(profile.sourcePath, "state"))).kind !== "directory") {
           actions.push(`create ${join17(profile.sourcePath, "state")}`);
         }
       } else {
@@ -12781,7 +12788,7 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
   }
   const requiresConfirmation = transition !== "reuse" || actions.some((action) => action.startsWith("create "));
   return {
-    profile,
+    vault: profile,
     platform: platform3,
     transition,
     topology,
@@ -12790,52 +12797,38 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
   };
 }
 async function applyObsidianAgentsSetup(paths, plan) {
-  const current = await createObsidianAgentsSetupPlan(paths, plan.profile, {
+  const current = await createObsidianAgentsSetupPlan(paths, plan.vault, {
     platform: plan.platform
   });
   if (current.transition !== plan.transition || !sameSetupTopology(current.topology, plan.topology)) {
-    throw new ObsidianAgentsServiceError("conflict", `Obsidian agents topology changed after preview. Run setup again before modifying ${plan.profile.vaultPath}.`);
+    throw new ObsidianAgentsServiceError("conflict", `Obsidian agents topology changed after preview. Run setup again before modifying ${plan.vault.vaultPath}.`);
   }
   try {
     switch (plan.transition) {
       case "create":
       case "link_existing_source":
-        await ensureSourceDirectories(plan.profile.sourcePath);
-        await createObsidianAgentsDirectoryLink(plan.profile.agentsPath, plan.profile.sourcePath, { platform: plan.platform });
-        break;
-      case "adopt_existing_agents":
-        await mkdir11(dirname12(plan.profile.sourcePath), { recursive: true });
-        if (current.topology.source.kind === "directory") {
-          await rmdir(plan.profile.sourcePath);
-        }
-        await rename6(plan.profile.agentsPath, plan.profile.sourcePath);
-        await ensureSourceDirectories(plan.profile.sourcePath);
-        await createObsidianAgentsDirectoryLink(plan.profile.agentsPath, plan.profile.sourcePath, { platform: plan.platform });
-        break;
-      case "replace_empty_agents":
-        await rmdir(plan.profile.agentsPath);
-        await ensureSourceDirectories(plan.profile.sourcePath);
-        await createObsidianAgentsDirectoryLink(plan.profile.agentsPath, plan.profile.sourcePath, { platform: plan.platform });
+        await ensureSourceDirectories(plan.vault.sourcePath);
+        await createObsidianAgentsDirectoryLink(plan.vault.agentsPath, plan.vault.sourcePath, { platform: plan.platform });
         break;
       case "repair_link":
-        await ensureSourceDirectories(plan.profile.sourcePath);
-        await unlink(plan.profile.agentsPath);
-        await createObsidianAgentsDirectoryLink(plan.profile.agentsPath, plan.profile.sourcePath, { platform: plan.platform });
+        await ensureSourceDirectories(plan.vault.sourcePath);
+        await unlink(plan.vault.agentsPath);
+        await createObsidianAgentsDirectoryLink(plan.vault.agentsPath, plan.vault.sourcePath, { platform: plan.platform });
         break;
       case "reuse":
-        await ensureSourceDirectories(plan.profile.sourcePath);
+        await ensureSourceDirectories(plan.vault.sourcePath);
         break;
     }
-    const topology = await inspectObsidianAgentsTopology(plan.profile, {
+    const topology = await inspectObsidianAgentsTopology(plan.vault, {
       platform: plan.platform
     });
     if (topology.linkStatus !== "correct") {
-      throw new Error(`Created compatibility link did not resolve to ${plan.profile.sourcePath}.`);
+      throw new Error(`Created compatibility link did not resolve to ${plan.vault.sourcePath}.`);
     }
     const existing = await readObsidianAgentsConfig(paths) ?? createEmptyObsidianAgentsConfig();
-    await writeObsidianAgentsConfig(paths, upsertObsidianAgentsProfile(existing, plan.profile));
+    await writeObsidianAgentsConfig(paths, upsertObsidianAgentsProfile(existing, plan.vault));
     return {
-      profile: plan.profile,
+      vault: plan.vault,
       transition: plan.transition,
       actions: plan.actions,
       link: {
@@ -12848,46 +12841,58 @@ async function applyObsidianAgentsSetup(paths, plan) {
   } catch (error) {
     if (error instanceof ObsidianAgentsServiceError)
       throw error;
-    const state = await describeCurrentState(plan.profile, plan.platform);
+    const state = await describeCurrentState(plan.vault, plan.platform);
     throw new ObsidianAgentsServiceError("filesystem_failed", `Unable to apply Obsidian agents topology. ${state}`, { cause: error });
   }
 }
 async function inspectObsidianAgentsStatus(options) {
-  const platform3 = options.platform ?? process.platform;
   const config = await readObsidianAgentsConfig(options.paths);
-  const profile = config ? selectObsidianAgentsProfile(config, options.profileId) : undefined;
-  if (!profile)
-    return createMissingStatus();
+  const selectedPath = options.vaultPath ? await canonicalVaultPath(options.vaultPath) : undefined;
+  const selected = selectedPath && config ? selectObsidianAgentsProfile(config, selectedPath) : undefined;
+  const vaults = selectedPath ? [
+    selected ? await inspectVaultStatus(selected, options.platform) : createMissingStatus(selectedPath)
+  ] : await Promise.all((config?.vaults ?? []).map((vault) => inspectVaultStatus(vault, options.platform)));
+  const healthy = vaults.filter((vault) => vault.healthy).length;
+  return {
+    summary: {
+      total: vaults.length,
+      healthy,
+      needsAttention: vaults.length - healthy
+    },
+    vaults
+  };
+}
+async function inspectVaultStatus(profile, platform3 = process.platform) {
   const topology = await inspectObsidianAgentsTopology(profile, { platform: platform3 });
   const vaultExists = await isDirectory2(profile.vaultPath);
   const sourceInsideVault = vaultExists && await isCanonicalSourceInsideVault(profile);
   const sourceExists = topology.source.kind === "directory";
-  const skillsExists = sourceExists ? await isDirectory2(join17(profile.sourcePath, "skills")) : false;
-  const stateExists = sourceExists ? await isDirectory2(join17(profile.sourcePath, "state")) : false;
-  const gitMetadata = sourceExists ? await pathExists3(join17(profile.sourcePath, ".git")) : false;
-  const warnings = [];
+  const skillsExists = sourceExists ? (await inspectObsidianAgentsPath(join17(profile.sourcePath, "skills"))).kind === "directory" : false;
+  const stateExists = sourceExists ? (await inspectObsidianAgentsPath(join17(profile.sourcePath, "state"))).kind === "directory" : false;
+  const issues = [];
   if (!vaultExists)
-    warnings.push("The configured Obsidian vault is missing.");
+    issues.push(`Vault directory is missing: ${profile.vaultPath}. Restore it or set up its new location.`);
   if (!sourceExists)
-    warnings.push("The visible Agents source is missing.");
-  if (vaultExists && !sourceInsideVault) {
-    warnings.push("The visible Agents source resolves outside the configured Obsidian vault.");
-  }
-  if (topology.linkStatus !== "correct") {
-    warnings.push(`The .agents compatibility link is ${topology.linkStatus}; run chc obsidian agents setup to repair it.`);
+    issues.push(`Visible source is missing or is not a real directory: ${profile.sourcePath}.`);
+  if (vaultExists && !sourceInsideVault)
+    issues.push(`Visible source resolves outside the vault: ${profile.sourcePath}. Choose a source inside the vault.`);
+  if (topology.linkStatus === "not_link") {
+    issues.push(`A real directory occupies ${profile.agentsPath}. Relocate it manually before rerunning setup.`);
+  } else if (topology.linkStatus === "unsupported") {
+    issues.push(`An unsupported ${topology.agents.kind} occupies ${profile.agentsPath}. Relocate it manually before rerunning setup.`);
+  } else if (topology.linkStatus === "mismatched") {
+    issues.push(`Link target mismatch: ${topology.agents.resolvedTarget ?? topology.agents.target ?? "unavailable"}; expected ${profile.sourcePath}.`);
+  } else if (topology.linkStatus !== "correct") {
+    issues.push(`The .agents link is ${topology.linkStatus}.`);
   }
   if (!skillsExists)
-    warnings.push("The visible source is missing skills/.");
+    issues.push("The visible source is missing a real skills/ directory.");
   if (!stateExists)
-    warnings.push("The visible source is missing state/.");
-  if (gitMetadata) {
-    warnings.push("Legacy .git metadata is preserved in the visible source and is not managed by this feature.");
-  }
-  warnings.push("Obsidian Sync is eventually consistent; avoid concurrent writes to one non-Markdown state file.");
+    issues.push("The visible source is missing a real state/ directory.");
   return {
     configured: true,
     healthy: vaultExists && sourceExists && sourceInsideVault && topology.linkStatus === "correct" && skillsExists && stateExists,
-    profile,
+    ...profile,
     paths: {
       vaultExists,
       sourceExists,
@@ -12905,9 +12910,7 @@ async function inspectObsidianAgentsStatus(options) {
       resolvedTarget: topology.agents.resolvedTarget,
       expectedTarget: topology.expectedTarget
     },
-    legacy: { gitMetadata },
-    consistency: { provider: "obsidian_sync", model: "eventual" },
-    warnings
+    issues
   };
 }
 async function inspectObsidianAgentsTopology(profile, options = {}) {
@@ -12948,7 +12951,7 @@ async function inspectObsidianAgentsPath(path, platform3 = process.platform) {
     const rawTarget = await readlink(path);
     const target = resolve11(dirname12(path), rawTarget);
     try {
-      const resolvedTarget = await realpath2(path);
+      const resolvedTarget = await realpath3(path);
       return {
         path,
         kind: "link",
@@ -12971,8 +12974,7 @@ async function inspectObsidianAgentsPath(path, platform3 = process.platform) {
   if (details.isDirectory()) {
     return {
       path,
-      kind: "directory",
-      empty: (await readdir4(path)).length === 0
+      kind: "directory"
     };
   }
   if (details.isFile())
@@ -13000,9 +13002,10 @@ async function sameCanonicalPath(left, right, platform3 = process.platform) {
   ]);
   return normalizeComparablePath(leftCanonical, platform3) === normalizeComparablePath(rightCanonical, platform3);
 }
-function createMissingStatus() {
-  const source = { path: "", kind: "absent" };
+function createMissingStatus(vaultPath) {
+  const vault = normalizeObsidianAgentsProfile({ vaultPath });
   return {
+    ...vault,
     configured: false,
     healthy: false,
     paths: {
@@ -13013,13 +13016,9 @@ function createMissingStatus() {
       skillsExists: false,
       stateExists: false
     },
-    source,
+    source: { path: vault.sourcePath, kind: "absent" },
     link: { status: "missing", kind: "absent" },
-    legacy: { gitMetadata: false },
-    consistency: { provider: "obsidian_sync", model: "eventual" },
-    warnings: [
-      "Obsidian agents is not configured. Run chc obsidian agents setup."
-    ]
+    issues: ["This vault is not configured. Run setup for this vault."]
   };
 }
 async function ensureSourceDirectories(sourcePath) {
@@ -13042,7 +13041,7 @@ async function describeCurrentState(profile, platform3) {
 }
 async function canonicalPath(path) {
   try {
-    return await realpath2(path);
+    return await realpath3(path);
   } catch (error) {
     if (isMissingFileError5(error))
       return resolve11(path);
@@ -13054,7 +13053,7 @@ async function canonicalDestinationPath(path) {
   let current = resolve11(path);
   while (true) {
     try {
-      const existing = await realpath2(current);
+      const existing = await realpath3(current);
       return resolve11(existing, ...missingSegments.reverse());
     } catch (error) {
       if (!isMissingFileError5(error))
@@ -13079,7 +13078,7 @@ function sameSetupTopology(left, right) {
   return left.linkStatus === right.linkStatus && samePathState(left.source, right.source) && samePathState(left.agents, right.agents);
 }
 function samePathState(left, right) {
-  return left.path === right.path && left.kind === right.kind && left.empty === right.empty && left.linkType === right.linkType && left.target === right.target && left.resolvedTarget === right.resolvedTarget;
+  return left.path === right.path && left.kind === right.kind && left.linkType === right.linkType && left.target === right.target && left.resolvedTarget === right.resolvedTarget;
 }
 function normalizeComparablePath(value, platform3) {
   let comparable = value;
@@ -13092,16 +13091,6 @@ function normalizeComparablePath(value, platform3) {
   }
   comparable = normalize(comparable).replace(/[\\/]+$/u, "");
   return platform3 === "win32" ? comparable.toLowerCase() : comparable;
-}
-async function pathExists3(path) {
-  try {
-    await lstat(path);
-    return true;
-  } catch (error) {
-    if (isMissingFileError5(error))
-      return false;
-    throw error;
-  }
 }
 async function isDirectory2(path) {
   try {
@@ -13142,13 +13131,116 @@ function createObsidianAgentsDataPaths(options = {}) {
   };
 }
 
+// src/command/obsidian-status.ts
+var import_picocolors4 = __toESM(require_picocolors(), 1);
+import { basename as basename4 } from "node:path";
+var segmenter2 = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+function displayWidth(value) {
+  let width = 0;
+  for (const { segment } of segmenter2.segment(value)) {
+    if (/^\p{Mark}+$/u.test(segment))
+      continue;
+    const point = segment.codePointAt(0) ?? 0;
+    if (point < 32 || point >= 127 && point < 160)
+      continue;
+    width += /\p{Extended_Pictographic}/u.test(segment) || point >= 4352 && (point <= 4447 || point === 9001 || point === 9002 || point >= 11904 && point <= 42191 || point >= 44032 && point <= 55203 || point >= 63744 && point <= 64255 || point >= 65040 && point <= 65049 || point >= 65072 && point <= 65135 || point >= 65280 && point <= 65376 || point >= 65504 && point <= 65510 || point >= 131072) ? 2 : 1;
+  }
+  return width;
+}
+function wrap(value, width) {
+  const lines = [];
+  let line = "";
+  let used = 0;
+  for (const { segment } of segmenter2.segment(value)) {
+    const size = displayWidth(segment);
+    if (line && used + size > width) {
+      const boundaries = [...line.matchAll(/[ /\\]/gu)];
+      const last = boundaries.at(-1);
+      const cut = last && displayWidth(line.slice(0, last.index + 1)) >= width / 2 ? last.index + 1 : line.length;
+      lines.push(line.slice(0, cut));
+      line = line.slice(cut);
+      used = displayWidth(line);
+    }
+    line += segment;
+    used += size;
+  }
+  lines.push(line);
+  return lines;
+}
+function quoteVaultPath(path, platform3 = process.platform) {
+  return platform3 === "win32" ? `'${path.replaceAll("'", "''")}'` : `'${path.replaceAll("'", "'\\''")}'`;
+}
+function formatObsidianAgentsStatus(report, options = {}) {
+  const colors2 = import_picocolors4.default.createColors(options.color ?? false);
+  const width = Math.max(20, Math.min(options.columns ?? 80, 96));
+  const lines = [colors2.bold(colors2.cyan("Obsidian Agents"))];
+  const { total, healthy, needsAttention } = report.summary;
+  if (total === 0) {
+    lines.push("", "No vaults configured.", "Run: chc obsidian agents setup");
+    return lines.flatMap((line) => options.color ? [line] : wrap(line, width));
+  }
+  const summary = `${total} ${total === 1 ? "vault" : "vaults"}  /  ${healthy} ready  /  ${needsAttention} needs attention`;
+  lines.push(...wrap(summary, width).map(colors2.dim));
+  function detail(label, value) {
+    const prefix = `  ${label.padEnd(9)}`;
+    const continuation = " ".repeat(prefix.length);
+    wrap(value, width - prefix.length).forEach((line, index) => {
+      lines.push((index === 0 ? colors2.dim(prefix) : continuation) + line);
+    });
+  }
+  for (const vault of report.vaults) {
+    lines.push("");
+    const title = basename4(vault.vaultPath) || vault.vaultPath;
+    const badge = vault.healthy ? "READY" : "NEEDS ATTENTION";
+    const styledBadge = vault.healthy ? colors2.green(badge) : colors2.yellow(badge);
+    if (width >= 48 && displayWidth(title) + badge.length + 3 <= width) {
+      lines.push(colors2.bold(title) + " ".repeat(width - displayWidth(title) - badge.length) + styledBadge);
+    } else {
+      lines.push(...wrap(title, width).map(colors2.bold), styledBadge);
+    }
+    lines.push(colors2.dim("-".repeat(width)));
+    detail("Vault", vault.vaultPath);
+    if (vault.configured) {
+      detail("Source", vault.sourcePath);
+      detail("Link", vault.agentsPath);
+      if (vault.link.resolvedTarget || vault.link.target) {
+        detail("", `-> ${vault.link.resolvedTarget ?? vault.link.target}`);
+      }
+      if (vault.link.status !== "correct")
+        detail("Status", vault.link.status.replaceAll("_", " "));
+      detail("Type", vault.link.type === "junction" ? "Directory junction" : vault.link.type === "symbolic_link" ? "Symbolic link" : "No link");
+      detail("Contents", `Skills ${vault.paths.skillsExists ? "OK" : "MISSING"}  /  State ${vault.paths.stateExists ? "OK" : "MISSING"}`);
+    }
+    if (!vault.healthy) {
+      lines.push("");
+      vault.issues.forEach((issue, index) => {
+        detail(index === 0 ? "Issue" : "", issue);
+      });
+      detail("Action", actionForVault(vault));
+      detail("", `chc obsidian agents setup --vault ${quoteVaultPath(vault.vaultPath, options.platform)}`);
+    }
+  }
+  return lines;
+}
+function actionForVault(vault) {
+  if (!vault.configured)
+    return "Configure this vault:";
+  if (!vault.paths.vaultExists)
+    return "Restore the vault at this path, then rerun setup:";
+  if (vault.link.status === "not_link" || vault.link.status === "unsupported") {
+    return "Relocate the occupied .agents path manually, then rerun setup:";
+  }
+  if (!vault.paths.sourceInsideVault)
+    return "Choose a visible source inside the vault during setup:";
+  if (vault.source.kind !== "absent" && vault.source.kind !== "directory") {
+    return "Relocate the occupied source path manually, then rerun setup:";
+  }
+  return "Create or repair the local directories and link:";
+}
+
 // src/command/obsidian.command.ts
 var commonArgs2 = {
   ...cliContractArgs,
-  profile: {
-    type: "string",
-    description: "Obsidian agents profile id"
-  },
   vault: {
     type: "string",
     description: "Obsidian vault path"
@@ -13182,6 +13274,8 @@ function createDataPaths(args) {
 async function runObservedObsidianSubcommand(subcommand, args, run) {
   await runObservedCliCommand(args, { command: "obsidian agents", subcommand }, async (scope) => {
     try {
+      if (args.profile !== undefined)
+        throw createCliError("invalid_option", "--profile has been removed. Select a vault with --vault <path>.");
       await run(scope);
     } catch (error) {
       const cliError = toObsidianCliError(error);
@@ -13203,9 +13297,8 @@ async function runObservedObsidianSubcommand(subcommand, args, run) {
 async function runSetup(args, scope) {
   const paths = createDataPaths(args);
   const config = await readObsidianAgentsConfig(paths);
-  const current = config ? selectObsidianAgentsProfile(config, getStringArg2(args.profile)) : undefined;
   const interactive = scope.context.interactive && !scope.context.json;
-  const input = await collectSetupInput(args, current, interactive);
+  const input = await collectSetupInput(args, config, interactive);
   if (!input) {
     writeSetupResult(scope.context, { status: "cancelled" });
     process.exitCode = 0;
@@ -13213,13 +13306,11 @@ async function runSetup(args, scope) {
   }
   const plan = await createObsidianAgentsSetupPlan(paths, input);
   if (!scope.context.json && !scope.context.quiet) {
-    writeHumanStatus(scope.context, processOutput, import_picocolors4.default.cyan("Obsidian agents setup"));
-    writeHumanStatus(scope.context, processOutput, `profile: ${plan.profile.id}`);
-    writeHumanStatus(scope.context, processOutput, `vault: ${plan.profile.vaultPath}`);
-    writeHumanStatus(scope.context, processOutput, `source: ${plan.profile.sourcePath}`);
-    writeHumanStatus(scope.context, processOutput, `.agents: ${plan.profile.agentsPath}`);
+    writeHumanStatus(scope.context, processOutput, import_picocolors5.default.cyan("Obsidian agents setup"));
+    writeHumanStatus(scope.context, processOutput, `vault: ${plan.vault.vaultPath}`);
+    writeHumanStatus(scope.context, processOutput, `source: ${plan.vault.sourcePath}`);
+    writeHumanStatus(scope.context, processOutput, `.agents: ${plan.vault.agentsPath}`);
     writeHumanStatus(scope.context, processOutput, "scope: vault-local");
-    writeHumanStatus(scope.context, processOutput, "consistency: Obsidian Sync (eventual)");
     for (const action of plan.actions) {
       writeHumanStatus(scope.context, processOutput, `- ${action}`);
     }
@@ -13245,7 +13336,7 @@ async function runSetup(args, scope) {
 async function runStatus(args, scope) {
   const result = await inspectObsidianAgentsStatus({
     paths: createDataPaths(args),
-    profileId: getStringArg2(args.profile)
+    vaultPath: getStringArg2(args.vault)
   });
   if (scope.context.json) {
     writeJsonValue(processOutput, {
@@ -13254,50 +13345,56 @@ async function runStatus(args, scope) {
       result
     });
   } else {
-    writeStatusHuman(scope.context, result);
+    const color = process.stdout.isTTY === true && process.env.NO_COLOR === undefined && import_picocolors5.default.isColorSupported;
+    for (const line of formatObsidianAgentsStatus(result, {
+      columns: process.stdout.columns,
+      color
+    })) {
+      writeHumanStatus(scope.context, processOutput, line);
+    }
   }
   process.exitCode = 0;
 }
-async function collectSetupInput(args, current, interactive) {
-  const suppliedProfile = getStringArg2(args.profile);
+async function collectSetupInput(args, config, interactive) {
   const suppliedVault = getStringArg2(args.vault);
   const suppliedSource = getStringArg2(args.sourcePath);
-  if (!interactive) {
-    const vaultPath2 = suppliedVault ?? current?.vaultPath;
-    if (!vaultPath2) {
-      throw createCliError("missing_required_argument", "Setup requires --vault in non-interactive mode when no profile exists.");
-    }
-    return {
-      id: suppliedProfile ?? current?.id ?? "obsidian-main",
-      vaultPath: vaultPath2,
-      sourcePath: suppliedSource ?? current?.sourcePath ?? join19(vaultPath2, "Agents")
-    };
+  if (!interactive && !suppliedVault) {
+    throw createCliError("missing_required_argument", "Setup requires --vault in non-interactive mode.");
   }
-  if (current) {
+  const chosenVault = suppliedVault ?? await promptString("Obsidian vault path", undefined, (value) => value.trim() ? undefined : "A vault path is required.");
+  if (!chosenVault)
+    return;
+  const vaultPath = await canonicalVaultPath(chosenVault);
+  const current = config ? selectObsidianAgentsProfile(config, vaultPath) : undefined;
+  if (current && interactive && !suppliedSource) {
+    writeHumanStatus({
+      json: false,
+      quiet: args.quiet === true,
+      isTty: true,
+      interactive: true
+    }, processOutput, `Vault: ${current.vaultPath}
+Source: ${current.sourcePath}
+Link: ${current.agentsPath}`);
     const choice = await le2({
-      message: `Existing profile "${current.id}" found.`,
+      message: "This vault is already configured.",
       options: [
         { value: "keep", label: "Keep current configuration" },
-        { value: "edit", label: "Edit configuration" }
+        { value: "edit", label: "Change visible source" }
       ],
       initialValue: "keep"
     });
     if (lD2(choice))
       return;
-    if (choice === "keep" && !suppliedVault && !suppliedSource && !suppliedProfile) {
+    if (choice === "keep")
       return current;
-    }
   }
-  const id = suppliedProfile ?? current?.id ?? await promptString("Profile id", "obsidian-main", (value) => /^[a-z0-9][a-z0-9_-]*$/u.test(value.trim()) ? undefined : "Use lowercase letters, numbers, hyphens, or underscores.");
-  if (!id)
-    return;
-  const vaultPath = suppliedVault ?? await promptString("Obsidian vault path", current?.vaultPath, (value) => value.trim() ? undefined : "A vault path is required.");
-  if (!vaultPath)
-    return;
-  const sourcePath = suppliedSource ?? await promptString("Visible Agents source path", current?.sourcePath ?? join19(vaultPath, "Agents"), (value) => value.trim() ? undefined : "A source path is required.");
+  const sourcePath = suppliedSource ?? (interactive ? await promptString("Visible Agents source path", current?.sourcePath ?? join19(vaultPath, "Agents"), (value) => value.trim() ? undefined : "A source path is required.") : current?.sourcePath ?? join19(vaultPath, "Agents"));
   if (!sourcePath)
     return;
-  return { id, vaultPath, sourcePath };
+  return canonicalizeObsidianAgentsProfile({
+    vaultPath: chosenVault,
+    sourcePath
+  });
 }
 async function promptString(message, initialValue, validate2) {
   const answer = await ae({ message, initialValue, validate: validate2 });
@@ -13316,35 +13413,12 @@ function writeSetupResult(context, result) {
     writeHumanStatus(context, processOutput, "Setup cancelled.");
     return;
   }
-  writeHumanStatus(context, processOutput, import_picocolors4.default.green("Obsidian agents configured."));
-  const profile = result.profile;
+  writeHumanStatus(context, processOutput, import_picocolors5.default.green("Obsidian agents configured."));
+  const profile = result.vault;
   if (profile) {
     writeHumanStatus(context, processOutput, `source: ${profile.sourcePath}`);
     writeHumanStatus(context, processOutput, `.agents: ${profile.agentsPath}`);
   }
-}
-function writeStatusHuman(context, result) {
-  writeHumanStatus(context, processOutput, import_picocolors4.default.cyan("Obsidian agents status"));
-  if (!result.configured) {
-    writeHumanStatus(context, processOutput, "configuration: missing");
-    writeHumanStatus(context, processOutput, "run: chc obsidian agents setup");
-    return;
-  }
-  writeHumanStatus(context, processOutput, `profile: ${result.profile?.id ?? "unknown"}`);
-  writeHumanStatus(context, processOutput, `vault: ${check(result.paths.vaultExists)} ${result.profile?.vaultPath ?? ""}`);
-  writeHumanStatus(context, processOutput, `source: ${check(result.paths.sourceExists && result.paths.sourceInsideVault)} ${result.profile?.sourcePath ?? ""}`);
-  writeHumanStatus(context, processOutput, `.agents: ${check(result.link.status === "correct")} ${result.link.status}`);
-  writeHumanStatus(context, processOutput, `link type: ${result.link.type ?? "none"}`);
-  writeHumanStatus(context, processOutput, `resolved target: ${result.link.resolvedTarget ?? "unavailable"}`);
-  writeHumanStatus(context, processOutput, `skills: ${check(result.paths.skillsExists)}; state: ${check(result.paths.stateExists)}`);
-  writeHumanStatus(context, processOutput, `legacy Git metadata: ${result.legacy.gitMetadata ? "present" : "absent"}`);
-  writeHumanStatus(context, processOutput, `consistency: ${result.consistency.provider} (${result.consistency.model})`);
-  for (const warning of result.warnings) {
-    writeHumanStatus(context, processOutput, `warning: ${warning}`);
-  }
-}
-function check(value) {
-  return value ? import_picocolors4.default.green("OK") : import_picocolors4.default.red("FAIL");
 }
 function toObsidianCliError(error) {
   if (error instanceof ObsidianAgentsServiceError) {
@@ -13416,7 +13490,7 @@ var obsidianCommand = defineCommand({
 });
 
 // src/command/run-scripts.command.ts
-var import_picocolors6 = __toESM(require_picocolors(), 1);
+var import_picocolors7 = __toESM(require_picocolors(), 1);
 
 // ../../node_modules/.pnpm/neverthrow@8.2.0/node_modules/neverthrow/dist/index.cjs.js
 var defaultErrorConfig = {
@@ -13975,7 +14049,7 @@ function runBundledScript(pkg, args, context) {
 }
 
 // src/infra/bundled-script-catalog.ts
-var import_picocolors5 = __toESM(require_picocolors(), 1);
+var import_picocolors6 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
 import { existsSync as existsSync5 } from "node:fs";
@@ -13992,7 +14066,7 @@ function getBundledScriptsRoot() {
 }
 
 // src/infra/discover-scripts.ts
-import { readdir as readdir5, readFile as readFile14, stat as stat6 } from "node:fs/promises";
+import { readdir as readdir4, readFile as readFile14, stat as stat6 } from "node:fs/promises";
 import { join as join22 } from "node:path";
 
 // src/domain/script-id.ts
@@ -14340,7 +14414,7 @@ async function scanScriptsRoot(scriptsRoot) {
   const seenIds = new Set;
   let entries;
   try {
-    entries = await readdir5(scriptsRoot, { withFileTypes: true });
+    entries = await readdir4(scriptsRoot, { withFileTypes: true });
   } catch (e3) {
     const msg = e3 instanceof Error ? e3.message : String(e3);
     throw new Error(`cannot read bundled scripts directory (${scriptsRoot}): ${msg}`);
@@ -14453,7 +14527,7 @@ function formatBundledScriptCatalog(catalog, heading = "AVAILABLE SCRIPTS") {
   } else {
     for (const row of rows) {
       const detail = row.description ? `${row.title} — ${row.description}` : row.title;
-      lines.push(`  ${import_picocolors5.default.cyan(row.id.padEnd(width + 2))}${detail}`);
+      lines.push(`  ${import_picocolors6.default.cyan(row.id.padEnd(width + 2))}${detail}`);
     }
   }
   if (catalog.warnings.length > 0) {
@@ -14486,7 +14560,7 @@ async function renderBundledScriptHelpAppendix() {
 var defaultDeps = {
   isInteractive: () => process.stdin.isTTY === true,
   pickScriptId: async (rows) => {
-    pe(import_picocolors6.default.cyan("▶ Script Selection"));
+    pe(import_picocolors7.default.cyan("▶ Script Selection"));
     const choice = await le2({
       message: "Choose a bundled script to run",
       options: rows.map((o3) => ({
@@ -14582,7 +14656,7 @@ async function executeBundledScript(args, deps) {
     }
   });
   for (const warning of catalog.warnings) {
-    writeWarning(processOutput, import_picocolors6.default.yellow(`${warning.path}: ${warning.message}`));
+    writeWarning(processOutput, import_picocolors7.default.yellow(`${warning.path}: ${warning.message}`));
     diagnostics.emit({
       level: "warn",
       event: "cli.script_discovery_warning",
@@ -14748,7 +14822,7 @@ var createScriptsCommand = (deps = defaultDeps) => {
 var scriptsCommand = createScriptsCommand();
 
 // src/command/self-update-output.ts
-var import_picocolors7 = __toESM(require_picocolors(), 1);
+var import_picocolors8 = __toESM(require_picocolors(), 1);
 var defaultDeps2 = {
   output: processOutput,
   isOutputTty: () => process.stdout.isTTY === true,
@@ -14769,7 +14843,7 @@ function identity(value) {
 function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
   const human = !context.json && !context.quiet;
   const interactiveOutput = human && context.isTty && deps.isOutputTty();
-  const colors2 = import_picocolors7.default.createColors(interactiveOutput);
+  const colors2 = import_picocolors8.default.createColors(interactiveOutput);
   let activeSpinner;
   let activePhase;
   let headerWritten = false;
@@ -14911,11 +14985,11 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
 }
 
 // src/command/self-update-status-output.ts
-var import_picocolors8 = __toESM(require_picocolors(), 1);
+var import_picocolors9 = __toESM(require_picocolors(), 1);
 var defaultDeps3 = {
   output: processOutput,
   isOutputTty: () => process.stdout.isTTY === true,
-  isColorSupported: () => import_picocolors8.default.isColorSupported
+  isColorSupported: () => import_picocolors9.default.isColorSupported
 };
 var statusMessageLength = 120;
 function formatCommitTime(value) {
@@ -14930,7 +15004,7 @@ function boundStatusMessage(value) {
 function renderCliInstallationStatus(context, status, deps = defaultDeps3) {
   if (context.json || context.quiet)
     return;
-  const colors2 = import_picocolors8.default.createColors(deps.isOutputTty() && deps.isColorSupported());
+  const colors2 = import_picocolors9.default.createColors(deps.isOutputTty() && deps.isColorSupported());
   const mode = status.mode === "local" ? colors2.magenta("● LOCAL") : colors2.blue("● REMOTE");
   const commit = colors2.yellow(status.commit ?? "unavailable");
   const commitIdentity = status.commitTime ? `${commit} ${colors2.dim(`· ${formatCommitTime(status.commitTime)}`)}` : commit;
@@ -15144,7 +15218,7 @@ var sourceUpdateCommand = createUpdateCommand({
 });
 
 // src/command/source.command.ts
-var import_picocolors9 = __toESM(require_picocolors(), 1);
+var import_picocolors10 = __toESM(require_picocolors(), 1);
 
 // src/domain/cli-source-manager.ts
 import { spawn as spawn3 } from "node:child_process";
@@ -15153,8 +15227,8 @@ import { existsSync as existsSync6, readFileSync as readFileSync5 } from "node:f
 import {
   mkdir as mkdir12,
   readFile as readFile15,
-  realpath as realpath3,
-  rename as rename7,
+  realpath as realpath4,
+  rename as rename6,
   rm as rm9,
   writeFile as writeFile9
 } from "node:fs/promises";
@@ -15218,7 +15292,7 @@ var defaultDeps4 = {
     if (!existsSync6(packagePath)) {
       return;
     }
-    return realpath3(packagePath);
+    return realpath4(packagePath);
   },
   async bootstrapManaged(target) {
     await runSelfUpdate({ installDir: target });
@@ -15774,7 +15848,7 @@ async function writeSourceRegistry(registry, home) {
 `, {
       mode: 384
     });
-    await rename7(temporary, path);
+    await rename6(temporary, path);
   } finally {
     await rm9(temporary, { force: true });
   }
@@ -15796,7 +15870,7 @@ function isCthuToolPackage(path) {
   }
 }
 async function canonicalExistingPath(path) {
-  return realpath3(resolve13(path));
+  return realpath4(resolve13(path));
 }
 async function canonicalPath2(path) {
   return existsSync6(path) ? canonicalExistingPath(path) : resolve13(path);
@@ -15935,13 +16009,13 @@ function getStringArg4(value) {
 }
 function writeSourceCandidate(candidate, home) {
   const presentation = presentCliSourceCandidate(candidate, home);
-  const marker = presentation.state === "active" ? import_picocolors9.default.green("●") : presentation.state === "ready" ? "○" : presentation.state === "not installed" ? "◌" : import_picocolors9.default.yellow("×");
+  const marker = presentation.state === "active" ? import_picocolors10.default.green("●") : presentation.state === "ready" ? "○" : presentation.state === "not installed" ? "◌" : import_picocolors10.default.yellow("×");
   processOutput.stdout.write(`${marker} ${presentation.selector.padEnd(23)} ${sourcePresentationDescription(presentation)}
 `);
   processOutput.stdout.write(`  ${presentation.displayPath}
 `);
   if (presentation.hint) {
-    processOutput.stdout.write(`  ${import_picocolors9.default.yellow(presentation.hint)}
+    processOutput.stdout.write(`  ${import_picocolors10.default.yellow(presentation.hint)}
 `);
   }
 }
@@ -15979,7 +16053,7 @@ function createSourceListCommand(deps) {
               warnings: inventory.warnings
             });
           } else if (!scope.context.quiet) {
-            writeHumanStatus(scope.context, processOutput, import_picocolors9.default.cyan("CthuTool sources"));
+            writeHumanStatus(scope.context, processOutput, import_picocolors10.default.cyan("CthuTool sources"));
             processOutput.stdout.write(`
 `);
             for (const candidate of inventory.candidates) {
@@ -15990,7 +16064,7 @@ function createSourceListCommand(deps) {
           }
           if (!scope.context.quiet) {
             for (const warning of inventory.warnings) {
-              writeWarning(processOutput, import_picocolors9.default.yellow(warning));
+              writeWarning(processOutput, import_picocolors10.default.yellow(warning));
             }
           }
           process.exitCode = 0;
@@ -16049,10 +16123,10 @@ function createSourceUseCommand(deps) {
             });
           } else {
             const verb = result.status === "already_active" ? "Already using" : result.status === "bootstrapped" ? "Bootstrapped and switched to" : "Switched to";
-            writeHumanStatus(scope.context, processOutput, `${import_picocolors9.default.green("✓")} ${verb} ${result.selected.id}`);
+            writeHumanStatus(scope.context, processOutput, `${import_picocolors10.default.green("✓")} ${verb} ${result.selected.id}`);
             writeHumanStatus(scope.context, processOutput, `  ${result.selected.path}`);
             if (result.selected.kind === "worktree") {
-              writeHumanStatus(scope.context, processOutput, import_picocolors9.default.yellow("  Switch away before deleting this worktree; otherwise restore chc with the public remote installer."));
+              writeHumanStatus(scope.context, processOutput, import_picocolors10.default.yellow("  Switch away before deleting this worktree; otherwise restore chc with the public remote installer."));
             }
           }
           process.exitCode = 0;
@@ -16090,7 +16164,7 @@ function createSourceRegisterCommand(deps) {
               result
             });
           } else {
-            writeHumanStatus(scope.context, processOutput, `${import_picocolors9.default.green("✓")} Registered local source`);
+            writeHumanStatus(scope.context, processOutput, `${import_picocolors10.default.green("✓")} Registered local source`);
             writeHumanStatus(scope.context, processOutput, `  ${result.mainRoot}`);
           }
           process.exitCode = 0;
@@ -16242,7 +16316,7 @@ function normalizeCommandRows(value, hiddenCommands) {
     }
     const width = Math.max(...visibleRows.map((row) => row.name.length));
     for (const row of visibleRows) {
-      normalized.push(`  ${import_picocolors10.default.bold(import_picocolors10.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
+      normalized.push(`  ${import_picocolors11.default.bold(import_picocolors11.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
     }
     pendingRows = [];
   };

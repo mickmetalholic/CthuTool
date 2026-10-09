@@ -24,7 +24,7 @@ describe('Obsidian agents filesystem inspection', () => {
     });
     await expect(
       inspectObsidianAgentsPath(directoryPath),
-    ).resolves.toMatchObject({ kind: 'directory', empty: true });
+    ).resolves.toMatchObject({ kind: 'directory' });
     await expect(inspectObsidianAgentsPath(filePath)).resolves.toMatchObject({
       kind: 'file',
     });

@@ -1,277 +1,291 @@
-import { describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readdir, rm, stat, unlink } from 'node:fs/promises';
+import { afterEach, describe, expect, test } from 'bun:test';
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createObsidianAgentsDirectoryLink } from '../../src/domain/obsidian-agents-service';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
-
-async function runCli(args: string[]) {
-  const proc = Bun.spawn(['bun', 'run', 'src/index.ts', ...args], {
-    cwd: cliRoot,
-    env: {
-      ...process.env,
-      FORCE_COLOR: '0',
-      NO_COLOR: '1',
-    },
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
+const roots: string[] = [];
+afterEach(async () => {
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  );
+});
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
+  roots.push(root);
+  const vaultPath = join(root, 'Notes');
+  const dataRoot = join(root, 'chc-data');
+  await mkdir(vaultPath);
   return {
-    out: await new Response(proc.stdout).text(),
-    err: await new Response(proc.stderr).text(),
-    code: await proc.exited,
+    root,
+    vaultPath,
+    dataRoot,
+    sourcePath: join(vaultPath, 'Agents'),
+    agentsPath: join(vaultPath, '.agents'),
   };
 }
+async function runCli(args: string[], env: Record<string, string> = {}) {
+  const proc = Bun.spawn(
+    ['bun', 'run', 'src/index.ts', 'obsidian', 'agents', ...args],
+    {
+      cwd: cliRoot,
+      env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1', ...env },
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  );
+  const [out, err, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  return { out, err, code };
+}
+function jsonArgs(dataRoot: string) {
+  return ['--data-root', dataRoot, '--json', '--no-interactive'];
+}
+async function setup(vaultPath: string, dataRoot: string) {
+  const result = await runCli([
+    'setup',
+    '--vault',
+    vaultPath,
+    '--yes',
+    ...jsonArgs(dataRoot),
+  ]);
+  expect(result.code).toBe(0);
+  expect(result.err).toBe('');
+  return JSON.parse(result.out).result;
+}
 
-describe('obsidian agents CLI', () => {
-  test('configures and reports the vault-local Agents topology through JSON', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
-    const vaultPath = join(root, 'vault');
-    const sourcePath = join(vaultPath, 'Agents');
-    const agentsPath = join(vaultPath, '.agents');
-    const dataRoot = join(root, 'chc-data');
-    await mkdir(vaultPath, { recursive: true });
-
-    const setup = await runCli([
-      'obsidian',
-      'agents',
+describe('Obsidian agents CLI', () => {
+  test('sets up without IDs and reuses aliases without duplicating configurations', async () => {
+    const f = await fixture();
+    const canonical = await realpath(f.vaultPath);
+    expect(await setup(f.vaultPath, f.dataRoot)).toMatchObject({
+      status: 'configured',
+      vault: {
+        vaultPath: canonical,
+        sourcePath: join(canonical, 'Agents'),
+        agentsPath: join(canonical, '.agents'),
+      },
+      transition: 'create',
+    });
+    const alias = join(f.root, 'alias');
+    await symlink(
+      f.vaultPath,
+      alias,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    expect(await setup(alias, f.dataRoot)).toMatchObject({
+      transition: 'reuse',
+    });
+    const withAliasSource = await runCli([
       'setup',
-      '--profile',
-      'obsidian-main',
       '--vault',
-      vaultPath,
+      alias,
       '--source-path',
-      sourcePath,
-      '--data-root',
-      dataRoot,
+      join(alias, 'Agents'),
       '--yes',
-      '--json',
-      '--no-interactive',
+      ...jsonArgs(f.dataRoot),
     ]);
-    expect(setup.code).toBe(0);
-    expect(setup.err).toBe('');
-    expect(JSON.parse(setup.out)).toMatchObject({
+    expect(withAliasSource.code).toBe(0);
+    const config = JSON.parse(
+      await readFile(join(f.dataRoot, 'obsidian-agents.json'), 'utf8'),
+    );
+    expect(config.version).toBe(3);
+    expect(config.vaults).toHaveLength(1);
+    expect(config).not.toHaveProperty('defaultProfile');
+    expect(config.vaults[0]).not.toHaveProperty('id');
+    expect(
+      await readFile(join(f.agentsPath, 'skills', 'missing.md'), 'utf8').catch(
+        () => 'missing',
+      ),
+    ).toBe('missing');
+    const report = await runCli(['status', ...jsonArgs(f.dataRoot)]);
+    expect(JSON.parse(report.out)).toMatchObject({
       ok: true,
-      command: 'obsidian agents setup',
       result: {
-        status: 'configured',
-        profile: {
-          id: 'obsidian-main',
-          vaultPath,
-          sourcePath,
-          agentsPath,
-        },
-        link: { status: 'correct' },
+        summary: { total: 1, healthy: 1, needsAttention: 0 },
+        vaults: [
+          {
+            configured: true,
+            healthy: true,
+            issues: [],
+            link: { status: 'correct' },
+          },
+        ],
       },
     });
-
-    expect((await stat(join(sourcePath, 'skills'))).isDirectory()).toBe(true);
-    expect((await stat(join(agentsPath, 'state'))).isDirectory()).toBe(true);
-
-    const status = await runCli([
-      'obsidian',
-      'agents',
-      'status',
-      '--data-root',
-      dataRoot,
-      '--json',
-      '--no-interactive',
-    ]);
-    expect(status.code).toBe(0);
-    expect(status.err).toBe('');
-    expect(JSON.parse(status.out)).toMatchObject({
-      ok: true,
-      command: 'obsidian agents status',
-      result: {
-        configured: true,
-        healthy: true,
-        paths: {
-          vaultExists: true,
-          sourceExists: true,
-          agentsExists: true,
-          skillsExists: true,
-          stateExists: true,
-        },
-        link: { status: 'correct' },
-        consistency: { provider: 'obsidian_sync', model: 'eventual' },
-      },
-    });
-
-    const humanStatus = await runCli([
-      'obsidian',
-      'agents',
-      'status',
-      '--data-root',
-      dataRoot,
-      '--no-interactive',
-    ]);
-    expect(humanStatus.code).toBe(0);
-    expect(humanStatus.out).toContain('.agents: OK correct');
-    expect(humanStatus.out).toContain('consistency: obsidian_sync (eventual)');
-
-    const repeated = await runCli([
-      'obsidian',
-      'agents',
-      'setup',
-      '--data-root',
-      dataRoot,
-      '--json',
-      '--no-interactive',
-    ]);
-    expect(repeated.code).toBe(0);
-    expect(JSON.parse(repeated.out)).toMatchObject({
-      ok: true,
-      result: { status: 'configured', transition: 'reuse' },
-    });
+    expect(report.out).not.toMatch(
+      /"(?:id|profile|legacy|consistency|warnings)":/,
+    );
   });
-
-  test('status is read-only and guides setup when no profile exists', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
-    const dataRoot = join(root, 'chc-data');
-    const result = await runCli([
-      'obsidian',
-      'agents',
-      'status',
-      '--data-root',
-      dataRoot,
-      '--json',
-      '--no-interactive',
-    ]);
-
+  test('reports all vaults by path order, filters aliases, and retains missing entries', async () => {
+    const f = await fixture();
+    await setup(f.vaultPath, f.dataRoot);
+    const second = join(f.root, 'Other', 'Notes');
+    await mkdir(second, { recursive: true });
+    await setup(second, f.dataRoot);
+    await unlink(join(second, '.agents'));
+    const before = await readFile(
+      join(f.dataRoot, 'obsidian-agents.json'),
+      'utf8',
+    );
+    const result = await runCli(['status', ...jsonArgs(f.dataRoot)]);
     expect(result.code).toBe(0);
-    expect(result.err).toBe('');
-    expect(JSON.parse(result.out)).toMatchObject({
-      ok: true,
-      result: { configured: false, healthy: false },
+    const report = JSON.parse(result.out).result;
+    expect(report.summary).toEqual({ total: 2, healthy: 1, needsAttention: 1 });
+    expect(
+      report.vaults.map((entry: { vaultPath: string }) => entry.vaultPath),
+    ).toEqual([await realpath(f.vaultPath), await realpath(second)].sort());
+    const alias = join(f.root, 'alias');
+    await symlink(
+      f.vaultPath,
+      alias,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    expect(
+      JSON.parse(
+        (await runCli(['status', '--vault', alias, ...jsonArgs(f.dataRoot)]))
+          .out,
+      ).result.summary.total,
+    ).toBe(1);
+    const unknown = JSON.parse(
+      (
+        await runCli([
+          'status',
+          '--vault',
+          join(f.root, 'Unknown'),
+          ...jsonArgs(f.dataRoot),
+        ])
+      ).out,
+    ).result;
+    expect(unknown.vaults).toHaveLength(1);
+    expect(unknown.vaults[0].configured).toBe(false);
+    expect(unknown.vaults[0].vaultPath).toContain('Unknown');
+    await rm(second, { recursive: true });
+    const missing = JSON.parse(
+      (await runCli(['status', ...jsonArgs(f.dataRoot)])).out,
+    ).result;
+    expect(missing.vaults).toHaveLength(2);
+    expect(missing.vaults[1].paths.vaultExists).toBe(false);
+    expect(
+      await readFile(join(f.dataRoot, 'obsidian-agents.json'), 'utf8'),
+    ).toBe(before);
+  });
+  test('empty status is read-only with a stable JSON array and human invitation', async () => {
+    const f = await fixture();
+    const result = await runCli(['status', ...jsonArgs(f.dataRoot)]);
+    expect(JSON.parse(result.out).result).toEqual({
+      summary: { total: 0, healthy: 0, needsAttention: 0 },
+      vaults: [],
     });
     expect(
-      await Bun.file(join(dataRoot, 'obsidian-agents.json')).exists(),
+      await Bun.file(join(f.dataRoot, 'obsidian-agents.json')).exists(),
     ).toBe(false);
-
-    const human = await runCli([
-      'obsidian',
-      'agents',
-      'status',
-      '--data-root',
-      dataRoot,
-      '--no-interactive',
-    ]);
-    expect(human.code).toBe(0);
-    expect(human.out).toContain('configuration: missing');
+    const human = await runCli(['status', '--data-root', f.dataRoot]);
+    expect(human.out).toContain('No vaults configured.');
     expect(human.out).toContain('chc obsidian agents setup');
+    expect(human.out).not.toContain('READY');
   });
-
-  test('reports mismatched, broken, and legacy-Git topologies without mutation', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
-    const vaultPath = join(root, 'vault');
-    const sourcePath = join(vaultPath, 'Agents');
-    const agentsPath = join(vaultPath, '.agents');
-    const oldTarget = join(vaultPath, 'OldAgent');
-    const dataRoot = join(root, 'chc-data');
-    await mkdir(vaultPath, { recursive: true });
-    const setup = await runCli([
-      'obsidian',
-      'agents',
+  test('reports mismatch, broken link, and occupied directory without mutation', async () => {
+    const f = await fixture();
+    await setup(f.vaultPath, f.dataRoot);
+    const oldTarget = join(f.vaultPath, 'OldAgent');
+    await mkdir(oldTarget);
+    await unlink(f.agentsPath);
+    await createObsidianAgentsDirectoryLink(f.agentsPath, oldTarget);
+    const mismatch = await runCli(['status', '--data-root', f.dataRoot]);
+    expect(mismatch.out).toContain('NEEDS ATTENTION');
+    expect(mismatch.out).toContain('Link target mismatch');
+    expect(mismatch.out.replace(/\n\s+/g, '')).toContain(oldTarget);
+    await rm(oldTarget, { recursive: true });
+    const before = await readdir(f.vaultPath);
+    expect(
+      JSON.parse((await runCli(['status', ...jsonArgs(f.dataRoot)])).out).result
+        .vaults[0].link.status,
+    ).toBe('broken');
+    expect(await readdir(f.vaultPath)).toEqual(before);
+    await unlink(f.agentsPath);
+    await mkdir(f.agentsPath);
+    await writeFile(join(f.agentsPath, 'keep.txt'), 'keep');
+    const conflict = await runCli([
       'setup',
       '--vault',
-      vaultPath,
-      '--data-root',
-      dataRoot,
+      f.vaultPath,
       '--yes',
-      '--json',
-      '--no-interactive',
+      ...jsonArgs(f.dataRoot),
     ]);
-    expect(setup.code).toBe(0);
-
-    await mkdir(join(sourcePath, '.git'), { recursive: true });
-    await unlink(agentsPath);
-    await mkdir(oldTarget);
-    await createObsidianAgentsDirectoryLink(agentsPath, oldTarget);
-    const mismatched = await runCli([
-      'obsidian',
-      'agents',
-      'status',
-      '--data-root',
-      dataRoot,
-      '--no-interactive',
-    ]);
-    expect(mismatched.code).toBe(0);
-    expect(mismatched.out).toContain('.agents: FAIL mismatched');
-    expect(mismatched.out).toContain('legacy Git metadata: present');
-
-    await rm(oldTarget, { recursive: true });
-    const before = await readdir(vaultPath);
-    const broken = await runCli([
-      'obsidian',
-      'agents',
-      'status',
-      '--data-root',
-      dataRoot,
-      '--json',
-      '--no-interactive',
-    ]);
-    const after = await readdir(vaultPath);
-    expect(broken.code).toBe(0);
-    expect(JSON.parse(broken.out)).toMatchObject({
-      ok: true,
-      result: {
-        healthy: false,
-        link: { status: 'broken' },
-        legacy: { gitMetadata: true },
-      },
-    });
-    expect(after).toEqual(before);
+    expect(conflict.code).not.toBe(0);
+    expect(JSON.parse(conflict.out).error.message).toContain(
+      'Relocate it manually',
+    );
+    expect(await readFile(join(f.agentsPath, 'keep.txt'), 'utf8')).toBe('keep');
+    expect((await runCli(['status', '--data-root', f.dataRoot])).out).toContain(
+      'Relocate',
+    );
   });
-
-  test('requires a vault non-interactively and rejects sources outside it', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'cthutool-obsidian-cli-'));
-    const dataRoot = join(root, 'chc-data');
-    const missing = await runCli([
-      'obsidian',
-      'agents',
-      'setup',
-      '--data-root',
-      dataRoot,
-      '--json',
-      '--no-interactive',
-    ]);
-    expect(missing.code).not.toBe(0);
+  test('human output is styled by hierarchy, plain when redirected, and quiet when requested', async () => {
+    const f = await fixture();
+    await setup(f.vaultPath, f.dataRoot);
+    const human = await runCli(['status', '--data-root', f.dataRoot], {
+      FORCE_COLOR: '1',
+    });
+    expect(human.out).toContain('Obsidian Agents');
+    expect(human.out).toContain('1 vault  /  1 ready');
+    expect(human.out).toContain('READY');
+    expect(human.out).toContain('Skills OK  /  State OK');
+    expect(human.out).not.toContain('\x1b');
+    expect(human.out).not.toMatch(/warning|consistency|legacy/);
+    expect(
+      (await runCli(['status', '--data-root', f.dataRoot, '--quiet'])).out,
+    ).toBe('');
+  });
+  test('requires a vault each time and rejects unsafe sources and removed profile options', async () => {
+    const f = await fixture();
+    await setup(f.vaultPath, f.dataRoot);
+    const missing = await runCli(['setup', ...jsonArgs(f.dataRoot)]);
     expect(JSON.parse(missing.out)).toMatchObject({
       ok: false,
       error: { code: 'missing_required_argument' },
     });
-
-    const vaultPath = join(root, 'vault');
-    await mkdir(vaultPath, { recursive: true });
     const invalid = await runCli([
-      'obsidian',
-      'agents',
       'setup',
       '--vault',
-      vaultPath,
+      f.vaultPath,
       '--source-path',
-      join(root, 'outside'),
-      '--data-root',
-      dataRoot,
+      join(f.root, 'outside'),
       '--yes',
-      '--json',
-      '--no-interactive',
+      ...jsonArgs(f.dataRoot),
     ]);
     expect(invalid.code).not.toBe(0);
-    expect(JSON.parse(invalid.out)).toMatchObject({
-      ok: false,
-      error: { code: 'obsidian_agents_invalid_configuration' },
-    });
+    for (const operation of ['setup', 'status']) {
+      const removed = await runCli([
+        operation,
+        '--profile',
+        'old',
+        ...jsonArgs(f.dataRoot),
+      ]);
+      expect(removed.code).not.toBe(0);
+      expect(JSON.parse(removed.out).error.message).toContain('--vault');
+    }
   });
-
   test('exposes only setup and status operations', async () => {
-    const result = await runCli(['obsidian', 'agents', 'sync']);
-
+    const result = await runCli(['sync']);
     expect(result.code).not.toBe(0);
-    expect(result.out).toContain('COMMANDS');
     expect(result.out).toContain('setup');
     expect(result.out).toContain('status');
     expect(result.err).toContain('Unknown command `sync`');

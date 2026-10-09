@@ -1,11 +1,8 @@
 import {
   lstat,
   mkdir,
-  readdir,
   readlink,
   realpath,
-  rename,
-  rmdir,
   stat,
   symlink,
   unlink,
@@ -22,6 +19,8 @@ import {
 } from 'node:path';
 import type { ObsidianAgentsDataPaths } from '../infra/obsidian-agents-paths';
 import {
+  canonicalizeObsidianAgentsProfile,
+  canonicalVaultPath,
   createEmptyObsidianAgentsConfig,
   normalizeObsidianAgentsProfile,
   type ObsidianAgentsProfile,
@@ -69,7 +68,6 @@ export type ObsidianAgentsLinkType = 'junction' | 'symbolic_link';
 export type ObsidianAgentsPathState = {
   readonly path: string;
   readonly kind: ObsidianAgentsPathKind;
-  readonly empty?: boolean;
   readonly linkType?: ObsidianAgentsLinkType;
   readonly target?: string;
   readonly resolvedTarget?: string;
@@ -93,13 +91,11 @@ export type ObsidianAgentsTopology = {
 export type ObsidianAgentsSetupTransition =
   | 'create'
   | 'link_existing_source'
-  | 'adopt_existing_agents'
-  | 'replace_empty_agents'
   | 'repair_link'
   | 'reuse';
 
 export type ObsidianAgentsSetupPlan = {
-  readonly profile: ObsidianAgentsProfile;
+  readonly vault: ObsidianAgentsProfile;
   readonly platform: NodeJS.Platform;
   readonly transition: ObsidianAgentsSetupTransition;
   readonly topology: ObsidianAgentsTopology;
@@ -108,7 +104,7 @@ export type ObsidianAgentsSetupPlan = {
 };
 
 export type ObsidianAgentsSetupResult = {
-  readonly profile: ObsidianAgentsProfile;
+  readonly vault: ObsidianAgentsProfile;
   readonly transition: ObsidianAgentsSetupTransition;
   readonly actions: readonly string[];
   readonly link: {
@@ -122,7 +118,9 @@ export type ObsidianAgentsSetupResult = {
 export type ObsidianAgentsStatus = {
   readonly configured: boolean;
   readonly healthy: boolean;
-  readonly profile?: ObsidianAgentsProfile;
+  readonly vaultPath: string;
+  readonly sourcePath: string;
+  readonly agentsPath: string;
   readonly paths: {
     readonly vaultExists: boolean;
     readonly sourceExists: boolean;
@@ -140,14 +138,16 @@ export type ObsidianAgentsStatus = {
     readonly resolvedTarget?: string;
     readonly expectedTarget?: string;
   };
-  readonly legacy: {
-    readonly gitMetadata: boolean;
+  readonly issues: readonly string[];
+};
+
+export type ObsidianAgentsStatusReport = {
+  readonly summary: {
+    readonly total: number;
+    readonly healthy: number;
+    readonly needsAttention: number;
   };
-  readonly consistency: {
-    readonly provider: 'obsidian_sync';
-    readonly model: 'eventual';
-  };
-  readonly warnings: readonly string[];
+  readonly vaults: readonly ObsidianAgentsStatus[];
 };
 
 export async function createObsidianAgentsSetupPlan(
@@ -155,7 +155,7 @@ export async function createObsidianAgentsSetupPlan(
   input: ObsidianAgentsSetupInput,
   options: { readonly platform?: NodeJS.Platform } = {},
 ): Promise<ObsidianAgentsSetupPlan> {
-  const profile = normalizeObsidianAgentsProfile(input);
+  const profile = await canonicalizeObsidianAgentsProfile(input);
   const platform = options.platform ?? process.platform;
   if (!(await isDirectory(profile.vaultPath))) {
     throw new ObsidianAgentsServiceError(
@@ -198,35 +198,24 @@ export async function createObsidianAgentsSetupPlan(
       );
       break;
     case 'directory':
-      if (topology.source.kind === 'absent' || topology.source.empty === true) {
-        transition = 'adopt_existing_agents';
-        actions.push(
-          `move existing directory ${profile.agentsPath} to ${profile.sourcePath}`,
-          `ensure ${join(profile.sourcePath, 'skills')} and ${join(profile.sourcePath, 'state')}`,
-          `create ${getObsidianAgentsLinkType(platform)} ${profile.agentsPath} -> ${profile.sourcePath}`,
-        );
-      } else if (topology.agents.empty === true) {
-        transition = 'replace_empty_agents';
-        actions.push(
-          `remove empty directory ${profile.agentsPath}`,
-          `preserve visible source ${profile.sourcePath}`,
-          `create ${getObsidianAgentsLinkType(platform)} ${profile.agentsPath} -> ${profile.sourcePath}`,
-        );
-      } else {
-        throw new ObsidianAgentsServiceError(
-          'conflict',
-          `Both agents directories contain data. Reconcile them manually before setup: ${profile.agentsPath} and ${profile.sourcePath}`,
-        );
-      }
-      break;
+      throw new ObsidianAgentsServiceError(
+        'conflict',
+        `A real directory occupies ${profile.agentsPath}. Relocate it manually before rerunning setup; automatic directory migration is not supported.`,
+      );
     case 'link':
       if (topology.linkStatus === 'correct') {
         transition = 'reuse';
         actions.push(`validate existing link ${profile.agentsPath}`);
-        if (!(await isDirectory(join(profile.sourcePath, 'skills')))) {
+        if (
+          (await inspectObsidianAgentsPath(join(profile.sourcePath, 'skills')))
+            .kind !== 'directory'
+        ) {
           actions.push(`create ${join(profile.sourcePath, 'skills')}`);
         }
-        if (!(await isDirectory(join(profile.sourcePath, 'state')))) {
+        if (
+          (await inspectObsidianAgentsPath(join(profile.sourcePath, 'state')))
+            .kind !== 'directory'
+        ) {
           actions.push(`create ${join(profile.sourcePath, 'state')}`);
         }
       } else {
@@ -259,7 +248,7 @@ export async function createObsidianAgentsSetupPlan(
     transition !== 'reuse' ||
     actions.some((action) => action.startsWith('create '));
   return {
-    profile,
+    vault: profile,
     platform,
     transition,
     topology,
@@ -272,7 +261,7 @@ export async function applyObsidianAgentsSetup(
   paths: ObsidianAgentsDataPaths,
   plan: ObsidianAgentsSetupPlan,
 ): Promise<ObsidianAgentsSetupResult> {
-  const current = await createObsidianAgentsSetupPlan(paths, plan.profile, {
+  const current = await createObsidianAgentsSetupPlan(paths, plan.vault, {
     platform: plan.platform,
   });
   if (
@@ -281,7 +270,7 @@ export async function applyObsidianAgentsSetup(
   ) {
     throw new ObsidianAgentsServiceError(
       'conflict',
-      `Obsidian agents topology changed after preview. Run setup again before modifying ${plan.profile.vaultPath}.`,
+      `Obsidian agents topology changed after preview. Run setup again before modifying ${plan.vault.vaultPath}.`,
     );
   }
 
@@ -289,55 +278,33 @@ export async function applyObsidianAgentsSetup(
     switch (plan.transition) {
       case 'create':
       case 'link_existing_source':
-        await ensureSourceDirectories(plan.profile.sourcePath);
+        await ensureSourceDirectories(plan.vault.sourcePath);
         await createObsidianAgentsDirectoryLink(
-          plan.profile.agentsPath,
-          plan.profile.sourcePath,
-          { platform: plan.platform },
-        );
-        break;
-      case 'adopt_existing_agents':
-        await mkdir(dirname(plan.profile.sourcePath), { recursive: true });
-        if (current.topology.source.kind === 'directory') {
-          await rmdir(plan.profile.sourcePath);
-        }
-        await rename(plan.profile.agentsPath, plan.profile.sourcePath);
-        await ensureSourceDirectories(plan.profile.sourcePath);
-        await createObsidianAgentsDirectoryLink(
-          plan.profile.agentsPath,
-          plan.profile.sourcePath,
-          { platform: plan.platform },
-        );
-        break;
-      case 'replace_empty_agents':
-        await rmdir(plan.profile.agentsPath);
-        await ensureSourceDirectories(plan.profile.sourcePath);
-        await createObsidianAgentsDirectoryLink(
-          plan.profile.agentsPath,
-          plan.profile.sourcePath,
+          plan.vault.agentsPath,
+          plan.vault.sourcePath,
           { platform: plan.platform },
         );
         break;
       case 'repair_link':
-        await ensureSourceDirectories(plan.profile.sourcePath);
-        await unlink(plan.profile.agentsPath);
+        await ensureSourceDirectories(plan.vault.sourcePath);
+        await unlink(plan.vault.agentsPath);
         await createObsidianAgentsDirectoryLink(
-          plan.profile.agentsPath,
-          plan.profile.sourcePath,
+          plan.vault.agentsPath,
+          plan.vault.sourcePath,
           { platform: plan.platform },
         );
         break;
       case 'reuse':
-        await ensureSourceDirectories(plan.profile.sourcePath);
+        await ensureSourceDirectories(plan.vault.sourcePath);
         break;
     }
 
-    const topology = await inspectObsidianAgentsTopology(plan.profile, {
+    const topology = await inspectObsidianAgentsTopology(plan.vault, {
       platform: plan.platform,
     });
     if (topology.linkStatus !== 'correct') {
       throw new Error(
-        `Created compatibility link did not resolve to ${plan.profile.sourcePath}.`,
+        `Created compatibility link did not resolve to ${plan.vault.sourcePath}.`,
       );
     }
 
@@ -346,11 +313,11 @@ export async function applyObsidianAgentsSetup(
       createEmptyObsidianAgentsConfig();
     await writeObsidianAgentsConfig(
       paths,
-      upsertObsidianAgentsProfile(existing, plan.profile),
+      upsertObsidianAgentsProfile(existing, plan.vault),
     );
 
     return {
-      profile: plan.profile,
+      vault: plan.vault,
       transition: plan.transition,
       actions: plan.actions,
       link: {
@@ -362,7 +329,7 @@ export async function applyObsidianAgentsSetup(
     };
   } catch (error) {
     if (error instanceof ObsidianAgentsServiceError) throw error;
-    const state = await describeCurrentState(plan.profile, plan.platform);
+    const state = await describeCurrentState(plan.vault, plan.platform);
     throw new ObsidianAgentsServiceError(
       'filesystem_failed',
       `Unable to apply Obsidian agents topology. ${state}`,
@@ -371,76 +338,90 @@ export async function applyObsidianAgentsSetup(
   }
 }
 
-export async function getObsidianAgentsProfile(
-  paths: ObsidianAgentsDataPaths,
-  profileId?: string,
-): Promise<ObsidianAgentsProfile> {
-  const config = await readObsidianAgentsConfig(paths);
-  if (!config) {
-    throw new ObsidianAgentsServiceError(
-      'not_configured',
-      'Obsidian agents is not configured. Run `chc obsidian agents setup` first.',
-    );
-  }
-  const profile = selectObsidianAgentsProfile(config, profileId);
-  if (!profile) {
-    throw new ObsidianAgentsServiceError(
-      'not_configured',
-      'No Obsidian agents profile is configured. Run `chc obsidian agents setup` first.',
-    );
-  }
-  return profile;
-}
-
 export async function inspectObsidianAgentsStatus(options: {
   readonly paths: ObsidianAgentsDataPaths;
-  readonly profileId?: string;
+  readonly vaultPath?: string;
   readonly platform?: NodeJS.Platform;
-}): Promise<ObsidianAgentsStatus> {
-  const platform = options.platform ?? process.platform;
+}): Promise<ObsidianAgentsStatusReport> {
   const config = await readObsidianAgentsConfig(options.paths);
-  const profile = config
-    ? selectObsidianAgentsProfile(config, options.profileId)
+  const selectedPath = options.vaultPath
+    ? await canonicalVaultPath(options.vaultPath)
     : undefined;
-  if (!profile) return createMissingStatus();
+  const selected =
+    selectedPath && config
+      ? selectObsidianAgentsProfile(config, selectedPath)
+      : undefined;
+  const vaults = selectedPath
+    ? [
+        selected
+          ? await inspectVaultStatus(selected, options.platform)
+          : createMissingStatus(selectedPath),
+      ]
+    : await Promise.all(
+        (config?.vaults ?? []).map((vault) =>
+          inspectVaultStatus(vault, options.platform),
+        ),
+      );
+  const healthy = vaults.filter((vault) => vault.healthy).length;
+  return {
+    summary: {
+      total: vaults.length,
+      healthy,
+      needsAttention: vaults.length - healthy,
+    },
+    vaults,
+  };
+}
 
+async function inspectVaultStatus(
+  profile: ObsidianAgentsProfile,
+  platform: NodeJS.Platform = process.platform,
+): Promise<ObsidianAgentsStatus> {
   const topology = await inspectObsidianAgentsTopology(profile, { platform });
   const vaultExists = await isDirectory(profile.vaultPath);
   const sourceInsideVault =
     vaultExists && (await isCanonicalSourceInsideVault(profile));
   const sourceExists = topology.source.kind === 'directory';
   const skillsExists = sourceExists
-    ? await isDirectory(join(profile.sourcePath, 'skills'))
+    ? (await inspectObsidianAgentsPath(join(profile.sourcePath, 'skills')))
+        .kind === 'directory'
     : false;
   const stateExists = sourceExists
-    ? await isDirectory(join(profile.sourcePath, 'state'))
+    ? (await inspectObsidianAgentsPath(join(profile.sourcePath, 'state')))
+        .kind === 'directory'
     : false;
-  const gitMetadata = sourceExists
-    ? await pathExists(join(profile.sourcePath, '.git'))
-    : false;
-  const warnings: string[] = [];
-  if (!vaultExists) warnings.push('The configured Obsidian vault is missing.');
-  if (!sourceExists) warnings.push('The visible Agents source is missing.');
-  if (vaultExists && !sourceInsideVault) {
-    warnings.push(
-      'The visible Agents source resolves outside the configured Obsidian vault.',
+  const issues: string[] = [];
+  if (!vaultExists)
+    issues.push(
+      `Vault directory is missing: ${profile.vaultPath}. Restore it or set up its new location.`,
     );
-  }
-  if (topology.linkStatus !== 'correct') {
-    warnings.push(
-      `The .agents compatibility link is ${topology.linkStatus}; run chc obsidian agents setup to repair it.`,
+  if (!sourceExists)
+    issues.push(
+      `Visible source is missing or is not a real directory: ${profile.sourcePath}.`,
     );
-  }
-  if (!skillsExists) warnings.push('The visible source is missing skills/.');
-  if (!stateExists) warnings.push('The visible source is missing state/.');
-  if (gitMetadata) {
-    warnings.push(
-      'Legacy .git metadata is preserved in the visible source and is not managed by this feature.',
+  if (vaultExists && !sourceInsideVault)
+    issues.push(
+      `Visible source resolves outside the vault: ${profile.sourcePath}. Choose a source inside the vault.`,
     );
+  if (topology.linkStatus === 'not_link') {
+    issues.push(
+      `A real directory occupies ${profile.agentsPath}. Relocate it manually before rerunning setup.`,
+    );
+  } else if (topology.linkStatus === 'unsupported') {
+    issues.push(
+      `An unsupported ${topology.agents.kind} occupies ${profile.agentsPath}. Relocate it manually before rerunning setup.`,
+    );
+  } else if (topology.linkStatus === 'mismatched') {
+    issues.push(
+      `Link target mismatch: ${topology.agents.resolvedTarget ?? topology.agents.target ?? 'unavailable'}; expected ${profile.sourcePath}.`,
+    );
+  } else if (topology.linkStatus !== 'correct') {
+    issues.push(`The .agents link is ${topology.linkStatus}.`);
   }
-  warnings.push(
-    'Obsidian Sync is eventually consistent; avoid concurrent writes to one non-Markdown state file.',
-  );
+  if (!skillsExists)
+    issues.push('The visible source is missing a real skills/ directory.');
+  if (!stateExists)
+    issues.push('The visible source is missing a real state/ directory.');
 
   return {
     configured: true,
@@ -451,7 +432,7 @@ export async function inspectObsidianAgentsStatus(options: {
       topology.linkStatus === 'correct' &&
       skillsExists &&
       stateExists,
-    profile,
+    ...profile,
     paths: {
       vaultExists,
       sourceExists,
@@ -469,9 +450,7 @@ export async function inspectObsidianAgentsStatus(options: {
       resolvedTarget: topology.agents.resolvedTarget,
       expectedTarget: topology.expectedTarget,
     },
-    legacy: { gitMetadata },
-    consistency: { provider: 'obsidian_sync', model: 'eventual' },
-    warnings,
+    issues,
   };
 }
 
@@ -553,7 +532,6 @@ export async function inspectObsidianAgentsPath(
     return {
       path,
       kind: 'directory',
-      empty: (await readdir(path)).length === 0,
     };
   }
   if (details.isFile()) return { path, kind: 'file' };
@@ -611,9 +589,10 @@ export async function sameCanonicalPath(
   );
 }
 
-function createMissingStatus(): ObsidianAgentsStatus {
-  const source: ObsidianAgentsPathState = { path: '', kind: 'absent' };
+function createMissingStatus(vaultPath: string): ObsidianAgentsStatus {
+  const vault = normalizeObsidianAgentsProfile({ vaultPath });
   return {
+    ...vault,
     configured: false,
     healthy: false,
     paths: {
@@ -624,13 +603,9 @@ function createMissingStatus(): ObsidianAgentsStatus {
       skillsExists: false,
       stateExists: false,
     },
-    source,
+    source: { path: vault.sourcePath, kind: 'absent' },
     link: { status: 'missing', kind: 'absent' },
-    legacy: { gitMetadata: false },
-    consistency: { provider: 'obsidian_sync', model: 'eventual' },
-    warnings: [
-      'Obsidian agents is not configured. Run chc obsidian agents setup.',
-    ],
+    issues: ['This vault is not configured. Run setup for this vault.'],
   };
 }
 
@@ -724,7 +699,6 @@ function samePathState(
   return (
     left.path === right.path &&
     left.kind === right.kind &&
-    left.empty === right.empty &&
     left.linkType === right.linkType &&
     left.target === right.target &&
     left.resolvedTarget === right.resolvedTarget
@@ -745,16 +719,6 @@ function normalizeComparablePath(
   }
   comparable = normalize(comparable).replace(/[\\/]+$/u, '');
   return platform === 'win32' ? comparable.toLowerCase() : comparable;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await lstat(path);
-    return true;
-  } catch (error) {
-    if (isMissingFileError(error)) return false;
-    throw error;
-  }
 }
 
 async function isDirectory(path: string): Promise<boolean> {
