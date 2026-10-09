@@ -89,3 +89,11 @@ The skill SHALL limit deletion to clearly identified records and connector-suppo
 - **WHEN** removal is requested
 - **THEN** the skill SHALL verify targets and the reversible result, or explain unavailable support with manual links
 - **AND** it SHALL NOT use permanent deletion or confuse removing an Owned On relation with deleting the game
+
+### Requirement: Metadata source selection
+The skill SHALL follow this source policy: Use IGDB for as much factual metadata as possible, including title, genre, release date, developer, and series. Use other verified sources only for unavailable IGDB records or fields, identify the fallback source, and preserve the intended game and edition scope. Do not replace available verified IGDB data merely for convenience.
+
+#### Scenario: Metadata enrichment
+- **WHEN** creating an entry or completing its factual metadata
+- **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
+- **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers

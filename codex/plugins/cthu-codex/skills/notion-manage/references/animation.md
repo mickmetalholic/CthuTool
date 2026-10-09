@@ -1,5 +1,11 @@
 # Animation
 
+## Metadata sources
+
+Use IMDb first, then Douban when IMDb is unavailable or lacks the requested field.
+Match the same work/season/part and disclose material conflicts. Douban URLs must
+not be written into the IMDb property.
+
 ## Target and fields
 
 - Database: `https://app.notion.com/p/830265c59ff741d2b670342ebe1bea9a`.
@@ -25,8 +31,7 @@ change schema, formulas, options, or views as a side effect.
   Do not silently turn a season into the whole series or link a live-action adaptation.
 - Use verified canonical IMDb title URLs matching the selected scope. If unavailable,
   leave IMDb empty/unchanged and report supporting sources; do not invent identifiers
-  or put another catalog's URL into IMDb. Use official studio/broadcaster or reliable
-  catalog evidence for metadata and report conflicts instead of guessing.
+  or put another catalog's URL into IMDb. Follow the metadata source priority above and report conflicts instead of guessing.
 - `Episodes` is the selected unit's count, not watched progress. Check whether specials
   are included and distinguish aired/announced counts from confirmed totals for ongoing
   works; leave uncertain values unset/unchanged. Release Date is that unit's premiere,

@@ -91,3 +91,11 @@ The skill SHALL reserve page bodies for personal notes and preserve unrelated bl
 #### Scenario: Add metadata without generating notes
 - **WHEN** the user creates a book or requests bibliographic enrichment without requesting page prose
 - **THEN** the skill does not insert catalog blurbs or duplicate bibliographic sections into the page body
+
+### Requirement: Metadata source selection
+The skill SHALL follow this source policy: Use Douban for Chinese-language books and Goodreads for English-language books, based on the selected edition's language rather than the author's nationality or original language. Match the work and edition before using metadata or Reference. For other languages or unavailable matching records, disclose the gap rather than silently substituting a different edition or source.
+
+#### Scenario: Metadata enrichment
+- **WHEN** creating an entry or completing its factual metadata
+- **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
+- **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers

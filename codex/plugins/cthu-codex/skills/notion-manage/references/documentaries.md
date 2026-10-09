@@ -1,5 +1,11 @@
 # Documentaries
 
+## Metadata sources
+
+Use IMDb first, then Douban when IMDb is unavailable or lacks the requested field.
+Match the same film/series/season/episode and disclose material conflicts. Douban
+URLs must not be written into the IMDb property.
+
 ## Target and fields
 
 - Database: `https://app.notion.com/p/354670d92c464db19d185eb0c40a012a`.
@@ -22,7 +28,7 @@ Do not change schema, options, formulas, or views as a side effect.
   shared parent-series IMDb URL do not establish duplication. Use the IMDb title
   URL matching the requested scope; do not substitute a series identifier for an
   episode or invent a season-specific identifier. Clarify unresolved matches.
-- Verify metadata against IMDb or official broadcaster/producer sources. Release
+- Verify metadata using the source priority above. Release
   Date belongs to the selected film/series/season/episode, not a streaming upload
   or personal viewing date. Do not turn a year-only date into a fabricated full date.
   Respect requested classification; use verified evidence for delegated Type,

@@ -41,3 +41,11 @@ The skill SHALL use the live template on creation, verify conventions on updates
 #### Scenario: Image unavailable
 - **WHEN** no image can be verified for the selected documentary
 - **THEN** it reports the gap without inventing a URL or automatically replacing the cover
+
+### Requirement: Metadata source selection
+The skill SHALL follow this source policy: Use IMDb first, then Douban when IMDb is unavailable or lacks the requested field. Match the same film/series/season/episode and disclose material conflicts. Douban URLs must not be written into the IMDb property.
+
+#### Scenario: Metadata enrichment
+- **WHEN** creating an entry or completing its factual metadata
+- **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
+- **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers

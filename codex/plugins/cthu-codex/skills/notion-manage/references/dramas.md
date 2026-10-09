@@ -1,5 +1,12 @@
 # Dramas
 
+## Metadata sources
+
+Use metadata sources in order: TMDB TV, then IMDb, then Douban. Fall back
+when the higher-priority source is unavailable or lacks the requested field.
+Match the same series/season/part across sources and disclose material conflicts.
+A fallback source URL must not be written into another catalog's URL property.
+
 Template verified on 2026-10-09: `5a7fa85d-bfc0-43e1-b078-33da787fea7a`. Refetch the live default
 before creation and pass its ID explicitly; copying its icon is not application.
 

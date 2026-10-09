@@ -1,5 +1,12 @@
 # Movies
 
+## Metadata sources
+
+Use metadata sources in order: TMDB Movie, then IMDb, then Douban. Fall back
+when the higher-priority source is unavailable or lacks the requested field.
+Verify the same movie identity across sources and disclose material conflicts.
+A fallback source URL must not be written into another catalog's URL property.
+
 Template verified on 2026-10-09: `fb21848b-db84-4973-8a6b-200733661796`. Refetch the live default
 before creation and pass its ID explicitly; copying its icon is not application.
 

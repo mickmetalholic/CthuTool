@@ -1,5 +1,12 @@
 # Games
 
+## Metadata sources
+
+Use IGDB for as much factual metadata as possible, including title, genre, release
+date, developer, and series. Use other verified sources only for unavailable IGDB
+records or fields, identify the fallback source, and preserve the intended game
+and edition scope. Do not replace available verified IGDB data merely for convenience.
+
 Template verified on 2026-10-09: `49c354ca-caee-4aea-93dc-e49ffa783cc9`. Refetch the live default
 before creation and pass its ID explicitly; copying its icon is not application.
 

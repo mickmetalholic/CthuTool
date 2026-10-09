@@ -108,3 +108,11 @@ The skill SHALL limit deletion to clearly identified records and connector-suppo
 - **THEN** the skill SHALL verify the targeted records and reversible removal result
 - **AND** unsupported removal SHALL be reported with manual page links
 - **AND** the skill SHALL NOT substitute permanent deletion
+
+### Requirement: Metadata source selection
+The skill SHALL follow this source policy: Use metadata sources in order: TMDB Movie, then IMDb, then Douban. Fall back when the higher-priority source is unavailable or lacks the requested field. Verify the same movie identity across sources and disclose material conflicts. A fallback source URL must not be written into another catalog's URL property.
+
+#### Scenario: Metadata enrichment
+- **WHEN** creating an entry or completing its factual metadata
+- **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
+- **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers

@@ -1,5 +1,11 @@
 # Comics
 
+## Metadata sources
+
+Use Douban for comic metadata and Reference, matching the intended work, volume,
+and edition. Report unavailable or mismatched records rather than silently
+substituting another catalog.
+
 Template verified on 2026-10-09: `7557bce9-7b38-4e18-a1f7-2a7b84fd71c4`. Refetch the live default
 before creation and pass its ID explicitly; copying its icon is not application.
 

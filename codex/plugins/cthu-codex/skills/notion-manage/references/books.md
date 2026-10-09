@@ -1,5 +1,13 @@
 # Books
 
+## Metadata sources
+
+Use Douban for Chinese-language books and Goodreads for English-language books,
+based on the selected edition's language rather than the author's nationality or
+original language. Match the work and edition before using metadata or Reference.
+For other languages or unavailable matching records, disclose the gap rather than
+silently substituting a different edition or source.
+
 Template verified on 2026-10-09: `8b795339-5733-4839-979a-1d641d564136`. Refetch the live default
 before creation and pass its ID explicitly; copying its icon is not application.
 

@@ -109,3 +109,11 @@ The skill SHALL remove only clearly identified records through connector-support
 - **WHEN** removal is requested
 - **THEN** the skill SHALL verify targets and the reversible result
 - **AND** unsupported removal SHALL be reported with manual page links, without permanent deletion or merely changing Status to Research & Archive
+
+### Requirement: Metadata source selection
+The skill SHALL follow this source policy: Use metadata sources in order: TMDB TV, then IMDb, then Douban. Fall back when the higher-priority source is unavailable or lacks the requested field. Match the same series/season/part across sources and disclose material conflicts. A fallback source URL must not be written into another catalog's URL property.
+
+#### Scenario: Metadata enrichment
+- **WHEN** creating an entry or completing its factual metadata
+- **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
+- **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers

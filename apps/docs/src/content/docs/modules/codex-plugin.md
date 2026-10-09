@@ -201,6 +201,19 @@ provide independent work CRUD. Music enrichment can use the optional skill-local
 resolver. Implicit invocation remains disabled; the separate library entry points
 have been removed. Source: `codex/plugins/cthu-codex/skills/notion-manage/SKILL.md`.
 
+Metadata sources follow these library-specific preferences. Ordered fallbacks apply
+when the preferred source is unavailable or lacks the requested field; all sources
+must match the selected work, edition, or season. Report material conflicts.
+
+| Library | Metadata sources |
+| --- | --- |
+| Books | Chinese-language editions: Douban; English-language editions: Goodreads |
+| Comics | Douban |
+| Movies | TMDB Movie → IMDb → Douban |
+| Dramas | TMDB TV → IMDb → Douban |
+| Games | IGDB wherever possible; identify other sources used for gaps |
+| Documentaries / Animation | IMDb → Douban |
+
 ## Notion Book Library
 
 Invoke `$notion-manage` explicitly to create, find, update, or reversibly

@@ -82,3 +82,11 @@ The skill SHALL return a verified cover image or direct image link for every new
 - **WHEN** no verified cover is found or a write has an uncertain outcome
 - **THEN** the limitation is reported without fabricating an image or claiming an unverified write succeeded
 - **AND** state is checked before retrying a mutation, with available Notion links included in results
+
+### Requirement: Metadata source selection
+The skill SHALL follow this source policy: Use Douban for comic metadata and Reference, matching the intended work, volume, and edition. Report unavailable or mismatched records rather than silently substituting another catalog.
+
+#### Scenario: Metadata enrichment
+- **WHEN** creating an entry or completing its factual metadata
+- **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
+- **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers
