@@ -352,7 +352,7 @@ describe('Notion album metadata resolver', () => {
       Artist: { type: 'relation', data_source_id: peopleId },
       'Release Date': 'date',
       'Release Type': 'select',
-      Genre: 'multi_select',
+      Genres: 'multi_select',
       'MusicBrainz Release Group': 'url',
       'Discogs Master': 'url',
       Status: 'status',
@@ -365,7 +365,7 @@ describe('Notion album metadata resolver', () => {
     ).toEqual({ ok: true, errors: [] });
     expect(
       validateSchemaContract(
-        { ...album, Genre: 'select' },
+        { ...album, Genres: 'select' },
         { 'MusicBrainz Artist': 'rich_text' },
         peopleId,
       ),

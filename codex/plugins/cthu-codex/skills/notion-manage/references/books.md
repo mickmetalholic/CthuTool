@@ -22,6 +22,10 @@ Database: `https://app.notion.com/p/3c457831780b46ebbe5a33fffb8f945b`
 
 ## Care points
 
+Use the selected edition's published title for `Name`, including the Chinese title
+of a Chinese translation. Keep different language editions distinguishable by their
+actual titles; do not replace them with a shared original-language work title.
+
 Observed shared icon: gray `book-closed`. Keep `Research & Archive` distinct from `Read`; do not assume a personal score scale.
 
 - Follow [cover handling](covers.md), matching the work and identified edition.

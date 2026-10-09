@@ -99,3 +99,10 @@ The skill SHALL follow this source policy: Use Douban for Chinese-language books
 - **WHEN** creating an entry or completing its factual metadata
 - **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
 - **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers
+
+### Requirement: Edition titles
+Book Name SHALL use the selected edition's published title, with Chinese translations retaining their Chinese title. Title, source metadata, reference, and cover SHALL identify the same edition.
+
+#### Scenario: Chinese translation
+- **WHEN** adding a Chinese translation of a foreign-language book
+- **THEN** use the Chinese edition title and matching Douban edition, not the original-language work title

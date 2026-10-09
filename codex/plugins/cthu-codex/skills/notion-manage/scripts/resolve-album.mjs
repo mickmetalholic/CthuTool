@@ -158,7 +158,7 @@ export function validateSchemaContract(albumSchema, peopleSchema, expectedPeople
     Artist: 'relation',
     'Release Date': 'date',
     'Release Type': 'select',
-    Genre: 'multi_select',
+    Genres: 'multi_select',
     'MusicBrainz Release Group': 'url',
     'Discogs Master': 'url',
     Status: 'status',

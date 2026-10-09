@@ -29,14 +29,14 @@ The skill MUST distinguish series, seasons, parts, films, specials, remakes, and
 - **THEN** the skill resolves the intended version or clarifies ambiguity, without substituting characters for people or incidentally creating related records
 
 ### Requirement: Personal and derived field protection
-The skill MUST preserve Status, Watched Date, Score, and Has Document unless requested, retain template defaults on creation, and never write Rating. Episodes SHALL represent the selected unit's count rather than watched progress. Research & archive SHALL remain distinct from page removal.
+The skill MUST preserve Status, Watched Date, Score, and Has Document unless requested, retain template defaults on creation, and never write Rating. Episodes SHALL represent the selected unit's count rather than watched progress. Research & Archive SHALL remain distinct from page removal.
 
 #### Scenario: Missing metadata completion
 - **WHEN** the user requests metadata completion
 - **THEN** verified empty metadata is filled without inventing personal scores, viewing dates, document flags, or unverified episode totals
 
 #### Scenario: Ambiguous archive request
-- **WHEN** archive could mean Research & archive status or removing the page
+- **WHEN** archive could mean Research & Archive status or removing the page
 - **THEN** the skill clarifies the intended operation before mutation
 
 ### Requirement: Template icon and poster output

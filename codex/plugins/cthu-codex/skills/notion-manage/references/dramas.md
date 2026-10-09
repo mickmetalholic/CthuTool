@@ -17,7 +17,7 @@ template. Last observed template: blank body, gray `tv` icon, `Want to watch`,
 and false `Is in Library`; verify live rather than force cached defaults.
 
 - Metadata: `Name` (title), `Category` (select), `Genres` (multi-select), `Episodes`
-  (number), `Release Date` (date), `IMDb`, `TMDB`, and `Douban` (URLs).
+  and `Season Number` (numbers), `Release Date` (date), `IMDb`, `TMDB`, and `Douban` (URLs).
 - People: `Director`, `Cast`, and `Writer` are People & Organizations relations.
 - Personal: `Status`, `Watched Date` (date), `Score` (number), `Is in Library`
   (checkbox). `Rating` and `In Library` are read-only formulas.
@@ -29,7 +29,10 @@ and false `Is in Library`; verify live rather than force cached defaults.
 
 - For multi-season dramas, create one record per season, named with the verified
   original series title plus `Season N` (for example, `Dark — Season 2`). Keep each
-  season's status, score, episode count, and premiere date separate. A request for
+  season's status, score, episode count, and premiere date separate. Set
+  `Season Number` to the verified integer N; leave it unset for whole-series records
+  or an unknown season. The title already identifies the series; no separate
+  `Series Name` field is needed. A request for
   the whole multi-season series maps to its verified regular seasons; a request for
   specific seasons creates only those. Do not add specials/Season 0 unless requested.
   Preserve existing whole-series records rather than splitting or migrating them

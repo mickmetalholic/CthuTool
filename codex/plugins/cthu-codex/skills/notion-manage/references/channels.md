@@ -8,7 +8,8 @@ Database: `https://app.notion.com/p/2c52c070ae2f42dbad20a3b4ff7764f3`
 - `Source`: `YouTube`, `Bilibili`, or `Xiaohongshu`, verified against live options.
 - `Videos`: relation to Knowledge Vault,
   `collection://94d3d31a-68e8-4966-bd0c-4bddf8e19ee0` (checked 2026-10-09).
-  Keep the property name `Videos`; do not infer a separate video database from it.
+  Keep the property name `Videos`; it links only video records in Knowledge Vault,
+  not arbitrary knowledge entries. Do not infer a separate video database from it.
 - `Tags`: existing category options. Do not change schema or views during CRUD.
 
 Template hints verified on 2026-10-09 (refetch before use):

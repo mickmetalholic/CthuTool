@@ -16,11 +16,14 @@ Fetch it to discover live data sources, relevant field types, options, relation
 targets, and default template. The last observed template is blank with a gray
 `video-game` icon and `Want to play`; verify live rather than force cached defaults.
 
-- Metadata: `Name` (title), `Genre` (multi-select), `IGDB` (URL), `Release Date`
+- Metadata: `Name` (title), `Genres` (multi-select), `IGDB` (URL), `Release Date`
   (date), and `Developer` / `Series` (relations).
-- Personal: `Owned On` (relation), `Status` (status), `My Score`, `Playtime (h)`,
+- Personal: `Owned On` (relation), `Status` (status), `Score`, `Playtime (h)`,
   `Purchase Price` (numbers), `Last Played At` and `Finished At` (dates).
 - Read-only: `Rating` (formula), `Playable On` and `Emulators` (rollups).
+  `Playable On` derives from `Owned On` → Access `Device`: devices playable through
+  the user's owned access channels, not all platforms supported by the game.
+  Read [game relations](game-relations.md) when resolving these related records.
 - Observed statuses: Want to play, Ongoing, Playing/Watching, Played.
   Reuse live options and types; report incompatible fields before affected writes.
 

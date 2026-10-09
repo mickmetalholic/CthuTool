@@ -34,8 +34,8 @@ The skill SHALL reconcile canonical IGDB evidence, title, release context, and i
 - **AND** a second owned platform SHALL NOT automatically cause creation of a duplicate game
 
 #### Scenario: Release and source evidence
-- **WHEN** filling IGDB, Genre, Release Date, Developer, or Series
-- **THEN** values SHALL be evidenced and scoped to the selected game, with existing Genre options reused
+- **WHEN** filling IGDB, Genres, Release Date, Developer, or Series
+- **THEN** values SHALL be evidenced and scoped to the selected game, with existing Genres options reused
 - **AND** developer SHALL NOT be silently replaced with publisher, series with bundle, or original release with a later port date
 - **AND** uncertain release context and partial dates SHALL be disclosed without invented date components or URLs
 
@@ -50,7 +50,7 @@ The skill SHALL resolve existing Developer, Series, and Owned On targets and pre
 
 #### Scenario: Personal and derived fields
 - **WHEN** personal fields are written
-- **THEN** Status, My Score, Playtime (h), Purchase Price, Last Played At, and Finished At SHALL come only from user instructions, with live defaults retained otherwise at creation
+- **THEN** Status, Score, Playtime (h), Purchase Price, Last Played At, and Finished At SHALL come only from user instructions, with live defaults retained otherwise at creation
 - **AND** playtime SHALL use hours and price SHALL respect the live currency format, clarifying unspecified units or currency when material
 - **AND** public ratings, completion estimates, and store prices SHALL NOT become personal values
 - **AND** Played SHALL NOT alone imply a completion date
@@ -97,3 +97,10 @@ The skill SHALL follow this source policy: Use IGDB for as much factual metadata
 - **WHEN** creating an entry or completing its factual metadata
 - **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
 - **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers
+
+### Requirement: Owned access rollups
+The game reference SHALL expose an on-demand reference for Access, Device, Emulator, Developer, and Series schemas. Playable On SHALL retain its meaning as devices available through Owned On → Access → Device, rather than all supported platforms.
+
+#### Scenario: Inspect playable devices
+- **WHEN** resolving the user's playable devices for a game
+- **THEN** follow existing owned access relations and leave rollup definitions and related records unchanged

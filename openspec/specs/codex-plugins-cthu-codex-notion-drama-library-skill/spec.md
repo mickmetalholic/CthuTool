@@ -119,7 +119,7 @@ The skill SHALL follow this source policy: Use metadata sources in order: TMDB T
 - **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers
 
 ### Requirement: One record and TMDB poster per season
-Multi-season dramas SHALL use one record per season, named with the verified original series title plus Season N. Each record SHALL hold that season's episode count, premiere date, status, and score. A whole-series creation request SHALL resolve to verified regular seasons; explicit season requests SHALL remain scoped to those seasons. Specials SHALL require a request. Existing whole-series records SHALL NOT be split or migrated incidentally.
+Multi-season dramas SHALL use one record per season, named with the verified original series title plus Season N. Season Number SHALL hold the verified integer season number and remain unset for whole-series records or unknown seasons. A separate Series Name field SHALL NOT be required. Each record SHALL hold that season's episode count, premiere date, status, and score. A whole-series creation request SHALL resolve to verified regular seasons; explicit season requests SHALL remain scoped to those seasons. Specials SHALL require a request. Existing whole-series records SHALL NOT be split or migrated incidentally.
 
 #### Scenario: Create multiple seasons
 - **WHEN** a multi-season drama is added

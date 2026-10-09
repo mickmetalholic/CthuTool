@@ -126,3 +126,10 @@ The skill SHALL preserve existing Videos relations unless explicitly asked to ch
 - **WHEN** the user explicitly asks to change Videos memberships
 - **THEN** the skill verifies the live relation target and existing video identities, changes only requested memberships, and clarifies missing or ambiguous targets
 - **AND** it does not create, import, or modify related Knowledge Vault pages as a side effect
+
+### Requirement: Video-only knowledge relations
+Videos SHALL retain its name and target Knowledge Vault, with memberships limited to verified video records.
+
+#### Scenario: Link channel video
+- **WHEN** the user requests a Videos relation update
+- **THEN** verify the target is the intended video record in Knowledge Vault, preserving unrelated memberships

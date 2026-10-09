@@ -12,7 +12,7 @@
 
 Read the live schema relevant to the request. `Name` is a title; `Artist` a
 relation; `MusicBrainz Release Group` and `Discogs Master` URLs; `Release Date` and
-`Listened Date` dates; `Release Type` a select; `Genre` a multi-select; `Status` a
+`Listened Date` dates; `Release Type` a select; `Genres` a multi-select; `Status` a
 status; `Score` a number; `Rating` a read-only formula. `Conductors`, `Performers`,
 and `Works` are relations. `Composers` and `Work Type` are read-only
 rollups through `Works`, sourced from Classical Work's `Composer` and `Work Type`.

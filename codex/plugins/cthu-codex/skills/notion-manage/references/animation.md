@@ -15,11 +15,11 @@ not be written into the IMDb property.
   gray `movie-clapboard-play` icon, `Want to watch`, and unchecked `Has Document`.
 
 Fetch the live schema and template. Metadata fields: `Name` (title), `IMDb` (URL),
-`Genre` (multi-select), `Episodes` (number), and `Release Date` (date). `Director`,
+`Genres` (multi-select), `Episodes` (number), and `Release Date` (date). `Director`,
 `Writer`, and `Cast` relate to People & Organizations. Personal fields: `Status`, `Watched Date`,
 `Score`, and `Has Document`. `Rating` is a read-only formula, currently absent from
 SQL columns; use supported page/formula reads if needed. Observed statuses: Want to
-watch, Watching, Research & archive, Watched. Reuse current options and exact keys;
+watch, Watching, Research & Archive, Watched. Reuse current options and exact keys;
 there are no observed Type, Season, TMDB, or Reference fields. Do not add them or
 change schema, formulas, options, or views as a side effect.
 
@@ -45,4 +45,4 @@ Adding an entry does not imply `Has Document`.
   ambiguous people before affected relation writes. Do not create or edit people here.
 - Follow [cover handling](covers.md) for the selected work/season.
 
-Keep Research & archive status distinct from actual removal; clarify ambiguous archive requests.
+Keep Research & Archive status distinct from actual removal; clarify ambiguous archive requests.

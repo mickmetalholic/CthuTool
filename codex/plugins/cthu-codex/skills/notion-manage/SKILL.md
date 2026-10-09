@@ -64,8 +64,12 @@ Ignore `To Be Downloaded`; it is outside this skill's scope.
 
 ## Shared care points
 
-- When creating an entry or setting its `Name`/title, use the verified original name
-  in its original language and script, not a translated/localized title or an invented
+- Books use the selected edition's published title: Chinese translations use the
+  Chinese edition title; English editions use their English title. Match that edition
+  across title, metadata, Reference, and cover. Do not replace it with the work's
+  original-language title.
+- For other libraries, when creating an entry or setting its `Name`/title, use the
+  verified original name in its original language and script, not a translated/localized title or an invented
   transliteration. Use translated names and aliases for search and duplicate matching
   only. Follow the selected library's source priorities, but distinguish a catalog's
   localized display title from the original name; if unverified, clarify before the

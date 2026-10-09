@@ -205,7 +205,9 @@ in the entry point; `references/templates.md` owns template/icon operations and
 sources, schema hints, identities, and relation permissions. Source: `codex/plugins/cthu-codex/skills/notion-manage/SKILL.md`.
 
 Creation and requested name changes use verified original-language titles in their
-original script, not translations. Translated titles remain useful for search and
+original script. Books instead use the selected edition's published title: Chinese
+translations use their Chinese edition title, and English editions their English title.
+Translated titles remain useful for search and
 matching. Channels, apps, people, and organizations use verified official/self-used
 names; personal notes retain the user's title. Unrelated updates do not rename entries.
 
@@ -262,6 +264,8 @@ tab. Existing entries can be found by name, platform, tags, or Notion link.
 Duplicate checks use platform identity; names and renamed handles alone do not
 prove that two accounts are the same. Videos, notes, search pages, and unresolved
 short links require a channel homepage instead.
+
+Channel `Videos` links only video records in Knowledge Vault.
 
 Tag additions and removals preserve other tags; explicit replacement uses the
 requested set. Shared batch tags and per-item overrides are supported. Valid
@@ -364,7 +368,7 @@ without a mandatory second confirmation. The skill discovers the live schema,
 options, and template and discloses incomplete query coverage.
 
 Multi-season dramas use one entry per season, named with the original series title
-plus Season N, with separate episode counts, premiere dates, statuses, and scores.
+plus Season N and a numeric `Season Number`, with separate episode counts, premiere dates, statuses, and scores.
 Each season uses its matching TMDB TV season poster. Missing season posters are
 reported without substituting a general series poster or another source automatically.
 Existing whole-series records are not migrated incidentally; specials require a request.
@@ -396,8 +400,10 @@ Game identity distinguishes base games, DLC, remakes, remasters, ports, and edit
 IGDB links and release dates must match the selected scope. Developer and Series
 link verified existing records. Owned On reflects only user-specified ownership;
 adding another owned platform does not automatically create a duplicate game.
+Game relation schema hints live in `references/game-relations.md`; `Playable On`
+derives owned access channels’ devices, not all supported platforms.
 
-My Score, Playtime (h), Purchase Price, Last Played At, Finished At, and Status stay
+Score, Playtime (h), Purchase Price, Last Played At, Finished At, and Status stay
 under user control. Public scores, store prices, and completion estimates are not
 personal values. Hours and currency must be clear. Rating, Playable On, and
 Emulators are read-only, and related databases are not modified incidentally.
@@ -452,7 +458,7 @@ The skill distinguishes series, seasons, films, specials, and adaptations; IMDb
 matches and episode counts must describe the requested unit. Director, Writer, and
 Cast link verified existing People Vault records, preserving voice-language versions.
 Status, Watched Date, Score, and Has Document remain personal fields; Rating is a
-read-only formula. Research & archive status is distinct from page removal.
+read-only formula. Research & Archive status is distinct from page removal.
 
 Creation uses the live template and verifies its gray movie-clapboard-play icon,
 repairing it where supported. Covers follow the shared workflow below. Updates preserve unrelated fields, notes, covers, and credits.
