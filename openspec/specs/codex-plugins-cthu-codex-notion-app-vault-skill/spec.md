@@ -29,11 +29,11 @@ The skill SHALL verify product identity using official product/store links and p
 - **THEN** other memberships remain intact and missing or ambiguous knowledge targets are clarified
 
 ### Requirement: Template icon and image handling
-The skill SHALL use a live template when available, disclose its absence or application failure, and verify page icons after creation or update without resetting content. Existing app-specific icons MUST be preserved; missing icons SHALL use the live template icon or the verified gray window fallback when no template is available. Creation SHALL return a verified app image or link for manual addition, or disclose its unavailability.
+The skill SHALL use a live template when available, disclose its absence or application failure, and verify page icons after creation or update without resetting content. Existing app-specific icons MUST be preserved; new or missing icons SHALL use the corresponding official website's verified favicon/apple-touch-icon, with no generic fallback. Creation SHALL return a verified app image or link for manual addition, or disclose its unavailability.
 
 #### Scenario: No template and missing icon
 - **WHEN** live discovery finds no template and the record has no icon
-- **THEN** the skill reports the template gap and applies the verified fallback where supported, or reports repair limitations
+- **THEN** the skill reports the template gap and applies the verified website icon where supported, or reports retrieval/application limitations
 
 #### Scenario: Existing branded icon
 - **WHEN** an existing app record has a custom icon

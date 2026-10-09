@@ -9,7 +9,8 @@ targets, and templates. Use current connector property keys, not guessed aliases
 - `Name`: title. `URL`: source resource URL, exposed as `userDefined:URL` in the
   current connector; it is not the system `url` identifying the Notion page.
 - `Category`: multi-select; `Source`: select. Reuse existing options.
-- `Type(Manual)`: select (Course, Textbook, Paper, Resource, Project, Article, Notes).
+- `Type(Manual)`: select. Supported creation types: Course, Paper, Resource, Project, Article, Notes.
+  Create only these types; live schema discovery does not expand this list.
   `Type` is a read-only formula; do not guess its derivation or write it.
 - `Status`: Backlog, Ready, Learning, Ongoing, Archived. Use live options.
 - `App`, `Magazine`, `Podcast`: relations to existing records; verify live targets.
@@ -17,7 +18,7 @@ targets, and templates. Use current connector property keys, not guessed aliases
 Templates share the name New page: distinguish them by Type(Manual) defaults.
 Observed gray icons: Course/movie-clapboard-play, Paper/document, Resource/package,
 Project/folder, Article/clipping, Notes/drafts. All observed bodies are blank with
-Backlog status. Textbook had no matching template. Recheck these live, not by order.
+Backlog status. Recheck these live, not by order.
 
 Template hints verified on 2026-10-09; refetch Type(Manual) defaults before selection:
 
@@ -30,13 +31,10 @@ Template hints verified on 2026-10-09; refetch Type(Manual) defaults before sele
 | Article | `2f9afcec-eb90-80f8-869d-f2edf148e717` |
 | Notes | `3d6afcec-eb90-80b4-946c-f31ab676992e` |
 
-Textbook still has no returned template. Clarify a template or an explicit no-template
-exception before creating that type; do not substitute another type's template.
-
 ## Essential safeguards
 
 - Preserve resource scope: a course versus a lesson, paper versus revision, article
-  versus collection, repository versus release, and textbook edition are not
+  versus collection, and repository versus release are not
   interchangeable. Normalize only non-identifying tracking parameters; retain
   meaningful queries/fragments and version identifiers. Same titles or broad source
   URLs alone do not prove duplication. Clarify conflicting matches before writing.
@@ -55,9 +53,8 @@ exception before creating that type; do not substitute another type's template.
 - Create with the template matching the intended type. On creation/update verify
   template conventions and matching icon without duplicating content. Refetch briefly
   if application is pending; if it fails or the icon is missing, manually apply the
-  verified type icon where supported. For absent/ambiguous templates (including
-  Textbook unless changed), report the gap and use only an observed unambiguous
-  same-type icon convention; never substitute another type's template or guess.
+  verified type icon where supported. For absent/ambiguous templates,
+  clarify before creation; never substitute another type's template or guess.
 - Verify image identity against the resource. Do not invent image URLs, replace
   uploaded covers, or replace the type icon with a thumbnail. Images are output for
   manual addition, not automatically applied.

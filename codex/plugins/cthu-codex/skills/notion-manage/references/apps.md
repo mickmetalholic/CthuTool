@@ -14,11 +14,11 @@ Linux, iOS, Android. Reuse exact live option names, including existing Tag spell
 do not silently rename taxonomy or add schema fields, options, or views.
 
 No template was returned on 2026-10-09. This is an explicit no-template exception,
-not a successful template application. The database has a gray `window` icon;
-sampled records use individual uploaded app/site icons. Recheck live availability.
-Use a template if one exists; otherwise report its absence and use the verified
-gray window fallback for missing icons, preserving existing app-specific icons.
-Do not claim a template was applied or create one as a side effect.
+not a successful template application. Recheck availability and apply a live template
+if present, then use the corresponding official website's verified icon for the app
+page. Prefer its declared favicon or apple-touch-icon; resolve relative image URLs
+against the verified site. Do not guess `/favicon.ico` or substitute a generic database
+icon. Preserve existing app-specific icons unless replacement is requested.
 
 ## Essential safeguards
 
@@ -37,12 +37,14 @@ Do not claim a template was applied or create one as a side effect.
 - Resolve requested Knowledges links to verified existing records in the live relation
   target. Preserve unrelated members and clarify missing/ambiguous matches. Do not
   create/edit knowledge pages or unrelated reciprocal memberships as a side effect.
-- Verify template conventions and icon after creation/update. If application fails
-  or the icon is missing, apply the live template icon using supported tools; when
-  no template exists, use the verified gray window fallback. Preserve branded icons
-  unless replacement is requested and disclose any unavailable template/repair support.
+- On creation or missing-icon repair, retrieve the corresponding official website's
+  verified favicon/apple-touch-icon and apply it using supported icon tools, then
+  refetch to verify. This app-specific icon rule overrides the generic template-icon
+  convention. If retrieval/application fails, report the missing icon without using
+  a generic fallback or claiming success. Do not replace an existing icon incidentally.
 - Verify image identity against the selected app/site. Return images for manual
-  addition; do not automatically replace covers or branded icons, copy another app's
+  addition, separately from the website icon applied above; do not replace covers or
+  existing branded icons, copy another app's
   artwork, or invent image URLs. Missing-image disclosure is an acceptable outcome.
 
 Record CRUD does not install, launch, purchase, or uninstall software, or alter accounts/subscriptions.

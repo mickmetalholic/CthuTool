@@ -448,7 +448,8 @@ identity distinguish similarly named apps, editions, extensions, and shared doma
 
 No template was returned during discovery. The skill rechecks availability, uses a
 live template when available, and reports absence otherwise. Existing branded icons
-are preserved; missing icons use the verified template icon or gray window fallback.
+are preserved; new or missing icons use the corresponding official website's verified
+favicon/apple-touch-icon. Unavailable icons are reported without a generic fallback.
 Creation returns a verified app image/link for manual addition, or reports its absence.
 
 ## Shared People & Organizations

@@ -86,3 +86,10 @@ The skill SHALL distinguish learning-status archival from reversible page remova
 - **WHEN** writing changes
 - **THEN** the skill SHALL recheck relevant state, clarify intervening conflicts, and refetch afterward to verify properties, requested body edits, icon, or removal state
 - **AND** it SHALL return page links and incomplete verification details and inspect current state before retrying uncertain operations
+
+### Requirement: Supported creation types
+New knowledge records SHALL use only Course, Paper, Resource, Project, Article, or Notes. Live schema discovery MUST NOT expand this supported creation list.
+
+#### Scenario: Additional live option
+- **WHEN** the live schema exposes another type option
+- **THEN** the skill does not create that type or substitute a different type without clarified user intent
