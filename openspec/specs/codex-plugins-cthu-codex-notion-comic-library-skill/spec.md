@@ -84,7 +84,7 @@ The skill SHALL follow the shared Notion Management cover workflow for every new
 - **AND** state is checked before retrying a mutation, with available Notion links included in results
 
 ### Requirement: Metadata source selection
-The skill SHALL follow this source policy: Use Douban for comic metadata and Reference when the intended work/volume has a verified mainland Chinese publication; otherwise use Goodreads. A Chinese title, Taiwan/Hong Kong edition, or Douban listing alone SHALL NOT prove mainland publication. Unclear publication status or conflicting edition scope SHALL be reported rather than silently switching editions. Goodreads references SHALL NOT be classified as defects solely by domain. The shared cover workflow remains unchanged.
+The skill SHALL follow this source policy: English-language editions SHALL use Goodreads even when a mainland Chinese edition exists. For non-English entries, use Douban for comic metadata and Reference when the intended work/volume has a verified mainland Chinese publication; otherwise use Goodreads. A Chinese title, Taiwan/Hong Kong edition, or Douban listing alone SHALL NOT prove mainland publication. Unclear publication status or conflicting edition scope SHALL be reported rather than silently switching editions. Goodreads references SHALL NOT be classified as defects solely by domain. The shared cover workflow remains unchanged.
 
 #### Scenario: Metadata enrichment
 - **WHEN** creating an entry or completing its factual metadata

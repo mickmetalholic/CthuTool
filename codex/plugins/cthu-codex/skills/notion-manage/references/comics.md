@@ -2,7 +2,8 @@
 
 ## Metadata sources
 
-Use Douban for comic metadata and Reference when the intended work/volume has a
+Use Goodreads for English-language editions, even when a mainland Chinese edition
+exists. For non-English entries, use Douban when the intended work/volume has a
 mainland Chinese publication; otherwise use Goodreads. Verify mainland publication
 rather than infer it from a Chinese title, a Taiwan/Hong Kong edition, or a Douban
 listing alone. If publication status is unclear, report it rather than assume no

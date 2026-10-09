@@ -218,7 +218,7 @@ must match the selected work, edition, or season. Report material conflicts.
 | Library | Metadata sources |
 | --- | --- |
 | Books | Chinese-language editions: Douban; English-language editions: Goodreads |
-| Comics | Verified mainland publication: Douban; no mainland publication: Goodreads |
+| Comics | English editions: Goodreads; otherwise verified mainland publication: Douban, no mainland publication: Goodreads |
 | Movies | TMDB Movie → IMDb → Douban |
 | Dramas | TMDB TV → IMDb → Douban |
 | Games | IGDB wherever possible; identify other sources used for gaps |
