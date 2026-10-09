@@ -59,7 +59,10 @@ and false `Is in Library`; verify live rather than force cached defaults.
 - Reuse live Category/Genres options with evidence or user direction; title language
   alone does not establish Category. Report unmapped values. Do not change schemas,
   options, views, or create new season/episode properties as a side effect.
-- Verify live People & Organizations targets and existing Director/Cast/Writer identities.
+- The user maintains `Director`, `Cast`, and `Writer` manually. Leave them unchanged
+  during routine creation/enrichment and exclude their absence from automatic
+  backfill work. Edit them only when the user explicitly requests those fields.
+  For such edits, verify live People & Organizations targets and existing identities.
   Prefer evidenced stable identifiers where available; reconcile names and credits
   otherwise. Preserve multiple credits, clarify missing/ambiguous people before
   affected relation writes, and do not create or edit related pages incidentally.

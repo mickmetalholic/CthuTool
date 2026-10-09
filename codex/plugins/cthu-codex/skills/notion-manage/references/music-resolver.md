@@ -30,6 +30,9 @@ option helpers can suggest missing values. Do not execute suggested People & Org
 updates or option creation. Follow SKILL.md for authorization, current schema,
 existing options, template/icon, covers, and direct personal-field CRUD.
 
+For classical releases, use resolver output only for identity/source/date checks;
+do not apply its Artist or Genres suggestions or treat those empty fields as gaps.
+
 The resolver does not resolve `Conductors`, `Performers`, or `Works`.
 Handle requested changes to these relations against the live related databases;
 missing helper output is not a reason to clear them. `Composers` and `Work Type`

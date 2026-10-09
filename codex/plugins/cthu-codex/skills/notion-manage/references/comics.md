@@ -2,9 +2,13 @@
 
 ## Metadata sources
 
-Use Douban for comic metadata and Reference, matching the intended work, volume,
-and edition. Report unavailable or mismatched records rather than silently
-substituting another catalog.
+Use Douban for comic metadata and Reference when the intended work/volume has a
+mainland Chinese publication; otherwise use Goodreads. Verify mainland publication
+rather than infer it from a Chinese title, a Taiwan/Hong Kong edition, or a Douban
+listing alone. If publication status is unclear, report it rather than assume no
+mainland edition exists. Match the intended work, volume, and edition; clarify any
+edition conflict instead of silently switching editions. A Goodreads reference is
+not a defect by itself. This source rule does not change the shared cover workflow.
 
 Template hint (2026-10-09): `7557bce9-7b38-4e18-a1f7-2a7b84fd71c4`.
 

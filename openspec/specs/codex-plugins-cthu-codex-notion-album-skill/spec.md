@@ -67,7 +67,7 @@ The skill SHALL use a confirmed Discogs Master for identity cross-checking and G
 - **THEN** the skill SHALL disclose the conflict and clarify before writing affected metadata
 
 ### Requirement: Music Release artist identity preservation
-The skill SHALL resolve every requested artist credit to existing People Vault pages, preferring canonical MusicBrainz Artist URLs.
+For non-classical releases, the skill SHALL resolve every requested artist credit to existing People Vault pages, preferring canonical MusicBrainz Artist URLs.
 
 #### Scenario: Artist match is unambiguous
 - **WHEN** one matching Artist URL exists or a unique exact normalized name has no conflicting identifier
@@ -120,3 +120,11 @@ The skill SHALL preserve personal listening data during metadata enrichment and 
 #### Scenario: Creation has no personal values
 - **WHEN** a new record is created without explicit listening data
 - **THEN** the skill SHALL retain template defaults and SHALL NOT infer a listening date or score
+
+### Requirement: Classical release metadata
+Classical releases SHALL leave Artist and Genres unset on creation and omit both fields from enrichment. Their absence SHALL NOT count as missing metadata. Role-specific Conductors, Performers, and Works SHALL identify credits, with Composers and Work Type remaining rollups. Existing values SHALL NOT be cleared incidentally.
+
+#### Scenario: Classical metadata completion
+- **WHEN** completing a classical release, including when using resolver suggestions
+- **THEN** do not populate Artist or Genres or report their absence as a gap
+- **AND** preserve existing role-specific relations and verify any requested changes

@@ -28,16 +28,23 @@ page/rollup reads when needed rather than querying nonexistent columns.
 
 ## Essential safeguards
 
+- For classical releases, leave `Artist` and `Genres` unset on creation and omit
+  them from enrichment writes. Their absence is intentional, not a completeness
+  defect. Identify the release with its source records and role-specific
+  `Conductors`, `Performers`, and `Works`; `Composers` and `Work Type` remain rollups.
+  Do not clear existing values incidentally. If classical/non-classical scope is
+  unclear, resolve it before choosing the fields to write.
+
 - MusicBrainz **Release Group** is the canonical identity and authority for title,
   artist credits, primary type, and earliest release date. Convert a concrete
   Release URL to its owning group; never use an edition, reissue, or remaster date.
   Do not pad partial dates: report their precision and leave `Release Date`
   unchanged until a full earliest date is verified.
-- Discogs **Master** cross-checks title, artist, and year and supplies Genre/Style.
+- Discogs **Master** cross-checks title, artist, and year and supplies Genre/Style for non-classical releases.
   Prefer a linked Master, verify identity, and reuse existing normalized options.
   Report missing options and source conflicts; do not substitute a concrete Release
   or streaming-service metadata for these authorities.
-- Resolve all artist credits against existing People & Organizations pages: MusicBrainz Artist
+- For non-classical releases, resolve artist credits against existing People & Organizations pages: MusicBrainz Artist
   URL first, then a unique exact normalized name without a conflicting identifier.
   Fetch the relation schema and candidate pages; clarify missing or ambiguous artists
   before the affected write. Do not create artists or fill their identifiers here.

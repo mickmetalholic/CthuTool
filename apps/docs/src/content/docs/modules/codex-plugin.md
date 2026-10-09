@@ -218,7 +218,7 @@ must match the selected work, edition, or season. Report material conflicts.
 | Library | Metadata sources |
 | --- | --- |
 | Books | Chinese-language editions: Douban; English-language editions: Goodreads |
-| Comics | Douban |
+| Comics | Verified mainland publication: Douban; no mainland publication: Goodreads |
 | Movies | TMDB Movie → IMDb → Douban |
 | Dramas | TMDB TV → IMDb → Douban |
 | Games | IGDB wherever possible; identify other sources used for gaps |
@@ -321,7 +321,9 @@ requests are sufficient; clear instructions do not require a second confirmation
 MusicBrainz Release Group identifies the work and supplies core metadata; Discogs
 Master provides cross-validation and Genre/Style. Concrete editions and reissue
 dates never replace the original release identity/date, and partial dates are not
-padded. Artist relations use verified existing People Vault pages. Ambiguous
+padded. Classical releases do not set Artist or Genres; empty values are intentional.
+Their credits use Conductors, Performers, and Works. For non-classical releases,
+Artist relations use verified existing People Vault pages. Ambiguous
 identities are clarified, and existing options are reused without schema changes.
 
 Creation uses the live template, repairs its consistent icon when necessary, and
@@ -380,7 +382,8 @@ reconciled. The live `Douban` URL field stores verified Douban references; the o
 Release Date match the selected unit; aired counts are not silently treated as
 final totals, and partial dates are not padded.
 
-Category and Genres reuse current options. Director, Cast, and Writer link verified
+Category and Genres reuse current options. Director, Cast, and Writer are maintained
+manually by the user and excluded from routine enrichment; explicit edits link verified
 existing People Vault records without incidental people creation. Status, Watched
 Date, Score, and Is in Library stay under user control; Rating and In Library are
 read-only formulas. Research & Archive is a status, not a removal operation.
