@@ -1,8 +1,18 @@
-import { describe, expect, test } from 'bun:test';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { afterEach, describe, expect, test } from 'bun:test';
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
+  canonicalizeObsidianAgentsProfile,
   createEmptyObsidianAgentsConfig,
   normalizeObsidianAgentsProfile,
   readObsidianAgentsConfig,
@@ -12,130 +22,161 @@ import {
 } from '../../src/domain/obsidian-agents-config';
 import { createObsidianAgentsDataPaths } from '../../src/infra/obsidian-agents-paths';
 
-describe('Obsidian agents configuration', () => {
-  test('resolves the Windows data root outside the shared Agents source', async () => {
-    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
-    const paths = createObsidianAgentsDataPaths({
-      homeRoot,
-      platform: 'win32',
-      env: {},
-    });
+const roots: string[] = [];
+afterEach(async () => {
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  );
+});
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), 'cthutool-config-'));
+  roots.push(root);
+  return { root, paths: createObsidianAgentsDataPaths({ dataRoot: root }) };
+}
 
-    expect(paths.dataRoot).toBe(
-      resolve(homeRoot, 'AppData', 'Roaming', 'CthuTool', 'chc'),
-    );
-    expect(paths.configPath).toBe(join(paths.dataRoot, 'obsidian-agents.json'));
-    expect(Object.keys(paths)).toEqual(['dataRoot', 'configPath']);
+describe('Obsidian path configuration', () => {
+  test('resolves the Windows local data root', () => {
+    const homeRoot = resolve('home');
+    expect(
+      createObsidianAgentsDataPaths({ homeRoot, platform: 'win32', env: {} })
+        .dataRoot,
+    ).toBe(resolve(homeRoot, 'AppData', 'Roaming', 'CthuTool', 'chc'));
   });
-
-  test('derives .agents, defaults to Agents, and rejects unsafe sources', () => {
+  test('derives paths and rejects unsafe sources', () => {
     const vaultPath = resolve('vault');
-    const profile = normalizeObsidianAgentsProfile({
-      id: 'obsidian-main',
+    expect(normalizeObsidianAgentsProfile({ vaultPath })).toEqual({
       vaultPath,
+      sourcePath: join(vaultPath, 'Agents'),
+      agentsPath: join(vaultPath, '.agents'),
     });
-
-    expect(profile.sourcePath).toBe(resolve(vaultPath, 'Agents'));
-    expect(profile.agentsPath).toBe(resolve(vaultPath, '.agents'));
     expect(() =>
-      normalizeObsidianAgentsProfile({ id: 'Obsidian', vaultPath }),
-    ).toThrow(/Profile id/);
-    expect(() =>
-      normalizeObsidianAgentsProfile({
-        id: 'obsidian-main',
-        vaultPath: 'relative-vault',
-      }),
-    ).toThrow(/absolute path/);
-    expect(() =>
-      normalizeObsidianAgentsProfile({
-        id: 'obsidian-main',
-        vaultPath,
-        sourcePath: resolve(vaultPath, '..', 'outside'),
-      }),
-    ).toThrow(/inside the Obsidian vault/);
-    expect(() =>
-      normalizeObsidianAgentsProfile({
-        id: 'obsidian-main',
-        vaultPath,
-        sourcePath: resolve(vaultPath, '.hidden', 'Agents'),
-      }),
-    ).toThrow(/hidden/);
-    expect(() =>
-      normalizeObsidianAgentsProfile({
-        id: 'obsidian-main',
-        vaultPath,
-        sourcePath: resolve(vaultPath, '.agents'),
-      }),
-    ).toThrow(/hidden|different/);
+      normalizeObsidianAgentsProfile({ vaultPath: 'relative' }),
+    ).toThrow(/absolute/);
+    for (const sourcePath of [
+      vaultPath,
+      resolve(vaultPath, '..', 'outside'),
+      join(vaultPath, '.agents'),
+      join(vaultPath, '.hidden', 'Agents'),
+    ]) {
+      expect(() =>
+        normalizeObsidianAgentsProfile({ vaultPath, sourcePath }),
+      ).toThrow();
+    }
   });
-
-  test('reads a version 1 profile and persists version 2 without agentsPath', async () => {
-    const dataRoot = await mkdtemp(join(tmpdir(), 'cthutool-chc-'));
-    const paths = createObsidianAgentsDataPaths({ dataRoot });
-    const vaultPath = resolve(dataRoot, 'vault');
-    await writeFile(
-      paths.configPath,
-      JSON.stringify({
-        version: 1,
-        defaultProfile: 'obsidian-main',
-        profiles: {
-          'obsidian-main': {
-            id: 'obsidian-main',
-            vaultPath,
-            agentsPath: resolve(vaultPath, '.agents'),
-          },
-        },
-      }),
-      'utf8',
+  test('canonicalizes symlink aliases, upserts one vault, and keeps same-name vaults distinct', async () => {
+    const { root, paths } = await fixture();
+    const firstPath = join(root, 'first', 'Notes');
+    const secondPath = join(root, 'second', 'Notes');
+    await mkdir(firstPath, { recursive: true });
+    await mkdir(secondPath, { recursive: true });
+    const alias = join(root, 'alias');
+    await symlink(
+      firstPath,
+      alias,
+      process.platform === 'win32' ? 'junction' : 'dir',
     );
-
-    const migrated = await readObsidianAgentsConfig(paths);
-    if (!migrated) throw new Error('Expected the legacy config to load.');
-    expect(migrated?.version).toBe(2);
-    expect(migrated?.profiles['obsidian-main']).toMatchObject({
-      sourcePath: resolve(vaultPath, 'Agents'),
-      agentsPath: resolve(vaultPath, '.agents'),
+    const first = await canonicalizeObsidianAgentsProfile({
+      vaultPath: firstPath,
     });
-    await writeObsidianAgentsConfig(paths, migrated);
-    const raw = await readFile(paths.configPath, 'utf8');
-    expect(JSON.parse(raw)).toMatchObject({
+    const repeated = await canonicalizeObsidianAgentsProfile({
+      vaultPath: alias,
+    });
+    expect(repeated).toEqual(first);
+    let config = upsertObsidianAgentsProfile(
+      createEmptyObsidianAgentsConfig(),
+      first,
+    );
+    config = upsertObsidianAgentsProfile(config, repeated);
+    config = upsertObsidianAgentsProfile(
+      config,
+      await canonicalizeObsidianAgentsProfile({ vaultPath: secondPath }),
+    );
+    await writeObsidianAgentsConfig(paths, config);
+    const loaded = await readObsidianAgentsConfig(paths);
+    if (!loaded) throw new Error('Expected configuration');
+    expect(loaded.vaults).toHaveLength(2);
+    expect(selectObsidianAgentsProfile(loaded, first.vaultPath)).toEqual(first);
+    const persisted = JSON.parse(await readFile(paths.configPath, 'utf8'));
+    expect(persisted).toEqual({
+      version: 3,
+      vaults: loaded.vaults.map(({ vaultPath, sourcePath }) => ({
+        vaultPath,
+        sourcePath,
+      })),
+    });
+    expect(
+      (await readdir(root)).filter((name) => name.includes('.tmp-')),
+    ).toEqual([]);
+  });
+  test('converts version 2 aliases read-only and saves version 3 atomically', async () => {
+    const { root, paths } = await fixture();
+    const vaultPath = join(root, 'vault');
+    await mkdir(vaultPath);
+    const alias = join(root, 'alias');
+    await symlink(
+      vaultPath,
+      alias,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    const old = JSON.stringify({
       version: 2,
+      defaultProfile: 'unused',
       profiles: {
-        'obsidian-main': {
-          vaultPath,
-          sourcePath: resolve(vaultPath, 'Agents'),
-        },
+        first: { vaultPath, sourcePath: join(vaultPath, 'Agents') },
+        second: { vaultPath: alias, sourcePath: join(alias, 'Agents') },
       },
     });
-    expect(raw).not.toContain('agentsPath');
+    await writeFile(paths.configPath, old);
+    const config = await readObsidianAgentsConfig(paths);
+    if (!config) throw new Error('Expected configuration');
+    expect(config.vaults).toHaveLength(1);
+    expect(await readFile(paths.configPath, 'utf8')).toBe(old);
+    await writeObsidianAgentsConfig(paths, config);
+    expect(JSON.parse(await readFile(paths.configPath, 'utf8'))).toEqual({
+      version: 3,
+      vaults: [
+        {
+          vaultPath: await realpath(vaultPath),
+          sourcePath: join(await realpath(vaultPath), 'Agents'),
+        },
+      ],
+    });
   });
-
-  test('atomically persists profiles and selects the configured default', async () => {
-    const dataRoot = await mkdtemp(join(tmpdir(), 'cthutool-chc-'));
-    const paths = createObsidianAgentsDataPaths({ dataRoot });
-    const first = normalizeObsidianAgentsProfile({
-      id: 'obsidian-main',
-      vaultPath: resolve(dataRoot, 'vault'),
+  test('rejects conflicting version 2 sources without rewriting', async () => {
+    const { root, paths } = await fixture();
+    const vaultPath = join(root, 'missing');
+    const raw = JSON.stringify({
+      version: 2,
+      profiles: {
+        a: { vaultPath, sourcePath: join(vaultPath, 'Agents') },
+        b: { vaultPath, sourcePath: join(vaultPath, 'Other') },
+      },
     });
-    const second = normalizeObsidianAgentsProfile({
-      id: 'secondary',
-      vaultPath: resolve(dataRoot, 'secondary-vault'),
-    });
-
-    let config = createEmptyObsidianAgentsConfig();
-    config = upsertObsidianAgentsProfile(config, first);
-    await writeObsidianAgentsConfig(paths, config);
-    config = upsertObsidianAgentsProfile(config, second);
-    await writeObsidianAgentsConfig(paths, config);
-
-    const loaded = await readObsidianAgentsConfig(paths);
-    if (!loaded) throw new Error('Expected the persisted config to load.');
-    expect(selectObsidianAgentsProfile(loaded)?.id).toBe('secondary');
-    expect(selectObsidianAgentsProfile(loaded, 'obsidian-main')?.id).toBe(
-      'obsidian-main',
+    await writeFile(paths.configPath, raw);
+    await expect(readObsidianAgentsConfig(paths)).rejects.toThrow(
+      /Conflicting sources.*Agents.*Other/,
     );
-    const raw = await readFile(paths.configPath, 'utf8');
-    expect(raw).not.toContain('remote');
-    expect(raw).not.toContain('password');
+    expect(await readFile(paths.configPath, 'utf8')).toBe(raw);
+  });
+  test('rejects version 1 with the config path and preserves missing entries', async () => {
+    const { root, paths } = await fixture();
+    await writeFile(
+      paths.configPath,
+      JSON.stringify({ version: 1, profiles: {} }),
+    );
+    await expect(readObsidianAgentsConfig(paths)).rejects.toThrow(
+      /Back up.*setup.*Configuration:/,
+    );
+    const vaultPath = join(root, 'unavailable');
+    await writeObsidianAgentsConfig(
+      paths,
+      upsertObsidianAgentsProfile(
+        createEmptyObsidianAgentsConfig(),
+        normalizeObsidianAgentsProfile({ vaultPath }),
+      ),
+    );
+    expect((await readObsidianAgentsConfig(paths))?.vaults[0]?.vaultPath).toBe(
+      vaultPath,
+    );
   });
 });

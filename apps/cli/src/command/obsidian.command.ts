@@ -3,6 +3,9 @@ import { confirm, isCancel, text as promptText, select } from '@clack/prompts';
 import { defineCommand } from 'citty';
 import pc from 'picocolors';
 import {
+  canonicalizeObsidianAgentsProfile,
+  canonicalVaultPath,
+  type ObsidianAgentsConfig,
   ObsidianAgentsConfigError,
   type ObsidianAgentsProfile,
   readObsidianAgentsConfig,
@@ -14,7 +17,6 @@ import {
   inspectObsidianAgentsStatus,
   ObsidianAgentsServiceError,
   type ObsidianAgentsSetupInput,
-  type ObsidianAgentsStatus,
 } from '../domain/obsidian-agents-service';
 import {
   createObsidianAgentsDataPaths,
@@ -32,13 +34,10 @@ import {
   writeHumanStatus,
   writeJsonValue,
 } from '../runtime/output';
+import { formatObsidianAgentsStatus } from './obsidian-status';
 
 const commonArgs = {
   ...cliContractArgs,
-  profile: {
-    type: 'string',
-    description: 'Obsidian agents profile id',
-  },
   vault: {
     type: 'string',
     description: 'Obsidian vault path',
@@ -96,6 +95,11 @@ async function runObservedObsidianSubcommand(
     { command: 'obsidian agents', subcommand },
     async (scope) => {
       try {
+        if (args.profile !== undefined)
+          throw createCliError(
+            'invalid_option',
+            '--profile has been removed. Select a vault with --vault <path>.',
+          );
         await run(scope);
       } catch (error) {
         const cliError = toObsidianCliError(error);
@@ -122,11 +126,8 @@ async function runSetup(
 ): Promise<void> {
   const paths = createDataPaths(args);
   const config = await readObsidianAgentsConfig(paths);
-  const current = config
-    ? selectObsidianAgentsProfile(config, getStringArg(args.profile))
-    : undefined;
   const interactive = scope.context.interactive && !scope.context.json;
-  const input = await collectSetupInput(args, current, interactive);
+  const input = await collectSetupInput(args, config, interactive);
   if (!input) {
     writeSetupResult(scope.context, { status: 'cancelled' });
     process.exitCode = 0;
@@ -143,29 +144,19 @@ async function runSetup(
     writeHumanStatus(
       scope.context,
       processOutput,
-      `profile: ${plan.profile.id}`,
+      `vault: ${plan.vault.vaultPath}`,
     );
     writeHumanStatus(
       scope.context,
       processOutput,
-      `vault: ${plan.profile.vaultPath}`,
+      `source: ${plan.vault.sourcePath}`,
     );
     writeHumanStatus(
       scope.context,
       processOutput,
-      `source: ${plan.profile.sourcePath}`,
-    );
-    writeHumanStatus(
-      scope.context,
-      processOutput,
-      `.agents: ${plan.profile.agentsPath}`,
+      `.agents: ${plan.vault.agentsPath}`,
     );
     writeHumanStatus(scope.context, processOutput, 'scope: vault-local');
-    writeHumanStatus(
-      scope.context,
-      processOutput,
-      'consistency: Obsidian Sync (eventual)',
-    );
     for (const action of plan.actions) {
       writeHumanStatus(scope.context, processOutput, `- ${action}`);
     }
@@ -200,7 +191,7 @@ async function runStatus(
 ): Promise<void> {
   const result = await inspectObsidianAgentsStatus({
     paths: createDataPaths(args),
-    profileId: getStringArg(args.profile),
+    vaultPath: getStringArg(args.vault),
   });
   if (scope.context.json) {
     writeJsonValue(processOutput, {
@@ -209,79 +200,79 @@ async function runStatus(
       result,
     });
   } else {
-    writeStatusHuman(scope.context, result);
+    const color =
+      process.stdout.isTTY === true &&
+      process.env.NO_COLOR === undefined &&
+      pc.isColorSupported;
+    for (const line of formatObsidianAgentsStatus(result, {
+      columns: process.stdout.columns,
+      color,
+    })) {
+      writeHumanStatus(scope.context, processOutput, line);
+    }
   }
   process.exitCode = 0;
 }
 
 async function collectSetupInput(
   args: ObsidianArgs,
-  current: ObsidianAgentsProfile | undefined,
+  config: ObsidianAgentsConfig | undefined,
   interactive: boolean,
 ): Promise<ObsidianAgentsSetupInput | undefined> {
-  const suppliedProfile = getStringArg(args.profile);
   const suppliedVault = getStringArg(args.vault);
   const suppliedSource = getStringArg(args.sourcePath);
-  if (!interactive) {
-    const vaultPath = suppliedVault ?? current?.vaultPath;
-    if (!vaultPath) {
-      throw createCliError(
-        'missing_required_argument',
-        'Setup requires --vault in non-interactive mode when no profile exists.',
-      );
-    }
-    return {
-      id: suppliedProfile ?? current?.id ?? 'obsidian-main',
-      vaultPath,
-      sourcePath:
-        suppliedSource ?? current?.sourcePath ?? join(vaultPath, 'Agents'),
-    };
+  if (!interactive && !suppliedVault) {
+    throw createCliError(
+      'missing_required_argument',
+      'Setup requires --vault in non-interactive mode.',
+    );
   }
-
-  if (current) {
+  const chosenVault =
+    suppliedVault ??
+    (await promptString('Obsidian vault path', undefined, (value) =>
+      value.trim() ? undefined : 'A vault path is required.',
+    ));
+  if (!chosenVault) return undefined;
+  const vaultPath = await canonicalVaultPath(chosenVault);
+  const current = config
+    ? selectObsidianAgentsProfile(config, vaultPath)
+    : undefined;
+  if (current && interactive && !suppliedSource) {
+    writeHumanStatus(
+      {
+        json: false,
+        quiet: args.quiet === true,
+        isTty: true,
+        interactive: true,
+      },
+      processOutput,
+      `Vault: ${current.vaultPath}\nSource: ${current.sourcePath}\nLink: ${current.agentsPath}`,
+    );
     const choice = await select<'keep' | 'edit'>({
-      message: `Existing profile "${current.id}" found.`,
+      message: 'This vault is already configured.',
       options: [
         { value: 'keep', label: 'Keep current configuration' },
-        { value: 'edit', label: 'Edit configuration' },
+        { value: 'edit', label: 'Change visible source' },
       ],
       initialValue: 'keep',
     });
     if (isCancel(choice)) return undefined;
-    if (
-      choice === 'keep' &&
-      !suppliedVault &&
-      !suppliedSource &&
-      !suppliedProfile
-    ) {
-      return current;
-    }
+    if (choice === 'keep') return current;
   }
-
-  const id =
-    suppliedProfile ??
-    current?.id ??
-    (await promptString('Profile id', 'obsidian-main', (value) =>
-      /^[a-z0-9][a-z0-9_-]*$/u.test(value.trim())
-        ? undefined
-        : 'Use lowercase letters, numbers, hyphens, or underscores.',
-    ));
-  if (!id) return undefined;
-  const vaultPath =
-    suppliedVault ??
-    (await promptString('Obsidian vault path', current?.vaultPath, (value) =>
-      value.trim() ? undefined : 'A vault path is required.',
-    ));
-  if (!vaultPath) return undefined;
   const sourcePath =
     suppliedSource ??
-    (await promptString(
-      'Visible Agents source path',
-      current?.sourcePath ?? join(vaultPath, 'Agents'),
-      (value) => (value.trim() ? undefined : 'A source path is required.'),
-    ));
+    (interactive
+      ? await promptString(
+          'Visible Agents source path',
+          current?.sourcePath ?? join(vaultPath, 'Agents'),
+          (value) => (value.trim() ? undefined : 'A source path is required.'),
+        )
+      : (current?.sourcePath ?? join(vaultPath, 'Agents')));
   if (!sourcePath) return undefined;
-  return { id, vaultPath, sourcePath };
+  return canonicalizeObsidianAgentsProfile({
+    vaultPath: chosenVault,
+    sourcePath,
+  });
 }
 
 async function promptString(
@@ -314,75 +305,11 @@ function writeSetupResult(
     processOutput,
     pc.green('Obsidian agents configured.'),
   );
-  const profile = result.profile as ObsidianAgentsProfile | undefined;
+  const profile = result.vault as ObsidianAgentsProfile | undefined;
   if (profile) {
     writeHumanStatus(context, processOutput, `source: ${profile.sourcePath}`);
     writeHumanStatus(context, processOutput, `.agents: ${profile.agentsPath}`);
   }
-}
-
-function writeStatusHuman(
-  context: CliContext,
-  result: ObsidianAgentsStatus,
-): void {
-  writeHumanStatus(context, processOutput, pc.cyan('Obsidian agents status'));
-  if (!result.configured) {
-    writeHumanStatus(context, processOutput, 'configuration: missing');
-    writeHumanStatus(context, processOutput, 'run: chc obsidian agents setup');
-    return;
-  }
-  writeHumanStatus(
-    context,
-    processOutput,
-    `profile: ${result.profile?.id ?? 'unknown'}`,
-  );
-  writeHumanStatus(
-    context,
-    processOutput,
-    `vault: ${check(result.paths.vaultExists)} ${result.profile?.vaultPath ?? ''}`,
-  );
-  writeHumanStatus(
-    context,
-    processOutput,
-    `source: ${check(result.paths.sourceExists && result.paths.sourceInsideVault)} ${result.profile?.sourcePath ?? ''}`,
-  );
-  writeHumanStatus(
-    context,
-    processOutput,
-    `.agents: ${check(result.link.status === 'correct')} ${result.link.status}`,
-  );
-  writeHumanStatus(
-    context,
-    processOutput,
-    `link type: ${result.link.type ?? 'none'}`,
-  );
-  writeHumanStatus(
-    context,
-    processOutput,
-    `resolved target: ${result.link.resolvedTarget ?? 'unavailable'}`,
-  );
-  writeHumanStatus(
-    context,
-    processOutput,
-    `skills: ${check(result.paths.skillsExists)}; state: ${check(result.paths.stateExists)}`,
-  );
-  writeHumanStatus(
-    context,
-    processOutput,
-    `legacy Git metadata: ${result.legacy.gitMetadata ? 'present' : 'absent'}`,
-  );
-  writeHumanStatus(
-    context,
-    processOutput,
-    `consistency: ${result.consistency.provider} (${result.consistency.model})`,
-  );
-  for (const warning of result.warnings) {
-    writeHumanStatus(context, processOutput, `warning: ${warning}`);
-  }
-}
-
-function check(value: boolean): string {
-  return value ? pc.green('OK') : pc.red('FAIL');
 }
 
 function toObsidianCliError(error: unknown): CliError {

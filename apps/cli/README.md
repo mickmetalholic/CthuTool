@@ -340,38 +340,74 @@ cache version, and marketplace/config paths; `--json` includes source metadata.
 If the plugin cache is busy, exit Codex completely and rerun the install
 command; `--json` reports `codex_plugin_cache_busy` with the locked path.
 
-### Obsidian Skill and state synchronization
+### Obsidian Skills and state
 
-Use the interactive setup once on each machine that has the Obsidian vault:
+Run setup on each machine that has the Obsidian vault:
 
 ```bash
 chc obsidian agents setup
+# Non-interactive setup needs an explicit vault and confirmation:
+chc obsidian agents setup --vault "/path/to/My Notes" --yes --no-interactive
 ```
 
-Setup creates a visible `<vault>/Agents/` source containing `skills/` and
-`state/`, then creates `<vault>/.agents` as a machine-local compatibility link
-to it. Windows uses a directory junction; macOS and Linux use a directory
-symlink. The source path is configurable during setup and the machine-specific
-choice is stored under the local CthuTool `chc` data directory.
+Setup asks for the vault path and a visible source (default: `<vault>/Agents`).
+The vault's real path identifies its local configuration, so path aliases reuse
+one configuration and different vaults stay independent. There is no profile ID
+or implicit default. Repeat setup for a vault to keep or change its source.
 
-Obsidian Sync synchronizes the visible `Agents/` contents between machines. Run
-setup once on every machine so its local `.agents` link is created. The link is
-not shared, and no Git repository, Codex Hook, or explicit push/pull command is
-required. Obsidian Sync is eventually consistent, so wait for it to finish
-before using a Skill that was just changed on another machine.
+The source contains `skills/` and `state/`; `<vault>/.agents` links to it using a
+Windows directory junction or a macOS/Linux symlink. Obsidian Sync transports
+the visible source. Setup creates the link locally on each machine. CthuTool
+stores paths in the local `chc` data directory and performs no synchronization
+operations itself.
 
-Inspect the configured paths, link target, `skills/`, `state/`, and any leftover
-legacy Git metadata without changing the vault:
+Status shows a summary and a separate section for each vault, with health,
+full paths, link details, content checks, and repair guidance when needed:
 
 ```bash
-chc obsidian agents status
+chc obsidian agents status                         # All configured vaults
+chc obsidian agents status --vault "/path/to/My Notes"
 chc obsidian agents status --json
 ```
 
-If both `Agents/` and a real `.agents/` directory already contain files, setup
-stops without merging or deleting either tree. Reconcile them manually, then
-run setup again. An existing real `.agents/` directory is otherwise adopted as
-the visible source, preserving any legacy `.git` metadata for manual cleanup.
+Human output uses restrained colors on supported terminals and remains readable
+with `NO_COLOR`, redirected output, long paths, and narrow terminals. Use
+`--quiet` to suppress human status. Repair commands on Windows use PowerShell
+argument quoting.
+
+JSON status always has one summary and a `vaults` array, including for zero or
+one vault. Each entry includes `vaultPath`, `sourcePath`, `agentsPath`,
+`configured`, `healthy`, `paths`, `source`, `link`, and actual local `issues`:
+
+```json
+{
+  "ok": true,
+  "command": "obsidian agents status",
+  "result": {
+    "summary": { "total": 0, "healthy": 0, "needsAttention": 0 },
+    "vaults": []
+  }
+}
+```
+
+A filtered unconfigured vault appears as one entry with `configured: false` and
+setup guidance. Exit code 0 means inspection completed; inspect `healthy` or
+`summary.needsAttention` to determine local health. Status never repairs links,
+writes configuration, or contacts Obsidian. It does not measure remote sync
+completion.
+
+Setup does not move, merge, or remove a real `.agents/` directory, even an empty
+one. If it occupies the link path, relocate it manually, then rerun setup. Link
+repair previews the existing and expected target and changes only the link after
+confirmation, preserving the old target.
+
+The local configuration now uses version 3 with vault/source entries. Current
+version-2 link configurations remain readable without rewriting them; the next
+successful setup saves version 3. Git-era version-1 configuration is unsupported:
+back up and move the reported local configuration file aside, then rerun setup
+for each vault. Source content is never migrated by this operation. The removed
+`--profile` selector reports guidance to use `--vault` instead. Update JSON
+consumers to read `result.vaults` and `issues` rather than the old single result.
 
 ## Local Development
 
