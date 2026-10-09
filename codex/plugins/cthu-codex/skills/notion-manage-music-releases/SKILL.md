@@ -13,7 +13,7 @@ clear, authorized operation. Clarify unresolved identity or scope before affecte
 
 - Database: `https://app.notion.com/p/e50b0eeaf5f14a858c93c5442c0f9d66`
 - Data source: `collection://4bc30fee-e028-4593-a505-4c4bfc6cf062`
-- People relations (`Artist`, `Conductors`, `Ensembles`, `Soloists`): People Vault,
+- People relations (`Artist`, `Conductors`, `Performers`): People Vault,
   `collection://0beb941d-d073-4079-a207-c8126201d1eb`.
 - `Works` relation: Classical Work, `collection://97d2982c-2812-48ef-ab37-e919a80a5e4f`.
 - Template hint: `01f4c2fa-1bf3-4ca8-a436-a1f609558dd6`; last observed with a gray
@@ -22,9 +22,12 @@ clear, authorized operation. Clarify unresolved identity or scope before affecte
 Read the live schema relevant to the request. `Name` is a title; `Artist` a
 relation; `MusicBrainz Release Group` and `Discogs Master` URLs; `Release Date` and
 `Listened Date` dates; `Release Type` a select; `Genre` a multi-select; `Status` a
-status; `Score` a number; `Rating` a read-only formula. `Conductors`, `Ensembles`,
-`Soloists`, and `Works` are relations. `Composers` and `Work Type` are read-only
+status; `Score` a number; `Rating` a read-only formula. `Conductors`, `Performers`,
+and `Works` are relations. `Composers` and `Work Type` are read-only
 rollups through `Works`, sourced from Classical Work's `Composer` and `Work Type`.
+`Performers` replaces the previously observed `Ensembles`; `Soloists` is no longer
+present. Use verified performer credits, without assuming this rename migrated
+all former soloist links. Never send obsolete property names.
 Last observed release types:
 Album, Single, EP, Broadcast, Other; statuses: Want to listen, Listening, Listened.
 Reuse current options. Report incompatible fields before writing them; do not
@@ -65,12 +68,15 @@ page/rollup reads when needed rather than querying nonexistent columns.
   URL first, then a unique exact normalized name without a conflicting identifier.
   Fetch the relation schema and candidate pages; clarify missing or ambiguous artists
   before the affected write. Do not create artists or fill their identifiers here.
-- Apply the same identity checks to `Conductors`, `Ensembles`, and `Soloists`,
+- Apply the same identity checks to `Conductors` and `Performers`,
   using verified role-specific credits; do not copy the entire `Artist` list into
   those fields. Link `Works` only to verified existing Classical Work pages,
-  checking composer and catalogue identity where available. Different recordings
-  of the same work remain distinct releases. Clarify ambiguous matches; preserve
-  unrelated links and do not create or edit related pages as a side effect.
+  matching composer, work title, and IMSLP identity; use catalogue details in verified
+  titles/sources when available, not a presumed catalogue property. Distinguish a
+  complete work from a movement, excerpt, or arrangement. A release may link multiple
+  works; preserve unrelated links. Different recordings of the same work remain
+  distinct releases. Clarify ambiguous matches and do not create or edit related
+  pages as a side effect.
   Never write `Composers` or `Work Type` directly or change a work to force a rollup.
 - `Status`, `Listened Date`, and `Score` are personal fields: edit them only when
   requested. Never infer them from release metadata, write `Rating`, or confuse
@@ -84,6 +90,6 @@ page/rollup reads when needed rather than querying nonexistent columns.
   afterward to verify fields/icon or removal status. Return page links and unresolved
   details. Reconcile uncertain outcomes before retrying, especially after creation.
 
-For optional MusicBrainz/Discogs enrichment, see
-[resolver notes](references/schema-and-matching.md). Routine queries and personal
+For Classical Work field/matching details and optional MusicBrainz/Discogs
+enrichment, see [matching and resolver notes](references/schema-and-matching.md). Routine queries and personal
 field updates do not require that resolver or external metadata searches.
