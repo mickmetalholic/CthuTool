@@ -51,19 +51,9 @@ page/rollup reads when needed rather than querying nonexistent columns.
   distinct releases. Clarify ambiguous matches and do not create or edit related
   pages as a side effect.
   Never write `Composers` or `Work Type` directly or change a work to force a rollup.
-- `Status`, `Listened Date`, and `Score` are personal fields: edit them only when
-  requested. Never infer them from release metadata, write `Rating`, or confuse
-  listening dates with release dates. Do not generate personal reviews or notes.
-- Verify template application and the consistent icon after creation or update.
-  If application fails or the icon is missing, manually copy the live template icon
-  using supported tools. Preserve unrelated content; disclose any repair limitation.
 - Follow [cover handling](covers.md), matching the selected release; cover sourcing
   does not change MusicBrainz/Discogs metadata authority.
 
 For requested `Works` matching, read [Classical Work](classical-works.md).
 For optional MusicBrainz/Discogs enrichment, read [resolver notes](music-resolver.md).
 Routine queries and personal-field updates need neither resolver nor public enrichment.
-
-For shared entity matching and required creation templates, read
-[People & Organizations](people-organizations.md). Keep this library's existing
-related-record permission limits.

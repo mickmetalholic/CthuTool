@@ -199,7 +199,10 @@ point covers all eleven libraries below. Its index loads only the relevant libra
 reference; Classical Work guidance is conditional on Works matching and does not
 provide independent work CRUD. Music enrichment can use the optional skill-local
 resolver. Implicit invocation remains disabled; the separate library entry points
-have been removed. Source: `codex/plugins/cthu-codex/skills/notion-manage/SKILL.md`.
+have been removed. Shared CRUD, naming, data-protection, and verification rules live
+in the entry point; `references/templates.md` owns template/icon operations and
+`references/covers.md` owns cover handling. Library references retain their specific
+sources, schema hints, identities, and relation permissions. Source: `codex/plugins/cthu-codex/skills/notion-manage/SKILL.md`.
 
 Creation and requested name changes use verified original-language titles in their
 original script, not translations. Translated titles remain useful for search and

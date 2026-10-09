@@ -25,6 +25,8 @@ change schema, formulas, options, or views as a side effect.
 
 ## Essential safeguards
 
+Adding an entry does not imply `Has Document`.
+
 - Distinguish series, seasons, parts/cours, films, specials, OVAs/ONAs, remakes, and
   adaptations. Reconcile alternate titles using year, studio/credits, and source
   evidence. Shared franchise names or parent-series IMDb URLs are not duplicate proof.
@@ -41,18 +43,6 @@ change schema, formulas, options, or views as a side effect.
   not characters; preserve original versus dubbed voice-language distinctions and
   clarify ambiguity. Preserve multiple/unrelated credits, and clarify missing or
   ambiguous people before affected relation writes. Do not create or edit people here.
-- Reuse evidenced or user-selected Genre options; additions/removals preserve other
-  memberships unless replacement is requested. Report missing options.
-- Status, Watched Date, Score, and Has Document come from the user or creation
-  template, not inferred metadata. Never copy public ratings into Score, write Rating,
-  infer document availability from adding an entry, or generate personal reviews.
-- Verify template application and the consistent icon after creation/update. If
-  application fails or the icon is missing, apply the verified template icon using
-  supported tools; preserve content and disclose missing templates or repair support.
 - Follow [cover handling](covers.md) for the selected work/season.
 
 Keep Research & archive status distinct from actual removal; clarify ambiguous archive requests.
-
-For shared entity matching and required creation templates, read
-[People & Organizations](people-organizations.md). Keep this library's existing
-related-record permission limits.

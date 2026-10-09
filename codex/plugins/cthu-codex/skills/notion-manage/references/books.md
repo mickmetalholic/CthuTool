@@ -8,16 +8,11 @@ original language. Match the work and edition before using metadata or Reference
 For other languages or unavailable matching records, disclose the gap rather than
 silently substituting a different edition or source.
 
-Template verified on 2026-10-09: `8b795339-5733-4839-979a-1d641d564136`. Refetch the live default
-before creation and pass its ID explicitly; copying its icon is not application.
+Template hint (2026-10-09): `8b795339-5733-4839-979a-1d641d564136`.
 
 ## Database and fields
 
 Database: `https://app.notion.com/p/3c457831780b46ebbe5a33fffb8f945b`
-
-Fetch the database on invocation and reuse its live schema for the request.
-Discover data-source IDs, relation targets, and available options from that
-response rather than hard-coding them.
 
 - Book metadata: `Name`, `Author`, `Genres`, `Series`, `Reference`, page cover.
 - Personal records: `Status`, `Finished`, `Score`, `Access`, page notes.
@@ -27,19 +22,8 @@ response rather than hard-coding them.
 
 ## Care points
 
-- Keep the page body for personal notes. Do not automatically insert catalog
-  blurbs or duplicate bibliographic sections; preserve unrelated blocks and
-  use targeted edits when the user requests a note change.
-- For creates and updates, fetch the database's current default template and
-  use its icon as the shared book icon. Create with that template; for existing
-  entries, retain an already-applied template and apply it only where needed,
-  without resetting personal fields or duplicating existing content. Template
-  application can be asynchronous: verify completion before dependent edits.
-  If the template is unavailable, fails, or leaves the icon missing, explicitly
-  set the same shared icon through a supported icon operation. The observed
-  fallback is Notion's gray `book-closed` icon. Verify the resulting icon on
-  every create/update; report any unresolved failure rather than claiming it
-  was applied. Do not reapply a template merely to repair the icon.
+Observed shared icon: gray `book-closed`. Keep `Research & Archive` distinct from `Read`; do not assume a personal score scale.
+
 - Follow [cover handling](covers.md), matching the work and identified edition.
 
 - Different titles, translations, or editions can describe the same work;
@@ -48,15 +32,5 @@ response rather than hard-coding them.
 - Reuse matching authors, series, and access channels. Create a missing related
   entry only when needed for the requested change and its identity is clear.
   People & Organizations is shared with other libraries; preserve unrelated information.
-- Never infer a personal score, completion date, ownership, or access channel
-  from public metadata. Do not assume a score scale or substitute a public
-  rating. Keep `Research & Archive` distinct from `Read`.
-- Use existing genre and status options. Schema changes require a request to
-  change the schema; normal entry maintenance does not authorize them.
-- Operate on records, not database views or their configuration.
 
 Default new books to `Want to Read` unless requested otherwise. Delete only requested book records, not related people, series, or access channels.
-
-For shared entity matching and required creation templates, read
-[People & Organizations](people-organizations.md). Keep this library's existing
-related-record permission limits.

@@ -37,15 +37,7 @@ organizations, verify an applicable live convention or clarify a materially ambi
 choice; do not assume every organization is a band or select the database's friends
 icon in place of a template. Set the verified Entity Type explicitly when needed.
 
-Whenever creation is authorized, create using the selected live template. Do not
-silently create a blank page and treat copying its icon as equivalent. Verify template
-application (including pending asynchronous application), requested properties, and
-icon before reporting full success. If template access/application is unsupported,
-report the gap before affected creation. If a page was already created and application
-fails, inspect that page before retrying; repair its icon from the verified template
-where supported, preserve content, and disclose that template application is unresolved.
-Do not create a duplicate. Updates preserve content and repair icons without resetting
-fields or reapplying a template unnecessarily.
+Apply the selected template using the [shared workflow](templates.md).
 
 ## Shared role relations
 

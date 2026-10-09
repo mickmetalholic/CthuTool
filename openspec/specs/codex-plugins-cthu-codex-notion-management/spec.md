@@ -74,3 +74,15 @@ When creating entries or setting their names, the skill SHALL use verified origi
 #### Scenario: Existing translated title during an unrelated update
 - **WHEN** the user updates only a personal score or status
 - **THEN** the skill SHALL preserve the existing name without performing an incidental rename
+
+### Requirement: Shared maintenance rules
+The entry point SHALL own common CRUD, live-schema, naming, personal-field, note-body, date-precision, relation-preservation, and write-verification rules. Template application and icon recovery SHALL be maintained in one shared reference loaded for creation or updates. Library references SHALL retain their distinct sources, identity scope, schema hints, template selection, icons, and related-record permissions rather than repeat the common workflow.
+
+#### Scenario: Library creation or update
+- **WHEN** the skill creates or updates an entry in any library
+- **THEN** it SHALL load the shared template workflow and the selected library's applicable conventions
+- **AND** App website icons, type/platform-specific templates, seasonal TMDB covers, and library-specific relation permissions SHALL remain intact
+
+#### Scenario: Read-only lookup
+- **WHEN** the user requests only a query
+- **THEN** the skill SHALL not require loading template or cover mutation workflows

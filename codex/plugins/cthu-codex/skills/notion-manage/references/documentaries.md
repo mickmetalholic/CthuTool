@@ -34,10 +34,4 @@ Do not change schema, options, formulas, or views as a side effect.
   Respect requested classification; use verified evidence for delegated Type,
   Series, and Topics choices, and report missing options rather than creating them.
   Topic additions/removals preserve other memberships unless replacement is requested.
-- `Status`, `Watched Date`, and `Is in Library` are personal fields; edit only when
-  requested. Adding a Notion entry does not mean the user owns the media or watched
-  it. Never write `In Library`, infer viewing progress, or generate personal reviews.
-- Create with the live template and verify its icon after creation or update. If
-  application fails or the icon is missing, manually apply the verified template
-  icon using supported tools. Preserve content and report any repair limitation.
 - Follow [cover handling](covers.md) for the selected documentary scope.
