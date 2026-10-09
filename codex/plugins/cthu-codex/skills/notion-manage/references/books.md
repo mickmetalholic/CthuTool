@@ -1,5 +1,8 @@
 # Books
 
+Template verified on 2026-10-09: `8b795339-5733-4839-979a-1d641d564136`. Refetch the live default
+before creation and pass its ID explicitly; copying its icon is not application.
+
 ## Database and fields
 
 Database: `https://app.notion.com/p/3c457831780b46ebbe5a33fffb8f945b`

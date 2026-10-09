@@ -1,5 +1,8 @@
 # Movies
 
+Template verified on 2026-10-09: `fb21848b-db84-4973-8a6b-200733661796`. Refetch the live default
+before creation and pass its ID explicitly; copying its icon is not application.
+
 ## Target and fields
 
 Database: `https://app.notion.com/p/1fe5b55e75f5497cb7acb7d439c0424f`.

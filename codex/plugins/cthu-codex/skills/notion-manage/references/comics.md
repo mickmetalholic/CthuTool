@@ -1,5 +1,8 @@
 # Comics
 
+Template verified on 2026-10-09: `7557bce9-7b38-4e18-a1f7-2a7b84fd71c4`. Refetch the live default
+before creation and pass its ID explicitly; copying its icon is not application.
+
 ## Database and fields
 
 Database: `https://app.notion.com/p/b8c2404f2d9f4d34ac6208bcb737acdb`

@@ -68,10 +68,25 @@ Ignore `To Be Downloaded`; it is outside this skill's scope.
 - Personal scores, dates, status, ownership, progress, and notes come from the user,
   not public metadata. Preserve defaults on creation; never write formulas/rollups.
   Reuse current options and preserve memberships for scoped additions/removals.
-- Verify template application and the library's icon convention after creation/update.
-  If pending, refetch briefly; if it fails or leaves the icon missing, repair using
-  the verified template icon or the reference's supported fallback. Preserve content,
-  do not reapply templates solely for icon repair, and disclose repair limitations.
+- Creation must apply the selected live template, not merely copy its icon. With
+  Notion create_pages, pass `template_id` on each page and omit `content`; override
+  defaults only with requested properties. Do not assume a database/view default
+  is automatically applied by the connector. Related-record creation follows the
+  related database's templates, never the source library's template.
+- Wait for any background creation task, then refetch to verify template defaults
+  and icon; task success alone does not mean template application has finished.
+  Blank template bodies are normal and do not prove failure. If pending, use bounded
+  refetches before dependent edits. Preserve explicit property overrides.
+- If a known matching template cannot be applied, report the limitation before
+  creation rather than silently creating blank. If creation already happened, inspect
+  that page, preserve content, and repair its icon where supported; report template
+  application and icon repair separately. Icon repair never proves template success.
+  Never recreate the page to retry. Missing-template creation is allowed only by a
+  library's explicit documented exception; otherwise clarify before affected creation.
+- On updates, verify template conventions and icon without reapplying the template
+  or resetting existing data. Icon recovery rules in library references do not waive
+  the creation requirement above. Refresh temporary uploaded-icon URLs from the live
+  template; never persist an expiring signed URL as a reusable configuration value.
 - For every created entry, output a verified relevant image or direct image link for
   manual addition, labeled per entry in batches. Report unavailable images; never
   invent URLs or substitute detail-page links. Do not automatically apply artwork

@@ -19,6 +19,20 @@ Observed gray icons: Course/movie-clapboard-play, Paper/document, Resource/packa
 Project/folder, Article/clipping, Notes/drafts. All observed bodies are blank with
 Backlog status. Textbook had no matching template. Recheck these live, not by order.
 
+Template hints verified on 2026-10-09; refetch Type(Manual) defaults before selection:
+
+| Type(Manual) | Template ID |
+| --- | --- |
+| Course | `3e63c9d3-88f6-42bd-84c9-2a6bd49c7b24` |
+| Paper | `50b7314f-6365-48a9-a2c7-9c5bf757f648` |
+| Resource | `3aeafcec-eb90-8058-b27b-c8c84961517c` |
+| Project | `369afcec-eb90-80b8-9746-c10d4576cf25` |
+| Article | `2f9afcec-eb90-80f8-869d-f2edf148e717` |
+| Notes | `3d6afcec-eb90-80b4-946c-f31ab676992e` |
+
+Textbook still has no returned template. Clarify a template or an explicit no-template
+exception before creating that type; do not substitute another type's template.
+
 ## Essential safeguards
 
 - Preserve resource scope: a course versus a lesson, paper versus revision, article

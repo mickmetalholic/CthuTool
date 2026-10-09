@@ -1,5 +1,8 @@
 # Games
 
+Template verified on 2026-10-09: `49c354ca-caee-4aea-93dc-e49ffa783cc9`. Refetch the live default
+before creation and pass its ID explicitly; copying its icon is not application.
+
 ## Target and fields
 
 Database: `https://app.notion.com/p/4e61f559a0dd4a53b79926dbfe3200ff`.

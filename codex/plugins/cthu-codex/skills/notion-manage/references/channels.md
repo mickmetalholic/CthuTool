@@ -13,6 +13,18 @@ contracts rather than assuming a particular query, parent, or icon API works.
 - `Videos`: relation to existing video records; preserve unless explicitly requested.
 - `Tags`: existing category options. Do not change schema or views during CRUD.
 
+Template hints verified on 2026-10-09 (refetch before use):
+
+| Source default | Template ID |
+| --- | --- |
+| Bilibili | `420918ec-569e-4423-b401-e930586a519f` |
+| YouTube | `822bc8e8-f235-4567-a8e0-b6a518d994a1` |
+| Xiaohongshu | `3baafcec-eb90-8060-8f24-fc469a7d2cff` |
+
+All are named New page and carry uploaded platform icons. Select by verified Source,
+not list order; apply the template explicitly and refresh expiring icon URLs if repair
+is needed. A missing/ambiguous platform template requires clarification before creation.
+
 ## Care points
 
 - For explicitly requested Videos edits, verify the live relation target and existing

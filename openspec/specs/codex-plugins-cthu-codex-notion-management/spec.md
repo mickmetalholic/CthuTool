@@ -30,3 +30,18 @@ The unified skill SHALL preserve library identity, personal-field, relation, tem
 #### Scenario: Installed music helper
 - **WHEN** music enrichment uses a copied plugin installation
 - **THEN** its resolver and linked notes remain available within the unified skill
+
+### Requirement: Explicit template application and verification
+Creation SHALL explicitly apply the selected live template using the connector's template parameter, without conflicting body content. The skill MUST distinguish background creation success, template application, and icon repair, and MUST NOT silently treat copying an icon as successful template application.
+
+#### Scenario: Asynchronous template
+- **WHEN** background creation reports success
+- **THEN** the skill refetches to verify template defaults and icon before dependent edits, allowing blank template bodies and requested property overrides
+
+#### Scenario: Missing or unsupported template
+- **WHEN** a matching template is absent or cannot be applied
+- **THEN** the skill discloses the gap and clarifies before affected creation unless the library explicitly allows a no-template exception
+
+#### Scenario: Recovery after creation
+- **WHEN** an existing newly created page has unresolved template application
+- **THEN** the skill inspects that page, preserves content, reports icon repair separately, and does not recreate it

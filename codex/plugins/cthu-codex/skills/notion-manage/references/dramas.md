@@ -1,5 +1,8 @@
 # Dramas
 
+Template verified on 2026-10-09: `5a7fa85d-bfc0-43e1-b078-33da787fea7a`. Refetch the live default
+before creation and pass its ID explicitly; copying its icon is not application.
+
 ## Target and fields
 
 Database: `https://app.notion.com/p/f1efac7703c241b7ba411cd082b45e0a`.

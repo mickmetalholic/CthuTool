@@ -13,7 +13,8 @@ URL, currently exposed as `userDefined:URL`, not the Notion page's system `url`.
 Linux, iOS, Android. Reuse exact live option names, including existing Tag spelling;
 do not silently rename taxonomy or add schema fields, options, or views.
 
-No template was returned during discovery. The database has a gray `window` icon;
+No template was returned on 2026-10-09. This is an explicit no-template exception,
+not a successful template application. The database has a gray `window` icon;
 sampled records use individual uploaded app/site icons. Recheck live availability.
 Use a template if one exists; otherwise report its absence and use the verified
 gray window fallback for missing icons, preserving existing app-specific icons.
