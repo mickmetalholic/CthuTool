@@ -42,9 +42,5 @@ icon. Preserve existing app-specific icons unless replacement is requested.
   refetch to verify. This app-specific icon rule overrides the generic template-icon
   convention. If retrieval/application fails, report the missing icon without using
   a generic fallback or claiming success. Do not replace an existing icon incidentally.
-- Verify image identity against the selected app/site. Return images for manual
-  addition, separately from the website icon applied above; do not replace covers or
-  existing branded icons, copy another app's
-  artwork, or invent image URLs. Missing-image disclosure is an acceptable outcome.
 
 Record CRUD does not install, launch, purchase, or uninstall software, or alter accounts/subscriptions.

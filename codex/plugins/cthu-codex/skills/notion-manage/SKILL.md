@@ -87,8 +87,8 @@ Ignore `To Be Downloaded`; it is outside this skill's scope.
   or resetting existing data. Icon recovery rules in library references do not waive
   the creation requirement above. Refresh temporary uploaded-icon URLs from the live
   template; never persist an expiring signed URL as a reusable configuration value.
-- For every created entry, output a verified relevant image or direct image link for
-  manual addition, labeled per entry in batches. Report unavailable images; never
+- For new books, comics, music releases, movies, dramas, games, documentaries, and
+  animation entries, output a verified cover image or direct image link for manual addition, labeled per entry in batches. Report unavailable images; never
   invent URLs or substitute detail-page links. Do not automatically apply artwork
   or overwrite existing covers/icons; respect library-specific icon conventions, including App Vault website icons.
 - Use authorized Notion tools for private records and public sources for delegated

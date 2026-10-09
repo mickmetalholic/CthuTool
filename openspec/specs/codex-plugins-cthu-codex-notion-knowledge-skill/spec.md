@@ -60,7 +60,7 @@ The skill SHALL use evidenced or user-specified classification and verified exis
 - **THEN** the skill SHALL verify live relation targets and existing identities, preserve unrequested memberships, and clarify missing or ambiguous records
 - **AND** it SHALL NOT create or modify related pages to force Type or other derived behavior
 
-### Requirement: Type-specific templates and images
+### Requirement: Type-specific templates and icons
 The skill SHALL choose templates by verified type defaults and maintain corresponding icons without destructive reapplication.
 
 #### Scenario: Template selection or failure
@@ -68,11 +68,6 @@ The skill SHALL choose templates by verified type defaults and maintain correspo
 - **THEN** creation SHALL use a matching live template, while updates preserve existing content and check the intended type's icon convention
 - **AND** pending application SHALL receive bounded verification and failed application or missing icons SHALL receive manual verified-icon repair where supported
 - **AND** absent or ambiguous type templates SHALL be reported rather than replaced with an unrelated type's template or guessed icon
-
-#### Scenario: Creation imagery
-- **WHEN** a record is created
-- **THEN** the skill SHALL return a verified resource cover/thumbnail image or direct image link for manual addition, or explicitly say none is available or applicable
-- **AND** it SHALL NOT invent image URLs, overwrite covers, or alter the template icon to match a thumbnail
 
 ### Requirement: Reversible removal and verified results
 The skill SHALL distinguish learning-status archival from reversible page removal, verify mutations, and reconcile uncertain outcomes before retrying.

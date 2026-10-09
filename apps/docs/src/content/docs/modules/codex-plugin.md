@@ -262,9 +262,7 @@ Deletion affects only Notion records through available reversible trash/archive;
 it never follows, unfollows, or changes platform accounts. Unsupported operations
 and incomplete query coverage are reported explicitly.
 
-Creation also returns a verified channel avatar/cover image or direct image link
-for manual addition, or states that none was available. The platform icon and
-existing covers are preserved. Explicit Videos relation edits resolve existing
+The platform icon and existing covers are preserved. Explicit Videos relation edits resolve existing
 records and change only requested memberships; no video import or related-page
 creation is performed.
 
@@ -397,8 +395,7 @@ version, release, and edition distinctions; personal notes can have no source UR
 
 Templates are selected by their type defaults, not their identical names. Creation
 uses the matching template and checks its icon; missing templates or repair support
-are reported without guessing. A verified cover/thumbnail image or link is returned
-for manual addition, or its unavailability is disclosed.
+are reported without guessing.
 
 Ordinary metadata collection preserves body content. Explicit note edits or summaries
 stay within the requested scope and cite sources without inventing personal insights.
@@ -450,7 +447,6 @@ No template was returned during discovery. The skill rechecks availability, uses
 live template when available, and reports absence otherwise. Existing branded icons
 are preserved; new or missing icons use the corresponding official website's verified
 favicon/apple-touch-icon. Unavailable icons are reported without a generic fallback.
-Creation returns a verified app image/link for manual addition, or reports its absence.
 
 ## Shared People & Organizations
 

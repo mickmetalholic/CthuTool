@@ -45,9 +45,7 @@ report the gap before affected creation. If a page was already created and appli
 fails, inspect that page before retrying; repair its icon from the verified template
 where supported, preserve content, and disclose that template application is unresolved.
 Do not create a duplicate. Updates preserve content and repair icons without resetting
-fields or reapplying a template unnecessarily. Return a verified portrait/group image
-or direct image link for each creation, or disclose unavailability; it does not replace
-the template icon automatically.
+fields or reapplying a template unnecessarily.
 
 ## Shared role relations
 
