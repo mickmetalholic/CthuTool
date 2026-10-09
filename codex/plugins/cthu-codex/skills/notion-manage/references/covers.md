@@ -32,41 +32,41 @@ artwork or invent an image URL when no matching cover can be verified.
 
 ## Douban: download, upload, and set the cover
 
-Download the verified Douban image as a file; do not hotlink it as the Notion cover.
-Validate that the response is a usable image, not HTML or a blocked-access response.
-Save it in `~/downloads` (create that directory if needed), with a safe, descriptive,
-collision-free filename and the correct extension. Retain it for manual fallback.
+Use `scripts/set-cover.mjs` relative to the installed skill directory. It accepts
+JSON on stdin; pass a verified image URL and the target page ID, for example:
 
-Use the Notion native File Upload API when `NOTION_TOKEN` is available in the process
-environment and its integration can edit the target page. Read the token without
-printing it; do not put it in skill files, source control, command arguments, or logs.
-Do not extract credentials from the connected Notion MCP session.
+```json
+{"page_id":"<page-uuid>","image_url":"https://<verified-image-host>/cover.jpg","filename":"Original Title"}
+```
 
-With an HTTP client, send the token only to `https://api.notion.com` in the Bearer
-Authorization header. Use a supported Notion-Version (documented flow: `2026-03-11`):
+Run `node scripts/set-cover.mjs` from the skill directory. The agent chooses and
+verifies the image identity and waits for template completion first; the script does
+not search catalogs or create pages. Set `replace: true` only for requested cover
+replacement. Keep the direct-link route above on the existing Notion connector.
 
-1. POST `/v1/file_uploads` with `mode: "single_part"`, filename, and image MIME type.
-2. POST multipart form data with the image in the `file` field to
-   `/v1/file_uploads/{id}/send`. Let the client set the multipart boundary.
-3. Only after status is `uploaded`, PATCH `/v1/pages/{page_id}` with
-   `{"cover":{"type":"file_upload","file_upload":{"id":"<upload-id>"}}}`.
-4. Refetch the page and verify its uploaded cover before reporting success. A
-   successful upload alone is not a successful cover update; do not attach the image
-   to the body or a Files property instead. Do not reuse temporary signed image URLs
-   as permanent external cover URLs.
+The script uses only Node built-ins. It checks HTTP responses, file signatures and
+basic image headers for PNG/JPEG/GIF/WebP (not a full image decoder), enforces a
+20 MiB limit, and saves a uniquely named file under `~/downloads`. HTML/block pages
+are rejected. It uses `NOTION_TOKEN` from the process environment for native upload,
+cover assignment, and refetch verification; workspace limits still apply. Never put
+the token into input JSON, arguments, skill files, source control, or logs, or extract
+MCP credentials. The integration must have access to the target page.
 
-Attach within the upload's expiry window (normally one hour). The single-part flow
-supports up to 20 MiB and remains subject to workspace limits. Report unsupported
-sizes rather than claiming an upload succeeded. For uncertain PATCH outcomes, refetch
-before retrying; never recreate the library entry to retry its cover.
+Result JSON uses these statuses:
 
-If the token is absent, API access is unavailable, or upload/cover assignment fails,
-keep the downloaded image in `~/downloads` and return its absolute clickable path
-plus the Notion page link, asking the user to set the cover manually. Do not block
-successful record creation on token setup. If downloading itself fails, report that
-no local file was saved; never claim the fallback file exists without checking it.
+- `uploaded_cover_set`: upload, cover assignment, and refetch verification succeeded.
+- `preserved_existing`: an existing cover was left untouched; no upload occurred.
+- `manual_required`: downloaded file is available in `local_path`; return its absolute
+  clickable path and `page_url` and ask the user to set it manually. `reason` identifies
+  missing credentials, access/upload failure, concurrent cover changes, or uncertain
+  write/verification outcomes. Do not repeat an uncertain PATCH blindly.
+- `download_failed`: no complete validated file is reported; disclose the failure.
+- `invalid_request`: fix the input before retrying; no successful operation is claimed.
 
-Report each item's source and outcome: direct-link cover set, uploaded cover set,
-local file ready for manual setup, or no verified image. Preserve existing icons.
+Before PATCH, the script rechecks that the cover has not changed since its initial
+read. It preserves existing covers by default, never alters icons/body/properties,
+and retains downloaded files for manual fallback. Missing token/API access does not
+block successful library entry creation. Report the source and per-item outcome;
+upload success alone is not cover success.
 
 API reference: https://developers.notion.com/guides/data-apis/uploading-small-files

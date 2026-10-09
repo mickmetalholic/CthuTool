@@ -86,3 +86,18 @@ The entry point SHALL own common CRUD, live-schema, naming, personal-field, note
 #### Scenario: Read-only lookup
 - **WHEN** the user requests only a query
 - **THEN** the skill SHALL not require loading template or cover mutation workflows
+
+### Requirement: Portable cover upload helper
+The skill SHALL provide a dependency-free Node helper accepting page ID, verified image URL, filename, and an optional explicit replacement flag through JSON stdin. It SHALL read NOTION_TOKEN only from the environment, validate bounded image downloads, save collision-free files under ~/downloads, upload and assign covers through the native API, and verify assignment separately from upload success. Image identity and source selection SHALL remain agent responsibilities.
+
+#### Scenario: Existing or concurrently changed cover
+- **WHEN** a cover exists without explicit replacement intent, or changes between initial read and assignment
+- **THEN** the helper SHALL preserve it and report the outcome without blindly overwriting it
+
+#### Scenario: Uncertain cover assignment
+- **WHEN** a PATCH result is uncertain or refetch does not verify the assigned file cover
+- **THEN** the helper SHALL avoid mutation retries, report the uncertainty, and return the local image for manual setup
+
+#### Scenario: Installed helper
+- **WHEN** the skill is copied outside the repository
+- **THEN** the helper SHALL run using Node built-ins without repository paths, services, or additional packages

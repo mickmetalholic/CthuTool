@@ -498,8 +498,11 @@ games; IMDb for documentaries and animation. Except for missing seasonal TMDB po
 including Chinese books, comics, music releases, and missing direct-link covers,
 use the matching Douban cover downloaded as an image file.
 
-Douban images are uploaded using the native Notion File Upload API and assigned
-as page covers. Configure `NOTION_TOKEN` in the local process environment with
+Douban images are handled by the portable `scripts/set-cover.mjs` helper: download,
+file-signature validation, local save, native Notion upload, cover assignment, and
+refetch verification. Pass a verified image URL and page ID as JSON on stdin; it
+does not select images or create records. Existing covers require explicit
+`replace: true` to overwrite, and concurrent cover changes stop assignment. Configure `NOTION_TOKEN` in the local process environment with
 access to the target pages; never store it in the skill or repository. If the token
 or API is unavailable, keep the image in `~/downloads` and provide its absolute
 file path and the Notion page link for manual setup. Download failures are reported
