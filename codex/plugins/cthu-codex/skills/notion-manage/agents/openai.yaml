@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Manage"
+  short_description: "Manage personal Notion libraries on explicit request."
+  default_prompt: "Use $notion-manage to query, add, update, or remove entries in my Notion libraries."
+policy:
+  allow_implicit_invocation: false

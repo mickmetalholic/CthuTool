@@ -7,10 +7,10 @@ Define lightweight, manually invoked Channel Library management with stable plat
 ## Requirements
 
 ### Requirement: Explicit channel management entrypoint
-The plugin SHALL provide `notion-manage-channels` with a `Notion ·` display name and implicit invocation disabled, replacing the old add-channel entrypoint and its documentation. It SHALL accept natural-language CRUD requests without mandatory fixed syntax or redundant confirmation of clear authorized operations.
+The plugin SHALL provide `notion-manage` with a `Notion ·` display name and implicit invocation disabled, replacing the old add-channel entrypoint and its documentation. It SHALL accept natural-language CRUD requests without mandatory fixed syntax or redundant confirmation of clear authorized operations.
 
 #### Scenario: Manual management
-- **WHEN** the user explicitly invokes `$notion-manage-channels` to maintain channel records
+- **WHEN** the user explicitly invokes `$notion-manage` to maintain channel records
 - **THEN** the requested CRUD operation is handled and ordinary channel discussion does not implicitly activate this skill
 - **AND** the old skill is no longer installed from the plugin source
 

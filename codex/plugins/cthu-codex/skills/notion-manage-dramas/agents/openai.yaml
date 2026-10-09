@@ -1,6 +1,0 @@
-interface:
-  display_name: "Notion · Manage Dramas"
-  short_description: "Manage the personal Notion Drama Library."
-  default_prompt: "Use $notion-manage-dramas to query, add, update, or remove records in my Notion Drama Library."
-policy:
-  allow_implicit_invocation: false

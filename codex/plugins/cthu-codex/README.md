@@ -58,29 +58,20 @@ The first pass is always read-only: it shows note IDs and exact before/after
 of at most 20, through stale-value-protected Anki MCP calls. The conversion
 does not add or remove tags.
 
-The plugin includes eleven lightweight, manually invoked Notion management skills.
-They support query, creation, scoped updates, and reversible removal when the
-connector supports it. Clear requests authorize their operations; ambiguous
-identities are clarified. Creation uses available live templates with verified icon repair
-and returns relevant images or direct links for manual addition.
+Use `$notion-manage` explicitly to query, create, update, or reversibly remove
+records in eleven personal Notion libraries: books, channels, comics, music releases,
+movies, dramas, games, knowledge, documentaries, animation, and apps.
 
-| Skill | Library and key safeguards |
-| --- | --- |
-| `$notion-manage-books` | Book Library; edition identity, author relations, and personal reading data. |
-| `$notion-manage-channels` | Channel Library; platform identity, tag edits, existing video relations, and read-only selected-tab input. |
-| `$notion-manage-comics` | Comic Book Library; work/part/volume identity and multiple creators. |
-| `$notion-manage-music-releases` | Music Release; MusicBrainz Release Groups, Discogs Masters, and personal listening data. |
-| `$notion-manage-movies` | Movie Library; canonical IMDb/TMDB identity and verified people relations. |
-| `$notion-manage-dramas` | Drama Library; series/season identity, episode counts, and personal viewing data. |
-| `$notion-manage-games` | Video Game Library; game/edition identity, owned platforms, and personal play history. |
-| `$notion-manage-knowledge` | Knowledge Vault; type-specific templates, resource versions, and scoped note edits. |
-| `$notion-manage-documentaries` | Documentary Library; film/series/season/episode identity and personal viewing/collection data. |
-| `$notion-manage-animation` | Animation Library; work/season identity, voice credits, and personal viewing data. |
-| `$notion-manage-apps` | App Vault; product identity, platform/tag membership, and existing knowledge links. |
+The entry point contains common CRUD rules and a library index. It reads only the
+relevant `references/<library>.md`; Classical Work matching and music resolver notes
+are loaded only when needed. Each reference retains its schema hints, identity rules,
+and template/icon conventions. Live schema remains authoritative.
 
-These replace `notion-maintain-books`, `notion-add-channel`, and
-`notion-maintain-album`. The MusicBrainz/Discogs resolver remains an optional
-skill-local helper; no additional MCP server is required.
+Creation uses available templates, verifies icons, and returns images for manual
+addition. Clear requests authorize scoped operations; ambiguous destinations are
+clarified. Implicit invocation is disabled. The former eleven `notion-manage-*`
+entry points are replaced by this one skill, as are the earlier maintenance/add-only
+entries. The optional music resolver remains skill-local.
 
 ## Source Boundary
 

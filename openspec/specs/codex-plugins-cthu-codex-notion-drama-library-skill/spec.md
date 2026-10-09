@@ -7,7 +7,7 @@ Provide lightweight, manually invoked management of the personal Notion Drama Li
 ## Requirements
 
 ### Requirement: Manual Drama Library management
-The plugin SHALL provide `notion-manage-dramas`, displayed under `Notion ·`, with implicit invocation disabled and natural-language query, create, update, and reversible removal.
+The plugin SHALL provide `notion-manage`, displayed under `Notion ·`, with implicit invocation disabled and natural-language query, create, update, and reversible removal.
 
 #### Scenario: Authorized operation
 - **WHEN** the user explicitly invokes the skill with a clear target and requested change

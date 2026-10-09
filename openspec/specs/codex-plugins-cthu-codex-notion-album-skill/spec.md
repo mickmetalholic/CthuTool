@@ -7,7 +7,7 @@ Define lightweight, manually invoked management of the personal Notion Music Rel
 ## Requirements
 
 ### Requirement: Manual Music Release skill entry point
-CthuCodex SHALL replace `notion-maintain-album` with `notion-manage-music-releases`, displayed under `Notion ·`, for manual-only management of the configured Music Release database.
+CthuCodex SHALL replace `notion-maintain-album` with `notion-manage`, displayed under `Notion ·`, for manual-only management of the configured Music Release database.
 
 #### Scenario: Invocation is explicit
 - **WHEN** the plugin is installed

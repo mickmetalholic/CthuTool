@@ -7,7 +7,7 @@ Provide lightweight, manually invoked Video Game Library management while preser
 ## Requirements
 
 ### Requirement: Manual game library CRUD
-The plugin SHALL provide `notion-manage-games` under `Notion ·`, with implicit invocation disabled, for natural-language query, create, update, and reversible removal.
+The plugin SHALL provide `notion-manage` under `Notion ·`, with implicit invocation disabled, for natural-language query, create, update, and reversible removal.
 
 #### Scenario: Invocation and authorization
 - **WHEN** explicitly invoked with a clear target and intended change

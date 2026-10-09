@@ -7,7 +7,7 @@ Provide lightweight, manually invoked Knowledge Vault management while preservin
 ## Requirements
 
 ### Requirement: Manual Knowledge Vault CRUD
-The plugin SHALL provide `notion-manage-knowledge` under `Notion ·`, with implicit invocation disabled, for natural-language query, create, scoped update, and reversible removal.
+The plugin SHALL provide `notion-manage` under `Notion ·`, with implicit invocation disabled, for natural-language query, create, scoped update, and reversible removal.
 
 #### Scenario: Invocation and authorization
 - **WHEN** explicitly invoked with a clear target and intended change

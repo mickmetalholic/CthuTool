@@ -1,6 +1,0 @@
-interface:
-  display_name: "Notion · Manage Documentaries"
-  short_description: "Manage the personal Notion Documentary Library."
-  default_prompt: "Use $notion-manage-documentaries to query, add, update, or remove entries in my Notion Documentary Library."
-policy:
-  allow_implicit_invocation: false

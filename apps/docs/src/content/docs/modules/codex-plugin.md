@@ -192,9 +192,18 @@ get past the maze of
 
 The `Sentence` field uses Anki cloze syntax with a short synonym or paraphrase hint. The `Explanation` field uses the existing English style with `Definition`, `Synonyms`, and `Other Examples` sections.
 
+## Unified Notion management
+
+Invoke `$notion-manage` explicitly and describe the library and operation. One entry
+point covers all eleven libraries below. Its index loads only the relevant library
+reference; Classical Work guidance is conditional on Works matching and does not
+provide independent work CRUD. Music enrichment can use the optional skill-local
+resolver. Implicit invocation remains disabled; the separate library entry points
+have been removed. Source: `codex/plugins/cthu-codex/skills/notion-manage/SKILL.md`.
+
 ## Notion Book Library
 
-Invoke `$notion-manage-books` explicitly to create, find, update, or reversibly
+Invoke `$notion-manage` explicitly to create, find, update, or reversibly
 delete entries in the personal Book Library. The skill accepts natural-language
 requests without a fixed format or a mandatory second confirmation. Ambiguous
 books or editions are clarified before changing the affected record.
@@ -211,21 +220,21 @@ for manual addition, or states that no verified cover was found. Query limits,
 unresolved writes, and unsupported deletion are reported explicitly.
 
 This replaces the former `$notion-maintain-books` entrypoint. Use
-`$notion-manage-books` after updating the plugin; it does not activate implicitly.
+`$notion-manage` after updating the plugin; it does not activate implicitly.
 
 ## Notion Channel Library
 
-Invoke `$notion-manage-channels` explicitly to add, find, update, or reversibly
+Invoke `$notion-manage` explicitly to add, find, update, or reversibly
 remove YouTube, Bilibili, and Xiaohongshu entries in the personal Channel Library.
 This replaces `$notion-add-channel`; the old entrypoint is removed. Requests use
 natural language, without a required format or a second confirmation for clear
 operations. Examples:
 
 ```text
-$notion-manage-channels 找出我收藏的 YouTube 科技频道
-$notion-manage-channels 给这个频道加上 AI 标签，保留原来的标签
-$notion-manage-channels 把这个主页加入频道库，自动选择合适的现有标签
-$notion-manage-channels 把 Chrome 当前标签页的频道加入频道库
+$notion-manage 找出我收藏的 YouTube 科技频道
+$notion-manage 给这个频道加上 AI 标签，保留原来的标签
+$notion-manage 把这个主页加入频道库，自动选择合适的现有标签
+$notion-manage 把 Chrome 当前标签页的频道加入频道库
 ```
 
 Creation needs a supported channel homepage or an explicitly selected homepage
@@ -261,7 +270,7 @@ creation is performed.
 
 ## Notion Comic Book Library
 
-Invoke `$notion-manage-comics` explicitly to create, find, update, or reversibly
+Invoke `$notion-manage` explicitly to create, find, update, or reversibly
 remove comic entries. Natural-language requests need no fixed format or redundant
 confirmation when the target and operation are clear.
 
@@ -278,11 +287,11 @@ for manual addition, or states that no cover was found. Representative volume ar
 is labeled for work-level entries. Deletion uses supported reversible Notion
 trash/archive only; incomplete queries and unverified writes are reported.
 
-Skill source: `codex/plugins/cthu-codex/skills/notion-manage-comics/SKILL.md`.
+Skill source: `codex/plugins/cthu-codex/skills/notion-manage/references/comics.md`.
 
 ## Notion Music Release Library
 
-Use `$notion-manage-music-releases` for lightweight query, creation, updates, and
+Use `$notion-manage` for lightweight query, creation, updates, and
 reversible removal in Music Release, including albums, singles, and EPs. It replaces
 `notion-maintain-album` and runs only when manually invoked. Natural-language
 requests are sufficient; clear instructions do not require a second confirmation.
@@ -307,7 +316,7 @@ reported rather than invented.
 
 ## Notion Movie Library
 
-Use `$notion-manage-movies` explicitly to query, add, update, or reversibly remove
+Use `$notion-manage` explicitly to query, add, update, or reversibly remove
 movies. Natural-language requests are sufficient; clear instructions authorize
 scoped changes without a mandatory second confirmation.
 
@@ -331,7 +340,7 @@ page links. Writes are verified and uncertain results are reconciled before retr
 
 ## Notion Drama Library
 
-Use `$notion-manage-dramas` explicitly for lightweight query, creation, updates,
+Use `$notion-manage` explicitly for lightweight query, creation, updates,
 and reversible removal. Clear natural-language requests authorize scoped changes
 without a mandatory second confirmation. The skill discovers the live schema,
 options, and template and discloses incomplete query coverage.
@@ -354,7 +363,7 @@ otherwise returns manual page links. Mutations are verified before reporting suc
 
 ## Notion Video Game Library
 
-Use `$notion-manage-games` explicitly for query, create, update, and reversible
+Use `$notion-manage` explicitly for query, create, update, and reversible
 removal. Clear natural-language instructions authorize scoped changes without a
 mandatory second confirmation. The skill discovers the live schema and template,
 checks duplicates, and discloses incomplete query coverage.
@@ -377,7 +386,7 @@ and uncertain outcomes are reconciled before retrying.
 
 ## Notion Knowledge Vault
 
-Use `$notion-manage-knowledge` explicitly for lightweight query, create, scoped
+Use `$notion-manage` explicitly for lightweight query, create, scoped
 property/body updates, and reversible removal. Clear natural-language requests
 authorize scoped changes without mandatory repeated confirmation.
 
@@ -400,7 +409,7 @@ is reported.
 
 ## Notion Documentary Library
 
-Use `$notion-manage-documentaries` explicitly for lightweight query, creation,
+Use `$notion-manage` explicitly for lightweight query, creation,
 scoped updates, and reversible removal in the Documentary Library.
 
 The skill distinguishes films, series, seasons, and episodes, verifies IMDb and
@@ -414,7 +423,7 @@ content and covers; unsupported icon repair or removal is reported with page lin
 
 ## Notion Animation Library
 
-Use `$notion-manage-animation` explicitly for lightweight query, creation, scoped
+Use `$notion-manage` explicitly for lightweight query, creation, scoped
 updates, and reversible removal in the Animation Library.
 
 The skill distinguishes series, seasons, films, specials, and adaptations; IMDb
@@ -429,7 +438,7 @@ addition. Updates preserve unrelated fields, notes, covers, and credits.
 
 ## Notion App Vault
 
-Use `$notion-manage-apps` explicitly for lightweight query, creation, scoped updates,
+Use `$notion-manage` explicitly for lightweight query, creation, scoped updates,
 and reversible removal of App Vault records. It does not install or uninstall apps.
 
 The app URL is currently exposed as userDefined:URL, distinct from the Notion page
@@ -445,5 +454,5 @@ Creation returns a verified app image/link for manual addition, or reports its a
 ## Authoritative Sources
 
 - Plugin README: `codex/plugins/cthu-codex/README.md`
-- Book Library skill: `codex/plugins/cthu-codex/skills/notion-manage-books/SKILL.md`
+- Book Library skill: `codex/plugins/cthu-codex/skills/notion-manage/references/books.md`
 - Requirements: `openspec/specs/codex-plugins-cthu-codex-anki-mcp/spec.md`, `openspec/specs/codex-plugins-cthu-codex-language-coach/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-sentence-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-japanese-vocabulary-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-english-expression-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-channel-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-album-skill/spec.md`, `openspec/specs/codex-plugins-cthu-codex-notion-movie-library-skill/spec.md`

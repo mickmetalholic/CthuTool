@@ -11,7 +11,7 @@ const skillRoot = join(
   'plugins',
   'cthu-codex',
   'skills',
-  'notion-manage-music-releases',
+  'notion-manage',
 );
 const resolverPath = join(skillRoot, 'scripts', 'resolve-album.mjs');
 const fixtureRoot = join(
@@ -387,11 +387,7 @@ describe('Notion album metadata resolver', () => {
     await cp(join(repoRoot, 'codex', 'plugins', 'cthu-codex'), installRoot, {
       recursive: true,
     });
-    const installedSkill = join(
-      installRoot,
-      'skills',
-      'notion-manage-music-releases',
-    );
+    const installedSkill = join(installRoot, 'skills', 'notion-manage');
     const installedResolver = join(
       installedSkill,
       'scripts',
@@ -403,7 +399,7 @@ describe('Notion album metadata resolver', () => {
     );
     expect(
       await readFile(
-        join(installedSkill, 'references', 'schema-and-matching.md'),
+        join(installedSkill, 'references', 'music-resolver.md'),
         'utf8',
       ),
     ).toContain('MusicBrainz Release Group');

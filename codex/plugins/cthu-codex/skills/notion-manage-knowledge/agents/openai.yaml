@@ -1,6 +1,0 @@
-interface:
-  display_name: "Notion · Manage Knowledge"
-  short_description: "Manage records and notes in the Notion Knowledge Vault."
-  default_prompt: "Use $notion-manage-knowledge to query, add, update, or remove entries in my Notion Knowledge Vault."
-policy:
-  allow_implicit_invocation: false
