@@ -62,3 +62,15 @@ For new media entries and requested cover completion or replacement, the skill S
 - **WHEN** native API access is unavailable, the token is missing, or upload or cover assignment fails
 - **THEN** the skill SHALL retain the verified downloaded image under ~/downloads and return its absolute path and the Notion page link for manual setup without blocking successful record creation
 - **AND** if image download failed, it SHALL report the failure without claiming a local file exists
+
+### Requirement: Original names for entry titles
+When creating entries or setting their names, the skill SHALL use verified original-language names in their original script rather than translated or localized titles. Translated names and aliases SHALL remain usable for search and identity matching. Official or self-used names SHALL apply to channels, apps, people, and organizations; personal notes SHALL retain user-supplied titles. This rule SHALL NOT authorize renaming records during unrelated updates or merging distinct editions or seasons.
+
+#### Scenario: Translated title supplied
+- **WHEN** a user supplies a translated title to create a work entry
+- **THEN** the skill SHALL resolve the matching work and write its verified original title while preserving the intended edition or season and library source priorities
+- **AND** it SHALL clarify an unverified original name rather than guess or invent a transliteration
+
+#### Scenario: Existing translated title during an unrelated update
+- **WHEN** the user updates only a personal score or status
+- **THEN** the skill SHALL preserve the existing name without performing an incidental rename

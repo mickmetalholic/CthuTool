@@ -62,6 +62,15 @@ Ignore `To Be Downloaded`; it is outside this skill's scope.
 
 ## Shared care points
 
+- When creating an entry or setting its `Name`/title, use the verified original name
+  in its original language and script, not a translated/localized title or an invented
+  transliteration. Use translated names and aliases for search and duplicate matching
+  only. Follow the selected library's source priorities, but distinguish a catalog's
+  localized display title from the original name; if unverified, clarify before the
+  affected name write. For channels, apps, people, and organizations, use their
+  verified official/self-used name. Preserve work/edition/season scope and identifiers;
+  a shared original title does not make different editions duplicates. Personal notes
+  retain the user's title. Unrelated updates do not rename existing entries.
 - Follow library-specific identity and relation rules; names/snippets alone are not
   proof. Clarify conflicting matches. Related-record creation is allowed only where
   the selected reference explicitly permits it within the requested operation.

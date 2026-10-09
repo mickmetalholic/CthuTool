@@ -201,6 +201,11 @@ provide independent work CRUD. Music enrichment can use the optional skill-local
 resolver. Implicit invocation remains disabled; the separate library entry points
 have been removed. Source: `codex/plugins/cthu-codex/skills/notion-manage/SKILL.md`.
 
+Creation and requested name changes use verified original-language titles in their
+original script, not translations. Translated titles remain useful for search and
+matching. Channels, apps, people, and organizations use verified official/self-used
+names; personal notes retain the user's title. Unrelated updates do not rename entries.
+
 Metadata sources follow these library-specific preferences. Ordered fallbacks apply
 when the preferred source is unavailable or lacks the requested field; all sources
 must match the selected work, edition, or season. Report material conflicts.
