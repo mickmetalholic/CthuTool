@@ -21,7 +21,8 @@ back to IMDb, Douban, a general series poster, or another season's image.
 
 Use a verified actual image URL from the matching source record, not its detail-page
 URL or a guessed image path. Set it through the supported Notion page `cover` URL
-operation and refetch to verify. If retrieval or application fails, follow the
+operation and refetch to verify. For IGDB retrieval failures, first try the in-app
+browser fallback in [games.md](games.md). If retrieval or application fails, follow the
 Douban route below; inspect uncertain writes before retrying or replacing anything.
 
 Except for the seasonal-drama rule above, use the corresponding Douban cover for all other cases: this includes Chinese books,
