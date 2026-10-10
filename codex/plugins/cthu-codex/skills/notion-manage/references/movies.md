@@ -36,6 +36,9 @@ verify these live instead of forcing cached defaults.
   values without adding options.
 - For Director/Cast, fetch the live relation target and candidate people pages.
   Prefer verified stable identifiers when available; otherwise reconcile names and
-  credits with evidence. Preserve multiple directors/cast members. Clarify missing
-  or ambiguous people before affected relation writes; do not create or edit them.
+  credits with evidence. Preserve multiple directors/cast members. When adding a
+  movie, link verified existing people directly and use the [shared new-person
+  selection workflow](people-organizations.md#new-people-while-adding-movies-or-dramas)
+  for missing people. Only user-selected missing people may be created and linked;
+  clarify ambiguous matches and preserve existing person records.
 - Follow [cover handling](covers.md), matching the selected movie.

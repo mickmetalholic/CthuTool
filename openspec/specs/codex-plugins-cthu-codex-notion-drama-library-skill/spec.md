@@ -70,12 +70,12 @@ The skill SHALL check identities and title/year/season candidates before creatio
 - **AND** intervening conflicts SHALL be clarified before affected writes
 
 ### Requirement: Drama people and personal fields
-Director, Cast, and Writer are user-maintained. Routine creation and enrichment SHALL leave them unchanged and SHALL NOT schedule automatic backfill for missing credits. Only explicit requests for these fields SHALL resolve them to verified existing People Vault records. User control over viewing data SHALL be preserved.
+When adding a drama, verified existing Director, Cast, and Writer identities SHALL be linked directly, and missing people SHALL follow the shared user-selection creation workflow. Existing drama credits remain user-maintained: routine enrichment SHALL leave them unchanged and SHALL NOT schedule automatic backfill unless explicitly requested. User control over viewing data SHALL be preserved.
 
 #### Scenario: People relations
-- **WHEN** a Director, Cast, or Writer relation is explicitly requested
+- **WHEN** adding a drama or explicitly editing Director, Cast, or Writer relations
 - **THEN** the skill SHALL verify the live target and related identities, retain multiple credits, and clarify missing or ambiguous people
-- **AND** it SHALL NOT create or modify People Vault pages incidentally
+- **AND** drama creation SHALL create and link only user-selected missing people under the shared workflow, without modifying existing person records
 
 #### Scenario: Personal values and formulas
 - **WHEN** records are created or updated

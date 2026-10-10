@@ -59,12 +59,13 @@ and false `Is in Library`; verify live rather than force cached defaults.
 - Reuse live Category/Genres options with evidence or user direction; title language
   alone does not establish Category. Report unmapped values. Do not change schemas,
   options, views, or create new season/episode properties as a side effect.
-- The user maintains `Director`, `Cast`, and `Writer` manually. Leave them unchanged
-  during routine creation/enrichment and exclude their absence from automatic
-  backfill work. Edit them only when the user explicitly requests those fields.
-  For such edits, verify live People & Organizations targets and existing identities.
-  Prefer evidenced stable identifiers where available; reconcile names and credits
-  otherwise. Preserve multiple credits, clarify missing/ambiguous people before
-  affected relation writes, and do not create or edit related pages incidentally.
+- When adding a drama, verify Director/Cast/Writer credits for the selected series
+  or season and link verified existing People & Organizations matches directly.
+  Use the [shared new-person selection workflow](people-organizations.md#new-people-while-adding-movies-or-dramas)
+  for missing people; only user-selected missing people may be created and linked.
+  Preserve multiple roles and clarify ambiguous identities. Existing drama credits
+  remain user-maintained: routine enrichment leaves them unchanged and does not
+  backfill missing credits unless the user explicitly requests those fields.
+
 
 Keep Research & Archive status distinct from actual removal; clarify ambiguous archive requests.

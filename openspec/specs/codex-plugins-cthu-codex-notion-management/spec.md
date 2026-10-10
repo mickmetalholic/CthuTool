@@ -109,3 +109,17 @@ For all libraries and related entities, when public metadata or image retrieval 
 - **WHEN** ordinary retrieval fails or omits needed metadata or image URLs
 - **THEN** the skill SHALL try the corresponding source page in the in-app browser as part of the requested lookup
 - **AND** if browser access remains unavailable or blocked, it SHALL report the limitation and follow existing source/cover fallbacks, handling login or verification under normal browser handoff requirements
+
+### Requirement: Select missing people for movie and drama creation
+When adding movies or dramas, the skill SHALL deduplicate credited identities and directly link verified existing people. It SHALL present only missing people with names, roles, and relevant work/season context for explicit selection before creation. A person spanning roles or seasons SHALL appear once. Ambiguous matches SHALL be clarified rather than duplicated.
+
+#### Scenario: Select new people
+- **WHEN** verified credited people are absent from the relation target
+- **THEN** a true multi-select tool SHALL be used when available; otherwise a numbered list SHALL accept multiple numbers, all, or none without presenting a single-choice tool as multi-select
+- **AND** only selected missing people SHALL be created with the live Person template, verified type/icon, and supported role tags, then linked to the work
+- **AND** silence or preselection SHALL NOT authorize creation; unselected people SHALL remain uncreated and unlinked
+
+#### Scenario: Independent creation work
+- **WHEN** the missing-person selection is pending
+- **THEN** independent metadata, template, cover, and existing-person links SHALL complete without recreating the work later
+- **AND** this workflow SHALL NOT trigger unsolicited backfill of existing dramas or expand other libraries' related-record creation permissions

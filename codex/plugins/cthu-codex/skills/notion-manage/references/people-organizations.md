@@ -56,3 +56,24 @@ replace all memberships, infer every role from one credit, or edit the other end
 independently. Preserve unrelated cross-library links, notes, and legacy relations;
 this reference does not authorize migration, deduplication/merging of shared entities,
 or deletion of related works. Unlinking a person from a work is not deleting the person.
+
+## New people while adding movies or dramas
+
+For movie/drama creation, resolve and deduplicate credited people first. Link verified
+existing matches directly, preserving their records. Present only missing people in
+one selection request, showing each name, Director/Cast/Writer role as applicable,
+and enough work/season context to distinguish identities. Deduplicate a person with
+multiple roles or seasons into one candidate. Do not preselect everyone or treat
+silence as selection. Clarify ambiguous existing matches rather than creating duplicates.
+
+Use a true multi-select tool when available. If the available question tool only
+supports single choice, do not simulate multi-select with single-choice options;
+provide a numbered list and let the user reply with multiple numbers, all, or none.
+Create and link only the selected missing people, using the live Person template
+and verifying its icon and Entity Type. Apply only verified roles supported by live
+fields/options; never invent a Writer tag. Unselected people remain uncreated and
+unlinked. Finish independent work metadata, template, cover, and existing-person
+links while awaiting the selection; do not recreate the movie or drama afterward.
+
+This creation workflow does not authorize automatic backfill of existing drama
+credits, nor unrelated person edits or creation in other library workflows.

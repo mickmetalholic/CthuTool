@@ -79,7 +79,8 @@ The skill SHALL support explicit personal-field edits and verified Director/Cast
 #### Scenario: People relations
 - **WHEN** Director or Cast is requested or enriched
 - **THEN** the skill SHALL verify the live relation target and existing People Vault identities, preserving multiple credits
-- **AND** it SHALL clarify missing or ambiguous people before affected relation writes without creating or editing People Vault pages incidentally
+- **AND** when adding a movie, verified existing people SHALL be linked directly; missing people SHALL follow the shared user-selection creation workflow, with only selected candidates created and linked
+- **AND** ambiguous matches SHALL be clarified and existing person records preserved
 
 ### Requirement: Movie template poster and result verification
 The skill SHALL create using the live default template, maintain its consistent icon, follow the shared Notion Management cover workflow, and verify mutations.
