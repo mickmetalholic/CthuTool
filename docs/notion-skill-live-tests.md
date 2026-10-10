@@ -6,8 +6,9 @@
 | --- | --- | --- |
 | 游戏 | 查重、创建、模板、默认值、开发商关联、元信息回读、封面失败路径、内置浏览器回退、直链封面 | 创建及封面通过 |
 | App | 查重、无模板例外、官网图标、平台和分类、回读 | 创建通过 |
-| 书籍、漫画、音乐、电影、剧集、纪录片、动画、频道、Knowledge | 无 | 待测 |
-| 人物／组织 | 无 | 待关联操作实测 |
+| 电影 | 查重、模板创建、元信息、TMDB 直链封面、人物关联 | 创建通过 |
+| 书籍、漫画、音乐、剧集、纪录片、动画、频道、Knowledge | 无 | 待测 |
+| 人物／组织 | 6 位 Person 的查重、模板创建、类型/标签及电影关联 | 人物创建通过；Ensemble/Organization 待测 |
 
 ## 2026-10-10：加入 Detroit: Become Human
 
@@ -43,3 +44,17 @@
 - 回读确认 Name、userDefined:URL、Platform、现有 Tag `01.Reading - Snippets Reading`、external icon 均正确。
 - cover 为 null，正文为空，未创建 Knowledge 关联；符合 App 无封面要求。
 - 结论：App 创建流程通过；更新、删除、重复项命中、模板存在分支仍待测。
+
+## 2026-10-10：加入赌侠2
+
+- 识别为 1991 年《賭俠II上海灘賭聖》，TMDB 53658、IMDb tt0101783；非 1990 年《赌侠》。
+- Notion：https://app.notion.com/p/3f5afceceb9081899fd7f2264a50cb6b
+- 名称搜索及参数化 SQL 查重无匹配；读取实时电影 schema 与模板。
+- 使用原名；TMDB 搜索缓存原名出现 III，与中文原名冲突，结合当前 TMDB 标题、豆瓣原名和 Netflix 香港片名确认 II，不照抄缓存错名。
+- 采用 TMDB 香港日期 1991-08-21、Action/Comedy/Fantasy；填写各目录正确 URL 字段。
+- 明确套用电影模板，回读确认灰色 movie 图标、Want to watch、Is in Library=false。
+- 从匹配 TMDB 页面实际 poster 元素核对 nz1OMsKU8V4svGgOIv271TFmLi5.jpg，设置 w500 直链，回读通过。
+- 人物搜索和中英文别名精确 SQL 未找到导演/五位主演；按 movies.md 先创建电影，用户明确授权后新增王晶、周星馳、鞏俐、吳孟達、呂良偉、吳君如。
+- 六人均传入实时 user 模板 ID，设置 Person 和对应 Director / Actor/Actress 标签；逐条回读确认模板图标和属性。
+- 设置 Director 一人、Cast 五人，再回读确认电影所有字段及封面；未填用户评分或观看日期，未生成正文，人物不设封面。
+- 结论：电影创建、封面、经明确授权的人物创建及关联通过。电影更新/删除/已有条目命中、Ensemble/Organization 模板分支待测。
