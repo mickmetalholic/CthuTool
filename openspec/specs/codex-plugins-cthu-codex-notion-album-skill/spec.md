@@ -1,226 +1,130 @@
 # codex-plugins-cthu-codex-notion-album-skill Specification
 
 ## Purpose
-Define the CthuCodex plugin-local workflow for safely resolving album metadata from MusicBrainz and Discogs and maintaining the configured Notion Album and People Vault databases through preview-confirmed, idempotent writes.
+
+Define lightweight, manually invoked management of the personal Notion Music Release library, preserving canonical metadata, template conventions, and user-controlled listening data.
 
 ## Requirements
-### Requirement: Plugin-local Notion album skill
-CthuCodex SHALL provide a plugin-local skill for maintaining the configured personal Notion Album database from natural-language album requests and supported source URLs.
 
-#### Scenario: Skill is packaged and grouped
-- **WHEN** the Notion album skill is installed
-- **THEN** its instructions live under `codex/plugins/cthu-codex/skills/notion-maintain-album/`
-- **AND** its skill name is `notion-maintain-album`
-- **AND** its display name starts with `Notion ·`
+### Requirement: Manual Music Release skill entry point
+CthuCodex SHALL replace `notion-maintain-album` with `notion-manage`, displayed under `Notion ·`, for manual-only management of the configured Music Release database.
 
-#### Scenario: Album maintenance request invokes the skill
-- **WHEN** the user asks to add, complete, audit, or reconcile an album in the personal Notion Album database or supplies a MusicBrainz or Discogs album URL for that purpose
-- **THEN** the skill may run its read-only preflight without requiring a `$skill-name` invocation
-- **AND** it MUST NOT write to Notion before presenting a preview and receiving explicit confirmation
+#### Scenario: Invocation is explicit
+- **WHEN** the plugin is installed
+- **THEN** the new skill SHALL set `allow_implicit_invocation: false` and replace the old entry point
+- **AND** ordinary music discussion or an uninvoked library request SHALL NOT activate it
 
-#### Scenario: Ordinary music discussion does not invoke album maintenance
-- **WHEN** the user discusses an album without asking to maintain the personal Notion Album database
-- **THEN** CthuCodex does not read or modify the Album database through this skill
+### Requirement: Live Music Release schema boundaries
+The skill SHALL inspect the live Music Release schema for the requested operation and verify People Vault when resolving Artist relations, without incidental schema or related-page mutations.
 
-### Requirement: Album and People Vault schema contract
-The Album workflow SHALL require the agreed Album and People Vault property names, types, and meanings and SHALL preserve existing personal data while aligning the live schema.
+#### Scenario: Schema drifts
+- **WHEN** a relevant field has changed type, name, or relation target
+- **THEN** the skill SHALL report the mismatch and stop the affected write without recreating properties
 
-#### Scenario: Album schema is aligned
-- **WHEN** the schema migration is applied to the verified Album data source
-- **THEN** `Date` is renamed to `Listened Date` without changing its stored values
-- **AND** `Release Type` exists as a select property supporting MusicBrainz primary release-group types
-- **AND** `Name`, `Artist`, `Release Date`, `Genre`, `MusicBrainz Release Group`, and `Discogs Master` retain their existing property types
+#### Scenario: Schema is compatible
+- **WHEN** a record is managed
+- **THEN** the skill SHALL reuse live options and preserve database schema, views, and People Vault pages
 
-#### Scenario: People Vault schema is aligned
-- **WHEN** the schema migration is applied to the data source targeted by the Album `Artist` relation
-- **THEN** that data source has a `MusicBrainz Artist` URL property
-- **AND** no existing People Vault property or relation is removed
+### Requirement: Music Release CRUD operations
+The skill SHALL support natural-language query, create, update, and reversible removal of Music Release records, including Album, Single, EP, Broadcast, and Other entries.
 
-#### Scenario: Core property meanings are documented
-- **WHEN** the schema migration is complete
-- **THEN** the live schema or an explicitly required verified schema step documents `MusicBrainz Release Group` as an abstract Release Group URL only
-- **AND** it documents `Discogs Master` as a Master URL only
-- **AND** it documents `Release Date` as the earliest MusicBrainz Release Group date
-- **AND** it documents `Genre` as the controlled Discogs-derived genre/style vocabulary
-- **AND** it documents `Artist` as a People Vault relation
+#### Scenario: Query is requested
+- **WHEN** the user requests records or a metadata check
+- **THEN** the skill SHALL return matching page links and disclose pagination or search limitations without writing
 
-#### Scenario: Runtime schema is incompatible
-- **WHEN** a required property is missing, renamed, related to another data source, or has an incompatible type
-- **THEN** the skill reports the exact mismatch
-- **AND** it does not silently recreate, rename, or replace the property during normal album maintenance
-- **AND** it performs no album write
+#### Scenario: A clear mutation is requested
+- **WHEN** the target and intended changes are unambiguous
+- **THEN** the skill SHALL act within that authorization without a mandatory second confirmation or fixed input syntax
+- **AND** it SHALL clarify unresolved identity or destructive scope instead of guessing
 
-### Requirement: Album input and operation resolution
-The skill SHALL resolve one requested album and distinguish add, missing-field completion, and check-only operations before accessing external metadata.
+#### Scenario: Removal is requested
+- **WHEN** the user identifies records to remove
+- **THEN** the skill SHALL use reversible trash or archive only if supported and verify the result
+- **AND** if unsupported it SHALL report the limitation and provide manual removal links without permanent deletion
 
-#### Scenario: Title and artist are supplied
-- **WHEN** the user supplies an album title and artist name
-- **THEN** the skill normalizes them for candidate search while preserving the original input for display
-- **AND** it searches MusicBrainz Release Groups rather than concrete Releases
+### Requirement: Music Release canonical metadata
+The skill SHALL preserve MusicBrainz Release Group as the canonical identity and source for name, artist credit, earliest release date, and primary release type when enriching metadata.
 
-#### Scenario: MusicBrainz Release Group URL is supplied
-- **WHEN** the user supplies a valid MusicBrainz Release Group URL
-- **THEN** the skill looks up that Release Group directly
-- **AND** it still validates title, artist, type, date, and conflicts before proposing a write
+#### Scenario: Concrete release is supplied
+- **WHEN** the input identifies a regional edition, reissue, or concrete MusicBrainz Release
+- **THEN** the skill SHALL resolve its owning Release Group and SHALL NOT substitute edition dates for the original release date
 
-#### Scenario: Concrete MusicBrainz Release URL is supplied
-- **WHEN** the user supplies a valid MusicBrainz Release URL
-- **THEN** the skill resolves its owning Release Group
-- **AND** it proposes only the canonical Release Group URL
-- **AND** it does not use the concrete Release's regional, reissue, or remaster date as `Release Date`
+#### Scenario: Metadata is ambiguous or partial
+- **WHEN** candidate identity remains ambiguous or the earliest date only has year or month precision
+- **THEN** the skill SHALL clarify identity before affected writes and preserve the known date precision without inventing a month or day
+- **AND** `Release Date` SHALL remain unmodified unless a full earliest date is verified
 
-#### Scenario: Check-only operation is requested
-- **WHEN** the user asks only whether MusicBrainz and Discogs match
-- **THEN** the skill reports candidates, scores, source values, and conflicts
-- **AND** it does not offer or perform a Notion write unless the user subsequently requests a mutation
+### Requirement: Music Release Discogs provenance and existing options
+The skill SHALL use a confirmed Discogs Master for identity cross-checking and Genre provenance and SHALL NOT expand options during ordinary record management.
 
-### Requirement: MusicBrainz Release Group resolution
-The skill SHALL use deterministic, rate-limited MusicBrainz resolution and SHALL treat the Release Group as the canonical album identity and metadata authority for name, artist credit, earliest release date, and primary release type.
+#### Scenario: Master matching supplies genre values
+- **WHEN** MusicBrainz links a Discogs Master or a matching Master is found
+- **THEN** the skill SHALL verify title, artist, and year, reuse existing normalized genre/style options, and report unavailable options
+- **AND** it SHALL NOT use a concrete Discogs Release as a Master or replace MusicBrainz authority with streaming metadata
 
-#### Scenario: One high-confidence Release Group is found
-- **WHEN** normalized title, artist identity, primary type, known year, and MusicBrainz search score produce one eligible candidate with the required score and margin
-- **THEN** the skill recommends that Release Group
-- **AND** it displays the candidate score and evidence
-- **AND** the score does not authorize a write
+#### Scenario: Sources conflict
+- **WHEN** artist, title identity, or dates conflict across sources
+- **THEN** the skill SHALL disclose the conflict and clarify before writing affected metadata
 
-#### Scenario: Release Group candidates are ambiguous
-- **WHEN** multiple eligible Release Groups are tied or within the configured score margin, the artist is missing, or an edition qualifier conflicts
-- **THEN** the skill presents the relevant candidates
-- **AND** it waits for the user to choose or clarify
-- **AND** it does not write to Notion
+### Requirement: Music Release artist identity preservation
+For non-classical releases, the skill SHALL resolve every requested artist credit to existing People Vault pages, preferring canonical MusicBrainz Artist URLs.
 
-#### Scenario: MusicBrainz metadata supplies complete core values
-- **WHEN** the confirmed Release Group has a title, artist credit, full earliest release date, and primary type
-- **THEN** the skill proposes those values for `Name`, `Artist`, `Release Date`, and `Release Type`
-- **AND** it records the canonical Release Group URL as their authority
-
-#### Scenario: Earliest release date has partial precision
-- **WHEN** MusicBrainz exposes only a year or year-month earliest date
-- **THEN** the skill reports the available precision
-- **AND** it does not fabricate a month or day
-- **AND** it leaves `Release Date` unmodified unless the user supplies a separately confirmed full date
-
-### Requirement: Discogs Master matching and Genre option expansion
-The skill SHALL use a confirmed Discogs Master to cross-check the MusicBrainz identity and SHALL add missing Discogs genre/style values to the Album `Genre` options only within an approved album mutation.
-
-#### Scenario: MusicBrainz links one Discogs Master
-- **WHEN** the confirmed Release Group has exactly one Discogs Master URL relationship
-- **THEN** the skill fetches that Master before performing a Discogs search
-- **AND** it validates the Master's title, artist, and year against MusicBrainz
-
-#### Scenario: Discogs relationship is unavailable
-- **WHEN** the Release Group has no usable Discogs Master relationship
-- **THEN** the skill searches Discogs Masters using the confirmed title, artist, and year
-- **AND** it scores only Master candidates
-- **AND** it requires clarification when candidates remain ambiguous
-
-#### Scenario: MusicBrainz and Discogs conflict
-- **WHEN** the proposed Master has a different artist, an unresolved title identity, or a conflicting year
-- **THEN** the skill displays the conflict
-- **AND** it does not silently replace MusicBrainz name, date, or type with Discogs values
-- **AND** it performs no write until the conflict is explicitly resolved
-
-#### Scenario: Confirmed Master contains new genre or style values
-- **WHEN** the approved preview contains normalized Discogs Master genre/style values not present in the current `Genre` options
-- **THEN** the skill includes every new option in the preview
-- **AND** after confirmation it refetches the schema and adds the still-missing options
-- **AND** it writes the resulting values to the album
-- **AND** it retains the Discogs Master URL as provenance
-
-#### Scenario: Genre option already exists
-- **WHEN** a Discogs genre/style matches an existing option after case and whitespace normalization
-- **THEN** the skill reuses the existing option
-- **AND** it does not create a duplicate spelling variant
-
-### Requirement: People Vault Artist relation resolution
-The skill SHALL resolve every MusicBrainz artist credit to an existing People Vault page and SHALL use `MusicBrainz Artist` as the stable identity whenever available.
-
-#### Scenario: Artist URL matches one person
-- **WHEN** one People Vault page has the same canonical MusicBrainz Artist URL as a Release Group artist credit
-- **THEN** the skill proposes that page in the Album `Artist` relation
-
-#### Scenario: Exact name fallback finds one person
-- **WHEN** no MusicBrainz Artist URL match exists and exactly one fetched People Vault page has the exact normalized artist name
-- **THEN** the skill proposes that page as the relation
-- **AND** it previews filling the page's missing `MusicBrainz Artist` URL
+#### Scenario: Artist match is unambiguous
+- **WHEN** one matching Artist URL exists or a unique exact normalized name has no conflicting identifier
+- **THEN** the skill SHALL use the verified page relation and preserve all resolved credits
+- **AND** it SHALL NOT fill People Vault identifiers incidentally
 
 #### Scenario: Artist identity conflicts
-- **WHEN** a name candidate has a different non-empty MusicBrainz Artist URL, multiple exact-name pages exist, or no page exists
-- **THEN** the skill reports the affected artist credit
-- **AND** it asks the user to select or create an Artist record separately
-- **AND** it does not create a duplicate People Vault page
-- **AND** it performs no album write
+- **WHEN** a credit is missing, ambiguous, or has a different non-empty Artist URL
+- **THEN** the skill SHALL report the unresolved credit and clarify the affected relation write without creating an Artist page
 
-#### Scenario: Multiple artist credits resolve
-- **WHEN** a Release Group has multiple artist credits and every credit resolves without conflict
-- **THEN** the skill proposes all resolved People Vault pages in the Album `Artist` relation
+### Requirement: Music Release scoped authorization
+The skill SHALL treat the user's clear instruction as authorization for the requested change, while preserving unrequested values, notes, and covers.
 
-### Requirement: Read-only preview and conflict authorization
-The skill SHALL complete a live read-only preflight and receive explicit confirmation for the exact plan before changing schema options, People Vault pages, or Album pages.
+#### Scenario: Metadata completion is requested
+- **WHEN** the user asks to fill missing metadata
+- **THEN** the skill SHALL preserve non-empty values and report conflicting source values
 
-#### Scenario: Preview is ready
-- **WHEN** one Release Group, Discogs Master, and all Artist relations resolve without blocking conflicts
-- **THEN** the skill displays every current value, proposed value, action, and authority URL
-- **AND** it separately lists new Genre options and People Vault identifier updates
-- **AND** it leaves non-empty Album values unchanged by default
+#### Scenario: Explicit replacement or stale state
+- **WHEN** the user explicitly requests a field replacement
+- **THEN** the skill SHALL update that field after checking current state
+- **AND** it SHALL clarify any intervening change that makes the intended update ambiguous
 
-#### Scenario: Existing value differs
-- **WHEN** a proposed core value conflicts with a non-empty Notion value
-- **THEN** the skill reports both values and their sources
-- **AND** a generic confirmation does not authorize replacement
-- **AND** the user must explicitly approve that field replacement before it can be included in a later write plan
+### Requirement: Music Release templates covers and write verification
+The skill SHALL avoid duplicate canonical identities, create with the live template, repair the consistent icon where needed, and verify writes.
 
-#### Scenario: User has not confirmed the plan
-- **WHEN** the preview is displayed but the user has not explicitly confirmed it
-- **THEN** the skill does not add Genre options
-- **AND** it does not update People Vault or Album pages
+#### Scenario: Duplicate candidates exist
+- **WHEN** creating a record
+- **THEN** the skill SHALL check canonical Release Group and Master URLs and reconcile title/artist candidates
+- **AND** it SHALL NOT infer absence from incomplete search results or blindly retry an uncertain creation
 
-#### Scenario: State changes after preview
-- **WHEN** a target property, relation, identifier, or option set changes before execution
-- **THEN** the skill aborts the stale plan
-- **AND** it regenerates the preview from current state before requesting confirmation again
+#### Scenario: Template or icon needs attention
+- **WHEN** creating or updating a record
+- **THEN** the skill SHALL use the template for creation and check template conventions on update without reapplying it destructively
+- **AND** if template application fails it SHALL manually repair the live template's consistent icon without duplicating content or resetting personal fields
 
-### Requirement: Idempotent Album write and verification
-The skill SHALL create or minimally update one Album page without duplicating canonical identities and SHALL verify every approved mutation.
+#### Scenario: Creation or mutation completes
+- **WHEN** a write completes
+- **THEN** the skill SHALL refetch the affected record and return its link and verification outcome
+- **AND** on creation the skill SHALL follow the shared Notion Management cover workflow and report the verified cover result or the local file for manual setup, or disclose that no image could be obtained
+- **AND** uncertain outcomes SHALL be reconciled before retrying
 
-#### Scenario: Existing Release Group entry is found
-- **WHEN** an Album page already has the confirmed canonical MusicBrainz Release Group URL
-- **THEN** the skill treats that page as the target
-- **AND** it fills only approved missing fields
-- **AND** it does not create another page
+### Requirement: Music Release personal field handling
+The skill SHALL preserve personal listening data during metadata enrichment and allow explicitly requested changes to writable personal fields.
 
-#### Scenario: Title match lacks stable identity
-- **WHEN** an existing page has the same normalized title but no matching Release Group or Discogs Master identity
-- **THEN** the skill treats it as a duplicate candidate rather than proof of identity
-- **AND** it requires Artist and source reconciliation before creating or updating
+#### Scenario: Personal listening fields are requested
+- **WHEN** the user requests a Status, Listened Date, or Score change
+- **THEN** the skill SHALL change only the requested fields using current schema options
+- **AND** it SHALL never write the Rating formula or confuse Listened Date with Release Date
 
-#### Scenario: New Album entry is approved
-- **WHEN** no canonical Release Group duplicate exists and the complete preview is confirmed
-- **THEN** the skill refetches the Album data source immediately before creation
-- **AND** it creates one page with the confirmed missing metadata and discovered default template
-- **AND** it does not set `Status`, `Listened Date`, `Score`, or `Rating`
+#### Scenario: Creation has no personal values
+- **WHEN** a new record is created without explicit listening data
+- **THEN** the skill SHALL retain template defaults and SHALL NOT infer a listening date or score
 
-#### Scenario: Approved mutations complete
-- **WHEN** Genre options, People Vault identifiers, or Album properties are written
-- **THEN** the skill fetches every affected schema and page
-- **AND** it verifies the exact approved values
-- **AND** it returns the Album page URL and any incomplete verification detail
+### Requirement: Classical release metadata
+Classical releases SHALL leave Artist and Genres unset on creation and omit both fields from enrichment. Their absence SHALL NOT count as missing metadata. Role-specific Conductors, Performers, and Works SHALL identify credits, with Composers and Work Type remaining rollups. Existing values SHALL NOT be cleared incidentally.
 
-#### Scenario: Write result is partial or uncertain
-- **WHEN** a schema or page mutation partially fails or returns an uncertain result
-- **THEN** the skill discovers the current affected state before retrying
-- **AND** it does not roll back successful approved mutations
-- **AND** it does not blindly repeat the complete plan
-
-### Requirement: Personal listening data protection
-The skill SHALL treat `Status`, `Listened Date`, `Score`, and `Rating` as outside normal album metadata maintenance.
-
-#### Scenario: Album metadata is added or completed
-- **WHEN** the skill creates or updates album metadata
-- **THEN** it omits `Status`, `Listened Date`, and `Score` from explicit property writes
-- **AND** it does not attempt to write the formula `Rating`
-
-#### Scenario: User asks to change listening data
-- **WHEN** a user combines album maintenance with a request to change a personal listening field
-- **THEN** the skill reports that the personal-field mutation is outside this capability
-- **AND** it completes no such mutation under this change
+#### Scenario: Classical metadata completion
+- **WHEN** completing a classical release, including when using resolver suggestions
+- **THEN** do not populate Artist or Genres or report their absence as a gap
+- **AND** preserve existing role-specific relations and verify any requested changes

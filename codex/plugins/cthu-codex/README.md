@@ -58,18 +58,21 @@ The first pass is always read-only: it shows note IDs and exact before/after
 of at most 20, through stale-value-protected Anki MCP calls. The conversion
 does not add or remove tags.
 
-The plugin also includes guarded Notion workflows. `$notion-add-channel` adds
-channels only when explicitly invoked. `notion-maintain-album` can recognize a
-specific personal Album-library maintenance request, but every Album schema or
-page mutation still requires a field-level preview and explicit confirmation.
-Its MusicBrainz and Discogs resolver is a skill-local script; it does not add a
-second MCP server.
+Use `$notion-manage` explicitly to query, create, update, or reversibly remove
+records in eleven personal Notion libraries: books, channels, comics, music releases,
+movies, dramas, games, knowledge, documentaries, animation, and apps.
 
-`$notion-maintain-books` searches and audits the personal Book Library, and
-prepares edition-aware single-book additions or updates. It confirms an exact
-field-level preview before writing, preserves user notes and uploaded covers,
-and never merges same-title editions automatically. Removal is preview-only in
-this version; it does not trash or permanently delete pages.
+The entry point contains common CRUD rules and a library index. It reads only the
+relevant `references/<library>.md`; Classical Work matching and music resolver notes
+are loaded only when needed. People & Organizations is a shared relation reference;
+authorized creation applies the person/band template and verifies its icon. Each reference retains its schema hints, identity rules,
+and template/icon conventions. Live schema remains authoritative.
+
+Creation uses available templates, verifies icons, and returns images for manual
+addition. Clear requests authorize scoped operations; ambiguous destinations are
+clarified. Implicit invocation is disabled. The former eleven `notion-manage-*`
+entry points are replaced by this one skill, as are the earlier maintenance/add-only
+entries. The optional music resolver remains skill-local.
 
 ## Source Boundary
 
@@ -92,6 +95,6 @@ managed, protected, opted-out, and unprovenanced Skills remain excluded.
 ## TODO
 
 - Integrate the future Notion Movie Library workflow with CthuTool's backend
-  movie-metadata capability. Keep candidate disambiguation and explicit
-  confirmation before every Notion write; use the backend only as the metadata
+  movie-metadata capability. Keep candidate disambiguation and user-authorized
+  write scope; use the backend only as the metadata
   source.
