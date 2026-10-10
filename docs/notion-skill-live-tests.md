@@ -5,7 +5,8 @@
 | 库 | 本轮覆盖 | 状态 |
 | --- | --- | --- |
 | 游戏 | 查重、创建、模板、默认值、开发商关联、元信息回读、封面失败路径、内置浏览器回退、直链封面 | 创建及封面通过 |
-| 书籍、漫画、音乐、电影、剧集、纪录片、动画、频道、Knowledge、App | 无 | 待测 |
+| App | 查重、无模板例外、官网图标、平台和分类、回读 | 创建通过 |
+| 书籍、漫画、音乐、电影、剧集、纪录片、动画、频道、Knowledge | 无 | 待测 |
 | 人物／组织 | 无 | 待关联操作实测 |
 
 ## 2026-10-10：加入 Detroit: Become Human
@@ -31,3 +32,14 @@
 - 页面再次确认 Adventure、Quantic Dream、2018-05-25，并明确 Series 为空。
 - 回读确认目标 Notion 页仍无封面后设置该直链；再次回读确认 external cover URL 完全一致。
 - 本例最终结果：创建与封面通过；补充覆盖“HTTP 403 → 内置浏览器读取成功 → 直链设置并回读成功”。原生上传与本地文件手动回退成功路径仍待测。
+
+## 2026-10-10：加入 NetNewsWire
+
+- 官网：https://netnewswire.com/；官方信息确认 Mac、iPhone、iPad 支持，映射现有 MacOS、iOS 选项。
+- Notion：https://app.notion.com/p/3f5afceceb908137a512c7a68a984759
+- 读取 apps.md 和实时 App Vault schema；名称搜索与参数化 SQL 按名称/官网域名查重均无匹配。
+- 数据库未提供模板；按 App 明确的无模板例外创建，未声称应用模板。
+- 官网 HTML 声明 shortcut icon：https://netnewswire.com/images/nnw7.0-appicon-ios-dark.png；以外部 URL 设置页面 icon。
+- 回读确认 Name、userDefined:URL、Platform、现有 Tag `01.Reading - Snippets Reading`、external icon 均正确。
+- cover 为 null，正文为空，未创建 Knowledge 关联；符合 App 无封面要求。
+- 结论：App 创建流程通过；更新、删除、重复项命中、模板存在分支仍待测。
