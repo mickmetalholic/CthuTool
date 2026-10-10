@@ -7,14 +7,6 @@ date, developer, and series. Use other verified sources only for unavailable IGD
 records or fields, identify the fallback source, and preserve the intended game
 and edition scope. Do not replace available verified IGDB data merely for convenience.
 
-If ordinary web reading or direct HTTP retrieval fails or omits needed metadata or
-the cover, open the matching IGDB page in the in-app browser before switching
-sources. This read-only fallback is part of the requested game workflow. Read the
-rendered page and its actual cover image URL through supported browser tools;
-do not guess image paths. A failed HTTP request does not prove browser failure.
-If browser access is unavailable or still blocked, report it and use the existing
-source/cover fallback rules. Handle login or verification through the browser's
-normal user-handoff requirements.
 
 Template hint (2026-10-09): `49c354ca-caee-4aea-93dc-e49ffa783cc9`.
 

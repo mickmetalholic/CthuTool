@@ -7,7 +7,7 @@ Define lightweight, manually invoked Movie Library management with verified movi
 ## Requirements
 
 ### Requirement: Manual Movie Library CRUD entry point
-The plugin SHALL expose `notion-manage` under `Notion ·` for manually invoked query, create, update, and reversible removal, using the authorized Notion connector and agent-native public web tools only.
+The plugin SHALL expose `notion-manage` under `Notion ·` for manually invoked query, create, update, and reversible removal, using the authorized Notion connector and agent-native public web tools, with the shared in-app browser fallback for failed or incomplete public retrieval.
 
 #### Scenario: Manual invocation
 - **WHEN** the skill is installed

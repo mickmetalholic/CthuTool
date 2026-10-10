@@ -101,3 +101,11 @@ The skill SHALL provide a dependency-free Node helper accepting page ID, verifie
 #### Scenario: Installed helper
 - **WHEN** the skill is copied outside the repository
 - **THEN** the helper SHALL run using Node built-ins without repository paths, services, or additional packages
+
+### Requirement: Shared in-app browser fallback
+For all libraries and related entities, when public metadata or image retrieval fails or returns incomplete content, the skill SHALL try opening the matching source page in the in-app browser before changing sources. It SHALL read rendered evidence and actual image URLs through supported browser tools, preserving source priorities and identity/edition scope. This read-only fallback SHALL NOT access unrelated tabs, history, cookies, storage, credentials, or profile files.
+
+#### Scenario: Incomplete or blocked source retrieval
+- **WHEN** ordinary retrieval fails or omits needed metadata or image URLs
+- **THEN** the skill SHALL try the corresponding source page in the in-app browser as part of the requested lookup
+- **AND** if browser access remains unavailable or blocked, it SHALL report the limitation and follow existing source/cover fallbacks, handling login or verification under normal browser handoff requirements

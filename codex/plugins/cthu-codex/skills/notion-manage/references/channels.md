@@ -50,14 +50,15 @@ Ready items can complete independently of those needing clarification.
   do not classify as a side effect of unrelated updates. If the user
   explicitly delegates automatic classification, use supported unambiguous
   options and report the choice. Ask when classification remains ambiguous.
-- Read browser state only for an explicitly requested or attached tab, preferring
-  the exact attachment. Otherwise use public URL metadata and Notion tools.
-  Image retrieval does not authorize browser access. Do not guess the browser or tab. If the tool requires metadata enumeration to
+- For a user-requested or attached existing tab, prefer the exact attachment.
+  The shared in-app browser fallback also applies to failed public channel metadata
+  retrieval; open the matching homepage in a task tab rather than navigating the
+  attached tab. Do not guess an existing browser or tab. If the tool requires metadata enumeration to
   claim an attachment, use it only to match the exact reference and discard
   unrelated metadata. Read minimal identity data, plus a bounded already-loaded
   description/recent-content sample only when classification is needed.
   Do not navigate, refresh, scroll, click, type, close, focus, or otherwise mutate
-  the tab; do not read unrelated tab content, history, cookies, storage,
+  the attached tab; do not read unrelated tab content, history, cookies, storage,
   credentials, or profile files. Check its URL before and after extraction.
   On change, blocked access, or an unsupported page, discard the snapshot and
   request a ready homepage or canonical URL for that item; do not switch tabs.

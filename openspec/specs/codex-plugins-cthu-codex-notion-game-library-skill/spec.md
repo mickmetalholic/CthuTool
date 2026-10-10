@@ -98,11 +98,6 @@ The skill SHALL follow this source policy: Use IGDB for as much factual metadata
 - **THEN** the skill SHALL select sources according to this policy and verify the requested identity and scope before writing
 - **AND** it SHALL disclose unavailable evidence instead of inventing values or identifiers
 
-#### Scenario: IGDB retrieval fallback
-- **WHEN** ordinary web reading or direct HTTP retrieval fails or omits needed metadata or cover information
-- **THEN** the skill SHALL try the matching IGDB page in the in-app browser before switching sources, reading rendered evidence and the actual cover URL through supported browser tools
-- **AND** unavailable or blocked browser access SHALL be reported before following existing source and cover fallbacks, with login or verification handled under normal browser handoff requirements
-
 ### Requirement: Owned access rollups
 The game reference SHALL expose an on-demand reference for Access, Device, Emulator, Developer, and Series schemas. Playable On SHALL retain its meaning as devices available through Owned On → Access → Device, rather than all supported platforms.
 

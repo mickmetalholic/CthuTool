@@ -92,16 +92,17 @@ The skill SHALL create entries with the template matching their platform and ens
 - **AND** missing or ambiguous icon/template identity is not guessed and unresolved presentation failures are reported
 
 ### Requirement: Explicit read-only browser input
-The skill SHALL read browser content only when the user explicitly requests or attaches the relevant tab. It MUST NOT navigate or mutate that tab, read unrelated tab content, or access browser history, cookies, storage, credentials, or profile files.
+The skill SHALL read explicitly requested or attached tabs without navigating or mutating them. Failed public channel metadata retrieval SHALL also use the shared in-app browser fallback in a task tab on the matching homepage. Neither route SHALL read unrelated tab content or access browser history, cookies, storage, credentials, or profile files.
 
 #### Scenario: Exact selected or attached tab
 - **WHEN** the user requests a current tab of an identified browser or attaches an exact reference
 - **THEN** only that tab is read, preferring the exact attachment, with minimal identity metadata and a bounded already-loaded content sample only when classification is needed
 - **AND** any tool-required metadata listing is limited to exact attachment matching and unrelated metadata is discarded
 
-#### Scenario: Browser access not requested
-- **WHEN** inputs are pasted URLs or existing-record queries without a browser request
-- **THEN** no browser state is accessed
+#### Scenario: Public metadata fallback
+- **WHEN** public channel metadata retrieval fails or returns incomplete content
+- **THEN** the skill SHALL open the matching homepage in the in-app browser under the shared fallback rule without navigating an attached user tab
+- **AND** an ordinary existing-record query SHALL not trigger unnecessary public enrichment
 
 #### Scenario: Unstable or unavailable tab
 - **WHEN** the URL changes during extraction, the selected surface is unclear/unavailable, authentication blocks required metadata, or the tab is unsupported
