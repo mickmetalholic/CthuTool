@@ -11,7 +11,7 @@ const skillRoot = join(
   'plugins',
   'cthu-codex',
   'skills',
-  'notion-maintain-album',
+  'notion-manage',
 );
 const resolverPath = join(skillRoot, 'scripts', 'resolve-album.mjs');
 const fixtureRoot = join(
@@ -352,7 +352,7 @@ describe('Notion album metadata resolver', () => {
       Artist: { type: 'relation', data_source_id: peopleId },
       'Release Date': 'date',
       'Release Type': 'select',
-      Genre: 'multi_select',
+      Genres: 'multi_select',
       'MusicBrainz Release Group': 'url',
       'Discogs Master': 'url',
       Status: 'status',
@@ -365,7 +365,7 @@ describe('Notion album metadata resolver', () => {
     ).toEqual({ ok: true, errors: [] });
     expect(
       validateSchemaContract(
-        { ...album, Genre: 'select' },
+        { ...album, Genres: 'select' },
         { 'MusicBrainz Artist': 'rich_text' },
         peopleId,
       ),
@@ -387,7 +387,7 @@ describe('Notion album metadata resolver', () => {
     await cp(join(repoRoot, 'codex', 'plugins', 'cthu-codex'), installRoot, {
       recursive: true,
     });
-    const installedSkill = join(installRoot, 'skills', 'notion-maintain-album');
+    const installedSkill = join(installRoot, 'skills', 'notion-manage');
     const installedResolver = join(
       installedSkill,
       'scripts',
@@ -399,7 +399,7 @@ describe('Notion album metadata resolver', () => {
     );
     expect(
       await readFile(
-        join(installedSkill, 'references', 'schema-and-matching.md'),
+        join(installedSkill, 'references', 'music-resolver.md'),
         'utf8',
       ),
     ).toContain('MusicBrainz Release Group');
