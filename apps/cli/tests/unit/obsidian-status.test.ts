@@ -95,6 +95,25 @@ describe('Obsidian status presentation', () => {
     expect(empty.join('\n')).toContain('No vaults configured.');
     expect(empty.join('\n')).not.toContain('READY');
   });
+  test('shows missing Claude links and manual relocation for occupied Claude paths', async () => {
+    const f = await fixture();
+    const link = join(f.vaultPath, '.claude', 'skills');
+    await unlink(link);
+    let report = await inspectObsidianAgentsStatus({ paths: f.paths });
+    let output = unindent(formatObsidianAgentsStatus(report, { columns: 96 }));
+    expect(output).toContain('.claude/skills');
+    expect(report.vaults[0]?.claudeLink.status).toBe('missing');
+    // Inspection and rendering leave a missing link missing.
+    report = await inspectObsidianAgentsStatus({ paths: f.paths });
+    expect(report.vaults[0]?.claudeLink.status).toBe('missing');
+    await mkdir(link);
+    report = await inspectObsidianAgentsStatus({ paths: f.paths });
+    output = unindent(formatObsidianAgentsStatus(report, { columns: 96 }));
+    expect(output).toContain(
+      'Relocate the occupied .claude/skills path manually',
+    );
+  });
+
   test('quotes repair arguments without interpreting shell characters', async () => {
     const path = "/tmp/space ' quote $(printf unsafe) `echo unsafe`";
     const proc = Bun.spawn(

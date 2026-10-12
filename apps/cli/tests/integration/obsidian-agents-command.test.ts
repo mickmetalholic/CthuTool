@@ -125,6 +125,8 @@ describe('Obsidian agents CLI', () => {
             healthy: true,
             issues: [],
             link: { status: 'correct' },
+            claudeSkillsPath: join(canonical, '.claude', 'skills'),
+            claudeLink: { status: 'correct' },
           },
         ],
       },

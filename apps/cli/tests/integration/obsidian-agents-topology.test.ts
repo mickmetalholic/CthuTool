@@ -64,6 +64,14 @@ describe('Obsidian agents vault topology', () => {
       await readFile(join(fixture.agentsPath, 'skills', 'shared.md'), 'utf8'),
     ).toBe('# shared\n');
 
+    expect(
+      await readFile(
+        join(fixture.vaultPath, '.claude', 'skills', 'shared.md'),
+        'utf8',
+      ),
+    ).toBe('# shared\n');
+    expect(setup.claudeLink.status).toBe('correct');
+
     const repeated = await createObsidianAgentsSetupPlan(
       fixture.paths,
       input(fixture),
@@ -240,6 +248,93 @@ describe('Obsidian agents vault topology', () => {
     await expect(
       sameCanonicalPath(topology.agents.resolvedTarget ?? '', secondTarget),
     ).resolves.toBe(true);
+  });
+
+  test('adds the Claude link to an older vault and preserves .claude settings', async () => {
+    const f = await createFixture();
+    await applyObsidianAgentsSetup(
+      f.paths,
+      await createObsidianAgentsSetupPlan(f.paths, input(f)),
+    );
+    const link = join(f.vaultPath, '.claude', 'skills');
+    await unlink(link);
+    await writeFile(join(f.vaultPath, '.claude', 'settings.json'), '{}');
+    const before = await inspectObsidianAgentsStatus({ paths: f.paths });
+    expect(before.summary.needsAttention).toBe(1);
+    expect(before.vaults[0]?.claudeLink.status).toBe('missing');
+    const plan = await createObsidianAgentsSetupPlan(f.paths, input(f));
+    expect(plan.requiresConfirmation).toBe(true);
+    await applyObsidianAgentsSetup(f.paths, plan);
+    expect(
+      (await inspectObsidianAgentsStatus({ paths: f.paths })).summary.healthy,
+    ).toBe(1);
+    expect(
+      await readFile(join(f.vaultPath, '.claude', 'settings.json'), 'utf8'),
+    ).toBe('{}');
+  });
+
+  test('repairs mismatched and broken Claude links without touching their old targets', async () => {
+    for (const broken of [false, true]) {
+      const f = await createFixture();
+      await applyObsidianAgentsSetup(
+        f.paths,
+        await createObsidianAgentsSetupPlan(f.paths, input(f)),
+      );
+      const link = join(f.vaultPath, '.claude', 'skills');
+      await unlink(link);
+      const old = join(f.root, 'old-skills');
+      await mkdir(old);
+      await writeFile(join(old, 'keep.md'), 'keep');
+      await createObsidianAgentsDirectoryLink(link, old);
+      if (broken) await rm(old, { recursive: true });
+      expect(
+        (await inspectObsidianAgentsStatus({ paths: f.paths })).vaults[0]
+          ?.claudeLink.status,
+      ).toBe(broken ? 'broken' : 'mismatched');
+      const plan = await createObsidianAgentsSetupPlan(f.paths, input(f));
+      expect(plan.transition).toBe('repair_link');
+      await applyObsidianAgentsSetup(f.paths, plan);
+      expect(
+        (await inspectObsidianAgentsStatus({ paths: f.paths })).summary.healthy,
+      ).toBe(1);
+      if (!broken)
+        expect(await readFile(join(old, 'keep.md'), 'utf8')).toBe('keep');
+    }
+  });
+
+  test('rejects occupied Claude paths before creating sources or links', async () => {
+    for (const kind of ['directory', 'file', 'parent-file', 'parent-link']) {
+      const f = await createFixture();
+      const parent = join(f.vaultPath, '.claude');
+      if (kind === 'parent-file') await writeFile(parent, 'keep');
+      else if (kind === 'parent-link') {
+        const outside = join(f.root, 'outside');
+        await mkdir(outside);
+        await createObsidianAgentsDirectoryLink(parent, outside);
+      } else {
+        await mkdir(parent);
+        if (kind === 'directory') await mkdir(join(parent, 'skills'));
+        else await writeFile(join(parent, 'skills'), 'keep');
+      }
+      const before = await readdir(f.vaultPath);
+      await expect(
+        createObsidianAgentsSetupPlan(f.paths, input(f)),
+      ).rejects.toThrow(/Relocate it manually/);
+      expect(await readdir(f.vaultPath)).toEqual(before);
+    }
+  });
+
+  test('detects Claude link changes after preview', async () => {
+    const f = await createFixture();
+    await applyObsidianAgentsSetup(
+      f.paths,
+      await createObsidianAgentsSetupPlan(f.paths, input(f)),
+    );
+    const plan = await createObsidianAgentsSetupPlan(f.paths, input(f));
+    await unlink(join(f.vaultPath, '.claude', 'skills'));
+    await expect(applyObsidianAgentsSetup(f.paths, plan)).rejects.toThrow(
+      /changed after preview/,
+    );
   });
 
   test('selects junctions on Windows and directory symlinks elsewhere', () => {
