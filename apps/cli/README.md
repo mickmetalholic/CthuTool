@@ -355,14 +355,21 @@ The vault's real path identifies its local configuration, so path aliases reuse
 one configuration and different vaults stay independent. There is no profile ID
 or implicit default. Repeat setup for a vault to keep or change its source.
 
-The source contains `skills/` and `state/`; `<vault>/.agents` links to it using a
-Windows directory junction or a macOS/Linux symlink. Obsidian Sync transports
-the visible source. Setup creates the link locally on each machine. CthuTool
+The source contains `skills/` and `state/`. Setup creates two local links using
+Windows directory junctions or macOS/Linux symlinks:
+
+- `<vault>/.agents` → the visible source (default: `<vault>/Agents`).
+- `<vault>/.claude/skills` → the source's `skills/`, shared with Claude Code
+  local sessions, including the desktop Code tab.
+
+Setup preserves other files in `.claude/`. It does not upload skills to Claude
+Chat or Cowork. Obsidian Sync transports the visible source. Setup creates the link locally on each machine. CthuTool
 stores paths in the local `chc` data directory and performs no synchronization
 operations itself.
 
 Status shows a summary and a separate section for each vault, with health,
-full paths, link details, content checks, and repair guidance when needed:
+full paths, both links and their targets/types/status, content checks, and repair
+guidance when needed:
 
 ```bash
 chc obsidian agents status                         # All configured vaults
@@ -377,7 +384,8 @@ argument quoting.
 
 JSON status always has one summary and a `vaults` array, including for zero or
 one vault. Each entry includes `vaultPath`, `sourcePath`, `agentsPath`,
-`configured`, `healthy`, `paths`, `source`, `link`, and actual local `issues`:
+`claudeSkillsPath`, `configured`, `healthy`, `paths`, `source`, `link`,
+`claudeLink`, and actual local `issues`:
 
 ```json
 {
@@ -397,7 +405,10 @@ writes configuration, or contacts Obsidian. It does not measure remote sync
 completion.
 
 Setup does not move, merge, or remove a real `.agents/` directory, even an empty
-one. If it occupies the link path, relocate it manually, then rerun setup. Link
+one. The same protection applies to an occupied `.claude/skills` path. The
+`.claude` parent must be absent or a real directory, not a link or file. Relocate
+conflicting paths manually, then rerun setup. Existing vaults configured by older
+versions need setup once more to add the Claude skills link. Link
 repair previews the existing and expected target and changes only the link after
 confirmation, preserving the old target.
 

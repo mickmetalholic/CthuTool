@@ -12786,6 +12786,24 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
     case "other":
       throw new ObsidianAgentsServiceError("invalid_configuration", `The compatibility path is an unsupported ${topology.agents.kind}: ${profile.agentsPath}`);
   }
+  if (topology.claudeParent.kind !== "absent" && topology.claudeParent.kind !== "directory") {
+    throw new ObsidianAgentsServiceError("conflict", `The Claude parent path must be a real directory: ${topology.claudeParent.path}. Relocate it manually before rerunning setup.`);
+  }
+  const claudePath = topology.claudeSkills.path;
+  const claudeTarget = join17(profile.sourcePath, "skills");
+  if (topology.claudeLinkStatus === "not_link" || topology.claudeLinkStatus === "unsupported") {
+    throw new ObsidianAgentsServiceError("conflict", `An occupied ${topology.claudeSkills.kind} exists at ${claudePath}. Relocate it manually before rerunning setup; automatic directory migration is not supported.`);
+  }
+  if (topology.claudeLinkStatus === "correct") {
+    actions.push(`validate existing link ${claudePath}`);
+  } else {
+    if (topology.claudeSkills.kind !== "absent") {
+      actions.push(`replace only link ${claudePath} (current target: ${topology.claudeSkills.resolvedTarget ?? topology.claudeSkills.target ?? "unavailable"})`, "preserve the old link target");
+      if (transition === "reuse")
+        transition = "repair_link";
+    }
+    actions.push(`create ${getObsidianAgentsLinkType(platform3)} ${claudePath} -> ${claudeTarget}`);
+  }
   const requiresConfirmation = transition !== "reuse" || actions.some((action) => action.startsWith("create "));
   return {
     vault: profile,
@@ -12812,6 +12830,8 @@ async function applyObsidianAgentsSetup(paths, plan) {
         break;
       case "repair_link":
         await ensureSourceDirectories(plan.vault.sourcePath);
+        if (plan.topology.linkStatus === "correct")
+          break;
         await unlink(plan.vault.agentsPath);
         await createObsidianAgentsDirectoryLink(plan.vault.agentsPath, plan.vault.sourcePath, { platform: plan.platform });
         break;
@@ -12819,10 +12839,17 @@ async function applyObsidianAgentsSetup(paths, plan) {
         await ensureSourceDirectories(plan.vault.sourcePath);
         break;
     }
+    if (plan.topology.claudeLinkStatus !== "correct") {
+      await mkdir11(plan.topology.claudeParent.path, { recursive: true });
+      if (plan.topology.claudeSkills.kind !== "absent") {
+        await unlink(plan.topology.claudeSkills.path);
+      }
+      await createObsidianAgentsDirectoryLink(plan.topology.claudeSkills.path, join17(plan.vault.sourcePath, "skills"), { platform: plan.platform });
+    }
     const topology = await inspectObsidianAgentsTopology(plan.vault, {
       platform: plan.platform
     });
-    if (topology.linkStatus !== "correct") {
+    if (topology.linkStatus !== "correct" || topology.claudeLinkStatus !== "correct") {
       throw new Error(`Created compatibility link did not resolve to ${plan.vault.sourcePath}.`);
     }
     const existing = await readObsidianAgentsConfig(paths) ?? createEmptyObsidianAgentsConfig();
@@ -12831,6 +12858,7 @@ async function applyObsidianAgentsSetup(paths, plan) {
       vault: plan.vault,
       transition: plan.transition,
       actions: plan.actions,
+      claudeLink: claudeLinkDetails(topology, plan.vault),
       link: {
         status: topology.linkStatus,
         type: topology.agents.linkType,
@@ -12885,14 +12913,22 @@ async function inspectVaultStatus(profile, platform3 = process.platform) {
   } else if (topology.linkStatus !== "correct") {
     issues.push(`The .agents link is ${topology.linkStatus}.`);
   }
+  if (topology.claudeParent.kind !== "absent" && topology.claudeParent.kind !== "directory") {
+    issues.push(`The Claude parent path must be a real directory: ${topology.claudeParent.path}. Relocate it manually before rerunning setup.`);
+  }
+  if (topology.claudeLinkStatus !== "correct") {
+    issues.push(`The .claude/skills link is ${topology.claudeLinkStatus}: ${topology.claudeSkills.path}; current target ${topology.claudeSkills.resolvedTarget ?? topology.claudeSkills.target ?? "unavailable"}; expected ${join17(profile.sourcePath, "skills")}.${topology.claudeLinkStatus === "not_link" || topology.claudeLinkStatus === "unsupported" ? " Relocate it manually before rerunning setup." : ""}`);
+  }
   if (!skillsExists)
     issues.push("The visible source is missing a real skills/ directory.");
   if (!stateExists)
     issues.push("The visible source is missing a real state/ directory.");
   return {
     configured: true,
-    healthy: vaultExists && sourceExists && sourceInsideVault && topology.linkStatus === "correct" && skillsExists && stateExists,
+    healthy: vaultExists && sourceExists && sourceInsideVault && topology.linkStatus === "correct" && topology.claudeLinkStatus === "correct" && topology.claudeParent.kind === "directory" && skillsExists && stateExists,
     ...profile,
+    claudeSkillsPath: topology.claudeSkills.path,
+    claudeLink: claudeLinkDetails(topology, profile),
     paths: {
       vaultExists,
       sourceExists,
@@ -12915,27 +12951,45 @@ async function inspectVaultStatus(profile, platform3 = process.platform) {
 }
 async function inspectObsidianAgentsTopology(profile, options = {}) {
   const platform3 = options.platform ?? process.platform;
-  const [source, agents] = await Promise.all([
+  const claudeParent = await inspectObsidianAgentsPath(join17(profile.vaultPath, ".claude"), platform3);
+  const claudeSkillsPath = join17(profile.vaultPath, ".claude", "skills");
+  const [source, agents, claudeSkills] = await Promise.all([
     inspectObsidianAgentsPath(profile.sourcePath, platform3),
-    inspectObsidianAgentsPath(profile.agentsPath, platform3)
+    inspectObsidianAgentsPath(profile.agentsPath, platform3),
+    claudeParent.kind === "directory" ? inspectObsidianAgentsPath(claudeSkillsPath, platform3) : Promise.resolve({
+      path: claudeSkillsPath,
+      kind: "absent"
+    })
   ]);
-  let linkStatus;
-  if (agents.kind === "absent") {
-    linkStatus = "missing";
-  } else if (agents.kind === "broken_link") {
-    linkStatus = "broken";
-  } else if (agents.kind === "link") {
-    linkStatus = source.kind === "directory" && agents.resolvedTarget !== undefined && await sameCanonicalPath(agents.resolvedTarget, profile.sourcePath, platform3) ? "correct" : "mismatched";
-  } else if (agents.kind === "directory") {
-    linkStatus = "not_link";
-  } else {
-    linkStatus = "unsupported";
-  }
   return {
     source,
     agents,
-    linkStatus,
+    claudeParent,
+    claudeSkills,
+    linkStatus: await inspectLinkStatus(agents, profile.sourcePath, platform3),
+    claudeLinkStatus: await inspectLinkStatus(claudeSkills, join17(profile.sourcePath, "skills"), platform3),
     expectedTarget: profile.sourcePath
+  };
+}
+async function inspectLinkStatus(link, target, platform3) {
+  if (link.kind === "absent")
+    return "missing";
+  if (link.kind === "broken_link")
+    return "broken";
+  if (link.kind === "directory")
+    return "not_link";
+  if (link.kind !== "link")
+    return "unsupported";
+  return link.resolvedTarget && (await inspectObsidianAgentsPath(target, platform3)).kind === "directory" && await sameCanonicalPath(link.resolvedTarget, target, platform3) ? "correct" : "mismatched";
+}
+function claudeLinkDetails(topology, profile) {
+  return {
+    status: topology.claudeLinkStatus,
+    kind: topology.claudeSkills.kind,
+    type: topology.claudeSkills.linkType,
+    target: topology.claudeSkills.target,
+    resolvedTarget: topology.claudeSkills.resolvedTarget,
+    expectedTarget: join17(profile.sourcePath, "skills")
   };
 }
 async function inspectObsidianAgentsPath(path, platform3 = process.platform) {
@@ -12987,12 +13041,12 @@ function getObsidianAgentsLinkType(platform3 = process.platform) {
 async function createObsidianAgentsDirectoryLink(linkPath, sourcePath, options = {}) {
   const platform3 = options.platform ?? process.platform;
   if (!await isDirectory2(sourcePath)) {
-    throw new ObsidianAgentsServiceError("invalid_configuration", `Cannot create the .agents link because its source is not a directory: ${sourcePath}`);
+    throw new ObsidianAgentsServiceError("invalid_configuration", `Cannot create the directory link because its source is not a directory: ${sourcePath}`);
   }
   await symlink(sourcePath, linkPath, platform3 === "win32" ? "junction" : "dir");
   const state = await inspectObsidianAgentsPath(linkPath, platform3);
   if (state.kind !== "link" || !state.resolvedTarget || !await sameCanonicalPath(state.resolvedTarget, sourcePath, platform3)) {
-    throw new ObsidianAgentsServiceError("filesystem_failed", `The .agents link does not resolve to its configured source: ${linkPath}`);
+    throw new ObsidianAgentsServiceError("filesystem_failed", `The directory link does not resolve to its configured source: ${linkPath}`);
   }
 }
 async function sameCanonicalPath(left, right, platform3 = process.platform) {
@@ -13006,6 +13060,8 @@ function createMissingStatus(vaultPath) {
   const vault = normalizeObsidianAgentsProfile({ vaultPath });
   return {
     ...vault,
+    claudeSkillsPath: join17(vaultPath, ".claude", "skills"),
+    claudeLink: { status: "missing", kind: "absent" },
     configured: false,
     healthy: false,
     paths: {
@@ -13034,7 +13090,7 @@ async function assertContentDirectory(sourcePath, name) {
 async function describeCurrentState(profile, platform3) {
   try {
     const topology = await inspectObsidianAgentsTopology(profile, { platform: platform3 });
-    return `Current state: source=${topology.source.kind} at ${profile.sourcePath}; .agents=${topology.agents.kind} at ${profile.agentsPath}.`;
+    return `Current state: source=${topology.source.kind} at ${profile.sourcePath}; .agents=${topology.agents.kind} at ${profile.agentsPath}; .claude/skills=${topology.claudeSkills.kind} at ${topology.claudeSkills.path}.`;
   } catch {
     return `Inspect ${profile.sourcePath} and ${profile.agentsPath} before retrying setup.`;
   }
@@ -13075,7 +13131,7 @@ async function isCanonicalSourceInsideVault(profile) {
   return sourceRelative.length > 0 && sourceRelative !== ".." && !sourceRelative.startsWith(`..${sep5}`) && !isAbsolute4(sourceRelative);
 }
 function sameSetupTopology(left, right) {
-  return left.linkStatus === right.linkStatus && samePathState(left.source, right.source) && samePathState(left.agents, right.agents);
+  return left.linkStatus === right.linkStatus && samePathState(left.source, right.source) && samePathState(left.agents, right.agents) && left.claudeLinkStatus === right.claudeLinkStatus && samePathState(left.claudeParent, right.claudeParent) && samePathState(left.claudeSkills, right.claudeSkills);
 }
 function samePathState(left, right) {
   return left.path === right.path && left.kind === right.kind && left.linkType === right.linkType && left.target === right.target && left.resolvedTarget === right.resolvedTarget;
@@ -13209,6 +13265,10 @@ function formatObsidianAgentsStatus(report, options = {}) {
       if (vault.link.status !== "correct")
         detail("Status", vault.link.status.replaceAll("_", " "));
       detail("Type", vault.link.type === "junction" ? "Directory junction" : vault.link.type === "symbolic_link" ? "Symbolic link" : "No link");
+      detail("Claude", vault.claudeSkillsPath);
+      detail("", `-> ${vault.claudeLink.resolvedTarget ?? vault.claudeLink.target ?? vault.claudeLink.expectedTarget ?? "unavailable"}`);
+      detail("Status", vault.claudeLink.status.replaceAll("_", " "));
+      detail("Type", vault.claudeLink.type === "junction" ? "Directory junction" : vault.claudeLink.type === "symbolic_link" ? "Symbolic link" : "No link");
       detail("Contents", `Skills ${vault.paths.skillsExists ? "OK" : "MISSING"}  /  State ${vault.paths.stateExists ? "OK" : "MISSING"}`);
     }
     if (!vault.healthy) {
@@ -13230,6 +13290,10 @@ function actionForVault(vault) {
   if (vault.link.status === "not_link" || vault.link.status === "unsupported") {
     return "Relocate the occupied .agents path manually, then rerun setup:";
   }
+  if (vault.issues.some((issue) => issue.startsWith("The Claude parent path must be a real directory:")))
+    return "Relocate the occupied .claude path manually, then rerun setup:";
+  if (vault.claudeLink.status === "not_link" || vault.claudeLink.status === "unsupported")
+    return "Relocate the occupied .claude/skills path manually, then rerun setup:";
   if (!vault.paths.sourceInsideVault)
     return "Choose a visible source inside the vault during setup:";
   if (vault.source.kind !== "absent" && vault.source.kind !== "directory") {
@@ -13311,6 +13375,7 @@ async function runSetup(args, scope) {
     writeHumanStatus(scope.context, processOutput, `source: ${plan.vault.sourcePath}`);
     writeHumanStatus(scope.context, processOutput, `.agents: ${plan.vault.agentsPath}`);
     writeHumanStatus(scope.context, processOutput, "scope: vault-local");
+    writeHumanStatus(scope.context, processOutput, `.claude/skills: ${plan.topology.claudeSkills.path}`);
     for (const action of plan.actions) {
       writeHumanStatus(scope.context, processOutput, `- ${action}`);
     }
@@ -13418,6 +13483,7 @@ function writeSetupResult(context, result) {
   if (profile) {
     writeHumanStatus(context, processOutput, `source: ${profile.sourcePath}`);
     writeHumanStatus(context, processOutput, `.agents: ${profile.agentsPath}`);
+    writeHumanStatus(context, processOutput, `.claude/skills: ${join19(profile.vaultPath, ".claude", "skills")}`);
   }
 }
 function toObsidianCliError(error) {
@@ -13455,13 +13521,13 @@ var obsidianCommand = defineCommand({
     agents: defineCommand({
       meta: {
         name: "agents",
-        description: "Manage the vault Agents source and .agents link."
+        description: "Manage the vault Agents source and agent skill links."
       },
       subCommands: {
         setup: defineCommand({
           meta: {
             name: "setup",
-            description: "Configure or repair the vault-local .agents link."
+            description: "Configure or repair the vault-local .agents and .claude/skills links."
           },
           args: commonArgs2,
           async run({ args }) {
@@ -13474,7 +13540,7 @@ var obsidianCommand = defineCommand({
         status: defineCommand({
           meta: {
             name: "status",
-            description: "Show local Agents source and .agents link health."
+            description: "Show local Agents source and agent skill link health."
           },
           args: commonArgs2,
           async run({ args }) {

@@ -131,6 +131,20 @@ export function formatObsidianAgentsStatus(
             ? 'Symbolic link'
             : 'No link',
       );
+      detail('Claude', vault.claudeSkillsPath);
+      detail(
+        '',
+        `-> ${vault.claudeLink.resolvedTarget ?? vault.claudeLink.target ?? vault.claudeLink.expectedTarget ?? 'unavailable'}`,
+      );
+      detail('Status', vault.claudeLink.status.replaceAll('_', ' '));
+      detail(
+        'Type',
+        vault.claudeLink.type === 'junction'
+          ? 'Directory junction'
+          : vault.claudeLink.type === 'symbolic_link'
+            ? 'Symbolic link'
+            : 'No link',
+      );
       detail(
         'Contents',
         `Skills ${vault.paths.skillsExists ? 'OK' : 'MISSING'}  /  State ${vault.paths.stateExists ? 'OK' : 'MISSING'}`,
@@ -158,6 +172,17 @@ function actionForVault(vault: ObsidianAgentsStatus): string {
   if (vault.link.status === 'not_link' || vault.link.status === 'unsupported') {
     return 'Relocate the occupied .agents path manually, then rerun setup:';
   }
+  if (
+    vault.issues.some((issue) =>
+      issue.startsWith('The Claude parent path must be a real directory:'),
+    )
+  )
+    return 'Relocate the occupied .claude path manually, then rerun setup:';
+  if (
+    vault.claudeLink.status === 'not_link' ||
+    vault.claudeLink.status === 'unsupported'
+  )
+    return 'Relocate the occupied .claude/skills path manually, then rerun setup:';
   if (!vault.paths.sourceInsideVault)
     return 'Choose a visible source inside the vault during setup:';
   if (vault.source.kind !== 'absent' && vault.source.kind !== 'directory') {

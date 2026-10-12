@@ -157,6 +157,11 @@ async function runSetup(
       `.agents: ${plan.vault.agentsPath}`,
     );
     writeHumanStatus(scope.context, processOutput, 'scope: vault-local');
+    writeHumanStatus(
+      scope.context,
+      processOutput,
+      `.claude/skills: ${plan.topology.claudeSkills.path}`,
+    );
     for (const action of plan.actions) {
       writeHumanStatus(scope.context, processOutput, `- ${action}`);
     }
@@ -309,6 +314,11 @@ function writeSetupResult(
   if (profile) {
     writeHumanStatus(context, processOutput, `source: ${profile.sourcePath}`);
     writeHumanStatus(context, processOutput, `.agents: ${profile.agentsPath}`);
+    writeHumanStatus(
+      context,
+      processOutput,
+      `.claude/skills: ${join(profile.vaultPath, '.claude', 'skills')}`,
+    );
   }
 }
 
@@ -361,13 +371,14 @@ export const obsidianCommand = defineCommand({
     agents: defineCommand({
       meta: {
         name: 'agents',
-        description: 'Manage the vault Agents source and .agents link.',
+        description: 'Manage the vault Agents source and agent skill links.',
       },
       subCommands: {
         setup: defineCommand({
           meta: {
             name: 'setup',
-            description: 'Configure or repair the vault-local .agents link.',
+            description:
+              'Configure or repair the vault-local .agents and .claude/skills links.',
           },
           args: commonArgs,
           async run({ args }) {
@@ -384,7 +395,8 @@ export const obsidianCommand = defineCommand({
         status: defineCommand({
           meta: {
             name: 'status',
-            description: 'Show local Agents source and .agents link health.',
+            description:
+              'Show local Agents source and agent skill link health.',
           },
           args: commonArgs,
           async run({ args }) {
