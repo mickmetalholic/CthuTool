@@ -308,17 +308,20 @@ Skill discovery and local operations use the pinned
 `npx --yes skills@1.5.19` backend at Codex user scope. Updates are offered only
 for branch-tracked entries; pinned refs remain fixed until the manifest changes.
 
-The repository-owned `$codex-skill-promoter` Skill scans eligible local Codex
-and Evolution-created Hermes Skills read-only, regardless of the caller's Git
-state. It shows one candidate table with name, source, provenance, files,
-compatibility, target/collision choice, and exact original-removal path; every
-row defaults to Skip. A confirmed selection creates an isolated task branch
-and a scoped OpenSpec change, promotes a Codex/Hermes-compatible shared core,
-verifies both agent entry points, retires unchanged originals, archives the
-change, and opens a PR. If verification fails, originals remain active and
-archive/PR do not proceed. The workflow does not write
-`codex/skills.manifest.json` or mirror Hermes directories. Hermes built-in,
-Hub-managed, external, organization-managed, opted-out, and unprovenanced
+The project-owned `$codex-skill-promoter` Skill lives under
+`.agents/skills/codex-skill-promoter` and is discovered from a CthuTool
+checkout. It is not bundled with CthuCodex or installed by
+`chc codex install`. It scans eligible local Codex and Evolution-created
+Hermes Skills read-only, regardless of the caller's Git state. One candidate
+table shows source, provenance, files, compatibility, plugin target/collision
+choice, and exact original-removal paths; every row defaults to Skip.
+A confirmed selection creates an isolated task branch and scoped OpenSpec
+change, promotes selected Skills into `codex/plugins/cthu-codex/skills`,
+verifies both Codex and Hermes entry points, retires unchanged originals,
+archives the change, and opens a PR. If verification fails, originals remain
+active and archive/PR do not proceed. The workflow does not write
+`codex/skills.manifest.json` or mirror Hermes directories. Bundled, Hub-managed,
+protected, external, organization-managed, opted-out, and unprovenanced Hermes
 Skills are excluded.
 
 `chc codex install` is plugin-only. It installs enabled repository plugins from

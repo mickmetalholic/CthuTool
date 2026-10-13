@@ -80,17 +80,12 @@ Keep repository-owned plugin source, manifests, and implementation assets under
 `codex/plugins/cthu-codex`. Keep generated command or skill adapters out of the
 repository; regenerate them per tool or platform.
 
-`$codex-skill-promoter` scans eligible local Codex Skills and marked Hermes
-Evolution Skills read-only, regardless of the caller's Git state. It presents
-names, sources, provenance, files, compatibility, targets, collisions, and
-exact original-removal paths in one candidate table. Every row defaults to
-Skip. A confirmed selection runs in an isolated task branch through a scoped
-OpenSpec proposal, implementation, Codex installation, verified Hermes
-availability, guarded original retirement, archive, and PR without routine
-intermediate prompts. Promoted content retains an agent-neutral core with
-explicit Codex and Hermes adapters. If either replacement cannot be loaded,
-the original remains active and the run stops before archive or PR. Bundled,
-managed, protected, opted-out, and unprovenanced Skills remain excluded.
+The project maintenance workflow `$codex-skill-promoter` lives in
+`.agents/skills/codex-skill-promoter` and is discovered from a CthuTool
+checkout. It is not bundled with this plugin or installed by
+`chc codex install`. Selected promoted Skills still target this plugin.
+See [AI tooling](../../../docs/ai-tooling.md#local-skill-promotion) for the
+promotion lifecycle.
 
 ## TODO
 

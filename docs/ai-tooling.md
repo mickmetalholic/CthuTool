@@ -9,6 +9,7 @@ can discover them without running a repository setup script or a checkout hook.
 | --- | --- | --- |
 | OpenSpec 1.13.0 | `.agents/skills/openspec-*` | Codex, Cursor, OpenCode, Pi |
 | OpenSpec 1.13.0 | `.zcode/skills/openspec-*` | ZCode |
+| Repository authors | `.agents/skills/codex-skill-promoter` | Codex, Cursor, OpenCode, Pi |
 | Repository authors | `.cursor/skills/commit`, `.cursor/skills/create-pull-request` | Cursor |
 | `npx skills` | Explicit third-party installation | Selected agents |
 | `chc codex skills` | `codex/skills.manifest.json` | Codex user scope |
@@ -76,3 +77,18 @@ npx skills add nextlevelbuilder/ui-ux-pro-max-skill --skill ui-ux-pro-max -a cod
 `chc codex skills` manages only user-scope, manifest-backed GitHub Skills. It
 does not install or remove project OpenSpec Skills. The CthuCodex business
 plugin is outside this workflow.
+
+## Local Skill promotion
+
+Invoke `$codex-skill-promoter` from a CthuTool checkout to review locally
+authored Codex Skills and eligible Hermes Evolution Skills for promotion.
+The repository owns this maintenance workflow under
+`.agents/skills/codex-skill-promoter`; it is not bundled with CthuCodex and
+`chc codex install` does not install it. Selected promoted Skills still
+target `codex/plugins/cthu-codex/skills`.
+
+Discovery is read-only and independent of the caller's Git state. One
+confirmed candidate selection authorizes an isolated task branch, a scoped
+OpenSpec change, implementation, verified Codex and Hermes replacements,
+guarded original retirement, archive, and PR. If either replacement cannot
+be loaded, originals remain active and the dependent stages stop.

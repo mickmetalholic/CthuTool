@@ -4,15 +4,34 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const skillRoot = join(
-  repoRoot,
-  'codex/plugins/cthu-codex/skills/codex-skill-promoter',
-);
+const skillRoot = join(repoRoot, '.agents/skills/codex-skill-promoter');
 const readSkill = () => readFile(join(skillRoot, 'SKILL.md'), 'utf8');
 const readContract = () =>
   readFile(join(skillRoot, 'references/promotion-contract.md'), 'utf8');
 
 describe('Codex skill promoter contract', () => {
+  test('is discovered from the project and excluded from plugin distribution', async () => {
+    await access(join(skillRoot, 'SKILL.md'));
+    await access(join(skillRoot, 'references/promotion-contract.md'));
+    await access(join(skillRoot, 'agents/openai.yaml'));
+    await expect(
+      access(
+        join(repoRoot, 'codex/plugins/cthu-codex/skills/codex-skill-promoter'),
+      ),
+    ).rejects.toThrow();
+
+    const plugin = JSON.parse(
+      await readFile(
+        join(repoRoot, 'codex/plugins/cthu-codex/.codex-plugin/plugin.json'),
+        'utf8',
+      ),
+    );
+    expect(plugin.skills).toBe('./skills/');
+    const skill = await readSkill();
+    expect(skill).toMatch(/not\s+bundled with CthuCodex/u);
+    expect(skill).toContain('codex/plugins/cthu-codex/skills');
+  });
+
   test('scans both roots without a caller Git-state gate', async () => {
     const skill = await readSkill();
     const reference = await readContract();

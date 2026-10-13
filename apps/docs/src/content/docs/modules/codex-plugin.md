@@ -15,7 +15,6 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - Notion album-maintenance skill
 - Notion movie-library skill
 - Notion book-library maintenance skill
-- unified Hermes-to-Codex absorption and local skill promotion skill
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -37,6 +36,11 @@ prompt. Install output identifies the selected source, installed or updated
 plugins, and synchronized cache versions.
 
 Restart Codex after install so plugin-provided tools are loaded.
+
+`$codex-skill-promoter` is a project maintenance Skill under
+`.agents/skills/codex-skill-promoter`, discovered from a CthuTool checkout.
+It is not bundled with CthuCodex or installed by `chc codex install`.
+Selected promoted Skills still target the plugin.
 
 `$codex-skill-promoter` scans eligible local Hermes and Codex Skills read-only
 without checking the caller's Git state. It shows a candidate table with names,

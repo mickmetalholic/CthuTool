@@ -5,6 +5,13 @@ transaction for `$codex-skill-promoter`. Current Git state is irrelevant to
 read-only discovery. A selected run later creates its own scoped branch and
 OpenSpec change.
 
+## Project ownership
+
+The promoter lives in `.agents/skills/codex-skill-promoter` and is loaded
+from a CthuTool checkout. Plugin installation does not distribute the
+promoter. Selected promoted Skills still belong in
+`codex/plugins/cthu-codex/skills`; the promoter maintains that plugin.
+
 ## Candidate ownership and selection
 
 Scan direct children only; never follow symlinks. Resolve `CODEX_HOME` to
