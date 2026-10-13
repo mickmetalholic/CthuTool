@@ -11,7 +11,7 @@ The CLI SHALL expose `chc codex skills` as the interactive manager for
 manifest-managed third-party skills from supported GitHub sources, together
 with eligible locally installed GitHub skills. Locally authored, previously
 Hermes-absorbed, and eligible evolution-created Hermes skills SHALL be managed
-by the repository-owned `codex-skill-promoter` skill and SHALL NOT become CLI
+by the project-owned `codex-skill-promoter` skill under `.agents/skills/codex-skill-promoter` and SHALL NOT become CLI
 inventory rows.
 
 #### Scenario: Reconciliation inventory is shown
@@ -45,7 +45,7 @@ inventory rows.
 - **THEN** the command reports that no tracked or trackable supported skills
   were found
 - **AND** it directs the user to Add a supported GitHub source or use the
-  repository-owned `codex-skill-promoter` skill for a local skill instead of
+  project-owned `codex-skill-promoter` skill under `.agents/skills/codex-skill-promoter` for a local skill instead of
   reporting that no changes were selected
 
 #### Scenario: Unchanged selections are distinguished from an empty inventory
@@ -84,7 +84,7 @@ entries only.
 - **WHEN** local Codex skill directories exist without manifest entries
 - **THEN** the command does not add them to the manifest automatically
 - **AND** local development candidates are discovered only by the
-  repository-owned `codex-skill-promoter` skill
+  project-owned `codex-skill-promoter` skill under `.agents/skills/codex-skill-promoter`
 
 #### Scenario: Existing local-source entry fails closed
 

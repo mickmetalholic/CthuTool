@@ -7,7 +7,14 @@ Define the repository-owned Codex workflow for absorbing eligible external skill
 
 ### Requirement: Repository-owned Codex skill absorber and promoter
 
-The CthuCodex plugin SHALL provide `codex-skill-promoter` as the sole repository-supplied entry point for promoting eligible local Codex Skills and absorbing eligible Hermes Evolution Skills; it SHALL NOT expose a separate `hermes-skill-absorber`. Discovery SHALL be read-only and SHALL begin without a current Git branch, HEAD, or cleanliness prerequisite. `chc codex skills` SHALL remain limited to GitHub-backed third-party Skills.
+The CthuTool project SHALL provide `codex-skill-promoter` under `.agents/skills/codex-skill-promoter` as the sole repository-supplied entry point for promoting eligible local Codex Skills and absorbing eligible Hermes Evolution Skills; it SHALL NOT expose a separate `hermes-skill-absorber`. The promoter SHALL be discovered from a CthuTool checkout and SHALL NOT be bundled with CthuCodex or installed by `chc codex install`. Selected promoted Skills SHALL still target `codex/plugins/cthu-codex/skills`. Discovery SHALL be read-only and SHALL begin without a current Git branch, HEAD, or cleanliness prerequisite. `chc codex skills` SHALL remain limited to GitHub-backed third-party Skills.
+
+#### Scenario: Project maintenance Skill stays outside plugin distribution
+
+- **WHEN** an agent discovers Skills from a CthuTool checkout
+- **THEN** the promoter is available under `.agents/skills/codex-skill-promoter` with its references and invocation metadata
+- **AND** the CthuCodex plugin source and installation do not contain the promoter
+- **AND** selected promoted Skills still belong to the plugin
 
 #### Scenario: Explicit invocation performs read-only discovery
 

@@ -63,7 +63,7 @@ The Codex bridge SHALL adapt a selected Hermes skill to Codex's skill format, pa
 
 ### Requirement: Codex absorption preserves Hermes source and provenance
 
-The repository-owned `codex-skill-promoter` SHALL absorb only a selected eligible Hermes Evolution Skill into reviewed Codex staging, record its source identity, content fingerprint, target scope, and adaptation, and keep the Hermes original unchanged until a compatible replacement is available and verified in Hermes. The confirmed end-to-end run MAY then retire the exact unchanged original from the active Hermes Skill root. It SHALL NOT mirror directories, run source scripts, or infer missing Evolution provenance.
+The project-owned `codex-skill-promoter` under `.agents/skills/codex-skill-promoter` SHALL absorb only a selected eligible Hermes Evolution Skill into reviewed Codex staging, record its source identity, content fingerprint, target scope, and adaptation, and keep the Hermes original unchanged until a compatible replacement is available and verified in Hermes. The confirmed end-to-end run MAY then retire the exact unchanged original from the active Hermes Skill root. It SHALL NOT mirror directories, run source scripts, or infer missing Evolution provenance.
 
 #### Scenario: Confirmed absorption writes an adapted Codex target
 
