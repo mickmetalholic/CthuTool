@@ -54,6 +54,9 @@ describe('Codex skill promoter contract', () => {
     expect(reference).toContain('codex/skills.manifest.json');
     expect(reference).toContain('User npx lock');
     expect(reference).toContain('.hermes-evolution.json');
+    expect(reference).toContain('.curator_ledger.jsonl');
+    expect(reference).toContain('.usage.json');
+    await access(join(skillRoot, 'scripts/scan-hermes-skills.mjs'));
     expect(reference).toContain('.bundled_manifest');
     expect(reference).toContain('.hub/lock.json');
     expect(skill).toContain('chc codex skills');
@@ -61,6 +64,7 @@ describe('Codex skill promoter contract', () => {
 
   test('shows complete candidate choices before one authorized run', async () => {
     const skill = await readSkill();
+    const reference = await readContract();
     const table = skill.match(
       /\| Skill \|[^\n]+\n\| --- \|[^\n]+\n\| `example` \|[^\n]+/u,
     )?.[0];
@@ -78,6 +82,9 @@ describe('Codex skill promoter contract', () => {
       expect(table).toContain(field);
     }
     expect(skill).toContain('Default every row to **Skip**');
+    expect(skill).toContain('Confirm local source + Promote');
+    expect(reference).toContain('user-confirmed-local');
+    expect(reference).toContain('sourceRelativePath');
     expect(skill).toContain('merge, replace, or');
     expect(skill).toContain('one complete confirmation table');
     expect(skill).toContain('not an optional cleanup choice');
