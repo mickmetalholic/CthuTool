@@ -193,7 +193,6 @@ describe('shell completion command', () => {
     ]);
     expect(lines((await runCli(['__complete', 'source', ''])).out)).toEqual([
       'list',
-      'register',
       'status',
       'update',
       'use',

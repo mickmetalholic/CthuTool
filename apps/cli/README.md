@@ -133,7 +133,7 @@ chc source use .
 chc source use worktree:<id>
 chc source use remote
 chc source update
-chc source register /path/to/CthuTool
+chc source use /path/to/CthuTool
 ```
 
 `mode` remains `local` or `remote` for compatibility. Source output additionally
@@ -141,6 +141,13 @@ reports `sourceKind: main`, `worktree`, or `managed`; `source list` supplies the
 current `worktree:<id>` selectors from `git worktree list --porcelain`.
 `source status` instead reports detailed diagnostics for the active or
 explicitly selected installation.
+
+`source use .`, `source use <path>`, and `source use worktree:<id>` automatically
+remember the owning main checkout after a successful selection, including when
+the selected source is already active. Switching to `remote` preserves that
+local anchor so `source use local` can return to it from any directory. Failed
+switches keep the previous record; `source list` and `source status` are read-only.
+No separate registration command is needed.
 
 Switching to a main checkout or worktree validates `package.json` and
 `apps/cli/dist/index.js`, then runs `npm install -g --ignore-scripts` for the

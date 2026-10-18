@@ -47,6 +47,6 @@ describe('root command', () => {
       sourceRegistrations
         ?.filter((registration) => registration.visibility === 'public')
         .map((registration) => registration.name),
-    ).toEqual(['list', 'status', 'use', 'update', 'register']);
+    ).toEqual(['list', 'status', 'use', 'update']);
   });
 });
