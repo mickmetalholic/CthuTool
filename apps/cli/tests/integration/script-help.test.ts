@@ -3,6 +3,7 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripVTControlCharacters } from 'node:util';
 
 const entrypoint = fileURLToPath(
   new URL('../../src/index.ts', import.meta.url),
@@ -24,7 +25,11 @@ async function runHelp(args: string[]) {
       proc.exited,
     ]);
     expect(await readdir(cwd)).toEqual([]);
-    return { out, err, code };
+    return {
+      out: stripVTControlCharacters(out),
+      err: stripVTControlCharacters(err),
+      code,
+    };
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
