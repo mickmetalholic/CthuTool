@@ -397,7 +397,7 @@ describe('global bin', () => {
         expect(plain).toContain('status');
         expect(plain).toContain('use');
         expect(plain).toContain('update');
-        expect(plain).toContain('register');
+        expect(plain).not.toContain('register');
         expect(plain).not.toContain('current');
       } else {
         expect(plain).toContain('COMMANDS');

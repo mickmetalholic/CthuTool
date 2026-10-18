@@ -15,7 +15,7 @@
 
 ## Verification results
 
-- Source manager, command discovery, interaction, source integration, and completion: 61 passed, 1 zsh-only test skipped on Windows.
+- Source manager, command discovery, interaction, source integration, completion, and global bin: 66 passed, 1 zsh-only test skipped on Windows.
 - CLI lint/typecheck, pinned Bun 1.3.11 build and bundle consistency: passed.
 - Docs index/build/typecheck, Skill validation, strict change validation, and all 68 main specs: passed.
 - Final diff leaves generated adapters and neighboring changes unchanged.
