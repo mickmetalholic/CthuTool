@@ -33,7 +33,7 @@ chc source use .
 chc source use worktree:<id>
 chc source use remote
 chc source update
-chc source register /path/to/CthuTool
+chc source use /path/to/CthuTool
 ```
 
 `source list` marks the active runtime and reports `main`, `worktree`, and
@@ -44,6 +44,13 @@ the current directory; worktree ids come from the live Git worktree catalog.
 `source status` is intentionally separate: it provides detailed diagnostics for
 the active or explicitly selected installation instead of another candidate
 inventory.
+
+`source use .`, `source use <path>`, and `source use worktree:<id>` automatically
+remember the owning main checkout after a successful selection, including when
+the selected source is already active. Switching to `remote` preserves that
+local anchor so `source use local` can return to it from any directory. Failed
+switches keep the previous record; `source list` and `source status` are read-only.
+No separate registration command is needed.
 
 Local/worktree switches only validate the CthuTool package and committed bundle
 before relinking global npm state. They allow dirty worktrees and never mutate

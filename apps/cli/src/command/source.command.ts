@@ -10,7 +10,6 @@ import {
   createCliSourceManagerDeps,
   discoverCliSources,
   getCliSourceSelectorCandidates,
-  registerCliSource,
   switchCliSource,
 } from '../domain/cli-source-manager';
 import { cliContractArgs } from '../runtime/cli-context';
@@ -94,15 +93,6 @@ const useArgs = {
   selector: {
     type: 'positional',
     description: 'local, remote, ., a worktree id, or a checkout path',
-    required: false,
-  },
-} as const;
-
-const registerArgs = {
-  ...cliContractArgs,
-  path: {
-    type: 'positional',
-    description: 'CthuTool main checkout or linked worktree path',
     required: false,
   },
 } as const;
@@ -334,64 +324,6 @@ function createSourceUseCommand(deps: SourceCommandDeps) {
   );
 }
 
-function createSourceRegisterCommand(deps: SourceCommandDeps) {
-  return defineCommand({
-    meta: {
-      name: 'register',
-      description: 'Remember a development checkout for local discovery.',
-    },
-    args: registerArgs,
-    async run({ args }) {
-      await runObservedCliCommand(
-        args,
-        { command: 'source', subcommand: 'register' },
-        async (scope) => {
-          const path = getStringArg(args.path);
-          if (!path) {
-            failSourceCommand(
-              scope,
-              createCliError(
-                'missing_required_argument',
-                'checkout path is required (use: chc source register <path>)',
-              ),
-              { phase: 'registration' },
-            );
-            return;
-          }
-          try {
-            const result = await registerCliSource(path, deps.manager);
-            if (scope.context.json) {
-              writeJsonValue(processOutput, {
-                ok: true,
-                command: 'source register',
-                result,
-              });
-            } else {
-              writeHumanStatus(
-                scope.context,
-                processOutput,
-                `${pc.green('✓')} Registered local source`,
-              );
-              writeHumanStatus(
-                scope.context,
-                processOutput,
-                `  ${result.mainRoot}`,
-              );
-            }
-            process.exitCode = 0;
-          } catch (error) {
-            failSourceCommand(scope, error, {
-              phase: 'registration',
-              path,
-            });
-          }
-        },
-        { isTty: deps.isTty },
-      );
-    },
-  });
-}
-
 export function createSourceCommand(
   overrides: Partial<SourceCommandDeps> = {},
 ) {
@@ -418,12 +350,6 @@ export function createSourceCommand(
     {
       name: 'update',
       command: sourceUpdateCommand,
-      visibility: 'public',
-      bareBehavior: 'run',
-    },
-    {
-      name: 'register',
-      command: createSourceRegisterCommand(deps),
       visibility: 'public',
       bareBehavior: 'run',
     },

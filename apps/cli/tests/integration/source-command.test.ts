@@ -36,10 +36,11 @@ describe('source command', () => {
     expect(bare).toEqual(explicit);
     expect(bare.code).toBe(0);
     expect(bare.err).toBe('');
-    for (const operation of ['list', 'status', 'use', 'update', 'register']) {
+    for (const operation of ['list', 'status', 'use', 'update']) {
       expect(bare.out).toContain(operation);
     }
     expect(bare.out).not.toContain('current');
+    expect(bare.out).not.toContain('register');
   });
 
   test('lists the active source and worktree candidates as one JSON value', async () => {
@@ -71,7 +72,7 @@ describe('source command', () => {
     expect(output).toContain('CthuTool sources');
     expect(output).toMatch(/●\s+\S+.*active/);
     expect(output).toMatch(/(main|worktree) ·/);
-    expect(output).toContain('~/');
+    expect(output).toMatch(/~[\\/]/);
     expect(quiet).toMatchObject({ code: 0, out: '', err: '' });
   });
 
@@ -153,20 +154,23 @@ describe('source command', () => {
     });
   });
 
-  test('requires explicit use and register arguments without a TTY', async () => {
+  test('requires an explicit use argument without a TTY', async () => {
     const use = await runCli(['source', 'use', '--json']);
-    const register = await runCli(['source', 'register', '--json']);
 
     expect(use.code).not.toBe(0);
     expect(JSON.parse(use.out)).toMatchObject({
       ok: false,
       error: { code: 'missing_required_argument' },
     });
-    expect(register.code).not.toBe(0);
-    expect(JSON.parse(register.out)).toMatchObject({
-      ok: false,
-      error: { code: 'missing_required_argument' },
-    });
+  });
+
+  test('rejects the removed register operation before resolving a checkout', async () => {
+    const result = await runCli(['source', 'register', repoRoot]);
+
+    expect(result.code).not.toBe(0);
+    expect(stripAnsi(`${result.out}\n${result.err}`)).toContain(
+      'Unknown command',
+    );
   });
 
   test('returns a stable JSON error for an unknown source selector', async () => {

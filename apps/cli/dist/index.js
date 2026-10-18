@@ -15551,7 +15551,7 @@ async function discoverCliSources(deps = createCliSourceManagerDeps()) {
         active: sameSourcePath(runtimeRoot, registryResult.registry.mainRoot),
         reason: "The registered development checkout is missing or no longer matches its Git identity."
       }));
-      warnings.push("Registered development checkout is unavailable; run `chc source register <path>` from a valid CthuTool checkout.");
+      warnings.push("Registered development checkout is unavailable; run `chc source use <path>` to select a valid CthuTool checkout.");
     }
   }
   if (development) {
@@ -15588,7 +15588,7 @@ async function registerCliSource(path, deps = createCliSourceManagerDeps()) {
     throw new CliSourceError({
       code: "source_invalid",
       message: "The managed checkout cannot be registered as the local development source.",
-      hint: "Register a separate development clone or one of its linked worktrees."
+      hint: "Select a separate development clone or one of its linked worktrees with `chc source use <path>`."
     });
   }
   const registry = {
@@ -15607,7 +15607,6 @@ async function switchCliSource(selector, deps = createCliSourceManagerDeps()) {
   const selected = await resolveCliSourceSelector(selector, inventory, deps);
   const previous = inventory.active;
   if (selected.kind === "managed" && getCliManagedSourceState(selected) === "absent") {
-    await rememberDevelopmentSource(previous, deps);
     return withSourceSwitchLock(deps, async () => {
       try {
         await deps.bootstrapManaged(selected.path);
@@ -15617,6 +15616,7 @@ async function switchCliSource(selector, deps = createCliSourceManagerDeps()) {
       const refreshed = await inspectManagedCandidate(selected.path, selected.path, deps);
       assertAvailableSource(refreshed);
       await assertGlobalTarget(refreshed.path, deps);
+      await rememberDevelopmentSource(previous, deps);
       return {
         status: "bootstrapped",
         previous,
@@ -15625,9 +15625,6 @@ async function switchCliSource(selector, deps = createCliSourceManagerDeps()) {
     });
   }
   assertAvailableSource(selected);
-  if (selected.kind === "managed") {
-    await rememberDevelopmentSource(previous, deps);
-  }
   if (sameSourcePath(selected.path, previous.path)) {
     if (selected.kind !== "managed") {
       await registerCliSource(selected.path, deps);
@@ -15639,15 +15636,13 @@ async function switchCliSource(selector, deps = createCliSourceManagerDeps()) {
     };
   }
   return withSourceSwitchLock(deps, async () => {
-    if (selected.kind !== "managed") {
-      await registerCliSource(selected.path, deps);
-    }
     try {
       await deps.relinkGlobal(selected.path);
       await assertGlobalTarget(selected.path, deps);
     } catch (error) {
       throw toSwitchError(error, `Failed to switch chc from ${previous.path} to ${selected.path}.`);
     }
+    await rememberDevelopmentSource(selected.kind === "managed" ? previous : selected, deps);
     return {
       status: "switched",
       previous,
@@ -15924,7 +15919,7 @@ function requiredCandidate(candidate, selector) {
   throw new CliSourceError({
     code: "source_unavailable",
     message: `Source selector is unavailable: ${selector}`,
-    hint: "Run `chc source list` or register a development checkout."
+    hint: "Run `chc source list` or select a development checkout with `chc source use <path>`."
   });
 }
 function assertAvailableSource(candidate) {
@@ -16160,14 +16155,6 @@ var useArgs = {
     required: false
   }
 };
-var registerArgs = {
-  ...cliContractArgs,
-  path: {
-    type: "positional",
-    description: "CthuTool main checkout or linked worktree path",
-    required: false
-  }
-};
 function getStringArg4(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
@@ -16305,43 +16292,6 @@ function createSourceUseCommand(deps) {
   });
   return registerPositionalCandidates(command, (context) => shouldOfferSourceSelectors(context) ? getCliSourceSelectorCandidates(deps.manager) : []);
 }
-function createSourceRegisterCommand(deps) {
-  return defineCommand({
-    meta: {
-      name: "register",
-      description: "Remember a development checkout for local discovery."
-    },
-    args: registerArgs,
-    async run({ args }) {
-      await runObservedCliCommand(args, { command: "source", subcommand: "register" }, async (scope) => {
-        const path = getStringArg4(args.path);
-        if (!path) {
-          failSourceCommand(scope, createCliError("missing_required_argument", "checkout path is required (use: chc source register <path>)"), { phase: "registration" });
-          return;
-        }
-        try {
-          const result = await registerCliSource(path, deps.manager);
-          if (scope.context.json) {
-            writeJsonValue(processOutput, {
-              ok: true,
-              command: "source register",
-              result
-            });
-          } else {
-            writeHumanStatus(scope.context, processOutput, `${import_picocolors10.default.green("✓")} Registered local source`);
-            writeHumanStatus(scope.context, processOutput, `  ${result.mainRoot}`);
-          }
-          process.exitCode = 0;
-        } catch (error) {
-          failSourceCommand(scope, error, {
-            phase: "registration",
-            path
-          });
-        }
-      }, { isTty: deps.isTty });
-    }
-  });
-}
 function createSourceCommand(overrides = {}) {
   const deps = { ...defaultDeps5, ...overrides };
   const registrations = [
@@ -16366,12 +16316,6 @@ function createSourceCommand(overrides = {}) {
     {
       name: "update",
       command: sourceUpdateCommand,
-      visibility: "public",
-      bareBehavior: "run"
-    },
-    {
-      name: "register",
-      command: createSourceRegisterCommand(deps),
       visibility: "public",
       bareBehavior: "run"
     }

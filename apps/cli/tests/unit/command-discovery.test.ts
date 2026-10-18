@@ -93,11 +93,11 @@ describe('command discovery registry', () => {
         rootCommand,
         words: ['source', ''],
       }),
-    ).resolves.toEqual(['list', 'register', 'status', 'update', 'use']);
+    ).resolves.toEqual(['list', 'status', 'update', 'use']);
     expect(
       getCommandRegistrations(source?.command ?? rootCommand)
         ?.filter((registration) => registration.visibility === 'public')
         .map((registration) => registration.name),
-    ).toEqual(['list', 'status', 'use', 'update', 'register']);
+    ).toEqual(['list', 'status', 'use', 'update']);
   });
 });

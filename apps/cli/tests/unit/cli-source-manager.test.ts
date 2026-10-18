@@ -214,6 +214,183 @@ describe('CLI source manager', () => {
     }
   });
 
+  test('source discovery never creates or rewrites the registry', async () => {
+    const fixture = await createFixture();
+    const registryPath = getCliSourceRegistryPath(fixture.home);
+    try {
+      await discoverCliSources(fixture.deps());
+      expect(existsSync(registryPath)).toBe(false);
+      await registerCliSource(fixture.main, fixture.deps());
+      const saved = await readFile(registryPath, 'utf8');
+      await discoverCliSources(fixture.deps());
+      expect(await readFile(registryPath, 'utf8')).toBe(saved);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test.each([
+    'dot',
+    'main path',
+    'worktree path',
+    'worktree id',
+  ])('automatically remembers the owning main checkout after selecting %s', async (selection) => {
+    const fixture = await createFixture();
+    const registryPath = getCliSourceRegistryPath(fixture.home);
+    try {
+      await fixture.cloneManaged();
+      let installed = fixture.managed;
+      const deps = fixture.deps({
+        runtimeRoot: () => fixture.managed,
+        cwd: () =>
+          selection === 'dot' || selection === 'worktree id'
+            ? fixture.linked
+            : fixture.root,
+        async relinkGlobal(target) {
+          expect(existsSync(registryPath)).toBe(false);
+          installed = target;
+        },
+        async resolveGlobalPackageTarget() {
+          expect(existsSync(registryPath)).toBe(false);
+          return installed;
+        },
+      });
+      const selector =
+        selection === 'dot'
+          ? '.'
+          : selection === 'main path'
+            ? fixture.main
+            : selection === 'worktree path'
+              ? fixture.linked
+              : createWorktreeSourceId(fixture.linked);
+      const result = await switchCliSource(selector, deps);
+
+      expect(result.status).toBe('switched');
+      expect(installed).toBe(
+        selection === 'main path' ? fixture.main : fixture.linked,
+      );
+      expect(JSON.parse(await readFile(registryPath, 'utf8'))).toEqual({
+        version: 1,
+        mainRoot: fixture.main,
+        commonDir: join(fixture.main, '.git'),
+      });
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test.each([
+    'main',
+    'worktree',
+  ])('remembers an already-active %s selection without relinking', async (kind) => {
+    const fixture = await createFixture();
+    const active = kind === 'main' ? fixture.main : fixture.linked;
+    try {
+      const result = await switchCliSource(
+        '.',
+        fixture.deps({
+          cwd: () => active,
+          runtimeRoot: () => active,
+          async relinkGlobal() {
+            throw new Error('Already-active selection must not relink');
+          },
+        }),
+      );
+      expect(result.status).toBe('already_active');
+      expect(
+        JSON.parse(
+          await readFile(getCliSourceRegistryPath(fixture.home), 'utf8'),
+        ),
+      ).toMatchObject({ mainRoot: fixture.main });
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('can return to local from managed mode after leaving a linked worktree', async () => {
+    const fixture = await createFixture();
+    try {
+      await fixture.cloneManaged();
+      await switchCliSource(
+        'remote',
+        fixture.deps({ runtimeRoot: () => fixture.linked }),
+      );
+      const result = await switchCliSource(
+        'local',
+        fixture.deps({
+          runtimeRoot: () => fixture.managed,
+          cwd: () => fixture.root,
+        }),
+      );
+      expect(result).toMatchObject({
+        status: 'switched',
+        previous: { kind: 'managed' },
+        selected: { kind: 'main', path: fixture.main },
+      });
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test.each([
+    'local npm',
+    'local verification',
+    'remote npm',
+    'remote verification',
+    'bootstrap',
+    'bootstrap verification',
+    'busy',
+    'validation',
+  ])('preserves a previously saved development anchor on %s failure', async (failure) => {
+    const fixture = await createFixture();
+    const registryPath = getCliSourceRegistryPath(fixture.home);
+    try {
+      const savedCheckout = join(fixture.root, 'saved');
+      await runGitChecked(fixture.root, ['clone', fixture.main, savedCheckout]);
+      await registerCliSource(savedCheckout, fixture.deps());
+      const saved = await readFile(registryPath, 'utf8');
+      if (failure.startsWith('remote')) await fixture.cloneManaged();
+      if (failure === 'validation') {
+        await rm(join(fixture.linked, committedCliBundlePath));
+      }
+      let clock = 0;
+      if (failure === 'busy') {
+        await mkdir(getCliSourceSwitchLockPath(fixture.home), {
+          recursive: true,
+        });
+      }
+      const deps = fixture.deps({
+        async relinkGlobal() {
+          if (failure.endsWith('npm')) throw new Error('npm failed');
+        },
+        async resolveGlobalPackageTarget() {
+          return fixture.main;
+        },
+        async bootstrapManaged() {
+          if (failure === 'bootstrap') throw new Error('network failed');
+          await fixture.cloneManaged();
+        },
+        now: () => clock,
+        async sleep(milliseconds) {
+          clock += milliseconds;
+        },
+      });
+      await expect(
+        switchCliSource(
+          failure.startsWith('remote') ||
+            failure.startsWith('bootstrap') ||
+            failure === 'busy'
+            ? 'remote'
+            : fixture.linked,
+          deps,
+        ),
+      ).rejects.toBeInstanceOf(CliSourceError);
+      expect(await readFile(registryPath, 'utf8')).toBe(saved);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('classifies managed paths without parsing human failure reasons', async () => {
     const fixture = await createFixture();
     const inspect = async () => {
@@ -302,9 +479,8 @@ describe('CLI source manager', () => {
           path: join(fixture.root, 'missing'),
         }),
       );
-      expect(inventory.warnings.join('\n')).toContain(
-        'Registered development checkout is unavailable',
-      );
+      expect(inventory.warnings.join('\n')).toContain('chc source use <path>');
+      expect(inventory.warnings.join('\n')).not.toContain('source register');
     } finally {
       await fixture.cleanup();
     }
@@ -367,6 +543,7 @@ describe('CLI source manager', () => {
         switchCliSource(createWorktreeSourceId(fixture.linked), deps),
       ).rejects.toMatchObject({ code: 'source_unavailable' });
       expect(relinked).toBe(false);
+      expect(existsSync(getCliSourceRegistryPath(fixture.home))).toBe(false);
     } finally {
       await fixture.cleanup();
     }
@@ -430,6 +607,7 @@ describe('CLI source manager', () => {
       });
       expect(bootstrapped).toBe(false);
       expect(relinked).toBe(false);
+      expect(existsSync(getCliSourceRegistryPath(fixture.home))).toBe(false);
       expect(await readFile(join(fixture.managed, 'keep.txt'), 'utf8')).toBe(
         'keep\n',
       );
@@ -500,6 +678,11 @@ describe('CLI source manager', () => {
         selected: { kind: 'managed', available: true },
       });
       expect(installed).toBe(fixture.managed);
+      expect(
+        JSON.parse(
+          await readFile(getCliSourceRegistryPath(fixture.home), 'utf8'),
+        ),
+      ).toMatchObject({ mainRoot: fixture.main });
     } finally {
       await fixture.cleanup();
     }
@@ -524,6 +707,7 @@ describe('CLI source manager', () => {
       });
       expect(relinked).toBe(false);
       expect((await discoverCliSources(deps)).active.path).toBe(fixture.main);
+      expect(existsSync(getCliSourceRegistryPath(fixture.home))).toBe(false);
     } finally {
       await fixture.cleanup();
     }
@@ -546,6 +730,7 @@ describe('CLI source manager', () => {
       await expect(
         switchCliSource(createWorktreeSourceId(fixture.linked), deps),
       ).rejects.toMatchObject({ code: 'source_busy' });
+      expect(existsSync(getCliSourceRegistryPath(fixture.home))).toBe(false);
     } finally {
       await fixture.cleanup();
     }
@@ -566,6 +751,7 @@ describe('CLI source manager', () => {
       await expect(
         switchCliSource(createWorktreeSourceId(fixture.linked), deps),
       ).rejects.toMatchObject({ code: 'source_switch_failed' });
+      expect(existsSync(getCliSourceRegistryPath(fixture.home))).toBe(false);
     } finally {
       await fixture.cleanup();
     }
@@ -586,6 +772,7 @@ describe('CLI source manager', () => {
         code: 'source_switch_failed',
         causeText: 'npm permission denied',
       });
+      expect(existsSync(getCliSourceRegistryPath(fixture.home))).toBe(false);
     } finally {
       await fixture.cleanup();
     }

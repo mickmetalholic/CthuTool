@@ -309,7 +309,7 @@ export async function discoverCliSources(
         }),
       );
       warnings.push(
-        'Registered development checkout is unavailable; run `chc source register <path>` from a valid CthuTool checkout.',
+        'Registered development checkout is unavailable; run `chc source use <path>` to select a valid CthuTool checkout.',
       );
     }
   }
@@ -366,7 +366,7 @@ export async function registerCliSource(
       code: 'source_invalid',
       message:
         'The managed checkout cannot be registered as the local development source.',
-      hint: 'Register a separate development clone or one of its linked worktrees.',
+      hint: 'Select a separate development clone or one of its linked worktrees with `chc source use <path>`.',
     });
   }
   const registry = {
@@ -393,7 +393,6 @@ export async function switchCliSource(
     selected.kind === 'managed' &&
     getCliManagedSourceState(selected) === 'absent'
   ) {
-    await rememberDevelopmentSource(previous, deps);
     return withSourceSwitchLock(deps, async () => {
       try {
         await deps.bootstrapManaged(selected.path);
@@ -410,6 +409,7 @@ export async function switchCliSource(
       );
       assertAvailableSource(refreshed);
       await assertGlobalTarget(refreshed.path, deps);
+      await rememberDevelopmentSource(previous, deps);
       return {
         status: 'bootstrapped',
         previous,
@@ -419,10 +419,6 @@ export async function switchCliSource(
   }
 
   assertAvailableSource(selected);
-  if (selected.kind === 'managed') {
-    await rememberDevelopmentSource(previous, deps);
-  }
-
   if (sameSourcePath(selected.path, previous.path)) {
     if (selected.kind !== 'managed') {
       await registerCliSource(selected.path, deps);
@@ -435,9 +431,6 @@ export async function switchCliSource(
   }
 
   return withSourceSwitchLock(deps, async () => {
-    if (selected.kind !== 'managed') {
-      await registerCliSource(selected.path, deps);
-    }
     try {
       await deps.relinkGlobal(selected.path);
       await assertGlobalTarget(selected.path, deps);
@@ -447,6 +440,10 @@ export async function switchCliSource(
         `Failed to switch chc from ${previous.path} to ${selected.path}.`,
       );
     }
+    await rememberDevelopmentSource(
+      selected.kind === 'managed' ? previous : selected,
+      deps,
+    );
     return {
       status: 'switched',
       previous,
@@ -820,7 +817,7 @@ function requiredCandidate(
   throw new CliSourceError({
     code: 'source_unavailable',
     message: `Source selector is unavailable: ${selector}`,
-    hint: 'Run `chc source list` or register a development checkout.',
+    hint: 'Run `chc source list` or select a development checkout with `chc source use <path>`.',
   });
 }
 
