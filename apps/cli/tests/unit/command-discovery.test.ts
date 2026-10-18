@@ -17,6 +17,15 @@ describe('command discovery registry', () => {
     ).toBe('USAGE chc codex|status|scripts');
   });
 
+  test('filters hidden operations from nested usage choices', () => {
+    expect(
+      filterUsageCommandChoices(
+        'USAGE chc agent install|settings|env',
+        new Set(['env']),
+      ),
+    ).toBe('USAGE chc agent install|settings');
+  });
+
   test('root completion candidates match public registrations', async () => {
     const registrations = getCommandRegistrations(rootCommand) ?? [];
     const publicNames = registrations

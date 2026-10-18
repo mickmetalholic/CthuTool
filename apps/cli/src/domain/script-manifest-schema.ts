@@ -6,6 +6,18 @@ export const scriptManifestSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),
   title: v.pipe(v.string(), v.minLength(1)),
   description: v.optional(v.pipe(v.string())),
+  help: v.optional(
+    v.object({
+      options: v.array(
+        v.object({
+          flags: v.pipe(v.string(), v.minLength(1)),
+          description: v.pipe(v.string(), v.minLength(1)),
+        }),
+      ),
+      notes: v.optional(v.array(v.string())),
+      examples: v.optional(v.array(v.string())),
+    }),
+  ),
 });
 
 export type ScriptManifest = v.InferOutput<typeof scriptManifestSchema>;

@@ -1,5 +1,5 @@
 import { intro, isCancel, select } from '@clack/prompts';
-import { defineCommand } from 'citty';
+import { defineCommand, parseArgs } from 'citty';
 import pc from 'picocolors';
 import { listSelectable, resolvePackage } from '../domain/script-catalog';
 import { runBundledScript } from '../flow/run-bundled-script';
@@ -352,7 +352,51 @@ function createScriptRunCommand(deps: RunScriptsDeps) {
       await executeBundledScript(args, deps);
     },
   });
-  return registerPositionalCandidates(command, scriptIdCandidates);
+  registerPositionalCandidates(command, scriptIdCandidates);
+  return registerCommandHelpAppendix(command, async ({ rawArgs }) => {
+    const args = parseArgs<typeof scriptRunnerArgs>(
+      rawArgs.slice(2),
+      scriptRunnerArgs,
+    );
+    const id = resolveExplicitId(args);
+    if (!id) return undefined;
+
+    const discovered = await loadBundledScriptCatalog();
+    if (discovered.isErr()) {
+      return `Script help unavailable: ${discovered.error.message}`;
+    }
+    const selected = resolvePackage(discovered.value, id);
+    if (selected.isErr()) {
+      return `Unknown bundled script: ${id.slice(0, 120)}. Use chc scripts list.`;
+    }
+    const { manifest } = selected.value;
+    const { help } = manifest;
+    if (!help) return undefined;
+
+    const width = Math.max(
+      0,
+      ...help.options.map((option) => option.flags.length),
+    );
+    const lines = [
+      `${manifest.title} (${manifest.id})`,
+      '',
+      'SCRIPT OPTIONS',
+      '',
+    ];
+    for (const option of help.options) {
+      lines.push(`  ${option.flags.padEnd(width + 2)}${option.description}`);
+    }
+    if (help.notes?.length) lines.push('', ...help.notes);
+    if (help.examples?.length) {
+      lines.push(
+        '',
+        'EXAMPLES',
+        '',
+        ...help.examples.map((line) => `  ${line}`),
+      );
+    }
+    return lines.join('\n');
+  });
 }
 
 export const createScriptsCommand = (deps: RunScriptsDeps = defaultDeps) => {

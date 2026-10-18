@@ -1,0 +1,6 @@
+interface:
+  display_name: "CthuTool CLI"
+  short_description: "Operate and troubleshoot the CthuTool chc CLI"
+  default_prompt: "Use $cthutool-cli to complete this CthuTool CLI task and verify the result."
+policy:
+  allow_implicit_invocation: true

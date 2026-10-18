@@ -24,10 +24,9 @@ export type PositionalCandidateProvider = (
   context: CandidateProviderContext,
 ) => Promise<readonly string[]> | readonly string[];
 
-export type CommandHelpAppendixProvider = () =>
-  | Promise<string | undefined>
-  | string
-  | undefined;
+export type CommandHelpAppendixProvider = (context: {
+  readonly rawArgs: readonly string[];
+}) => Promise<string | undefined> | string | undefined;
 
 export function stripAnsi(value: string): string {
   const sgrPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
@@ -39,7 +38,7 @@ export function filterUsageCommandChoices(
   hiddenCommands: ReadonlySet<string>,
 ): string {
   const match =
-    /^(\s*USAGE\s+\S+\s+)([A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)(.*)$/.exec(
+    /^(\s*USAGE\s+.+?\s+)([A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)(.*)$/.exec(
       stripAnsi(line),
     );
   if (!match) {

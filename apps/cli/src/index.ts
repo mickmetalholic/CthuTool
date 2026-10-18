@@ -97,7 +97,7 @@ async function showNativeUsage<T extends ArgsDef = ArgsDef>(
   );
   const appendix = await getCommandHelpAppendixProvider(
     command as AnyCommandDef,
-  )?.();
+  )?.({ rawArgs });
   const rendered = formatUsageForStdout(
     await renderUsage(command, parent),
     hiddenCommands,

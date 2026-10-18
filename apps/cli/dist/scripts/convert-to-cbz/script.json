@@ -1,5 +1,50 @@
 {
   "id": "convert-to-cbz",
   "title": "Convert to CBZ",
-  "description": "Batch convert PDF/ePub files to CBZ archives."
+  "description": "Batch convert PDF/ePub files to CBZ archives.",
+  "help": {
+    "options": [
+      {
+        "flags": "--input <dir>",
+        "description": "Input directory, scanned recursively; required without an interactive terminal."
+      },
+      {
+        "flags": "--output <dir>",
+        "description": "Output root; default: <input>/.output. Relative directories are preserved."
+      },
+      {
+        "flags": "--overwrite",
+        "description": "Replace an existing target only after validating a partial archive; default: skip existing targets."
+      },
+      {
+        "flags": "--format <jpg|png|webp>",
+        "description": "Rendered PDF page format; default: jpg."
+      },
+      {
+        "flags": "--quality <1-100>",
+        "description": "Rendered image quality; default: 90."
+      },
+      {
+        "flags": "--dpi <72-600>",
+        "description": "Rendered PDF resolution; default: 200."
+      },
+      {
+        "flags": "--concurrency <1-16>",
+        "description": "Concurrent files; default: min(4, NUMBER_OF_PROCESSORS), or 4 when unavailable."
+      },
+      {
+        "flags": "--epubConcurrency <1-2>",
+        "description": "Legacy accepted setting; default: 1. EPUB extraction uses --concurrency, with no separate EPUB limit."
+      }
+    ],
+    "notes": [
+      "PDF conversion requires Poppler: pdfinfo, pdfimages, and pdftoppm.",
+      "Fixed-layout EPUB pages preserve source JPEG/PNG/WebP bytes in reading order; text-only EPUBs are unsupported.",
+      "Native PDF scans are extracted when possible; format, quality, and DPI apply to rendered pages."
+    ],
+    "examples": [
+      "chc scripts run convert-to-cbz --input ./comics --json --no-interactive",
+      "chc scripts run convert-to-cbz --input ./comics --output ./converted --format png --dpi 300"
+    ]
+  }
 }

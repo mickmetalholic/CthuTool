@@ -175,6 +175,7 @@ The Bash installer enables zsh completion automatically when zsh is the user's l
 chc scripts
 chc scripts list
 chc scripts list --json
+chc scripts run convert-to-cbz --help
 chc scripts run convert-to-cbz --input ./samples
 ```
 
@@ -192,6 +193,12 @@ chc scripts convert-to-cbz --input ./samples --json --no-interactive
 ```
 
 `convert-to-cbz` scans the input directory recursively, converts `.pdf` and `.epub` files, and writes `.cbz` outputs under `<input>/.output` by default. If `--input` is omitted in non-interactive mode, the command exits non-zero and prints a JSON error when `--json` is set.
+
+Use selected-script `--help` to discover conversion options, defaults, Poppler
+requirements, and examples without running a conversion or requiring Poppler.
+Positional and `--script` compatibility selectors show the same help. The
+legacy `--epubConcurrency` setting is accepted but has no separate scheduling
+effect; current PDF and EPUB files share `--concurrency`.
 
 ## Codex Skills and Plugins
 

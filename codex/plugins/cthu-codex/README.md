@@ -23,6 +23,16 @@ After install, start a new Codex thread or restart Codex so the bundled MCP
 servers are loaded. In a fresh thread, use `/mcp` to verify the `anki` and
 `language-feedback` servers are available.
 
+## CthuTool CLI Skill
+
+Use `$cthutool-cli` to operate or troubleshoot the installed `chc` CLI.
+The automatically discoverable skill covers source selection/update, Agent
+lifecycle, Codex skills/plugins, Obsidian agent links, bundled scripts, and
+PowerShell/zsh completion. It uses live command help, JSON/non-interactive
+operations where supported, and verification appropriate to the user's target.
+Its workflow reference is bundled, so it works outside a CthuTool checkout.
+After installing the updated plugin, start a fresh Codex thread to discover it.
+
 ## Language Feedback UI
 
 The language coach still uses deterministic local filtering to decide whether
