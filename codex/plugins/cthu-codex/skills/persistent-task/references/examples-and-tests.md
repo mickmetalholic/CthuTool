@@ -1,61 +1,99 @@
 # Examples and Manual Test Scenarios
 
-These scenarios are acceptance tests for the workflow. They do not authorize changes to a real system.
+These behavioral review scenarios do not authorize changes to a real system. Assess the proposed actions and stopping points, not exact wording.
 
-## Scenario A — Development environment
+## Scenario A — Complete development environment
 
 Request: configure a complete development environment without modifying system Python, deleting existing configuration, or overwriting files without backup.
 
-Expected flow:
+Expected behavior:
 
-1. Create `PLAN.md`/`LOG.md`; clarify target OS, package managers, versions, backups, and Definition of Done.
-2. Show the coherent plan and first phase: inventory installed tools, inspect dotfiles, and map missing components. One `继续` approves both plan and phase.
-3. Run all included read-only checks, verify the inventory, and checkpoint once at the phase boundary. Report findings first, then preview the installation/configuration phase with exact targets, backup, and verification.
-4. After `继续`, perform all included installations and configuration within that reviewed scope, verifying each material outcome without asking again between routine operations.
-5. If an unexpected version or package conflict requires a choice, record `PHASE_BLOCKED` and ask for the choice. A clear answer permits resuming the same scope; a new target/risk requires a revised preview.
-6. Include final tool and regression checks in the last approved phase, or preview a bounded final-verification phase. Report missing or unverified tools explicitly.
+1. Inspect OS, package managers, installed versions, existing configuration, and verification options read-only before planning execution.
+2. Resolve only material choices the user must make, including version preferences, configuration targets, backup policy, and Definition of Done.
+3. Plan one complete phase for installation, configuration, in-scope corrections, and final tool/regression checks. Record existing explicit authorization; if the concrete scope is still unapproved, obtain one confirmation.
+4. Execute all covered work, recording checkpoints and giving progress updates without waiting after inventory, installation, configuration, or final checks.
+5. Diagnose an ordinary installation/check failure and attempt reasonable in-scope correction. A missing permission or a version trade-off outside agreed policy can suspend affected work; finish safe independent work first.
 
-Pass condition: no target mutation occurs before the first phase approval; related actions run without micro-confirmation, and each completed phase has verification evidence.
+Pass condition: a complete environment is verified in one phase when material choices can be settled upfront. No routine discovery, checkpoint, or final-verification approval is requested.
 
-## Scenario B — Thousands of files
+## Scenario B — Thousands of files with an upfront policy
 
 Request: organize a large directory while preserving conflicts, damaged files, and ambiguous versions.
 
-Expected flow:
+Expected behavior:
 
-1. Define exact source, destination, exclusions, conflict policy, and count/bytes/content Definition of Done.
-2. Preview an inventory/mapping phase. After `继续`, enumerate, hash where needed, and prepare a bounded batch map; then checkpoint and report the result before previewing the move phase.
-3. Preview a move phase whose exact collections and batch bounds are reviewable. After `继续`, process all included batches, verifying destination count/bytes and source state per batch without asking after each one.
-4. Preserve an unexpected conflict, record partial state, and ask for the user decision. Do not use a bare `继续` to choose a canonical version.
-5. After context loss, reconcile the live tree and recorded batch outcomes before any retry.
-6. Preview cleanup only after independently proving no in-scope source files remain. Cleanup is a separate phase because its target/risk differs from the move phase.
+1. Enumerate sources/destinations, exclusions, count/bytes/content checks, and a reviewable mapping read-only. Do not create a separate inventory approval phase.
+2. Confirm the concrete mapping and conditional policy: preserve conflicts and ambiguous versions, process other mapped items, and report unresolved cases. Clarify whether such preserved items satisfy DoD or must remain blocked.
+3. Use one complete phase for all approved batches and count/bytes/content verification. Include empty-directory cleanup only if its exact bounds and recovery were authorized upfront.
+4. Record each meaningful batch result and continue. A policy-covered conflict is handled without a new decision.
+5. An unexpected conflict outside that policy suspends only its dependent work. Continue other approved batches only if they cannot constrain the choice or alter shared uncertain state.
+6. On interruption, reconcile live source/destination state and recorded evidence before retrying. A required unresolved item prevents completion unless the user's DoD explicitly permits preservation.
 
-Pass condition: `继续` authorizes only the previewed collection and operations; unresolved files remain in `Residual Issues`.
+Pass condition: large batch count and different operation types do not create approval gates. A broad request does not authorize unmapped destructive cleanup or forced conflict resolution.
 
-## Scenario C — Complex troubleshooting
+## Scenario C — Troubleshooting with bounded remediation
 
-Request: locate and fix an intermittent service failure using several experiments.
+Request: locate and fix an intermittent service failure.
 
-Expected flow:
+Expected behavior:
 
-1. Define baseline, hypotheses, evidence required for root cause, safe-change limits, rollback, and Definition of Done.
-2. Preview a diagnostic phase containing several read-only experiments. After `继续`, run those experiments and verify their observations without per-experiment confirmations.
-3. Report the diagnosis first, then preview a remediation phase containing exact configuration edits, restart if needed, and regression checks. These can share one approval when the full target and rollback are explicit.
-4. If evidence reveals a different service or higher-risk operation, stop and preview a revised phase instead of extending the earlier approval.
-5. After context loss, inspect current service state and recent logs; never blindly replay a restart or configuration change.
-6. Final verification maps each fix and regression check to evidence; unresolved hypotheses remain residual issues.
+1. Inspect baseline, logs, available hypotheses, and rollback options read-only; do not ask the user to approve each diagnostic experiment.
+2. Settle service targets, allowed configuration/restart bounds, rollback, and evidence needed for completion.
+3. When bounded remediation can be authorized upfront, use one phase for remaining diagnosis, the necessary covered fix, recovery, and regression verification.
+4. Update the internal plan when a command or implementation detail changes without changing those bounds.
+5. If evidence requires another service or a higher-impact action, suspend the affected work and present the concrete expansion, evidence, options, and recommendation. Do not replay a restart blindly.
+6. If the user's answer explicitly authorizes that described expansion, record it and continue without another identical confirmation.
 
-Pass condition: a transient successful restart is not reported as completed remediation, and routine experiments do not cause repeated approval prompts.
+Pass condition: no routine diagnosis/fix/check split; a transient successful restart is insufficient completion evidence, and materially broader impact requires an actual decision.
+
+## Scenario D — A real execution-dependent boundary
+
+Request: produce a small trial conversion, let the user inspect the actual outputs and choose a quality preset, then convert the remaining named collection using that choice.
+
+Expected behavior:
+
+1. Inspect source types, destination mapping, presets, recovery, and verification read-only; settle all other material choices upfront.
+2. Record why the user's quality choice requires generated outputs and cannot be established from discovery or a conditional policy.
+3. Define P1 as producing and verifying the approved trial outputs plus a decision-ready comparison. P2 depends on the user's preset choice for the concretely mapped remaining collection.
+4. Execute P1 fully. Report evidence first, then request the preset choice with options, consequences, and recommendation.
+5. If the answer explicitly selects and authorizes the previewed P2 action, record it and execute the bulk conversion, in-scope corrections, and final checks together. Do not ask for another `继续`.
+
+Pass condition: the extra phase exists because user judgment requires execution evidence. A speculative unknown or an agent-solvable implementation detail alone would not justify the split.
+
+## Scenario E — Recovery and isolated blockers
+
+Given a task with an approved complete phase, a failing check with a safe in-scope fix, and one data conflict requiring a user choice:
+
+- Inspect failure/partial state, apply the reasonable correction, and verify again; record attempts without repeatedly replaying a mutation.
+- Preserve the conflict and suspend dependents. Continue only safe independent authorized work.
+- Keep task status `in_progress` while such work or reasonable recovery remains.
+- Once remaining work requires the unresolved choice or unavailable external prerequisite, checkpoint and report `blocked` with the exact required input.
+- Do not mark required failed/unknown checks complete, silently drop blocked work, or report `completed_with_followups` without an applicable DoD and user acceptance.
+
+Pass condition: recoverable failures do not become immediate handoffs, local blockers do not freeze unrelated work, and no progress is claimed without evidence.
+
+## Scenario F — Resume and legacy authorization
+
+Given an interrupted task and durable state:
+
+- Read PLAN and recent LOG, inspect actual state, reconstruct explicit authorization, and distinguish completed from remaining actions.
+- Continue safe remaining covered work after reconciliation without requesting a routine reconfirmation.
+- An unchanged concrete pending preview can be approved by an unambiguous `继续`; an unresolved choice still needs a specific answer.
+- For a legacy `Plan Approval: approved` plus P1-only approval, finish only covered P1 work. Do not infer permission for P2.
+- Normalize current state while preserving historical log entries and valid authority. Ask only for genuinely missing permission or decisions.
+
+Pass condition: context loss neither repeats mutations blindly nor widens old approval.
 
 ## Manual invariant checks
 
-- A bare registered Skill invocation creates no task files and runs no target command.
-- A draft plan with an unanswered critical question cannot enter execution.
-- The first `继续` approves only a coherent plan and fully previewed first phase; later `继续` approves only one unchanged queued phase.
-- Multiple included actions in an approved phase run without separate user confirmations.
-- A completed phase has a `PLAN.md` state update, matching `LOG.md` checkpoint, and observed verification evidence.
-- A required failed or unknown verification never becomes `[x]`.
-- A mid-phase ambiguous choice requires an explicit answer; a material scope/risk change requires a new preview.
-- A phase checkpoint reports its result before summarizing the next phase and asking for `继续`.
-- A new session resumes from `PLAN.md` and real-state checks, not conversation memory or blind replay.
-- Final output lists residual, deferred, and unknown items even when the Definition of Done passes.
+- A bare invocation and status inspection remain side-effect free for the target; ordinary complex work does not implicitly activate this Skill.
+- Available read-only facts are inspected before user questions; only unresolved choices affecting current work block that work.
+- Default phase count is one complete outcome; additional boundaries identify evidence, a necessary dependent user decision, and why it cannot be settled upfront.
+- Conditional handling policies avoid unnecessary boundaries; steps, tools, batches, and checkpoints do not create gates.
+- Explicit existing authorization is recorded and reused; a vague goal is not permission for unspecified high-impact or external actions.
+- Plan adjustments stay inside actual authorization; `继续` approves only an unchanged concrete pending scope and never selects an ambiguous option.
+- Meaningful checkpoints preserve evidence and automatically continue runnable authorized work; verification is part of delivery.
+- Recovery and independent continuation obey shared-state/dependency boundaries; a required failed or unknown check remains incomplete.
+- Necessary decisions or unavailable permissions/prerequisites stop remaining work only after safe independent work is exhausted; an explicit task pause stops all work.
+- Resume preserves task identity, actual state, logs, and approval scope across both Codex and Hermes.
+- Final reporting includes verification and residual/deferred/unknown items and does not claim completion while required in-scope work remains.
