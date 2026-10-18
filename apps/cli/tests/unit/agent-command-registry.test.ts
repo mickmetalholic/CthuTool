@@ -8,9 +8,9 @@ import { rootCommand } from '../../src/command/root.command';
 
 describe('public Agent command registry', () => {
   test('statically exposes lifecycle and native-settings commands without catalog env selection', () => {
-    const names = (getCommandRegistrations(agentCommand) ?? []).map(
-      (item) => item.name,
-    );
+    const names = (getCommandRegistrations(agentCommand) ?? [])
+      .filter((item) => item.visibility === 'public')
+      .map((item) => item.name);
     expect(names).toEqual([
       'install',
       'update',
@@ -25,7 +25,9 @@ describe('public Agent command registry', () => {
       'uninstall',
     ]);
     expect(names).not.toContain('env');
-    expect(getCommandRegistration(agentCommand, 'env')).toBeUndefined();
+    expect(getCommandRegistration(agentCommand, 'env')?.visibility).toBe(
+      'compat',
+    );
     expect(getCommandRegistration(agentCommand, 'settings')).toBeDefined();
     const autostart = getCommandRegistration(agentCommand, 'autostart');
     expect(

@@ -11,6 +11,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - language-feedback MCP Apps server and compact correction card
 - Anki MCP server
 - Anki card-creation and mature-card conversion skills
+- `cthutool-cli` skill for operating the installed `chc` CLI
 - Notion channel-library skill
 - Notion album-maintenance skill
 - Notion movie-library skill
@@ -53,6 +54,17 @@ agent entry points, retires unchanged originals, archives the change, and opens
 a PR. If either agent cannot load the replacement, the original stays active
 and the run stops. Bundled, Hub-managed, protected, external,
 organization-managed, opted-out, and unprovenanced Hermes Skills are excluded.
+
+## CthuTool CLI Skill
+
+`$cthutool-cli` helps agents select and verify installed CLI operations across
+source management, local Agent lifecycle, Codex skills/plugins, Obsidian vault
+links, bundled scripts, and shell completion. It supports automatic discovery
+for matching requests and works from directories outside the source checkout.
+The skill follows live command help and existing user authorization, prefers
+supported JSON/non-interactive inputs, and distinguishes CLI updates from Agent
+runtime updates. Update the plugin with `chc codex install` and start a fresh
+thread to load the new skill.
 
 ## Language Feedback UI
 

@@ -6845,7 +6845,7 @@ function stripAnsi3(value) {
   return value.replace(sgrPattern, "");
 }
 function filterUsageCommandChoices(line, hiddenCommands) {
-  const match = /^(\s*USAGE\s+\S+\s+)([A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)(.*)$/.exec(stripAnsi3(line));
+  const match = /^(\s*USAGE\s+.+?\s+)([A-Za-z0-9_-]+(?:\|[A-Za-z0-9_-]+)+)(.*)$/.exec(stripAnsi3(line));
   if (!match) {
     return line;
   }
@@ -10244,7 +10244,13 @@ function createAgentCommand(service) {
     registration("logs", logs),
     registration("autostart", autostart, "help"),
     registration("doctor", doctor),
-    registration("uninstall", uninstall)
+    registration("uninstall", uninstall),
+    {
+      name: "env",
+      command: envRedirect,
+      visibility: "compat",
+      bareBehavior: "run"
+    }
   ];
   return {
     command: registerCommandGroup(defineCommand({
@@ -10252,10 +10258,7 @@ function createAgentCommand(service) {
         name: "agent",
         description: "Install and control the local CthuTool Agent."
       },
-      subCommands: {
-        ...buildRegisteredSubCommands(registrations),
-        env: envRedirect
-      }
+      subCommands: buildRegisteredSubCommands(registrations)
     }), registrations),
     registrations
   };
@@ -14301,6 +14304,58 @@ function getFallback(schema, dataset, config$1) {
 function getDefault(schema, dataset, config$1) {
   return typeof schema.default === "function" ? schema.default(dataset, config$1) : schema.default;
 }
+function array(item, message$1) {
+  return {
+    kind: "schema",
+    type: "array",
+    reference: array,
+    expects: "Array",
+    async: false,
+    item,
+    message: message$1,
+    get "~standard"() {
+      return /* @__PURE__ */ _getStandardProps(this);
+    },
+    "~run"(dataset, config$1) {
+      const input = dataset.value;
+      if (Array.isArray(input)) {
+        dataset.typed = true;
+        dataset.value = [];
+        for (let key = 0;key < input.length; key++) {
+          const value$1 = input[key];
+          const itemDataset = this.item["~run"]({ value: value$1 }, config$1);
+          if (itemDataset.issues) {
+            const pathItem = {
+              type: "array",
+              origin: "value",
+              input,
+              key,
+              value: value$1
+            };
+            for (const issue of itemDataset.issues) {
+              if (issue.path)
+                issue.path.unshift(pathItem);
+              else
+                issue.path = [pathItem];
+              dataset.issues?.push(issue);
+            }
+            if (!dataset.issues)
+              dataset.issues = itemDataset.issues;
+            if (config$1.abortEarly) {
+              dataset.typed = false;
+              break;
+            }
+          }
+          if (!itemDataset.typed)
+            dataset.typed = false;
+          dataset.value.push(itemDataset.value);
+        }
+      } else
+        _addIssue(this, "type", dataset, config$1);
+      return dataset;
+    }
+  };
+}
 function object(entries$1, message$1) {
   return {
     kind: "schema",
@@ -14452,7 +14507,15 @@ function safeParse(schema, input, config$1) {
 var scriptManifestSchema = object({
   id: pipe(string(), minLength(1)),
   title: pipe(string(), minLength(1)),
-  description: optional(pipe(string()))
+  description: optional(pipe(string())),
+  help: optional(object({
+    options: array(object({
+      flags: pipe(string(), minLength(1)),
+      description: pipe(string(), minLength(1))
+    })),
+    notes: optional(array(string())),
+    examples: optional(array(string()))
+  }))
 });
 var parseScriptManifest = (raw) => {
   const result = safeParse(scriptManifestSchema, raw);
@@ -14858,7 +14921,42 @@ function createScriptRunCommand(deps) {
       await executeBundledScript(args, deps);
     }
   });
-  return registerPositionalCandidates(command, scriptIdCandidates);
+  registerPositionalCandidates(command, scriptIdCandidates);
+  return registerCommandHelpAppendix(command, async ({ rawArgs }) => {
+    const args = parseArgs(rawArgs.slice(2), scriptRunnerArgs);
+    const id = resolveExplicitId(args);
+    if (!id)
+      return;
+    const discovered = await loadBundledScriptCatalog();
+    if (discovered.isErr()) {
+      return `Script help unavailable: ${discovered.error.message}`;
+    }
+    const selected = resolvePackage(discovered.value, id);
+    if (selected.isErr()) {
+      return `Unknown bundled script: ${id.slice(0, 120)}. Use chc scripts list.`;
+    }
+    const { manifest } = selected.value;
+    const { help } = manifest;
+    if (!help)
+      return;
+    const width = Math.max(0, ...help.options.map((option) => option.flags.length));
+    const lines = [
+      `${manifest.title} (${manifest.id})`,
+      "",
+      "SCRIPT OPTIONS",
+      ""
+    ];
+    for (const option of help.options) {
+      lines.push(`  ${option.flags.padEnd(width + 2)}${option.description}`);
+    }
+    if (help.notes?.length)
+      lines.push("", ...help.notes);
+    if (help.examples?.length) {
+      lines.push("", "EXAMPLES", "", ...help.examples.map((line) => `  ${line}`));
+    }
+    return lines.join(`
+`);
+  });
 }
 var createScriptsCommand = (deps = defaultDeps) => {
   const registrations = [
@@ -16415,7 +16513,7 @@ function normalizeCommandRows(value, hiddenCommands) {
 }
 async function showNativeUsage(command, parent) {
   const hiddenCommands = new Set(getCommandRegistrations(command)?.filter((registration2) => registration2.visibility !== "public").map((registration2) => registration2.name) ?? []);
-  const appendix = await getCommandHelpAppendixProvider(command)?.();
+  const appendix = await getCommandHelpAppendixProvider(command)?.({ rawArgs });
   const rendered = formatUsageForStdout(await renderUsage(command, parent), hiddenCommands);
   process.stdout.write(`${rendered}${appendix ? `
 

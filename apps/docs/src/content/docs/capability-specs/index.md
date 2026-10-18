@@ -12,6 +12,7 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 <!-- openspec-index:start -->
 - `apps-agent-environment-routing`
 - `apps-agent-local-bridge`
+- `apps-agent-native-bootstrap-ui`
 - `apps-agent-release-artifacts`
 - `apps-agent-runtime`
 - `apps-agent-tray`
@@ -29,16 +30,20 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 - `apps-backend-sites-config`
 - `apps-cli-agent-contract`
 - `apps-cli-agent-lifecycle`
+- `apps-cli-ai-tooling-standardization`
 - `apps-cli-bundled-script-execution`
 - `apps-cli-codex-config`
 - `apps-cli-codex-plugin-management`
 - `apps-cli-codex-skill-management`
+- `apps-cli-comic-conversion`
 - `apps-cli-command-discovery`
+- `apps-cli-cross-agent-skill-absorption`
 - `apps-cli-distribution-ci`
 - `apps-cli-observability`
-- `apps-cli-opencode-shared-assets`
+- `apps-cli-obsidian-agents-link`
 - `apps-cli-self-installation`
 - `apps-cli-shell-completion`
+- `apps-cli-source-switching`
 - `apps-cli-update-experience`
 - `apps-docs-site`
 - `apps-root-engineering-config`
@@ -50,13 +55,27 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 ## Codex Plugins
 
 - `codex-plugins-cthu-codex-anki-mcp`
+- `codex-plugins-cthu-codex-cli-skill`
 - `codex-plugins-cthu-codex-english-expression-skill`
 - `codex-plugins-cthu-codex-japanese-sentence-skill`
 - `codex-plugins-cthu-codex-japanese-vocabulary-skill`
 - `codex-plugins-cthu-codex-language-coach`
 - `codex-plugins-cthu-codex-mature-japanese-sentence-conversion-skill`
 - `codex-plugins-cthu-codex-notion-album-skill`
+- `codex-plugins-cthu-codex-notion-animation-library-skill`
+- `codex-plugins-cthu-codex-notion-app-vault-skill`
+- `codex-plugins-cthu-codex-notion-book-library-skill`
 - `codex-plugins-cthu-codex-notion-channel-skill`
+- `codex-plugins-cthu-codex-notion-comic-library-skill`
+- `codex-plugins-cthu-codex-notion-documentary-library-skill`
+- `codex-plugins-cthu-codex-notion-drama-library-skill`
+- `codex-plugins-cthu-codex-notion-game-library-skill`
+- `codex-plugins-cthu-codex-notion-knowledge-skill`
+- `codex-plugins-cthu-codex-notion-management`
+- `codex-plugins-cthu-codex-notion-movie-library-skill`
+- `codex-plugins-cthu-codex-notion-people-reference`
+- `codex-plugins-cthu-codex-persistent-task`
+- `codex-plugins-cthu-codex-skill-promoter`
 
 ## Packages
 

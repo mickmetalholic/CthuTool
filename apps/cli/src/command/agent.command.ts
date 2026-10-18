@@ -330,6 +330,12 @@ export function createAgentCommand(service: AgentLifecycleService) {
     registration('autostart', autostart, 'help'),
     registration('doctor', doctor),
     registration('uninstall', uninstall),
+    {
+      name: 'env',
+      command: envRedirect,
+      visibility: 'compat',
+      bareBehavior: 'run',
+    },
   ];
   return {
     command: registerCommandGroup(
@@ -338,11 +344,7 @@ export function createAgentCommand(service: AgentLifecycleService) {
           name: 'agent',
           description: 'Install and control the local CthuTool Agent.',
         },
-        subCommands: {
-          ...buildRegisteredSubCommands(registrations),
-          // Keep a soft-deprecated entry so mistyped catalog flows get a clear redirect.
-          env: envRedirect,
-        },
+        subCommands: buildRegisteredSubCommands(registrations),
       }),
       registrations,
     ),

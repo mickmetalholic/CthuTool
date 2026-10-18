@@ -198,28 +198,30 @@ from `chc source update`: the latter updates this CLI checkout, while
 
 ```bash
 chc agent install
-chc agent env list
-chc agent env set production
+chc agent settings
 chc agent autostart enable
 chc agent start
-chc agent settings
 chc agent status --json
 chc agent logs --follow
 chc agent stop
 ```
 
-`settings` starts the tray when necessary and asks it to create a fresh,
-one-time local bridge launch before opening the deployed Web `/agent` page.
-The CLI never prints or stores the launch ticket.
+`settings` starts the tray when necessary and opens the native first-run or
+settings window. Configure the deployment's exact HTTPS Origin there. Open Web
+Console in native settings creates a fresh one-time bridge launch to the deployed
+Web `/agent` page; the CLI never prints or stores the launch ticket.
 
-Installation and updates are fail-closed. Production Agent bundles, the
-environment catalog, and stable/beta channel pointers are signature- and
-digest-verified. A release build must embed the Ed25519 public key through
-`AGENT_RELEASE_PUBLIC_KEY_PEM` while building the committed CLI bundle. Without
-that pinned key, `agent install` and `agent update` fail before downloading.
+Installation and updates resolve the single latest self-use release from
+`agent-latest/manifest.json`. HTTPS transport, SHA-256 integrity, compatibility,
+safe extraction, and bundle layout are checked before activation. This self-use
+flow does not require release signatures, channel pointers, a pinned public key,
+or platform signing. `--channel` and remote `--version` selection are rejected.
+The deprecated `agent env` entry is hidden from help and completion and reports
+guidance to use native settings. Failed update readiness restores the prior
+installed version.
 
 Default `chc agent uninstall` stops the tray, removes managed autostart and
-binaries, and preserves environment selection, browser profiles, and logs.
+binaries, and preserves deployment Origin, browser profiles, and logs.
 `--purge` removes those categories too and requires an interactive confirmation
 or `--yes` for non-interactive use.
 
@@ -231,6 +233,7 @@ Use the discoverable catalog and canonical `run` operation:
 chc scripts
 chc scripts list
 chc scripts list --json
+chc scripts run convert-to-cbz --help
 chc scripts run convert-to-cbz --input ./samples
 ```
 
@@ -243,6 +246,12 @@ route through the same runner:
 chc scripts convert-to-cbz --input ./samples
 chc scripts --script convert-to-cbz --input ./samples
 ```
+
+Selected-script help reads optional `help.options`, `help.notes`, and
+`help.examples` from its discovered `script.json`, including in the installed
+package. It never imports or runs the script or checks conversion prerequisites.
+Scripts without that metadata retain the common runner help. The three sample
+scripts remain contributor/test examples; `convert-to-cbz` is the conversion tool.
 
 ### Convert PDF and EPUB to CBZ
 

@@ -97,7 +97,7 @@ describe('Agent CLI command contract', () => {
     const result = await runCli(['agent', '--help'], root);
     expect(result.code).toBe(0);
     expect(result.out).toContain('settings');
-    expect(result.out).not.toMatch(/\benv list\b|\bset-secret\b/);
+    expect(result.out).not.toMatch(/\benv\b|\bset-secret\b/);
   });
 
   test('status JSON omits secret state and ignores a legacy secret file', async () => {
