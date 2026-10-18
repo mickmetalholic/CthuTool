@@ -1,6 +1,6 @@
 interface:
   display_name: "Codex · Absorb and Promote Skill"
-  short_description: "Promote compatible Hermes or Codex skills into CthuCodex."
-  default_prompt: "Use $codex-skill-promoter to scan eligible local Skills, show me a candidate table, then promote my selection for Codex and Hermes through an OpenSpec change and PR, retiring verified originals."
+  short_description: "Review native Hermes origins and promote selected local skills."
+  default_prompt: "Use $codex-skill-promoter to scan local Skills, including Hermes categories. Show creation evidence and uncertain origins separately, ask me to confirm uncertain local sources, then promote my selected set for both agents through an OpenSpec change and PR."
 policy:
   allow_implicit_invocation: false

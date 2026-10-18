@@ -5,50 +5,55 @@ Define the repository-owned Codex workflow for absorbing eligible external skill
 
 ## Requirements
 
-### Requirement: Repository-owned Codex skill absorber and promoter
+### Requirement: Repository-owned local Skill review and promotion
 
-The CthuTool project SHALL provide `codex-skill-promoter` under `.agents/skills/codex-skill-promoter` as the sole repository-supplied entry point for promoting eligible local Codex Skills and absorbing eligible Hermes Evolution Skills; it SHALL NOT expose a separate `hermes-skill-absorber`. The promoter SHALL be discovered from a CthuTool checkout and SHALL NOT be bundled with CthuCodex or installed by `chc codex install`. Selected promoted Skills SHALL still target `codex/plugins/cthu-codex/skills`. Discovery SHALL be read-only and SHALL begin without a current Git branch, HEAD, or cleanliness prerequisite. `chc codex skills` SHALL remain limited to GitHub-backed third-party Skills.
+CthuTool SHALL provide `codex-skill-promoter` under `.agents/skills/codex-skill-promoter` for reviewing local Codex and Hermes Skills and promoting an explicitly selected set into `codex/plugins/cthu-codex/skills`. The promoter SHALL remain outside plugin distribution, perform read-only discovery regardless of caller Git state, and keep `chc codex skills` limited to third-party GitHub Skills. It SHALL report native Hermes creation evidence, separate uncertain origins for explicit local-source confirmation, and exclude managed, protected, external, opted-out, or unsafe sources.
 
 #### Scenario: Project maintenance Skill stays outside plugin distribution
 
 - **WHEN** an agent discovers Skills from a CthuTool checkout
-- **THEN** the promoter is available under `.agents/skills/codex-skill-promoter` with its references and invocation metadata
-- **AND** the CthuCodex plugin source and installation do not contain the promoter
-- **AND** selected promoted Skills still belong to the plugin
+- **THEN** the promoter is available under `.agents/skills/codex-skill-promoter` with references, scanner, and invocation metadata
+- **AND** CthuCodex installation does not distribute the promoter
+- **AND** selected promoted Skills target the business plugin
 
 #### Scenario: Explicit invocation performs read-only discovery
 
-- **WHEN** the user invokes `codex-skill-promoter` from a dirty checkout, detached HEAD, default branch, or directory outside a Git checkout
-- **THEN** the promoter scans eligible local Codex and Hermes roots read-only
-- **AND** it does not create a branch, change Git state, or write a Skill during discovery
+- **WHEN** the user invokes the promoter regardless of branch, HEAD, or working-tree state
+- **THEN** it inspects the configured local Skill roots without changing Git, Skill files, or Hermes metadata
 
-#### Scenario: Only evolution-created Hermes skills are eligible
+#### Scenario: Native Hermes creation records are reviewed
 
-- **WHEN** the Hermes tree contains bundled, Hub-managed, protected built-in, external, organization-managed, opted-out, or unprovenanced Skills
-- **THEN** the promoter excludes them from absorption
-- **AND** it accepts a Hermes candidate only with a valid dedicated `.hermes-evolution.json` marker
-- **AND** usage, author, activity, and directory location do not prove Evolution provenance
+- **WHEN** a Hermes package has a valid create event linked to its identity and exact path and passes ownership and safety checks
+- **THEN** the promoter reports the event identity, actor, timestamp, source-relative path, and current fingerprint
+- **AND** it labels the evidence as recorded local creation without requiring a dedicated Evolution marker
+
+#### Scenario: Management flags leave origin uncertain
+
+- **WHEN** a local Hermes package has only usage counters, author text, a management/adoption flag, a legacy marker claim, or no creation history
+- **THEN** the promoter lists it separately as source uncertain with available hints and missing evidence
+- **AND** it requires explicit confirmation of that exact package's local source together with promotion selection
+- **AND** it records the result as user-confirmed local origin rather than a verified historical creation
 
 #### Scenario: Third-party skills are excluded
 
-- **WHEN** the local Codex tree contains a Skill owned by the GitHub/npx lifecycle, repository manifest, system installation, or installed plugin
-- **THEN** the promoter excludes it from locally authored candidates
-- **AND** it reports the ownership reason when requested
+- **WHEN** a Codex or Hermes package is owned by a manifest, Hub/npx lifecycle, system/bundled installation, plugin, external location, organization, or protected inventory
+- **THEN** it is excluded with the ownership reason
+- **AND** local-source confirmation cannot override that exclusion
 
 #### Scenario: Promotion and cleanup sets are explicit after discovery
 
-- **WHEN** read-only discovery finds eligible candidates
-- **THEN** the promoter displays a table with each Skill name, source mode and exact path, provenance or ownership evidence, file summary, compatibility result and warnings, plugin target and collision resolution, exact original-source removal path, and planned OpenSpec/PR scope
-- **AND** every candidate defaults to Skip
-- **AND** the user selects the promotion set and any collision resolution in one explicit confirmation before mutation
-- **AND** the confirmation states that verified original-source retirement and PR creation are included in the selected run
+- **WHEN** discovery finds recorded-local or source-uncertain candidates
+- **THEN** the confirmation table shows exact paths, provenance classification and evidence gaps, files/fingerprints, compatibility warnings, targets/collision resolutions, original-retirement paths, and OpenSpec/PR scope
+- **AND** every row defaults to Skip
+- **AND** uncertain rows require explicit local-source confirmation plus selection
+- **AND** the selected set authorizes verified retirement and the complete scoped promotion run
 
 #### Scenario: Confirmed Hermes adaptation enters Codex staging
 
-- **WHEN** the user confirms an eligible Hermes candidate with a compatible adaptation and no unresolved collision
-- **THEN** the promoter creates a provenance-recorded Codex staging tree from reviewed regular files
-- **AND** it preserves the Hermes original until a replacement is available and verified in Hermes
-- **AND** it does not execute source-provided scripts
+- **WHEN** the user selects a reviewed Hermes source and supplies any required local-source confirmation and collision resolution
+- **THEN** the promoter creates reviewed Codex staging and records portable source identity, fingerprint, evidence classification, and any user attestation
+- **AND** the original stays active until both replacements pass verification
+- **AND** source scripts remain unexecuted during inspection
 
 ### Requirement: Promoted skills retain Codex and Hermes compatibility
 
@@ -121,7 +126,7 @@ After the user confirms the candidate table, the promoter SHALL create a scoped 
 
 #### Scenario: Source changes or replacement fails
 
-- **WHEN** a source fingerprint, provenance marker, eligibility classification, replacement load check, or installation verification differs from the reviewed state
+- **WHEN** a source fingerprint, provenance evidence or user attestation, eligibility classification, replacement load check, or installation verification differs from the reviewed state
 - **THEN** the promoter stops before deleting that original and before archive or PR
 - **AND** it reports the observed state and retains all unrelated files and sources
 
