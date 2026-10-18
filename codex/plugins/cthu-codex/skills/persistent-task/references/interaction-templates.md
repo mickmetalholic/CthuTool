@@ -1,96 +1,76 @@
 # Interaction Templates
 
-Use concise, explicit messages. Adapt wording to the user's language. These are output shapes, not scripts to repeat verbatim.
+Use concise messages adapted to the user's language. These are optional output shapes, not a mandatory sequence. Omit empty fields and unnecessary prompts.
 
-## After creating a draft
+## Discovery and material questions
+
+Perform available read-only investigation first. Ask only unresolved user choices that affect execution, and confirm conditional policies before forming phases when possible.
 
 ```text
-已创建持久任务：<path>
-当前进行澄清和只读检查，尚未修改目标。
-
-未决问题：
-Q1. <question>
-Q2. <question>
-
-回答后我会更新 PLAN.md，并展示计划及首阶段。
+已查明：<relevant facts and evidence>
+执行前需要确定：<material choice, recommendation, and consequences>
+<When useful: an upfront conditional policy that would avoid a later interruption>
 ```
 
-## Initial plan and first phase preview
+## Execution preview when authorization is missing
 
 ```text
-PLAN.md 已完善，状态为 awaiting_plan_approval。
-
-目标与范围：<goal, targets, exclusions>
+目标与范围：<outcome, concrete targets/actions/exclusions>
 完成标准：<observable DoD>
-主要风险：<risks>
-阶段安排：<short phase list>
+执行阶段：<one complete phase, including implementation, recovery, and final checks>
+风险与恢复：<impact limits, backup/recovery>
+已约定的分支处理：<conditional policies>
+需要暂停的条件：<actual decisions or external prerequisites>
 
-首阶段 P1：<objective>
-包含的工作：<related actions and bounded batch>
-目标及排除项：<exact targets/exclusions>
-预期结果与验证：<result and evidence>
-风险、备份与回滚：<risk and recovery>
-
-回复“继续”即可批准计划并启动上述 P1；P1 中列出的工作会连续执行并验证。
+回复“继续”即可授权上述完整执行范围；我会连续执行、纠错和验证。
 ```
 
-## Later phase preview
+Describe another phase only when an actual decision depends on evidence unavailable until execution; explain the evidence, dependent choice, and why it cannot be settled now. Do not ask the user to approve discovery already possible read-only.
+
+## Existing authorization
 
 ```text
-下一阶段 P<n>：<objective>
-包含的工作：<related actions and bounded batch>
-目标及排除项：<exact targets/exclusions>
-预期结果与验证：<result and evidence>
-风险、备份与回滚：<risk and recovery>
-
-PLAN.md 状态：awaiting_phase_approval。
-回复“继续”即批准上述 P<n>；范围变化时我会重新展示，不沿用本次确认。
+已记录你的执行授权：<source and concrete bounds>
+计划用一个完整阶段完成 <outcome>，包含 <implementation/recovery/verification>。
+现在继续执行。
 ```
 
-## Phase checkpoint
+Use this only when the previous explicit instruction actually covers the work. A vague goal does not supply missing high-impact targets or permission for external actions.
+
+## Progress checkpoint with automatic continuation
 
 ```text
-P<n> 阶段结果：<success / partial / failed>
-已完成的工作：<actual actions and targets>
-验证：<PASS / FAIL / UNKNOWN + evidence>
-问题与恢复：<residuals, rollback, or None>
-PLAN.md / LOG.md：<current status and checkpoint event>
-
-下一阶段计划 P<n+1>：<objective, included work, exact scope>
-预期结果与验证：<result and checks>
-风险、备份与回滚：<risk and recovery>
-
-回复“继续”即可启动上面展示的下一阶段。
+已完成并验证：<outcome, actual changes, evidence>
+待处理：<remaining work and isolated blockers, if any>
+接下来继续：<next safe authorized action>
 ```
 
-If there is no next phase, use the final report instead of asking to continue. Do not put the next-phase plan ahead of the completed-phase result.
+Report completed results before next work. Update PLAN/LOG and proceed without waiting for `继续`. A phase boundary or final checks alone never require another approval.
 
-## Decision required mid-phase
+## Genuine decision or external prerequisite
+
+First preserve the affected targets and finish safe independent work. When remaining work needs input:
 
 ```text
-P<n> 已暂停，状态为 blocked。
-
-已完成及验证：<actual progress>
-阻塞事实：<observed reality>
-需要你的决定：<exact question>
-选项及后果：<options and consequences>
-当前目标状态：<partial changes and rollback status>
-
-PLAN.md 和 LOG.md 已记录。请明确选择；单独回复“继续”不会替你作决定。
+已完成并验证：<progress and evidence>
+剩余受阻工作：<affected targets and dependency>
+已知事实与当前状态：<evidence, partial changes, recovery>
+需要决定或补齐：<exact choice or external prerequisite>
+建议：<preferred option and concrete action>
+其他选项及影响：<alternatives and consequences>
+本次选择涉及的执行范围：<changed targets/actions/impact/recovery, when applicable>
 ```
 
-After a clear decision, finish the previously approved phase if its scope is unchanged. If the decision changes scope or risk materially, show a revised preview before acting.
+A bare `继续` does not choose among ambiguous options. Record a clear answer and continue existing covered work. If the answer explicitly authorizes the concrete revised scope, do not ask for a second identical confirmation; otherwise obtain the genuinely missing authorization.
 
 ## Final report
 
 ```text
 任务状态：<completed / completed_with_followups / blocked>
-
-已完成并验证：<DoD items + evidence>
+已完成并验证：<DoD outcomes and evidence>
 实际修改：<targets>
-错误/恢复：<summary>
-回滚状态：<summary>
-残留问题：<None or explicit list>
-延期决策：<None or explicit list>
-建议的后续任务：<None or list>
+错误与恢复：<material attempts and backup/rollback state, if any>
+残留与延期决策：<required unresolved, accepted deferred, or unknown items, or None>
 ```
+
+Report `in_progress` when safe authorized work or reasonable recovery remains; keep executing rather than using the final report to hand back an unfinished task.

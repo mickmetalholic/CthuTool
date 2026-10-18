@@ -1,105 +1,93 @@
 # Persistent Task Plan
 
-Copy this template into `<workspace>/.agent/tasks/<task-id>/PLAN.md` and replace the placeholders. Keep it short; move execution detail to `LOG.md`.
+Copy this template into `<workspace>/.agent/tasks/<task-id>/PLAN.md`. Keep current state compact and move execution history to LOG.
 
 ```markdown
 # Task: <short name>
 
 Task ID: <task-id>
 Status: draft
-Plan Approval: pending
 Created: <YYYY-MM-DD HH:mm TZ>
-Workspace: <absolute or repository-relative workspace>
+Workspace: <workspace path>
 
 ## Goal
 
 <One precise outcome.>
 
-## Scope
+## Scope and Constraints
 
-- In scope: <paths, systems, data, or services>
-- Out of scope: <explicit exclusions>
-
-## Constraints
-
-- <safety, compatibility, time, permissions, or user preferences>
-
-## Risks
-
-- <material risk and mitigation, or None>
+- In scope: <targets, actions, and observable outcomes>
+- Out of scope: <exclusions>
+- Constraints: <compatibility, impact/cost limits, and user preferences>
+- Risks / recovery: <material risks, pre-state, backup, and recovery path>
 
 ## Definition of Done
 
 - [ ] <observable completion condition>
-- [ ] <verification condition>
+- [ ] <final verification condition>
 
-## Plan / Phases
+## Authorization
 
-- [ ] P1 — <phase>; verify: <observable evidence>
-- [ ] P2 — <phase>; verify: <observable evidence>
-- [ ] P3 — <last phase including Definition of Done verification, or a separate final-verification phase>
+State: <pending / authorized / partial>
+Source: <explicit user instruction or confirmation, timestamp and LOG reference>
+Covered Work: <targets/actions/exclusions and impact/recovery bounds>
+Conditional Policies: <agreed handling rules, or None>
+External Actions: <authorized action and destination, or None>
+Not Yet Authorized: <concrete uncovered work, or None>
 
-## Current Phase
+## Phase Plan
 
-ID: none
-Phase State: clarification
-Objective: <one bounded outcome>
-Target and Exclusions: <exact targets, scope limits, and excluded items>
-Included Work: <related actions and bounded batches>
-Expected Result: <observable result>
-Verification: <checks and evidence>
-Risk / Backup / Rollback: <material risks, pre-state, and recovery path>
-Stop Conditions: <decisions or material changes that require a pause>
-Approval: <pending / user-confirmed at timestamp / not applicable>
+- [ ] P1 — <complete verifiable outcome, including implementation, recovery, and final checks>
 
-## Pending Questions
+<Add another phase only for a necessary user decision that depends on execution evidence and cannot be settled through discovery or an upfront conditional policy. Internal steps and checkpoints stay inside the phase.>
 
-- Q1: <question or None>
+## Decision Dependencies
+
+- <evidence an earlier phase must produce; dependent user choice and work; why it cannot be settled upfront, or None>
+
+## Current Work
+
+Phase: <phase ID>
+Phase State: <ready / running / verified / blocked / deferred>
+Objective: <complete outcome or decision-ready evidence>
+Included Work: <related actions, internal milestones, and bounded batches>
+Verification: <observable checks and evidence>
+Authorization Reference: <source covering this work, or pending>
+Next Runnable Work: <safe authorized work that can proceed now, or None>
+
+## Pending Decisions and Blocked Work
+
+- <observed facts; exact decision or prerequisite; recommendation/options; affected work; independent work that may continue, or None>
 
 ## Decisions
 
-- <decision that still affects execution, or None>
+- <confirmed choice or conditional policy still affecting execution, with source, or None>
 
-## Blockers
-
-- <active blocker, or None>
-
-## Verification Status
+## Verification and Residuals
 
 Last Verification: <not started / pass / fail / unknown>
-Evidence: <short path, command, test, or log entry>
-
-## Residual Issues
-
-- <unresolved, deferred, ambiguous, or unknown item, or None>
+Evidence: <short command, path, result, or LOG reference>
+Residual Issues: <unresolved, deferred, or unknown items, or None>
+Recovery State: <partial changes, attempts, backup/rollback status, or None>
 
 ## Next Action
 
-<Answer Q1 / wait for 继续 to approve current phase / resume approved phase / None>
+<Continue authorized work / perform in-scope recovery / await a named decision or concrete authorization / resolve an external prerequisite / None>
 ```
 
 Allowed task statuses:
 
 ```text
 draft
-awaiting_plan_approval
-awaiting_phase_approval
+awaiting_authorization
 in_progress
 blocked
+paused
 completed
 completed_with_followups
 cancelled
 ```
 
-Allowed phase states:
+`blocked` means no safe authorized work remains runnable and required progress needs a user decision or external prerequisite. A local blocker with independent runnable work leaves the task `in_progress`. Use `paused` only for an explicit user pause.
 
-```text
-clarification
-proposed
-approved
-running
-verified
-failed
-blocked
-deferred
-```
+On resume, read legacy fields such as `Plan Approval`, `Current Phase`, `awaiting_plan_approval`, and `awaiting_phase_approval` alongside LOG evidence. Normalize current state while preserving the original approved scope; an old phase-only approval never expands to the whole plan.
