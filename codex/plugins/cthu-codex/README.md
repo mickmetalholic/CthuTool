@@ -55,18 +55,7 @@ call a model, load remote assets, send feedback over the network, persist
 history or preferences, record telemetry, or mutate Anki. Copying uses only the
 host's local clipboard capability when the user activates the control.
 
-## Mature Japanese Sentence Conversion
-
-Invoke `$anki-convert-mature-japanese-sentence-cards` explicitly to preview
-`Japanese Sentence` notes whose FSRS stability is at least 45 days and review
-count is at least 3. The skill proposes replacing each supported local grammar
-cloze with one whole-sentence `c1` cloze whose hint is the existing English
-translation.
-
-The first pass is always read-only: it shows note IDs and exact before/after
-`文` values. Only a later confirmation updates the displayed notes, in batches
-of at most 20, through stale-value-protected Anki MCP calls. The conversion
-does not add or remove tags.
+## Notion Libraries
 
 Use `$notion-manage` explicitly to query, create, update, or reversibly remove
 records in eleven personal Notion libraries: books, channels, comics, music releases,
