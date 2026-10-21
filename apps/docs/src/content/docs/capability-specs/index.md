@@ -60,7 +60,6 @@ The list between the markers is checked by `pnpm --filter @cthutool/docs check:o
 - `codex-plugins-cthu-codex-japanese-sentence-skill`
 - `codex-plugins-cthu-codex-japanese-vocabulary-skill`
 - `codex-plugins-cthu-codex-language-coach`
-- `codex-plugins-cthu-codex-mature-japanese-sentence-conversion-skill`
 - `codex-plugins-cthu-codex-notion-album-skill`
 - `codex-plugins-cthu-codex-notion-animation-library-skill`
 - `codex-plugins-cthu-codex-notion-app-vault-skill`

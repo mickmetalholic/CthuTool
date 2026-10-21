@@ -1,0 +1,4 @@
+interface:
+  display_name: "ChatGPT Plugin Exporter"
+  short_description: "Export repository skills for ChatGPT web"
+  default_prompt: "Use $chatgpt-plugin-exporter to review repository plugin skills, export my selected workflows for ChatGPT web, and upload the reviewed package as a private plugin."
