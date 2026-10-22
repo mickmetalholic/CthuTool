@@ -1,96 +1,60 @@
-# Interaction Templates
+# Interaction templates
 
-Use concise, explicit messages. Adapt wording to the user's language. These are output shapes, not scripts to repeat verbatim.
+Use these shapes as needed, in the user's language. Omit empty or irrelevant fields. Execution rules are in [SKILL.md](../SKILL.md).
 
-## After creating a draft
+## Material question
 
 ```text
-已创建持久任务：<path>
-当前进行澄清和只读检查，尚未修改目标。
-
-未决问题：
-Q1. <question>
-Q2. <question>
-
-回答后我会更新 PLAN.md，并展示计划及首阶段。
+已查明：<facts and evidence>
+需要确定：<unresolved choice>
+建议：<recommended option and consequences>
 ```
 
-## Initial plan and first phase preview
+## Execution preview requiring authorization
 
 ```text
-PLAN.md 已完善，状态为 awaiting_plan_approval。
-
-目标与范围：<goal, targets, exclusions>
+目标与范围：<outcome, targets/actions/exclusions>
 完成标准：<observable DoD>
-主要风险：<risks>
-阶段安排：<short phase list>
+完整阶段：<implementation, recovery, final checks>
+风险与恢复：<impact limits, backup/recovery>
+分支规则与暂停条件：<agreed policies and actual dependencies>
 
-首阶段 P1：<objective>
-包含的工作：<related actions and bounded batch>
-目标及排除项：<exact targets/exclusions>
-预期结果与验证：<result and evidence>
-风险、备份与回滚：<risk and recovery>
-
-回复“继续”即可批准计划并启动上述 P1；P1 中列出的工作会连续执行并验证。
+回复“继续”即可授权上述范围；我会连续执行、纠错和验证。
 ```
 
-## Later phase preview
+For existing authorization, state its source and scope, summarize the execution plan, and proceed.
+
+## Progress checkpoint
 
 ```text
-下一阶段 P<n>：<objective>
-包含的工作：<related actions and bounded batch>
-目标及排除项：<exact targets/exclusions>
-预期结果与验证：<result and evidence>
-风险、备份与回滚：<risk and recovery>
-
-PLAN.md 状态：awaiting_phase_approval。
-回复“继续”即批准上述 P<n>；范围变化时我会重新展示，不沿用本次确认。
+已完成并验证：<outcome, changes, evidence>
+待处理：<remaining work or isolated blockers>
+接下来继续：<next authorized action>
 ```
 
-## Phase checkpoint
+Update PLAN/LOG and carry out the next action.
+
+## Required decision or prerequisite
+
+Use when remaining work requires input:
 
 ```text
-P<n> 阶段结果：<success / partial / failed>
-已完成的工作：<actual actions and targets>
-验证：<PASS / FAIL / UNKNOWN + evidence>
-问题与恢复：<residuals, rollback, or None>
-PLAN.md / LOG.md：<current status and checkpoint event>
-
-下一阶段计划 P<n+1>：<objective, included work, exact scope>
-预期结果与验证：<result and checks>
-风险、备份与回滚：<risk and recovery>
-
-回复“继续”即可启动上面展示的下一阶段。
+已完成并验证：<progress and evidence>
+剩余受阻工作：<targets and dependency>
+当前状态：<facts, partial changes, recovery>
+需要决定或补齐：<choice or prerequisite>
+建议与其他选项：<actions and consequences>
+涉及范围：<changed targets/actions/impact/recovery, if applicable>
 ```
 
-If there is no next phase, use the final report instead of asking to continue. Do not put the next-phase plan ahead of the completed-phase result.
-
-## Decision required mid-phase
-
-```text
-P<n> 已暂停，状态为 blocked。
-
-已完成及验证：<actual progress>
-阻塞事实：<observed reality>
-需要你的决定：<exact question>
-选项及后果：<options and consequences>
-当前目标状态：<partial changes and rollback status>
-
-PLAN.md 和 LOG.md 已记录。请明确选择；单独回复“继续”不会替你作决定。
-```
-
-After a clear decision, finish the previously approved phase if its scope is unchanged. If the decision changes scope or risk materially, show a revised preview before acting.
+Record the answer and apply the [decision rules](../SKILL.md#decisions-and-blockers).
 
 ## Final report
 
 ```text
 任务状态：<completed / completed_with_followups / blocked>
-
-已完成并验证：<DoD items + evidence>
+已完成并验证：<DoD outcomes and evidence>
 实际修改：<targets>
-错误/恢复：<summary>
-回滚状态：<summary>
-残留问题：<None or explicit list>
-延期决策：<None or explicit list>
-建议的后续任务：<None or list>
+错误与恢复：<attempts, backup/rollback, if any>
+残留与延期决策：<unresolved, accepted deferred, or unknown items, or None>
 ```

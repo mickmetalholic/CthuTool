@@ -1,10 +1,8 @@
 # Persistent Task
 
-一个仅在用户明确调用时启动的持久任务 Skill，用文件系统保存长时间、多步骤任务的状态。共享流程可供 Codex 和 Hermes 使用；本目录随 CthuCodex 插件发布。
+用 PLAN.md 和 LOG.md 保存长期任务的计划、授权和执行证据。用户明确调用后启动，共享流程适用于分别安装后的 Codex 和 Hermes。
 
 ## 调用
-
-Codex 插件使用：
 
 ```text
 $cthu-codex:persistent-task 配置完整开发环境
@@ -12,45 +10,24 @@ $cthu-codex:persistent-task resume my-task
 $cthu-codex:persistent-task status my-task
 ```
 
-独立安装的 Codex 用户 Skill 可能使用 `$persistent-task`。Hermes 用户 Skill 使用 `/persistent-task`；如果安装时指定了命名空间，应使用实际注册名。调用差异见 `references/codex-adapter.md` 和 `references/hermes-adapter.md`。将本 Skill 纳入 Codex 插件不会自动安装到 Hermes。
+独立 Codex Skill 通常使用 `$persistent-task`，Hermes 通常使用 `/persistent-task`，以实际注册名为准。安装方式见 [Codex](references/codex-adapter.md) 和 [Hermes](references/hermes-adapter.md) 适配说明。仅输入调用名时显示用法。
 
-Codex 的 `agents/openai.yaml` 禁止隐式调用：
-
-```yaml
-policy:
-  allow_implicit_invocation: false
-```
-
-Skill 会在目标 workspace 下创建：
+任务文件位于目标 workspace：
 
 ```text
 .agent/tasks/<task-id>/PLAN.md
 .agent/tasks/<task-id>/LOG.md
 ```
 
-执行顺序是：
+## 工作方式
 
-```text
-创建计划
-→ 澄清问题
-→ 展示计划和首阶段
-→ 用户输入“继续”批准计划及首阶段
-→ 连续执行阶段内工作并验证
-→ 更新 PLAN.md 与 LOG.md
-→ 先总结本阶段结果，再概述下一阶段
-→ 用户输入“继续”启动下一阶段
-```
+1. 先调查可查事实，前置确认用户取舍、范围、条件规则和完成标准。
+2. 优先用一个完整阶段完成实施、纠错、恢复和验收。必须先执行才能形成的用户决策，才构成阶段边界。
+3. 记录并沿用已有授权；缺少授权时，展示具体执行范围并确认一次。
+4. 持续执行已授权工作，检查点保存进度后继续。普通错误先尝试范围内修复，局部冲突先保留并处理独立工作。
+5. 剩余工作依赖用户决策、外部权限或前置条件时，带着证据、选项和建议请求输入。
+6. 续接时核对文件和真实状态，沿用原授权范围。旧任务仅授权 P1 时，续接仍只覆盖 P1。
 
-只输入 Skill 调用名时仅显示用法，不读取目标、不创建文件、不执行命令。
+最终报告说明验证结果、实际修改、恢复状态和残留事项。
 
-## 核心规则
-
-- 每个有明确范围的阶段只需一次确认；阶段内已展示的工作自主执行，无需逐项确认。
-- 每个阶段结束、阻塞或中断时更新文档状态；用户只需对下一阶段回复“继续”。
-- 中途只有需要用户决策、范围或风险发生实质变化、出现未纳入阶段的外部操作时才暂停。
-- 命令成功不等于任务完成，必须验证真实状态。
-- 现实状态优先于旧计划；不一致时先修复计划。
-- 问题、部分成功、失败、延期和用户决策都要记录。
-- 最终报告必须列出残留问题、未知状态和延期事项。
-
-详细模板和验收场景见 `references/`。
+[主规则](SKILL.md) · [PLAN 模板](references/plan-template.md) · [LOG 模板](references/log-template.md) · [交互模板](references/interaction-templates.md) · [验收场景](references/examples-and-tests.md)
