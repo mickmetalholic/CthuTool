@@ -16,6 +16,7 @@ import {
   selectCodexPluginSource,
 } from '../../src/command/codex.command';
 import type { SkillsBackend } from '../../src/domain/codex-skills-backend';
+import { getCliRuntimeRoot } from '../../src/domain/self-update-manager';
 import type { ObservedCliCommandScope } from '../../src/runtime/command-diagnostics';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -110,9 +111,29 @@ async function writePlugin(root: string, name: string) {
 }
 
 describe('codex command boundary', () => {
-  test('first interactive install selects a valid repository and marks it for saving', async () => {
+  test('first interactive install uses the running CLI repository without prompting', async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const scope: ObservedCliCommandScope = {
+      context: { isTty: true, interactive: true, json: false, quiet: true },
+      complete() {},
+      fail() {},
+    };
+    const selection = await selectCodexPluginSource({ home: homeRoot }, scope, {
+      async requestPath() {
+        throw new Error('the running CLI repository should not prompt');
+      },
+    });
+    expect(selection).toEqual({
+      repoRoot: getCliRuntimeRoot(),
+      origin: 'runtime',
+      saveDefault: false,
+    });
+  });
+
+  test('prompts when the running CLI repository has no plugin source', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const runtimeRoot = join(repoRoot, 'unavailable');
     await writePlugin(join(repoRoot, 'codex', 'plugins'), 'sample-plugin');
     let offeredPath: string | undefined;
     const scope: ObservedCliCommandScope = {
@@ -120,18 +141,51 @@ describe('codex command boundary', () => {
       complete() {},
       fail() {},
     };
-    const selection = await selectCodexPluginSource({ home: homeRoot }, scope, {
-      async requestPath(initialValue) {
-        offeredPath = initialValue;
-        return repoRoot;
+    const selection = await selectCodexPluginSource(
+      { home: homeRoot },
+      scope,
+      {
+        async requestPath(initialValue) {
+          offeredPath = initialValue;
+          return repoRoot;
+        },
       },
-    });
-    expect(offeredPath).toBeTruthy();
+      runtimeRoot,
+    );
+    expect(offeredPath).toBe(runtimeRoot);
     expect(selection).toEqual({
       repoRoot,
       origin: 'selected',
       saveDefault: true,
     });
+  });
+
+  test('rejects an unavailable runtime source without prompts or writes in unattended modes', async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const runtimeRoot = join(homeRoot, 'unavailable');
+    for (const json of [false, true]) {
+      const scope: ObservedCliCommandScope = {
+        context: { isTty: false, interactive: false, json, quiet: true },
+        complete() {},
+        fail(error) {
+          throw new Error(error.message);
+        },
+      };
+      await expect(
+        selectCodexPluginSource(
+          { home: homeRoot },
+          scope,
+          {
+            async requestPath() {
+              throw new Error('unattended install should not prompt');
+            },
+          },
+          runtimeRoot,
+        ),
+      ).rejects.toThrow('--change-source');
+    }
+    await expect(stat(join(homeRoot, '.codex'))).rejects.toThrow();
+    await expect(stat(join(homeRoot, '.cthutool'))).rejects.toThrow();
   });
 
   test('interactive change offers the saved path and selects a replacement', async () => {
@@ -176,21 +230,75 @@ describe('codex command boundary', () => {
     });
   });
 
-  test('requires a source outside a repository and can remember, reuse, and override it', async () => {
+  test('defaults to the running CLI repository instead of the working directory', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'cthutool-other-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    await writeJson(join(cwd, 'package.json'), { name: 'cthutool' });
+    await writePlugin(join(cwd, 'codex', 'plugins'), 'cwd-plugin');
+    const result = await runCli(
+      ['codex', 'install', '--home', homeRoot, '--json'],
+      {},
+      cwd,
+    );
+    expect(result.code).toBe(0);
+    expect(result.err).toBe('');
+    const parsed = JSON.parse(result.out);
+    expect(parsed.result.source).toEqual({
+      repoRoot: getCliRuntimeRoot(),
+      origin: 'runtime',
+      defaultSaved: false,
+    });
+    expect(
+      parsed.result.installedPlugins.map(
+        (plugin: { name: string }) => plugin.name,
+      ),
+    ).not.toContain('cwd-plugin');
+    await expect(
+      stat(join(homeRoot, '.cthutool', 'codex', 'plugin-source.json')),
+    ).rejects.toThrow();
+
+    const human = await runCli(
+      ['codex', 'install', '--home', homeRoot, '--no-interactive'],
+      {},
+      cwd,
+    );
+    expect(human.code).toBe(0);
+    expect(human.out).toContain(`Source  ${getCliRuntimeRoot()} (runtime)`);
+  });
+
+  test('packaged bin uses its own repository from an unrelated directory', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'cthutool-other-'));
+    const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const proc = Bun.spawn(
+      [
+        'node',
+        join(cliRoot, 'bin', 'chc.mjs'),
+        'codex',
+        'install',
+        '--home',
+        homeRoot,
+        '--json',
+      ],
+      { cwd, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' },
+    );
+    const out = await new Response(proc.stdout).text();
+    const err = await new Response(proc.stderr).text();
+    expect(await proc.exited).toBe(0);
+    expect(err).toBe('');
+    expect(JSON.parse(out).result.source).toEqual({
+      repoRoot: getCliRuntimeRoot(),
+      origin: 'runtime',
+      defaultSaved: false,
+    });
+  });
+
+  test('can remember, reuse, and override a selected source outside a repository', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'cthutool-other-'));
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
     const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
     const otherRepo = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
     await writePlugin(join(repoRoot, 'codex', 'plugins'), 'first-plugin');
     await writePlugin(join(otherRepo, 'codex', 'plugins'), 'second-plugin');
-
-    const missing = await runCli(
-      ['codex', 'install', '--home', homeRoot, '--json'],
-      {},
-      cwd,
-    );
-    expect(missing.code).not.toBe(0);
-    expect(JSON.parse(missing.out).error.message).toContain('--change-source');
 
     const selected = await runCli(
       [

@@ -111,16 +111,25 @@ The `chc codex install` flow SHALL preserve bundled MCP server metadata when ins
 
 The `chc codex install` command SHALL select a valid repository plugin source and remember a user-selected default across working directories.
 
-#### Scenario: First interactive use
+#### Scenario: Default to the running CLI repository
 
-- **WHEN** no saved source or explicit repository root exists and the current directory is not inside a CthuTool workspace
+- **WHEN** no saved source or explicit repository root exists
+- **AND** the repository containing the running `chc` command has a valid plugin source
+- **THEN** install uses that repository without prompting in interactive, JSON, and non-interactive modes
+- **AND** the current working directory does not affect that selection
+- **AND** the automatically selected runtime repository is not saved as a fixed default
+- **AND** JSON output identifies the source provenance as `runtime`
+
+#### Scenario: Runtime repository has no plugin source
+
+- **WHEN** no saved source or explicit repository root exists and the running CLI repository has no valid plugin source
 - **THEN** interactive install prompts for a repository path
 - **AND** a valid selected path is saved after successful installation
 
 #### Scenario: Reuse and change default
 
 - **WHEN** a valid source has been saved
-- **THEN** subsequent install commands use it regardless of the current directory
+- **THEN** subsequent install commands use it ahead of the running CLI repository regardless of the current directory
 - **AND** `--change-source` can replace it interactively or with `--repo-root <path>`
 
 #### Scenario: One-run override

@@ -10864,20 +10864,6 @@ async function writeCodexPluginSource(homeRoot, repoRoot) {
     await rm6(temporaryPath, { force: true });
   }
 }
-function findCthuToolRoot(start) {
-  let current = resolve7(start);
-  while (true) {
-    try {
-      const pkg = JSON.parse(readFileSync4(join11(current, "package.json"), "utf8"));
-      if (pkg.name === "cthutool")
-        return current;
-    } catch {}
-    const parent = dirname7(current);
-    if (parent === current)
-      return;
-    current = parent;
-  }
-}
 function pluginSourceValidationError(repoRoot, pluginsRoot) {
   const root = resolve7(repoRoot);
   if (!isDirectory(root))
@@ -11671,7 +11657,7 @@ var defaultPluginSourceInteraction = {
     return lD2(answer) ? undefined : answer.trim();
   }
 };
-async function selectCodexPluginSource(args, scope, interaction = defaultPluginSourceInteraction) {
+async function selectCodexPluginSource(args, scope, interaction = defaultPluginSourceInteraction, runtimeRoot = getCliRuntimeRoot()) {
   const basePaths = createPaths(args);
   const explicit = getStringArg(args.repoRoot);
   const changing = args["change-source"] === true;
@@ -11684,8 +11670,8 @@ async function selectCodexPluginSource(args, scope, interaction = defaultPluginS
       savedError = error2 instanceof Error ? error2.message : String(error2);
     }
   }
-  const detected = findCthuToolRoot(process.cwd());
-  const promptNeeded = !explicit && scope.context.interactive && !scope.context.json && (changing || !saved || !!pluginSourceValidationError(saved.repoRoot));
+  const defaultSourceError = pluginSourceValidationError(saved?.repoRoot ?? runtimeRoot, getStringArg(args.pluginsRoot));
+  const promptNeeded = !explicit && scope.context.interactive && !scope.context.json && (changing || !!savedError || !!defaultSourceError);
   if (changing && !explicit && (!scope.context.interactive || scope.context.json)) {
     failCommand(scope, "`--change-source` needs an interactive terminal or `--repo-root <path>`.");
     return;
@@ -11695,12 +11681,12 @@ async function selectCodexPluginSource(args, scope, interaction = defaultPluginS
     return;
   }
   if (promptNeeded) {
-    writeHumanStatus(scope.context, processOutput, savedError ? `${savedError} Choose a valid replacement.` : saved ? `Saved plugin source: ${saved.repoRoot}${pluginSourceValidationError(saved.repoRoot) ? " (unavailable)" : ""}` : "No default Codex plugin source is saved yet.");
-    if (detected && !saved) {
-      writeHumanStatus(scope.context, processOutput, `Detected working tree: ${detected}`);
+    writeHumanStatus(scope.context, processOutput, savedError ? `${savedError} Choose a valid replacement.` : saved ? `Saved plugin source: ${saved.repoRoot}${defaultSourceError ? " (unavailable)" : ""}` : "No default Codex plugin source is saved yet.");
+    if (!saved) {
+      writeHumanStatus(scope.context, processOutput, `Current CLI repository: ${runtimeRoot}${defaultSourceError ? " (unavailable)" : ""}`);
     }
     writeHumanStatus(scope.context, processOutput, "Select the repository to use and remember for future installs.");
-    const chosen = await interaction.requestPath(saved?.repoRoot ?? detected);
+    const chosen = await interaction.requestPath(saved?.repoRoot ?? runtimeRoot);
     if (!chosen) {
       writeHumanStatus(scope.context, processOutput, import_picocolors3.default.dim("Cancelled."));
       return;
@@ -11712,11 +11698,7 @@ async function selectCodexPluginSource(args, scope, interaction = defaultPluginS
     }
     return { repoRoot: resolve9(chosen), origin: "selected", saveDefault: true };
   }
-  const repoRoot = explicit ?? saved?.repoRoot ?? detected;
-  if (!repoRoot) {
-    failCommand(scope, "No Codex plugin source is configured. Run `chc codex install --change-source --repo-root <path>` or run interactively to choose one.");
-    return;
-  }
+  const repoRoot = explicit ?? saved?.repoRoot ?? runtimeRoot;
   const error = pluginSourceValidationError(repoRoot, getStringArg(args.pluginsRoot));
   if (error) {
     failCommand(scope, `${error} Run 'chc codex install --change-source --repo-root <path>' to change the default.`);
@@ -11724,7 +11706,7 @@ async function selectCodexPluginSource(args, scope, interaction = defaultPluginS
   }
   return {
     repoRoot: resolve9(repoRoot),
-    origin: explicit ? "explicit" : saved ? "saved" : "working-tree",
+    origin: explicit ? "explicit" : saved ? "saved" : "runtime",
     saveDefault: changing
   };
 }
