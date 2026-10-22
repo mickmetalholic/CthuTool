@@ -12,7 +12,6 @@ import pc from 'picocolors';
 import { installRepositoryCodexPlugins } from '../domain/codex-plugin-install-manager';
 import { CodexPluginCacheBusyError } from '../domain/codex-plugin-manager';
 import {
-  findCthuToolRoot,
   pluginSourceValidationError,
   readCodexPluginSource,
   writeCodexPluginSource,
@@ -37,6 +36,7 @@ import {
   readCodexSkillsManifest,
 } from '../domain/codex-skills-manifest';
 import { parseSkillSource } from '../domain/codex-skills-source';
+import { getCliRuntimeRoot } from '../domain/self-update-manager';
 import { createCodexConfigPaths } from '../infra/codex-config-paths';
 import { cliContractArgs } from '../runtime/cli-context';
 import { type CliErrorCode, createCliError } from '../runtime/cli-error';
@@ -166,7 +166,7 @@ function failCommand(
 
 type PluginSourceSelection = {
   readonly repoRoot: string;
-  readonly origin: 'explicit' | 'saved' | 'working-tree' | 'selected';
+  readonly origin: 'explicit' | 'saved' | 'runtime' | 'selected';
   readonly saveDefault: boolean;
 };
 
@@ -193,6 +193,7 @@ export async function selectCodexPluginSource(
   args: CodexArgs,
   scope: ObservedCliCommandScope,
   interaction: PluginSourceInteraction = defaultPluginSourceInteraction,
+  runtimeRoot: string = getCliRuntimeRoot(),
 ): Promise<PluginSourceSelection | undefined> {
   const basePaths = createPaths(args);
   const explicit = getStringArg(args.repoRoot);
@@ -206,12 +207,15 @@ export async function selectCodexPluginSource(
       savedError = error instanceof Error ? error.message : String(error);
     }
   }
-  const detected = findCthuToolRoot(process.cwd());
+  const defaultSourceError = pluginSourceValidationError(
+    saved?.repoRoot ?? runtimeRoot,
+    getStringArg(args.pluginsRoot),
+  );
   const promptNeeded =
     !explicit &&
     scope.context.interactive &&
     !scope.context.json &&
-    (changing || !saved || !!pluginSourceValidationError(saved.repoRoot));
+    (changing || !!savedError || !!defaultSourceError);
 
   if (
     changing &&
@@ -240,14 +244,14 @@ export async function selectCodexPluginSource(
       savedError
         ? `${savedError} Choose a valid replacement.`
         : saved
-          ? `Saved plugin source: ${saved.repoRoot}${pluginSourceValidationError(saved.repoRoot) ? ' (unavailable)' : ''}`
+          ? `Saved plugin source: ${saved.repoRoot}${defaultSourceError ? ' (unavailable)' : ''}`
           : 'No default Codex plugin source is saved yet.',
     );
-    if (detected && !saved) {
+    if (!saved) {
       writeHumanStatus(
         scope.context,
         processOutput,
-        `Detected working tree: ${detected}`,
+        `Current CLI repository: ${runtimeRoot}${defaultSourceError ? ' (unavailable)' : ''}`,
       );
     }
     writeHumanStatus(
@@ -255,7 +259,9 @@ export async function selectCodexPluginSource(
       processOutput,
       'Select the repository to use and remember for future installs.',
     );
-    const chosen = await interaction.requestPath(saved?.repoRoot ?? detected);
+    const chosen = await interaction.requestPath(
+      saved?.repoRoot ?? runtimeRoot,
+    );
     if (!chosen) {
       writeHumanStatus(scope.context, processOutput, pc.dim('Cancelled.'));
       return undefined;
@@ -268,14 +274,7 @@ export async function selectCodexPluginSource(
     return { repoRoot: resolve(chosen), origin: 'selected', saveDefault: true };
   }
 
-  const repoRoot = explicit ?? saved?.repoRoot ?? detected;
-  if (!repoRoot) {
-    failCommand(
-      scope,
-      'No Codex plugin source is configured. Run `chc codex install --change-source --repo-root <path>` or run interactively to choose one.',
-    );
-    return undefined;
-  }
+  const repoRoot = explicit ?? saved?.repoRoot ?? runtimeRoot;
   const error = pluginSourceValidationError(
     repoRoot,
     getStringArg(args.pluginsRoot),
@@ -289,7 +288,7 @@ export async function selectCodexPluginSource(
   }
   return {
     repoRoot: resolve(repoRoot),
-    origin: explicit ? 'explicit' : saved ? 'saved' : 'working-tree',
+    origin: explicit ? 'explicit' : saved ? 'saved' : 'runtime',
     saveDefault: changing,
   };
 }

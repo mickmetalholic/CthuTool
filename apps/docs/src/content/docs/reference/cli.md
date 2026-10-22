@@ -259,13 +259,16 @@ enabled plugins, and synchronizes their cache. It does not manage standalone
 skills, prompts, or rules. The retired `codex status`, `export`, and `apply`
 subcommands are rejected as unknown commands.
 
-The first interactive install asks for the CthuTool repository path and saves
-it at `~/.cthutool/codex/plugin-source.json`. Later installs reuse that source
-from any working directory. `--change-source` prompts for a new default;
+Without a saved source, install uses the repository containing the running `chc`
+command from any working directory, without prompting or saving a fixed path.
+A source saved at `~/.cthutool/codex/plugin-source.json` takes priority.
+`--change-source` prompts for a new default and saves it after successful
+installation;
 `--change-source --repo-root <path>` changes it non-interactively. Plain
-`--repo-root <path>` is a one-run override. JSON and non-interactive runs fail
-with a repair command if no valid source is available. The human result names
-the source and each plugin action/cache version, while JSON includes source
+`--repo-root <path>` is a one-run override. If the current CLI repository has no
+plugin source, interactive install asks for a valid repository. JSON and
+non-interactive runs fail with a repair command if no valid source is available.
+The human result names the source and each plugin action/cache version, while JSON includes source
 path and provenance.
 If cache synchronization reports that a plugin cache path is busy, exit Codex
 completely and rerun `chc codex install`.

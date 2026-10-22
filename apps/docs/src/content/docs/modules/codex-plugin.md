@@ -29,9 +29,13 @@ User Codex environment, with local dependencies such as Anki and AnkiConnect whe
 chc codex install
 ```
 
-On first interactive use, enter the CthuTool repository path. The CLI saves it
-for future installs from any directory. Run `chc codex install --change-source`
-to select another default, or add `--repo-root <path>` for a one-run override.
+Without a saved source, the CLI automatically uses the repository containing
+the running `chc` command from any directory. Run
+`chc codex install --change-source` to select and save a default after successful
+installation, or add
+`--repo-root <path>` for a one-run override. A saved default takes priority over
+the running CLI repository. If that repository has no plugin source, interactive
+install asks for a valid path.
 For scripts, `--change-source --repo-root <path>` sets a new default without a
 prompt. Install output identifies the selected source, installed or updated
 plugins, and synchronized cache versions.
