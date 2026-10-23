@@ -27,7 +27,9 @@ Bootstrap installs the committed CLI from the chosen checkout into a user npm pr
 
 ## Binding and existing files
 
-Init prints the OS/architecture (including WSL), running Node version, and checks for chezmoi/mise. It shows detected executable paths/versions, whether each tool is reused, and the chosen installer before installing a missing tool. Version probing is informational: installed tools are not automatically upgraded, and native .chezmoiversion remains responsible for source compatibility. Use --quiet to suppress progress; --json returns one structured result including environment.tools without human check messages.
+Init groups live environment checks, the selected host profile, and next steps into a terminal report. It shows the OS/architecture (including WSL), running Node version, detected chezmoi/mise executable paths and versions, whether each tool is reused, and the chosen installer before installing a missing tool. Version probing is informational: installed tools are not automatically upgraded, and native .chezmoiversion remains responsible for source compatibility.
+
+The env/config/notion commands use the same sectioned presentation, with success, attention and failure markers. Long profile values wrap under their labels. Colors appear only on a supported output terminal; redirected output stays plain. Native chezmoi diff text and conflict prompts are retained. Notion diff presents the published and candidate contents separately, together with retirement acknowledgements and the first-publication review gate. Use `--quiet` to suppress human reports and progress; `--json` keeps the existing single structured result, including `environment.tools` for init.
 
 Notion owns software, toolsets, host OS/shell/terminal and Tools/Exclude. Init selects a host from the local published snapshot, validates OS/WSL compatibility and persists only canonical `[data.local].host` and a fixed chezmoi sourceDir. It does not create Notion hosts or a local software plan. No match: create/review/activate the host in Notion, publish a snapshot through Git, update this checkout, then rerun init.
 

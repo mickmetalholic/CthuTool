@@ -9,16 +9,24 @@ export type ToolPreparation = {
   version?: string;
   installer?: 'winget' | 'Homebrew' | 'official installer';
 };
+export type ToolPreparationEvent =
+  | { type: 'tool_check'; tool: ToolPreparation['tool'] }
+  | {
+      type: 'tool_install';
+      tool: ToolPreparation['tool'];
+      installer: NonNullable<ToolPreparation['installer']>;
+    }
+  | { type: 'tool_ready'; preparation: ToolPreparation };
 export async function ensureDotfilesTools(
   system: DotfilesSystem,
-  report: (message: string) => void = () => {},
+  report: (event: ToolPreparationEvent) => void = () => {},
 ): Promise<ToolPreparation[]> {
   const bin = join(system.home, '.local/bin');
   await mkdir(bin, { recursive: true });
   process.env.PATH = `${bin}${delimiter}${process.env.PATH ?? ''}`;
   const tools: ToolPreparation[] = [];
   for (const tool of ['chezmoi', 'mise'] as const) {
-    report(`Checking ${tool}...`);
+    report({ type: 'tool_check', tool });
     const existing = await system.which(tool);
     let installer: ToolPreparation['installer'];
     if (!existing) {
@@ -28,7 +36,7 @@ export async function ensureDotfilesTools(
           : (await system.which('brew'))
             ? 'Homebrew'
             : 'official installer';
-      report(`${tool}: not found; installing with ${installer}...`);
+      report({ type: 'tool_install', tool, installer });
       if (system.os === 'windows') {
         await checkedRun(system, 'winget', [
           'install',
@@ -92,11 +100,15 @@ export async function ensureDotfilesTools(
     } catch {
       /* Availability can succeed even when a version probe is unsupported. */
     }
-    const status = existing ? 'reused' : 'installed';
-    report(
-      `${tool}: ${version ?? 'version unavailable'} at ${path} (${existing ? 'reusing existing installation' : 'installed successfully'})`,
-    );
-    tools.push({ tool, path, status, version, installer });
+    const preparation: ToolPreparation = {
+      tool,
+      path,
+      status: existing ? 'reused' : 'installed',
+      version,
+      installer,
+    };
+    report({ type: 'tool_ready', preparation });
+    tools.push(preparation);
   }
   return tools;
 }

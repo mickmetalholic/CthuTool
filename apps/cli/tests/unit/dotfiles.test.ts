@@ -45,6 +45,7 @@ import {
   createDotfilesSystem,
   type DotfilesSystem,
 } from '../../src/infra/dotfiles/system';
+import type { ToolPreparationEvent } from '../../src/infra/dotfiles/tooling';
 import {
   publishSnapshot,
   recoverTransaction,
@@ -929,7 +930,7 @@ test('init tooling reports installation choices, detected versions and reuse wit
     '../../src/infra/dotfiles/tooling'
   );
   const { s, calls } = await testSystem();
-  const messages: string[] = [];
+  const messages: ToolPreparationEvent[] = [];
   const installed = new Set(['brew']);
   s.os = 'darwin';
   s.which = async (c) => (installed.has(c) ? `/fake/${c}` : undefined);
@@ -954,20 +955,24 @@ test('init tooling reports installation choices, detected versions and reuse wit
       path: '/fake/chezmoi',
       installer: 'Homebrew',
     });
-    expect(messages).toContain(
-      'chezmoi: not found; installing with Homebrew...',
-    );
-    expect(messages.some((m) => m.includes('installed successfully'))).toBe(
-      true,
-    );
+    expect(messages).toContainEqual({
+      type: 'tool_install',
+      tool: 'chezmoi',
+      installer: 'Homebrew',
+    });
+    expect(messages).toContainEqual({
+      type: 'tool_ready',
+      preparation: fresh[0],
+    });
     messages.length = 0;
     const reused = await ensureDotfilesTools(s, (message) =>
       messages.push(message),
     );
     expect(reused.map((t) => t.status)).toEqual(['reused', 'reused']);
-    expect(
-      messages.some((m) => m.includes('reusing existing installation')),
-    ).toBe(true);
+    expect(messages).toContainEqual({
+      type: 'tool_ready',
+      preparation: reused[0],
+    });
     expect(calls.filter((c) => c.command === 'brew')).toEqual([
       { command: 'brew', args: ['install', 'chezmoi'] },
       { command: 'brew', args: ['install', 'mise'] },
@@ -982,7 +987,7 @@ test('init tooling reports the selected installer before a failed installation',
   );
   const { s } = await testSystem();
   s.os = 'windows';
-  const messages: string[] = [];
+  const messages: ToolPreparationEvent[] = [];
   s.run = async () => ({
     code: 1,
     stdout: '',
@@ -994,8 +999,8 @@ test('init tooling reports the selected installer before a failed installation',
       ensureDotfilesTools(s, (m) => messages.push(m)),
     ).rejects.toThrow('fixture installer failed');
     expect(messages).toEqual([
-      'Checking chezmoi...',
-      'chezmoi: not found; installing with winget...',
+      { type: 'tool_check', tool: 'chezmoi' },
+      { type: 'tool_install', tool: 'chezmoi', installer: 'winget' },
     ]);
   } finally {
     process.env.PATH = previous;

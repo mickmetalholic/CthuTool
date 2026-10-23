@@ -13752,7 +13752,7 @@ async function runMain(cmd, opts = {}) {
 }
 
 // src/index.ts
-var import_picocolors11 = __toESM(require_picocolors(), 1);
+var import_picocolors12 = __toESM(require_picocolors(), 1);
 
 // src/command/command-discovery.ts
 function stripAnsi3(value) {
@@ -23210,12 +23210,12 @@ async function ensureDotfilesTools(system, report = () => {}) {
   process.env.PATH = `${bin}${delimiter2}${process.env.PATH ?? ""}`;
   const tools = [];
   for (const tool of ["chezmoi", "mise"]) {
-    report(`Checking ${tool}...`);
+    report({ type: "tool_check", tool });
     const existing = await system.which(tool);
     let installer;
     if (!existing) {
       installer = system.os === "windows" ? "winget" : await system.which("brew") ? "Homebrew" : "official installer";
-      report(`${tool}: not found; installing with ${installer}...`);
+      report({ type: "tool_install", tool, installer });
       if (system.os === "windows") {
         await checkedRun(system, "winget", [
           "install",
@@ -23261,9 +23261,15 @@ async function ensureDotfilesTools(system, report = () => {}) {
       if (result.code === 0)
         version = result.stdout.trim().split(/\r?\n/)[0]?.slice(0, 200) || undefined;
     } catch {}
-    const status = existing ? "reused" : "installed";
-    report(`${tool}: ${version ?? "version unavailable"} at ${path} (${existing ? "reusing existing installation" : "installed successfully"})`);
-    tools.push({ tool, path, status, version, installer });
+    const preparation = {
+      tool,
+      path,
+      status: existing ? "reused" : "installed",
+      version,
+      installer
+    };
+    report({ type: "tool_ready", preparation });
+    tools.push(preparation);
   }
   return tools;
 }
@@ -23422,6 +23428,327 @@ async function publishSnapshot(source, files, baseline, fault) {
   }
 }
 
+// src/command/dotfiles-output.ts
+var import_picocolors4 = __toESM(require_picocolors(), 1);
+import { stripVTControlCharacters } from "node:util";
+var defaultDeps = {
+  output: processOutput,
+  isOutputTty: () => process.stdout.isTTY === true,
+  isColorSupported: () => import_picocolors4.default.isColorSupported,
+  columns: () => process.stdout.columns ?? 100
+};
+var text2 = (value2) => stripVTControlCharacters(value2).replaceAll(/\p{Cc}/gu, (character) => character === `
+` ? character : "");
+var count = (amount, noun) => `${amount} ${noun}${amount === 1 ? "" : "s"}`;
+var graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+function width(value2) {
+  let size = 0;
+  for (const { segment } of graphemes.segment(value2)) {
+    if (/^\p{Mark}+$/u.test(segment))
+      continue;
+    const code = segment.codePointAt(0) ?? 0;
+    size += /\p{Extended_Pictographic}/u.test(segment) || code >= 4352 && (code <= 4447 || code >= 11904 && code <= 42191 || code >= 44032 && code <= 55203 || code >= 63744 && code <= 64255 || code >= 65040 && code <= 65376 || code >= 131072) ? 2 : 1;
+  }
+  return size;
+}
+function wrap(value2, columns) {
+  const lines2 = [];
+  let line = "";
+  for (const { segment } of graphemes.segment(value2)) {
+    if (line && width(line + segment) > columns) {
+      const boundary = [...line.matchAll(/[ ,/\\]/gu)].at(-1);
+      const cut = boundary && boundary.index >= line.length / 2 ? boundary.index + 1 : line.length;
+      lines2.push(line.slice(0, cut));
+      line = line.slice(cut);
+    }
+    line += segment;
+  }
+  lines2.push(line);
+  return lines2;
+}
+function createDotfilesRenderer(context, command, deps = defaultDeps) {
+  const human = !context.json && !context.quiet;
+  const c4 = import_picocolors4.default.createColors(deps.isOutputTty() && deps.isColorSupported());
+  const columns = Math.max(40, Math.min(100, deps.columns?.() ?? 100));
+  let started = false;
+  const tone = (value2, style) => ({ success: c4.green, warning: c4.yellow, error: c4.red, muted: c4.dim })[style](value2);
+  const write = (line = "") => {
+    if (human)
+      deps.output.stdout.write(`${line}
+`);
+  };
+  const start = () => {
+    if (started || !human)
+      return;
+    started = true;
+    write(`${c4.bold(c4.cyan("◆ CthuTool"))}  ${c4.dim(`dotfiles › ${command.replaceAll(" ", " › ")}`)}`);
+  };
+  const section = (title) => {
+    start();
+    write(c4.dim("│"));
+    write(`${c4.cyan("◇")} ${c4.bold(text2(title))}`);
+  };
+  const row = (label, value2, style) => {
+    const lines2 = text2(value2).split(`
+`).flatMap((line) => wrap(line, columns - 18));
+    for (const [index, line] of lines2.entries())
+      write(`${c4.dim("│")}  ${c4.dim((index === 0 ? text2(label) : "").padEnd(13))}  ${style ? tone(line, style) : line}`);
+  };
+  const item = (label, value2, style = "muted") => {
+    const symbol = { success: "✓", warning: "!", error: "✗", muted: "·" }[style];
+    write(`${c4.dim("│")}  ${tone(symbol, style)} ${c4.bold(text2(label))}${value2 ? `  ${tone(text2(value2), style)}` : ""}`);
+  };
+  const finish = (message, style = "success") => {
+    write(c4.dim("│"));
+    write(`${c4.dim("└")} ${tone(`${style === "success" ? "✓" : style === "error" ? "✗" : "!"} ${message}`, style)}`);
+  };
+  const next = (commands) => {
+    section("Next steps");
+    for (const [index, value2] of commands.entries())
+      row(`${index + 1}.`, value2);
+  };
+  const profile = (plan) => {
+    row("Host", plan.host);
+    row("Platform", plan.os);
+    row("Shell", plan.shell);
+    row("Terminal", plan.terminal);
+    row("Toolsets", plan.toolsets.join(", ") || "none");
+    const packages = plan.entries.filter((e3) => e3.classification === "package").length;
+    row("Software", `${packages} packages · ${plan.entries.length - packages} runtimes · ${plan.skipped.length} unsupported`);
+  };
+  const alignment = (reviewed) => row("Alignment", reviewed ? "reviewed" : "review required before Notion publication", reviewed ? "success" : "warning");
+  const sync = (result, pull) => {
+    section(pull ? "Notion publication" : "Notion comparison");
+    row("Source", result.source);
+    row("Generation", String(result.generation));
+    alignment(result.alignmentReviewed);
+    row("Changes", `${result.changes.length} files · ${result.retired.length} retirements`);
+    if (result.changes.length) {
+      section(result.published ? "Published files" : "Changed files");
+      for (const change of result.changes)
+        item(change.path, "", "warning");
+    }
+    if (!pull) {
+      for (const change of result.changes) {
+        section(change.path);
+        row("Published", "--- local snapshot", "error");
+        for (const line of change.before.trimEnd().split(`
+`))
+          row("", line, "error");
+        row("Notion", "+++ candidate snapshot", "success");
+        for (const line of change.after.trimEnd().split(`
+`))
+          row("", line, "success");
+      }
+    }
+    if (result.retired.length) {
+      section("Retirements requiring acknowledgement");
+      for (const key2 of result.retired)
+        item(key2, "--allow-retire", "warning");
+    }
+    if (result.published)
+      next(["git diff -- dotfiles/data dotfiles/notion/manifest.json"]);
+    else if (result.hasChanges) {
+      if (!result.alignmentReviewed) {
+        section("Before publication");
+        row("Review", "docs/dotfiles/reconciliation.md", "warning");
+      } else
+        next([
+          `chc dotfiles notion pull${result.retired.length ? ` --allow-retire ${result.retired.join(",")}` : ""}`
+        ]);
+    }
+    finish(result.published ? "Snapshot published locally; ready for Git review" : result.hasChanges ? "Differences found; review before publication" : "Notion and the local snapshot match", result.hasChanges && !result.published ? "warning" : "success");
+  };
+  const renderers = {
+    init(result) {
+      section("Host profile");
+      profile(result.plan);
+      row("Source", result.source);
+      row("Binding", result.configFile);
+      if (result.previousConfigBackup)
+        row("Backup", result.previousConfigBackup);
+      if (result.legacyHint)
+        row("Previous host", result.legacyHint);
+      if (result.adoption) {
+        section("Imported home files");
+        for (const op of result.adoption.operations)
+          item(op.target, op.command, "success");
+        row("Review", "git diff -- dotfiles/home");
+      }
+      next(result.next);
+      finish("Host binding saved");
+    },
+    "env setup"(result) {
+      section("dryRun" in result ? "Software plan · dry run" : "Software setup");
+      profile(result.plan);
+      if ("dryRun" in result) {
+        row("Source", result.source);
+        section("Installation plan");
+        for (const entry of result.plan.entries) {
+          const policy = entry.platform;
+          const owner2 = entry.classification === "runtime" ? "runtime" : policy?.owner;
+          item(entry.id, `${owner2 === "dot" ? `${policy?.install} · ${policy?.package}` : `managed by ${owner2}`} · ${entry.provenance}`);
+          const guidance = policy?.guidance ?? ("guidance" in entry.software ? entry.software.guidance : undefined);
+          if (guidance)
+            row("", guidance);
+        }
+      } else {
+        section("Results");
+        for (const entry of result.results) {
+          const style = entry.status === "failed" ? "error" : ["installed", "available"].includes(entry.status) ? "success" : "warning";
+          item(entry.id, entry.status, style);
+          if ("detail" in entry && entry.detail)
+            row("", entry.detail);
+        }
+        row("Summary", Object.entries(result.results.reduce((counts, r4) => {
+          counts[r4.status] = (counts[r4.status] ?? 0) + 1;
+          return counts;
+        }, {})).map(([status, count2]) => `${count2} ${status}`).join(" · ") || "No software selected");
+      }
+      if (result.plan.skipped.length) {
+        section("Unsupported software");
+        for (const entry of result.plan.skipped)
+          item(entry.id, `${entry.reason} · ${entry.provenance}`, "warning");
+      }
+      if ("dryRun" in result) {
+        next([`chc dotfiles env setup --host ${result.plan.host}`]);
+        finish("Preview complete; no installers ran");
+      } else {
+        next([
+          "chc dotfiles env doctor",
+          "chc dotfiles config diff",
+          "mise install"
+        ]);
+        finish(result.blockingFailures ? `Setup finished with ${count(result.blockingFailures, "failure")}` : "Software setup complete; review manual and runtime actions above", result.blockingFailures ? "error" : "success");
+      }
+    },
+    "env doctor"(result) {
+      section("Machine");
+      row("Source", result.source);
+      row("Host", result.host ?? "unbound");
+      if (result.bindingIssue)
+        item("Host binding", result.bindingIssue, "warning");
+      section("Prerequisites");
+      for (const p of result.prerequisites)
+        item(p.command, p.available ? "available" : "missing", p.available ? "success" : "warning");
+      section("Git identity · read only");
+      row("Name", result.gitIdentity.name || "not configured");
+      row("Email", result.gitIdentity.email || "not configured");
+      if (result.results.length)
+        section("Software health");
+      for (const entry of result.results) {
+        const missing = entry.checks.some((check3) => check3.status === "missing");
+        const manual = entry.checks.some((check3) => check3.status === "manual");
+        item(entry.id, `${missing ? "missing" : manual ? "manual check" : "ready"} · ${entry.severity}`, missing ? entry.severity === "blocking" ? "error" : "warning" : manual ? "warning" : "success");
+        for (const check3 of entry.checks)
+          row("", `${check3.status} · ${check3.type} · ${check3.detail}`);
+        if (entry.guidance)
+          row("", entry.guidance);
+      }
+      const attention = !!result.bindingIssue || result.prerequisites.some((p) => !p.available) || result.results.some((r4) => r4.checks.some((c5) => c5.status !== "ok"));
+      finish(result.blockingFailures ? `${count(result.blockingFailures, "blocking software failure")}` : attention ? "Checks complete; review items above" : "All checked software is ready", result.blockingFailures ? "error" : attention ? "warning" : "success");
+    },
+    "config add"(result) {
+      section("Imported home files");
+      row("Source", result.source);
+      for (const op of result.operations)
+        item(op.target, `chezmoi ${op.command}`, "success");
+      section("Private backups");
+      for (const backup of result.backups)
+        if (backup)
+          row("Backup", backup);
+      next(["git diff -- dotfiles/home", "chc dotfiles config diff"]);
+      finish("Source updated; ready for review");
+    },
+    "config diff"(result) {
+      section("Home configuration differences");
+      if (result.output.trim()) {
+        write();
+        if (human)
+          deps.output.stdout.write(result.output.endsWith(`
+`) ? result.output : `${result.output}
+`);
+        next([
+          "chc dotfiles config add <home-path...>",
+          "chc dotfiles config apply"
+        ]);
+        finish("Differences found", "warning");
+      } else
+        finish("Home files match the rendered configuration");
+    },
+    "config apply"(result) {
+      section("Home configuration");
+      row("Host", result.host);
+      row("Source", result.source);
+      row("Conflict mode", result.interactive ? "native chezmoi prompts" : "noninteractive preflight");
+      next(["chc dotfiles config diff", "mise install"]);
+      finish("chezmoi apply completed; check diff for any skipped files");
+    },
+    "notion auth"(result) {
+      section("Notion credentials");
+      if ("cleared" in result) {
+        row("Cache", "cleared");
+        if (result.environmentStillActive)
+          item("NOTION_TOKEN", "still active in this environment", "warning");
+        finish("Local credential cache cleared");
+      } else {
+        row("Token source", result.credentialSource === "environment" ? "NOTION_TOKEN environment variable" : "private local cache");
+        row("Access", "software, toolsets and hosts verified");
+        next(["chc dotfiles notion diff"]);
+        finish("Notion access verified");
+      }
+    },
+    "notion validate"(result) {
+      section("Published snapshot · offline");
+      row("Source", result.source);
+      row("Model", `v${result.modelVersion}`);
+      alignment(result.alignmentReviewed);
+      section(`Published hosts · ${result.hosts.length}`);
+      for (const host of result.hosts)
+        item(host, "", "success");
+      finish("Snapshot structure, digests and references are valid");
+    },
+    "notion diff": (result) => sync(result, false),
+    "notion pull": (result) => sync(result, true)
+  };
+  return {
+    start,
+    progress(event) {
+      if (!human)
+        return;
+      switch (event.type) {
+        case "environment":
+          section("Environment");
+          row("Platform", `${event.os}/${event.arch}${event.wsl ? " · WSL" : ""}`);
+          row("Node", event.node);
+          break;
+        case "tool_check":
+          item(event.tool, "checking…");
+          break;
+        case "tool_install":
+          item(event.tool, `missing · installing with ${event.installer}…`, "warning");
+          break;
+        case "tool_ready": {
+          const tool = event.preparation;
+          item(tool.tool, tool.status, "success");
+          row("Version", tool.version ?? "unavailable");
+          row("Executable", tool.path);
+          break;
+        }
+        case "phase":
+          section(event.title);
+          if (event.detail)
+            row("Status", event.detail);
+          break;
+      }
+    },
+    result(name, result) {
+      if (human)
+        renderers[name](result);
+    }
+  };
+}
+
 // src/command/dotfiles.command.ts
 var sourceArg = {
   source: {
@@ -23489,6 +23816,7 @@ function createDotfilesCommand(overrides = {}) {
       args: { ...cliContractArgs, ...extra },
       async run({ args, rawArgs }) {
         await runObservedCliCommand(args, { command: "dotfiles", subcommand: name }, async (scope) => {
+          const renderer = createDotfilesRenderer(scope.context, name);
           try {
             const allowed2 = new Set([
               ...Object.keys(cliContractArgs),
@@ -23498,7 +23826,8 @@ function createDotfilesCommand(overrides = {}) {
             for (const arg of rawArgs)
               if (arg.startsWith("--") && !allowed2.has(arg.slice(2).split("=")[0]) && arg !== "--")
                 throw new Error(`Unknown dotfiles option: ${arg.split("=")[0]}`);
-            const result = await action(args, scope.context.isTty && scope.context.interactive && !scope.context.json, (message) => writeHumanStatus(scope.context, processOutput, message));
+            renderer.start();
+            const result = await action(args, scope.context.isTty && scope.context.interactive && !scope.context.json, renderer.progress);
             if (scope.context.json)
               writeJsonValue(processOutput, {
                 ok: true,
@@ -23506,8 +23835,8 @@ function createDotfilesCommand(overrides = {}) {
                 result
               });
             else
-              writeHumanStatus(scope.context, processOutput, typeof result.output === "string" ? result.output : JSON.stringify(result, null, 2));
-            process.exitCode = typeof result.blockingFailures === "number" && result.blockingFailures > 0 ? 1 : 0;
+              renderer.result(name, result);
+            process.exitCode = "blockingFailures" in result && result.blockingFailures > 0 ? 1 : 0;
           } catch (error) {
             const code = error instanceof NotionError ? error.code : "dotfiles_failed";
             const e3 = createCliError(code, redactSecrets(error instanceof Error ? error.message : "Dotfiles operation failed"));
@@ -23538,9 +23867,19 @@ function createDotfilesCommand(overrides = {}) {
       description: "Explicit previous chezmoi source to migrate, preserving backup"
     }
   }, async (args, interactive, report) => {
-    report(`[init] Checking environment: ${deps.system.os}/${deps.system.arch}${deps.system.wsl ? " (WSL)" : ""}, Node ${process.version}`);
-    const tools = await ensureDotfilesTools(deps.system, (message) => report(`[init] ${message}`));
-    report("[init] Environment checks complete. Preparing host binding...");
+    report({
+      type: "environment",
+      os: deps.system.os,
+      arch: deps.system.arch,
+      wsl: deps.system.wsl,
+      node: process.version
+    });
+    const tools = await ensureDotfilesTools(deps.system, report);
+    report({
+      type: "phase",
+      title: "Host binding",
+      detail: "Preparing published host selection…"
+    });
     const { source } = await resolveSource(deps.system, string2(args.source));
     const { catalog } = await loadSnapshot(source);
     const result = await saveBinding(deps.system, {
@@ -23595,13 +23934,18 @@ function createDotfilesCommand(overrides = {}) {
       type: "boolean",
       description: "Report a plan without running installers"
     }
-  }, async (args, interactive) => {
+  }, async (args, interactive, report) => {
     const b5 = await bound(args);
     const plan = resolvePlan(b5.catalog, b5.host);
     if (args["dry-run"])
       return { source: b5.source, dryRun: true, plan };
     const results = [];
-    for (const e3 of plan.entries) {
+    for (const [index, e3] of plan.entries.entries()) {
+      report({
+        type: "phase",
+        title: `Software ${index + 1}/${plan.entries.length} · ${e3.id}`,
+        detail: "Checking availability and installation policy…"
+      });
       try {
         results.push(await installEntry(e3, {
           ...deps.system,
@@ -23656,8 +24000,13 @@ function createDotfilesCommand(overrides = {}) {
       ])
     };
   });
-  const apply = leaf("config apply", "Back up files and apply with native chezmoi conflict prompts", hostArg, async (args, interactive) => {
+  const apply = leaf("config apply", "Back up files and apply with native chezmoi conflict prompts", hostArg, async (args, interactive, report) => {
     const b5 = await bound(args);
+    report({
+      type: "phase",
+      title: "Home configuration",
+      detail: "Backing up files and starting native chezmoi conflict handling…"
+    });
     return applyConfiguration(deps.system, b5.source, b5.host, interactive);
   });
   const auth = leaf("notion auth", "Validate, replace or clear the local Token cache (interactive menu)", sourceArg, async (args, interactive) => {
@@ -23668,7 +24017,10 @@ function createDotfilesCommand(overrides = {}) {
       interaction: deps.auth,
       manage: true
     });
-    return "cleared" in result ? result : { authenticated: true, credentialSource: result.credentialSource };
+    return result.cleared ? {
+      cleared: true,
+      environmentStillActive: result.environmentStillActive
+    } : { authenticated: true, credentialSource: result.credentialSource };
   });
   const validate2 = leaf("notion validate", "Offline validation of snapshot model, digests and references; no Token", sourceArg, async (args) => {
     const { source } = await resolveSource(deps.system, string2(args.source));
@@ -23690,7 +24042,7 @@ function createDotfilesCommand(overrides = {}) {
           description: "Comma-separated group:stable-key retirements explicitly acknowledged"
         }
       } : {}
-    }, async (args, interactive) => {
+    }, async (args, interactive, report) => {
       const { source } = await resolveSource(deps.system, string2(args.source));
       async function sync() {
         if (pull)
@@ -23700,6 +24052,11 @@ function createDotfilesCommand(overrides = {}) {
           ...old.files,
           [MANIFEST]: old.manifestText
         };
+        report({
+          type: "phase",
+          title: "Notion access",
+          detail: "Verifying credentials and data source access…"
+        });
         const auth2 = await ensureAuth({
           system: deps.system,
           source: async () => source,
@@ -23708,6 +24065,11 @@ function createDotfilesCommand(overrides = {}) {
         });
         if (!("client" in auth2) || !auth2.client)
           throw new Error("Authentication did not produce an API client");
+        report({
+          type: "phase",
+          title: "Notion data",
+          detail: "Reading software, toolsets and hosts…"
+        });
         const data = await readNotion(auth2.client);
         const normalized = normalizeNotion(data, old.catalog, old.manifest);
         const candidate = candidateSnapshot(normalized, old.manifest, old.files);
@@ -23775,7 +24137,7 @@ var dotfilesCommand = createDotfilesCommand();
 
 // src/command/obsidian.command.ts
 import { join as join29 } from "node:path";
-var import_picocolors5 = __toESM(require_picocolors(), 1);
+var import_picocolors6 = __toESM(require_picocolors(), 1);
 
 // src/domain/obsidian-agents-config.ts
 import { randomUUID as randomUUID4 } from "node:crypto";
@@ -24410,31 +24772,31 @@ function createObsidianAgentsDataPaths(options = {}) {
 }
 
 // src/command/obsidian-status.ts
-var import_picocolors4 = __toESM(require_picocolors(), 1);
+var import_picocolors5 = __toESM(require_picocolors(), 1);
 import { basename as basename4 } from "node:path";
 var segmenter2 = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 function displayWidth(value2) {
-  let width = 0;
+  let width2 = 0;
   for (const { segment } of segmenter2.segment(value2)) {
     if (/^\p{Mark}+$/u.test(segment))
       continue;
     const point = segment.codePointAt(0) ?? 0;
     if (point < 32 || point >= 127 && point < 160)
       continue;
-    width += /\p{Extended_Pictographic}/u.test(segment) || point >= 4352 && (point <= 4447 || point === 9001 || point === 9002 || point >= 11904 && point <= 42191 || point >= 44032 && point <= 55203 || point >= 63744 && point <= 64255 || point >= 65040 && point <= 65049 || point >= 65072 && point <= 65135 || point >= 65280 && point <= 65376 || point >= 65504 && point <= 65510 || point >= 131072) ? 2 : 1;
+    width2 += /\p{Extended_Pictographic}/u.test(segment) || point >= 4352 && (point <= 4447 || point === 9001 || point === 9002 || point >= 11904 && point <= 42191 || point >= 44032 && point <= 55203 || point >= 63744 && point <= 64255 || point >= 65040 && point <= 65049 || point >= 65072 && point <= 65135 || point >= 65280 && point <= 65376 || point >= 65504 && point <= 65510 || point >= 131072) ? 2 : 1;
   }
-  return width;
+  return width2;
 }
-function wrap(value2, width) {
+function wrap2(value2, width2) {
   const lines2 = [];
   let line = "";
   let used = 0;
   for (const { segment } of segmenter2.segment(value2)) {
     const size = displayWidth(segment);
-    if (line && used + size > width) {
+    if (line && used + size > width2) {
       const boundaries = [...line.matchAll(/[ /\\]/gu)];
       const last = boundaries.at(-1);
-      const cut = last && displayWidth(line.slice(0, last.index + 1)) >= width / 2 ? last.index + 1 : line.length;
+      const cut = last && displayWidth(line.slice(0, last.index + 1)) >= width2 / 2 ? last.index + 1 : line.length;
       lines2.push(line.slice(0, cut));
       line = line.slice(cut);
       used = displayWidth(line);
@@ -24449,20 +24811,20 @@ function quoteVaultPath(path, platform3 = process.platform) {
   return platform3 === "win32" ? `'${path.replaceAll("'", "''")}'` : `'${path.replaceAll("'", "'\\''")}'`;
 }
 function formatObsidianAgentsStatus(report, options = {}) {
-  const colors2 = import_picocolors4.default.createColors(options.color ?? false);
-  const width = Math.max(20, Math.min(options.columns ?? 80, 96));
+  const colors2 = import_picocolors5.default.createColors(options.color ?? false);
+  const width2 = Math.max(20, Math.min(options.columns ?? 80, 96));
   const lines2 = [colors2.bold(colors2.cyan("Obsidian Agents"))];
   const { total, healthy, needsAttention } = report.summary;
   if (total === 0) {
     lines2.push("", "No vaults configured.", "Run: chc obsidian agents setup");
-    return lines2.flatMap((line) => options.color ? [line] : wrap(line, width));
+    return lines2.flatMap((line) => options.color ? [line] : wrap2(line, width2));
   }
   const summary = `${total} ${total === 1 ? "vault" : "vaults"}  /  ${healthy} ready  /  ${needsAttention} needs attention`;
-  lines2.push(...wrap(summary, width).map(colors2.dim));
+  lines2.push(...wrap2(summary, width2).map(colors2.dim));
   function detail(label, value2) {
     const prefix = `  ${label.padEnd(9)}`;
     const continuation = " ".repeat(prefix.length);
-    wrap(value2, width - prefix.length).forEach((line, index) => {
+    wrap2(value2, width2 - prefix.length).forEach((line, index) => {
       lines2.push((index === 0 ? colors2.dim(prefix) : continuation) + line);
     });
   }
@@ -24471,12 +24833,12 @@ function formatObsidianAgentsStatus(report, options = {}) {
     const title = basename4(vault.vaultPath) || vault.vaultPath;
     const badge = vault.healthy ? "READY" : "NEEDS ATTENTION";
     const styledBadge = vault.healthy ? colors2.green(badge) : colors2.yellow(badge);
-    if (width >= 48 && displayWidth(title) + badge.length + 3 <= width) {
-      lines2.push(colors2.bold(title) + " ".repeat(width - displayWidth(title) - badge.length) + styledBadge);
+    if (width2 >= 48 && displayWidth(title) + badge.length + 3 <= width2) {
+      lines2.push(colors2.bold(title) + " ".repeat(width2 - displayWidth(title) - badge.length) + styledBadge);
     } else {
-      lines2.push(...wrap(title, width).map(colors2.bold), styledBadge);
+      lines2.push(...wrap2(title, width2).map(colors2.bold), styledBadge);
     }
-    lines2.push(colors2.dim("-".repeat(width)));
+    lines2.push(colors2.dim("-".repeat(width2)));
     detail("Vault", vault.vaultPath);
     if (vault.configured) {
       detail("Source", vault.sourcePath);
@@ -24592,7 +24954,7 @@ async function runSetup(args, scope) {
   }
   const plan = await createObsidianAgentsSetupPlan(paths, input);
   if (!scope.context.json && !scope.context.quiet) {
-    writeHumanStatus(scope.context, processOutput, import_picocolors5.default.cyan("Obsidian agents setup"));
+    writeHumanStatus(scope.context, processOutput, import_picocolors6.default.cyan("Obsidian agents setup"));
     writeHumanStatus(scope.context, processOutput, `vault: ${plan.vault.vaultPath}`);
     writeHumanStatus(scope.context, processOutput, `source: ${plan.vault.sourcePath}`);
     writeHumanStatus(scope.context, processOutput, `.agents: ${plan.vault.agentsPath}`);
@@ -24632,7 +24994,7 @@ async function runStatus(args, scope) {
       result
     });
   } else {
-    const color = process.stdout.isTTY === true && process.env.NO_COLOR === undefined && import_picocolors5.default.isColorSupported;
+    const color = process.stdout.isTTY === true && process.env.NO_COLOR === undefined && import_picocolors6.default.isColorSupported;
     for (const line of formatObsidianAgentsStatus(result, {
       columns: process.stdout.columns,
       color
@@ -24700,7 +25062,7 @@ function writeSetupResult(context, result) {
     writeHumanStatus(context, processOutput, "Setup cancelled.");
     return;
   }
-  writeHumanStatus(context, processOutput, import_picocolors5.default.green("Obsidian agents configured."));
+  writeHumanStatus(context, processOutput, import_picocolors6.default.green("Obsidian agents configured."));
   const profile = result.vault;
   if (profile) {
     writeHumanStatus(context, processOutput, `source: ${profile.sourcePath}`);
@@ -24778,7 +25140,7 @@ var obsidianCommand = defineCommand({
 });
 
 // src/command/run-scripts.command.ts
-var import_picocolors7 = __toESM(require_picocolors(), 1);
+var import_picocolors8 = __toESM(require_picocolors(), 1);
 
 // ../../node_modules/.pnpm/neverthrow@8.2.0/node_modules/neverthrow/dist/index.cjs.js
 var defaultErrorConfig = {
@@ -25337,7 +25699,7 @@ function runBundledScript(pkg, args, context) {
 }
 
 // src/infra/bundled-script-catalog.ts
-var import_picocolors6 = __toESM(require_picocolors(), 1);
+var import_picocolors7 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
 import { existsSync as existsSync7 } from "node:fs";
@@ -25519,14 +25881,14 @@ async function getBundledScriptIdCandidates() {
 }
 function formatBundledScriptCatalog(catalog, heading = "AVAILABLE SCRIPTS") {
   const rows = toBundledScriptCatalogRows(catalog);
-  const width = Math.max(0, ...rows.map((row) => row.id.length));
+  const width2 = Math.max(0, ...rows.map((row) => row.id.length));
   const lines2 = [heading, ""];
   if (rows.length === 0) {
     lines2.push("  No bundled scripts available.");
   } else {
     for (const row of rows) {
       const detail = row.description ? `${row.title} — ${row.description}` : row.title;
-      lines2.push(`  ${import_picocolors6.default.cyan(row.id.padEnd(width + 2))}${detail}`);
+      lines2.push(`  ${import_picocolors7.default.cyan(row.id.padEnd(width2 + 2))}${detail}`);
     }
   }
   if (catalog.warnings.length > 0) {
@@ -25556,10 +25918,10 @@ async function renderBundledScriptHelpAppendix() {
 }
 
 // src/command/run-scripts.command.ts
-var defaultDeps = {
+var defaultDeps2 = {
   isInteractive: () => process.stdin.isTTY === true,
   pickScriptId: async (rows) => {
-    pe(import_picocolors7.default.cyan("▶ Script Selection"));
+    pe(import_picocolors8.default.cyan("▶ Script Selection"));
     const choice = await le2({
       message: "Choose a bundled script to run",
       options: rows.map((o3) => ({
@@ -25655,7 +26017,7 @@ async function executeBundledScript(args, deps) {
     }
   });
   for (const warning of catalog.warnings) {
-    writeWarning(processOutput, import_picocolors7.default.yellow(`${warning.path}: ${warning.message}`));
+    writeWarning(processOutput, import_picocolors8.default.yellow(`${warning.path}: ${warning.message}`));
     diagnostics.emit({
       level: "warn",
       event: "cli.script_discovery_warning",
@@ -25809,7 +26171,7 @@ function createScriptRunCommand(deps) {
     const { help } = manifest;
     if (!help)
       return;
-    const width = Math.max(0, ...help.options.map((option) => option.flags.length));
+    const width2 = Math.max(0, ...help.options.map((option) => option.flags.length));
     const lines2 = [
       `${manifest.title} (${manifest.id})`,
       "",
@@ -25817,7 +26179,7 @@ function createScriptRunCommand(deps) {
       ""
     ];
     for (const option of help.options) {
-      lines2.push(`  ${option.flags.padEnd(width + 2)}${option.description}`);
+      lines2.push(`  ${option.flags.padEnd(width2 + 2)}${option.description}`);
     }
     if (help.notes?.length)
       lines2.push("", ...help.notes);
@@ -25828,7 +26190,7 @@ function createScriptRunCommand(deps) {
 `);
   });
 }
-var createScriptsCommand = (deps = defaultDeps) => {
+var createScriptsCommand = (deps = defaultDeps2) => {
   const registrations = [
     {
       name: "list",
@@ -25856,8 +26218,8 @@ var createScriptsCommand = (deps = defaultDeps) => {
 var scriptsCommand = createScriptsCommand();
 
 // src/command/self-update-output.ts
-var import_picocolors8 = __toESM(require_picocolors(), 1);
-var defaultDeps2 = {
+var import_picocolors9 = __toESM(require_picocolors(), 1);
+var defaultDeps3 = {
   output: processOutput,
   isOutputTty: () => process.stdout.isTTY === true,
   createSpinner: _4
@@ -25874,10 +26236,10 @@ var phaseLabels = {
 function identity2(value2) {
   return `${value2.ref}@${value2.shortCommit}`;
 }
-function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
+function createSelfUpdateRenderer(context, options, deps = defaultDeps3) {
   const human = !context.json && !context.quiet;
   const interactiveOutput = human && context.isTty && deps.isOutputTty();
-  const colors2 = import_picocolors8.default.createColors(interactiveOutput);
+  const colors2 = import_picocolors9.default.createColors(interactiveOutput);
   let activeSpinner;
   let activePhase;
   let headerWritten = false;
@@ -26019,11 +26381,11 @@ function createSelfUpdateRenderer(context, options, deps = defaultDeps2) {
 }
 
 // src/command/self-update-status-output.ts
-var import_picocolors9 = __toESM(require_picocolors(), 1);
-var defaultDeps3 = {
+var import_picocolors10 = __toESM(require_picocolors(), 1);
+var defaultDeps4 = {
   output: processOutput,
   isOutputTty: () => process.stdout.isTTY === true,
-  isColorSupported: () => import_picocolors9.default.isColorSupported
+  isColorSupported: () => import_picocolors10.default.isColorSupported
 };
 var statusMessageLength = 120;
 function formatCommitTime(value2) {
@@ -26035,10 +26397,10 @@ function boundStatusMessage(value2) {
   const characters = Array.from(normalized);
   return characters.length <= statusMessageLength ? normalized : `${characters.slice(0, statusMessageLength - 1).join("")}…`;
 }
-function renderCliInstallationStatus(context, status, deps = defaultDeps3) {
+function renderCliInstallationStatus(context, status, deps = defaultDeps4) {
   if (context.json || context.quiet)
     return;
-  const colors2 = import_picocolors9.default.createColors(deps.isOutputTty() && deps.isColorSupported());
+  const colors2 = import_picocolors10.default.createColors(deps.isOutputTty() && deps.isColorSupported());
   const mode = status.mode === "local" ? colors2.magenta("● LOCAL") : colors2.blue("● REMOTE");
   const commit = colors2.yellow(status.commit ?? "unavailable");
   const commitIdentity = status.commitTime ? `${commit} ${colors2.dim(`· ${formatCommitTime(status.commitTime)}`)}` : commit;
@@ -26252,7 +26614,7 @@ var sourceUpdateCommand = createUpdateCommand({
 });
 
 // src/command/source.command.ts
-var import_picocolors10 = __toESM(require_picocolors(), 1);
+var import_picocolors11 = __toESM(require_picocolors(), 1);
 
 // src/domain/cli-source-manager.ts
 import { spawn as spawn4 } from "node:child_process";
@@ -26292,7 +26654,7 @@ class CliSourceError extends Error {
     this.causeText = causeText;
   }
 }
-var defaultDeps4 = {
+var defaultDeps5 = {
   home: homedir9,
   cwd: () => process.cwd(),
   runtimeRoot: getCliRuntimeRoot,
@@ -26333,7 +26695,7 @@ var defaultDeps4 = {
   }
 };
 function createCliSourceManagerDeps(overrides = {}) {
-  return { ...defaultDeps4, ...overrides };
+  return { ...defaultDeps5, ...overrides };
 }
 function getCliSourceRegistryPath(home = homedir9()) {
   return join33(home, ".cthutool", "cli", "source-registry.json");
@@ -27011,7 +27373,7 @@ var defaultInteraction = {
     return lD2(answer) ? undefined : answer;
   }
 };
-var defaultDeps5 = {
+var defaultDeps6 = {
   manager: createCliSourceManagerDeps(),
   interaction: defaultInteraction,
   isTty: () => process.stdin.isTTY === true,
@@ -27031,13 +27393,13 @@ function getStringArg4(value2) {
 }
 function writeSourceCandidate(candidate, home) {
   const presentation = presentCliSourceCandidate(candidate, home);
-  const marker = presentation.state === "active" ? import_picocolors10.default.green("●") : presentation.state === "ready" ? "○" : presentation.state === "not installed" ? "◌" : import_picocolors10.default.yellow("×");
+  const marker = presentation.state === "active" ? import_picocolors11.default.green("●") : presentation.state === "ready" ? "○" : presentation.state === "not installed" ? "◌" : import_picocolors11.default.yellow("×");
   processOutput.stdout.write(`${marker} ${presentation.selector.padEnd(23)} ${sourcePresentationDescription(presentation)}
 `);
   processOutput.stdout.write(`  ${presentation.displayPath}
 `);
   if (presentation.hint) {
-    processOutput.stdout.write(`  ${import_picocolors10.default.yellow(presentation.hint)}
+    processOutput.stdout.write(`  ${import_picocolors11.default.yellow(presentation.hint)}
 `);
   }
 }
@@ -27075,7 +27437,7 @@ function createSourceListCommand(deps) {
               warnings: inventory.warnings
             });
           } else if (!scope.context.quiet) {
-            writeHumanStatus(scope.context, processOutput, import_picocolors10.default.cyan("CthuTool sources"));
+            writeHumanStatus(scope.context, processOutput, import_picocolors11.default.cyan("CthuTool sources"));
             processOutput.stdout.write(`
 `);
             for (const candidate of inventory.candidates) {
@@ -27086,7 +27448,7 @@ function createSourceListCommand(deps) {
           }
           if (!scope.context.quiet) {
             for (const warning of inventory.warnings) {
-              writeWarning(processOutput, import_picocolors10.default.yellow(warning));
+              writeWarning(processOutput, import_picocolors11.default.yellow(warning));
             }
           }
           process.exitCode = 0;
@@ -27145,10 +27507,10 @@ function createSourceUseCommand(deps) {
             });
           } else {
             const verb = result.status === "already_active" ? "Already using" : result.status === "bootstrapped" ? "Bootstrapped and switched to" : "Switched to";
-            writeHumanStatus(scope.context, processOutput, `${import_picocolors10.default.green("✓")} ${verb} ${result.selected.id}`);
+            writeHumanStatus(scope.context, processOutput, `${import_picocolors11.default.green("✓")} ${verb} ${result.selected.id}`);
             writeHumanStatus(scope.context, processOutput, `  ${result.selected.path}`);
             if (result.selected.kind === "worktree") {
-              writeHumanStatus(scope.context, processOutput, import_picocolors10.default.yellow("  Switch away before deleting this worktree; otherwise restore chc with the public remote installer."));
+              writeHumanStatus(scope.context, processOutput, import_picocolors11.default.yellow("  Switch away before deleting this worktree; otherwise restore chc with the public remote installer."));
             }
           }
           process.exitCode = 0;
@@ -27164,7 +27526,7 @@ function createSourceUseCommand(deps) {
   return registerPositionalCandidates(command, (context) => shouldOfferSourceSelectors(context) ? getCliSourceSelectorCandidates(deps.manager) : []);
 }
 function createSourceCommand(overrides = {}) {
-  const deps = { ...defaultDeps5, ...overrides };
+  const deps = { ...defaultDeps6, ...overrides };
   const registrations = [
     {
       name: "list",
@@ -27299,9 +27661,9 @@ function normalizeCommandRows(value2, hiddenCommands) {
       pendingRows = [];
       return;
     }
-    const width = Math.max(...visibleRows.map((row) => row.name.length));
+    const width2 = Math.max(...visibleRows.map((row) => row.name.length));
     for (const row of visibleRows) {
-      normalized.push(`  ${import_picocolors11.default.bold(import_picocolors11.default.cyan(row.name.padEnd(width + 2)))}${row.description}`);
+      normalized.push(`  ${import_picocolors12.default.bold(import_picocolors12.default.cyan(row.name.padEnd(width2 + 2)))}${row.description}`);
     }
     pendingRows = [];
   };

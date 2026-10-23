@@ -824,14 +824,17 @@ rendererTest(
       '--no-interactive',
     ];
     const human = await exec(node, base, { env: executionEnv });
-    expect(human.stdout).toContain('[init] Checking environment:');
-    expect(human.stdout).toContain('[init] Checking chezmoi...');
-    expect(human.stdout).toContain('[init] Checking mise...');
+    expect(human.stdout).toContain('◆ CthuTool  dotfiles › init');
+    expect(human.stdout).toContain('◇ Environment');
+    expect(human.stdout).toContain('chezmoi  checking…');
+    expect(human.stdout).toContain('mise  checking…');
     expect(human.stdout).toContain('mise fixture-version');
-    expect(human.stdout).toContain('reusing existing installation');
-    expect(human.stdout).toContain(
-      'Environment checks complete. Preparing host binding...',
-    );
+    expect(human.stdout).toContain('mise  reused');
+    expect(human.stdout).toContain('◇ Host binding');
+    expect(human.stdout).toContain('◇ Host profile');
+    expect(human.stdout).toContain('◇ Next steps');
+    expect(human.stdout).toContain('└ ✓ Host binding saved');
+    expect(human.stdout).not.toContain('"environment":');
     const json = await exec(node, [...base, '--json'], { env: executionEnv });
     expect(json.stdout.trim().split('\n')).toHaveLength(1);
     const report = JSON.parse(json.stdout);
