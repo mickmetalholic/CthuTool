@@ -384,7 +384,28 @@ Windows directory junctions or macOS/Linux symlinks:
   local sessions, including the desktop Code tab.
 
 Setup preserves other files in `.claude/`. It does not upload skills to Claude
-Chat or Cowork. Obsidian Sync transports the visible source. Setup creates the link locally on each machine. CthuTool
+Chat or Cowork. Setup also creates `<vault>/.codex/config.toml` when it is absent:
+
+```toml
+[features]
+hooks = false
+```
+
+This disables all Codex hooks for chats whose working directory is the vault,
+so language practice Skills control their own feedback. Codex Skills and MCP
+servers remain available. Existing `config.toml` files are preserved byte for
+byte, including any explicit hook settings. Setup previews config creation and
+requires the usual confirmation; repeating setup leaves the file unchanged.
+Status checks that a regular config file exists, not whether its hook setting
+is disabled. Occupied or redirected `.codex` paths require manual reconciliation.
+
+Obsidian Sync excludes hidden directories such as `.codex`. Run setup on each
+machine to create this local default; the config does not need to be synced.
+In a non-Git vault, start chats from the vault root because chats started
+directly in a subdirectory may not inherit the root's Codex configuration.
+
+Obsidian Sync transports the visible source. Setup creates the links and local
+Codex config on each machine. CthuTool
 stores paths in the local `chc` data directory and performs no synchronization
 operations itself.
 
@@ -405,7 +426,7 @@ argument quoting.
 
 JSON status always has one summary and a `vaults` array, including for zero or
 one vault. Each entry includes `vaultPath`, `sourcePath`, `agentsPath`,
-`claudeSkillsPath`, `configured`, `healthy`, `paths`, `source`, `link`,
+`claudeSkillsPath`, `codexConfigPath`, `configured`, `healthy`, `paths`, `source`, `link`,
 `claudeLink`, and actual local `issues`:
 
 ```json
@@ -429,7 +450,8 @@ Setup does not move, merge, or remove a real `.agents/` directory, even an empty
 one. The same protection applies to an occupied `.claude/skills` path. The
 `.claude` parent must be absent or a real directory, not a link or file. Relocate
 conflicting paths manually, then rerun setup. Existing vaults configured by older
-versions need setup once more to add the Claude skills link. Link
+versions need setup once more to add missing Claude skills links and the local
+Codex config. Link
 repair previews the existing and expected target and changes only the link after
 confirmation, preserving the old target.
 

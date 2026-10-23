@@ -71,6 +71,47 @@ async function setup(vaultPath: string, dataRoot: string) {
 }
 
 describe('Obsidian agents CLI', () => {
+  test('requires confirmation to add missing Codex config even when links are ready', async () => {
+    const f = await fixture();
+    const first = await setup(f.vaultPath, f.dataRoot);
+    expect(first.codexConfig.created).toBe(true);
+    const configPath = join(f.vaultPath, '.codex', 'config.toml');
+    await unlink(configPath);
+    const status = await runCli(['status', '--data-root', f.dataRoot]);
+    expect(status.out).toContain('NEEDS ATTENTION');
+    expect(status.out).toContain('Local Codex config is missing');
+    const unconfirmed = await runCli([
+      'setup',
+      '--vault',
+      f.vaultPath,
+      ...jsonArgs(f.dataRoot),
+    ]);
+    expect(unconfirmed.code).not.toBe(0);
+    expect(JSON.parse(unconfirmed.out).error.message).toContain('--yes');
+    expect(await Bun.file(configPath).exists()).toBe(false);
+    expect((await setup(f.vaultPath, f.dataRoot)).codexConfig.created).toBe(
+      true,
+    );
+    const repeated = await runCli([
+      'setup',
+      '--vault',
+      f.vaultPath,
+      ...jsonArgs(f.dataRoot),
+    ]);
+    expect(repeated.code).toBe(0);
+    expect(JSON.parse(repeated.out).result.codexConfig.created).toBe(false);
+    const human = await runCli([
+      'setup',
+      '--vault',
+      f.vaultPath,
+      '--data-root',
+      f.dataRoot,
+      '--no-interactive',
+    ]);
+    expect(human.code).toBe(0);
+    expect(human.out).toContain('existing file preserved');
+  });
+
   test('sets up without IDs and reuses aliases without duplicating configurations', async () => {
     const f = await fixture();
     const canonical = await realpath(f.vaultPath);
