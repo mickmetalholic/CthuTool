@@ -1,0 +1,91 @@
+exit-code=0
+
+
+Setup Plan
+  [ok] data: C:\Users\fixture-user\.codex\worktrees\fb0c\dotfiles\data\packages.yaml
+  [ok] host: linux-wsl
+  [ok] identity source: environment DOTFILES_HOST
+
+Runtime Managed Tools
+  [skipped] deepseek-harness: runtime=node; native runtime workflow owns installation
+        fix: npm install -g @deepseek-ai/dsh
+  [skipped] openspec-cli: runtime=node; native runtime workflow owns installation
+        fix: npm install -g @fission-ai/openspec
+
+Setup Plan
+  [skipped] apt-get: not available
+  [skipped] brew: not available for supplemental CLI packages
+        fix: install Homebrew on Linux for supplemental CLI packages, or install these tools from official sources
+  [skipped] git: apt package skipped package=git command=git
+  [skipped] curl: apt package skipped package=curl command=curl
+  [skipped] unzip: apt package skipped package=unzip command=unzip
+  [skipped] gh: brew package skipped package=gh command=gh
+  [skipped] jq: apt package skipped package=jq command=jq
+  [skipped] ripgrep: apt package skipped package=ripgrep command=rg
+  [skipped] fd: apt package skipped package=fd-find command=fd aliases=fdfind
+  [skipped] fzf: apt package skipped package=fzf command=fzf
+  [skipped] tree: apt package skipped package=tree command=tree
+  [skipped] yq: brew package skipped package=yq command=yq
+  [skipped] eza: brew package skipped package=eza command=eza
+  [skipped] zoxide: brew package skipped package=zoxide command=zoxide
+  [skipped] starship: brew package skipped package=starship command=starship
+  [skipped] direnv: brew package skipped package=direnv command=direnv
+  [skipped] httpie-cli: apt package skipped package=httpie command=http
+  [skipped] hyperfine: brew package skipped package=hyperfine command=hyperfine
+  [skipped] bat: apt package skipped package=bat command=bat aliases=batcat
+  [skipped] tlrc: brew package skipped package=tlrc command=tlrc
+  [skipped] git-delta: brew package skipped package=git-delta command=delta
+  [skipped] lazygit: brew package skipped package=lazygit command=lazygit
+  [skipped] just: brew package skipped package=just command=just
+  [skipped] glow: brew package skipped package=glow command=glow
+  [skipped] yazi: brew package skipped package=yazi command=yazi
+  [skipped] f2: brew package skipped package=f2 command=f2
+  [skipped] ast-grep: brew package skipped package=ast-grep command=ast-grep aliases=sg
+  [skipped] bats-core: apt package skipped package=bats command=bats
+  [skipped] dyff: brew package skipped package=homeport/tap/dyff command=dyff
+  [skipped] visidata: apt package skipped package=visidata command=vd
+  [skipped] aria2: apt package skipped package=aria2 command=aria2c
+  [skipped] mosh: apt package skipped package=mosh command=mosh
+  [skipped] mise: brew package skipped package=mise command=mise
+  [skipped] neovim: brew package skipped package=neovim command=nvim
+  [skipped] emacs: apt package skipped package=emacs command=emacs
+  [skipped] watchman: brew package skipped package=watchman command=watchman
+  [skipped] shellcheck: apt package skipped package=shellcheck command=shellcheck
+  [skipped] shfmt: apt package skipped package=shfmt command=shfmt
+  [skipped] taplo: brew package skipped package=taplo command=taplo
+  [skipped] stylua: brew package skipped package=stylua command=stylua
+  [skipped] psscriptanalyzer: fallback-only package=psscriptanalyzer command=Invoke-ScriptAnalyzer
+        fix: Install-Module PSScriptAnalyzer -Scope CurrentUser
+  [skipped] duckdb: brew package skipped package=duckdb command=duckdb
+  [skipped] sqlite: apt package skipped package=sqlite3 command=sqlite3
+  [skipped] libpq: brew package skipped package=libpq command=psql
+  [skipped] redis: brew package skipped package=redis command=redis-cli
+  [skipped] bottom: brew package skipped package=bottom command=btm
+  [skipped] btop: brew package skipped package=btop command=btop
+  [skipped] fastfetch: brew package skipped package=fastfetch command=fastfetch
+  [skipped] duf: brew package skipped package=duf command=duf
+  [skipped] dust: brew package skipped package=dust command=dust
+  [skipped] mkcert: brew package skipped package=mkcert command=mkcert
+  [skipped] openssh-client: apt package skipped package=openssh-client command=ssh
+  [skipped] rsync: apt package skipped package=rsync command=rsync
+  [skipped] lsof: apt package skipped package=lsof command=lsof
+  [skipped] iproute2: apt package skipped package=iproute2 command=ip
+  [skipped] dnsutils: apt package skipped package=dnsutils command=dig
+  [skipped] unattended-upgrades: apt package skipped package=unattended-upgrades command=unattended-upgrade
+  [planned] codex-cli: would install with official installer
+        fix: curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh
+  [planned] claude-code: would install with official installer
+        fix: curl -fsSL https://claude.ai/install.sh | bash
+  [skipped] opencode-cli: fallback-only package=opencode-cli command=opencode
+        fix: curl -fsSL https://opencode.ai/install | bash
+  [skipped] hermes-cli: fallback-only package=hermes-cli command=hermes
+        fix: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+  [skipped] zsh: apt package skipped package=zsh command=zsh
+  [planned] oh-my-zsh: would install with official installer
+        fix: RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  [skipped] zsh-completions: apt package skipped package=zsh-completions command=
+  [skipped] zsh-autosuggestions: apt package skipped package=zsh-autosuggestions command=
+  [skipped] zsh-syntax-highlighting: apt package skipped package=zsh-syntax-highlighting command=
+
+Summary
+  [dry-run] setup plan: preview complete; no packages, installers, services, or compatibility links were changed

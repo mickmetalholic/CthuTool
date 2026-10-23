@@ -1,0 +1,50 @@
+{{- $local := dict -}}
+{{- if and (hasKey . "local") (kindIs "map" (get . "local")) -}}
+{{-   $local = get . "local" -}}
+{{- end -}}
+{{- $key := get $local "host" -}}
+{{- $id := "" -}}
+{{- range $name, $h := .hosts -}}
+{{-   if eq (lower $name) (lower $key) }}{{ $id = $name }}{{ end -}}
+{{- if kindIs "slice" (get $h "aliases") -}}
+{{-   range $a := get $h "aliases" -}}
+{{-     if eq (lower $a) (lower $key) }}{{ $id = $name }}{{ end -}}
+{{-   end -}}
+{{- end -}}
+{{- end -}}
+{{- $k3sSelected := false -}}
+{{- if $id -}}
+{{-   $h := index .hosts $id -}}
+{{-   if kindIs "slice" (get $h "tools") -}}
+{{-     $k3sSelected = has "k3s" (get $h "tools") -}}
+{{-   end -}}
+{{- end -}}
+export EDITOR="{{ .defaults.editor }}"
+export PATH="$HOME/.local/bin:$PATH"
+{{- if $k3sSelected }}
+
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+{{- end }}
+
+if command -v starship >/dev/null 2>&1; then
+  eval "$(starship init bash)"
+fi
+
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init bash)"
+fi
+
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate bash)"
+fi
+
+{{- $profile := joinPath .chezmoi.destDir ".bashrc" -}}
+{{- if stat $profile -}}
+{{- $existing := include $profile -}}
+{{- range $pattern := list "(?ms)^# >>> cthutool chc completion >>>\\r?\\n.*?^# <<< cthutool chc completion <<<" "(?ms)^# >>> cthutool bootstrap PATH >>>\\r?\\n.*?^# <<< cthutool bootstrap PATH <<<" -}}
+{{- $blocks := regexFindAll $pattern $existing -1 -}}
+{{- if $blocks }}
+{{ index $blocks 0 }}
+{{ end -}}
+{{- end -}}
+{{- end }}

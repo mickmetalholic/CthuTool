@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "files": [
+    ".chezmoiroot",
+    ".chezmoiversion",
+    "dotfiles/data/packages.yaml",
+    "dotfiles/data/runtime-tools.yaml",
+    "dotfiles/data/toolsets.yaml",
+    "dotfiles/home/.chezmoi.toml.tmpl",
+    "dotfiles/home/.chezmoidata/defaults.yaml",
+    "dotfiles/home/.chezmoidata/hosts.yaml",
+    "dotfiles/home/.chezmoiignore",
+    "dotfiles/home/Documents/PowerShell/Microsoft.PowerShell_profile.ps1.tmpl",
+    "dotfiles/home/dot_bashrc.tmpl",
+    "dotfiles/home/dot_config/direnv/direnvrc",
+    "dotfiles/home/dot_config/ghostty/config.tmpl",
+    "dotfiles/home/dot_config/mise/config.toml.tmpl",
+    "dotfiles/home/dot_config/nvim/init.lua",
+    "dotfiles/home/dot_config/starship.toml.tmpl",
+    "dotfiles/home/dot_config/wezterm/wezterm.lua.tmpl",
+    "dotfiles/home/dot_config/zellij/config.kdl",
+    "dotfiles/home/dot_editorconfig",
+    "dotfiles/home/dot_gitignore_global",
+    "dotfiles/home/dot_profile.tmpl",
+    "dotfiles/home/dot_zshrc.tmpl",
+    "dotfiles/home/private_dot_ssh/config.tmpl",
+    "dotfiles/notion/manifest.json",
+    "dotfiles/notion/sources.json"
+  ]
+}

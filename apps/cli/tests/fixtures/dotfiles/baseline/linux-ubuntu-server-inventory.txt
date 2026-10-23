@@ -1,0 +1,32 @@
+HOST: linux-ubuntu-server
+OS: linux
+TOOLSETS: [core operations]
+TOOLS: [k3s k9s]
+EXCLUDE: []
+PACKAGE:
+    git install=apt pkg=git check=git severity=blocking src=toolset:core
+    curl install=apt pkg=curl check=curl severity=blocking src=toolset:core
+    unzip install=apt pkg=unzip check=unzip severity=blocking src=toolset:core
+    gh install=brew pkg=gh check=gh severity=blocking src=toolset:core
+    jq install=apt pkg=jq check=jq severity=blocking src=toolset:core
+    ripgrep install=apt pkg=ripgrep check=rg severity=blocking src=toolset:core
+    fd install=apt pkg=fd-find check=fd severity=blocking src=toolset:core
+    fzf install=apt pkg=fzf check=fzf severity=blocking src=toolset:core
+    tree install=apt pkg=tree check=tree severity=optional src=toolset:core
+    yq install=brew pkg=yq check=yq severity=optional src=toolset:core
+    bottom install=brew pkg=bottom check=btm severity=optional src=toolset:operations
+    btop install=brew pkg=btop check=btop severity=optional src=toolset:operations
+    fastfetch install=brew pkg=fastfetch check=fastfetch severity=optional src=toolset:operations
+    duf install=brew pkg=duf check=duf severity=optional src=toolset:operations
+    dust install=brew pkg=dust check=dust severity=optional src=toolset:operations
+    mkcert install=brew pkg=mkcert check=mkcert severity=optional src=toolset:operations
+    openssh-client install=apt pkg=openssh-client check=ssh severity=blocking src=toolset:operations
+    rsync install=apt pkg=rsync check=rsync severity=optional src=toolset:operations
+    lsof install=apt pkg=lsof check=lsof severity=optional src=toolset:operations
+    iproute2 install=apt pkg=iproute2 check=ip severity=optional src=toolset:operations
+    dnsutils install=apt pkg=dnsutils check=dig severity=optional src=toolset:operations
+    unattended-upgrades install=apt pkg=unattended-upgrades check=unattended-upgrade severity=optional src=toolset:operations
+    k3s install=official pkg=k3s check=k3s severity=optional src=host
+    k9s install=official pkg=k9s check=k9s severity=optional src=host
+SKIPPED:
+RUNTIME:

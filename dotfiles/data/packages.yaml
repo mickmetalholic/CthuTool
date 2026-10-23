@@ -1,0 +1,2187 @@
+tools:
+  git:
+    homepage: https://git-scm.com
+    github: git/git
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: git
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: git
+      darwin:
+        install: brew
+        owner: dot
+        package: git
+      windows:
+        install: winget
+        owner: dot
+        package: Git.Git
+  curl:
+    homepage: https://curl.se
+    github: curl/curl
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: curl
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: curl
+      darwin:
+        install: system
+        owner: system
+        package: curl
+      windows:
+        install: system
+        owner: system
+        package: curl
+  unzip:
+    homepage: http://infozip.sourceforge.net/UnZip.html
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: unzip
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: unzip
+      darwin:
+        install: system
+        owner: system
+        package: unzip
+      windows:
+        install: winget
+        owner: dot
+        package: GnuWin32.UnZip
+  gh:
+    homepage: https://cli.github.com
+    github: cli/cli
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: gh
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: gh
+      darwin:
+        install: brew
+        owner: dot
+        package: gh
+      windows:
+        install: winget
+        owner: dot
+        package: GitHub.cli
+  jq:
+    homepage: https://jqlang.github.io/jq
+    github: jqlang/jq
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: jq
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: jq
+      darwin:
+        install: brew
+        owner: dot
+        package: jq
+      windows:
+        install: winget
+        owner: dot
+        package: jqlang.jq
+  ripgrep:
+    homepage: https://github.com/BurntSushi/ripgrep
+    github: BurntSushi/ripgrep
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: rg
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: ripgrep
+      darwin:
+        install: brew
+        owner: dot
+        package: ripgrep
+      windows:
+        install: winget
+        owner: dot
+        package: BurntSushi.ripgrep.MSVC
+  fd:
+    homepage: https://github.com/sharkdp/fd
+    github: sharkdp/fd
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: fd
+    aliases:
+      linux:
+        - fdfind
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: fd-find
+      darwin:
+        install: brew
+        owner: dot
+        package: fd
+      windows:
+        install: winget
+        owner: dot
+        package: sharkdp.fd
+  fzf:
+    homepage: https://junegunn.github.io/fzf
+    github: junegunn/fzf
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: fzf
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: fzf
+      darwin:
+        install: brew
+        owner: dot
+        package: fzf
+      windows:
+        install: winget
+        owner: dot
+        package: junegunn.fzf
+  eza:
+    homepage: https://eza.rocks
+    github: eza-community/eza
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: eza
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: eza
+      darwin:
+        install: brew
+        owner: dot
+        package: eza
+      windows:
+        install: winget
+        owner: dot
+        package: eza-community.eza
+  zoxide:
+    homepage: https://github.com/ajeetdsouza/zoxide
+    github: ajeetdsouza/zoxide
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: zoxide
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: zoxide
+      darwin:
+        install: brew
+        owner: dot
+        package: zoxide
+      windows:
+        install: winget
+        owner: dot
+        package: ajeetdsouza.zoxide
+  starship:
+    homepage: https://starship.rs
+    github: starship/starship
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: starship
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: starship
+      darwin:
+        install: brew
+        owner: dot
+        package: starship
+      windows:
+        install: winget
+        owner: dot
+        package: Starship.Starship
+  mise:
+    homepage: https://mise.jdx.dev
+    github: jdx/mise
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: mise
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: mise
+      darwin:
+        install: brew
+        owner: dot
+        package: mise
+      windows:
+        install: winget
+        owner: dot
+        package: jdx.mise
+  direnv:
+    homepage: https://direnv.net
+    github: direnv/direnv
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: direnv
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: direnv
+      darwin:
+        install: brew
+        owner: dot
+        package: direnv
+      windows:
+        install: fallback
+        owner: user
+        package: direnv
+        guidance: https://direnv.net/docs/installation.html
+  httpie-cli:
+    homepage: https://httpie.io/cli
+    github: httpie/cli
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: http
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: httpie
+      darwin:
+        install: brew
+        owner: dot
+        package: httpie
+      windows:
+        install: fallback
+        owner: user
+        package: httpie-cli
+        guidance: https://httpie.io/cli
+  hyperfine:
+    homepage: https://github.com/sharkdp/hyperfine
+    github: sharkdp/hyperfine
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: hyperfine
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: hyperfine
+      darwin:
+        install: brew
+        owner: dot
+        package: hyperfine
+      windows:
+        install: winget
+        owner: dot
+        package: sharkdp.hyperfine
+  bat:
+    homepage: https://github.com/sharkdp/bat
+    github: sharkdp/bat
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: bat
+    aliases:
+      linux:
+        - batcat
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: bat
+      darwin:
+        install: brew
+        owner: dot
+        package: bat
+      windows:
+        install: winget
+        owner: dot
+        package: sharkdp.bat
+  tlrc:
+    homepage: https://tldr.sh
+    github: tldr-pages/tlrc
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: tlrc
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: tlrc
+      darwin:
+        install: brew
+        owner: dot
+        package: tlrc
+      windows:
+        install: winget
+        owner: dot
+        package: tldr-pages.tlrc
+  git-delta:
+    homepage: https://dandavison.github.io/delta
+    github: dandavison/delta
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: delta
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: git-delta
+      darwin:
+        install: brew
+        owner: dot
+        package: git-delta
+      windows:
+        install: winget
+        owner: dot
+        package: dandavison.delta
+  neovim:
+    homepage: https://neovim.io
+    github: neovim/neovim
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: nvim
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: neovim
+      darwin:
+        install: brew
+        owner: dot
+        package: neovim
+      windows:
+        install: winget
+        owner: dot
+        package: Neovim.Neovim
+  emacs:
+    homepage: https://www.gnu.org/software/emacs
+    github: emacs-mirror/emacs
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: emacs
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: emacs
+      darwin:
+        install: brew
+        owner: dot
+        package: emacs
+      windows:
+        install: winget
+        owner: dot
+        package: GNU.Emacs
+  lazygit:
+    homepage: https://github.com/jesseduffield/lazygit
+    github: jesseduffield/lazygit
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: lazygit
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: lazygit
+      darwin:
+        install: brew
+        owner: dot
+        package: lazygit
+      windows:
+        install: winget
+        owner: dot
+        package: JesseDuffield.lazygit
+  just:
+    homepage: https://just.systems
+    github: casey/just
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: just
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: just
+      darwin:
+        install: brew
+        owner: dot
+        package: just
+      windows:
+        install: winget
+        owner: dot
+        package: Casey.Just
+  yq:
+    homepage: https://mikefarah.gitbook.io/yq
+    github: mikefarah/yq
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: yq
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: yq
+      darwin:
+        install: brew
+        owner: dot
+        package: yq
+      windows:
+        install: winget
+        owner: dot
+        package: MikeFarah.yq
+  tree:
+    homepage: http://mama.indstate.edu/users/ice/tree
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: tree
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: tree
+      darwin:
+        install: brew
+        owner: dot
+        package: tree
+      windows:
+        install: winget
+        owner: dot
+        package: GnuWin32.Tree
+  bottom:
+    homepage: https://clementtsang.github.io/bottom
+    github: ClementTsang/bottom
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: btm
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: bottom
+      darwin:
+        install: brew
+        owner: dot
+        package: bottom
+      windows:
+        install: winget
+        owner: dot
+        package: Clement.bottom
+  btop:
+    homepage: https://github.com/aristocratos/btop
+    github: aristocratos/btop
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: btop
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: btop
+      darwin:
+        install: brew
+        owner: dot
+        package: btop
+  fastfetch:
+    homepage: https://fastfetch-cli.github.io/fastfetch
+    github: fastfetch-cli/fastfetch
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: fastfetch
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: fastfetch
+      darwin:
+        install: brew
+        owner: dot
+        package: fastfetch
+      windows:
+        install: winget
+        owner: dot
+        package: Fastfetch-cli.Fastfetch
+  duf:
+    homepage: https://github.com/muesli/duf
+    github: muesli/duf
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: duf
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: duf
+      darwin:
+        install: brew
+        owner: dot
+        package: duf
+      windows:
+        install: winget
+        owner: dot
+        package: muesli.duf
+  dust:
+    homepage: https://github.com/bootandy/dust
+    github: bootandy/dust
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: dust
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: dust
+      darwin:
+        install: brew
+        owner: dot
+        package: dust
+      windows:
+        install: winget
+        owner: dot
+        package: bootandy.dust
+  mkcert:
+    homepage: https://mkcert.dev
+    github: FiloSottile/mkcert
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: mkcert
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: mkcert
+      darwin:
+        install: brew
+        owner: dot
+        package: mkcert
+      windows:
+        install: winget
+        owner: dot
+        package: FiloSottile.mkcert
+  watchman:
+    homepage: https://facebook.github.io/watchman
+    github: facebook/watchman
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: watchman
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: watchman
+      darwin:
+        install: brew
+        owner: dot
+        package: watchman
+      windows:
+        install: fallback
+        owner: user
+        package: watchman
+        guidance: https://facebook.github.io/watchman/docs/install.html
+  duckdb:
+    homepage: https://duckdb.org
+    github: duckdb/duckdb
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: duckdb
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: duckdb
+      darwin:
+        install: brew
+        owner: dot
+        package: duckdb
+      windows:
+        install: winget
+        owner: dot
+        package: DuckDB.cli
+  sqlite:
+    homepage: https://sqlite.org
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: sqlite3
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: sqlite3
+      darwin:
+        install: brew
+        owner: dot
+        package: sqlite
+      windows:
+        install: winget
+        owner: dot
+        package: SQLite.SQLite
+  libpq:
+    homepage: https://www.postgresql.org/docs/current/libpq.html
+    github: postgres/postgres
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: psql
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: libpq
+      darwin:
+        install: brew
+        owner: dot
+        package: libpq
+      windows:
+        install: fallback
+        owner: user
+        package: libpq
+        guidance: https://www.postgresql.org/download/windows/
+  redis:
+    homepage: https://redis.io
+    github: redis/redis
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: redis-cli
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: redis
+      darwin:
+        install: brew
+        owner: dot
+        package: redis
+      windows:
+        install: winget
+        owner: dot
+        package: Redis.Redis
+  shellcheck:
+    homepage: https://www.shellcheck.net
+    github: koalaman/shellcheck
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: shellcheck
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: shellcheck
+      darwin:
+        install: brew
+        owner: dot
+        package: shellcheck
+      windows:
+        install: winget
+        owner: dot
+        package: koalaman.shellcheck
+  shfmt:
+    homepage: https://github.com/mvdan/sh
+    github: mvdan/sh
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: shfmt
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: shfmt
+      darwin:
+        install: brew
+        owner: dot
+        package: shfmt
+      windows:
+        install: winget
+        owner: dot
+        package: mvdan.shfmt
+  taplo:
+    homepage: https://taplo.tamasfe.dev
+    github: tamasfe/taplo
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: taplo
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: taplo
+      darwin:
+        install: brew
+        owner: dot
+        package: taplo
+      windows:
+        install: fallback
+        owner: user
+        package: taplo
+        guidance: https://taplo.tamasfe.dev/cli/installation/
+  stylua:
+    homepage: https://github.com/JohnnyMorganz/StyLua
+    github: JohnnyMorganz/StyLua
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: stylua
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: stylua
+      darwin:
+        install: brew
+        owner: dot
+        package: stylua
+      windows:
+        install: fallback
+        owner: user
+        package: stylua
+        guidance: https://github.com/JohnnyMorganz/StyLua
+  psscriptanalyzer:
+    homepage: https://github.com/PowerShell/PSScriptAnalyzer
+    github: PowerShell/PSScriptAnalyzer
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: Invoke-ScriptAnalyzer
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: psscriptanalyzer
+        guidance: Install-Module PSScriptAnalyzer -Scope CurrentUser
+      darwin:
+        install: fallback
+        owner: user
+        package: psscriptanalyzer
+        guidance: Install-Module PSScriptAnalyzer -Scope CurrentUser
+      windows:
+        install: powershell-gallery
+        owner: dot
+        package: PSScriptAnalyzer
+        guidance: Install-Module PSScriptAnalyzer -Scope CurrentUser
+  zsh:
+    homepage: https://www.zsh.org
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: zsh
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: zsh
+      darwin:
+        install: brew
+        owner: dot
+        package: zsh
+  fish:
+    homepage: https://fishshell.com
+    github: fish-shell/fish-shell
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: fish
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: fish
+      darwin:
+        install: brew
+        owner: dot
+        package: fish
+      windows:
+        install: fallback
+        owner: user
+        package: fish
+        guidance: https://fishshell.com
+  nushell:
+    homepage: https://www.nushell.sh
+    github: nushell/nushell
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: nu
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: nushell
+      darwin:
+        install: brew
+        owner: dot
+        package: nushell
+      windows:
+        install: winget
+        owner: dot
+        package: Nushell.Nushell
+  tmux:
+    homepage: https://github.com/tmux/tmux/wiki
+    github: tmux/tmux
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: tmux
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: tmux
+      darwin:
+        install: brew
+        owner: dot
+        package: tmux
+  zellij:
+    homepage: https://zellij.dev
+    github: zellij-org/zellij
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: zellij
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: zellij
+      darwin:
+        install: brew
+        owner: dot
+        package: zellij
+  oh-my-zsh:
+    homepage: https://ohmyz.sh
+    github: ohmyzsh/ohmyzsh
+    kind: framework
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: path
+          path: ~/.oh-my-zsh/oh-my-zsh.sh
+    platforms:
+      linux:
+        install: official
+        owner: dot
+        handler: oh-my-zsh
+        package: oh-my-zsh
+        guidance: RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+      darwin:
+        install: official
+        owner: dot
+        handler: oh-my-zsh
+        package: oh-my-zsh
+        guidance: RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  zsh-completions:
+    homepage: https://github.com/zsh-users/zsh-completions
+    github: zsh-users/zsh-completions
+    kind: framework
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify zsh completions are installed and loaded in the shell
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: zsh-completions
+      darwin:
+        install: brew
+        owner: dot
+        package: zsh-completions
+  zsh-history-substring-search:
+    homepage: https://github.com/zsh-users/zsh-history-substring-search
+    github: zsh-users/zsh-history-substring-search
+    kind: framework
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify zsh history substring search is installed and loaded in the shell
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: zsh-history-substring-search
+      darwin:
+        install: brew
+        owner: dot
+        package: zsh-history-substring-search
+  zsh-autosuggestions:
+    homepage: https://github.com/zsh-users/zsh-autosuggestions
+    github: zsh-users/zsh-autosuggestions
+    kind: framework
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify zsh autosuggestions are installed and loaded in the shell
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: zsh-autosuggestions
+      darwin:
+        install: brew
+        owner: dot
+        package: zsh-autosuggestions
+  zsh-syntax-highlighting:
+    homepage: https://github.com/zsh-users/zsh-syntax-highlighting
+    github: zsh-users/zsh-syntax-highlighting
+    kind: framework
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify zsh syntax highlighting is installed and loaded in the shell
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: zsh-syntax-highlighting
+      darwin:
+        install: brew
+        owner: dot
+        package: zsh-syntax-highlighting
+  powershell:
+    homepage: https://learn.microsoft.com/powershell
+    github: PowerShell/PowerShell
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: pwsh
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: powershell
+        guidance: https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-linux
+      darwin:
+        install: brew
+        owner: dot
+        package: powershell
+      windows:
+        install: winget
+        owner: dot
+        package: Microsoft.PowerShell
+  mas:
+    homepage: https://github.com/mas-cli/mas
+    github: mas-cli/mas
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: mas
+    platforms:
+      darwin:
+        install: brew
+        owner: dot
+        package: mas
+  windows-terminal:
+    homepage: https://github.com/microsoft/terminal
+    github: microsoft/terminal
+    kind: desktop
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: wt
+    platforms:
+      windows:
+        install: winget
+        owner: dot
+        package: Microsoft.WindowsTerminal
+  ghostty:
+    homepage: https://ghostty.org
+    github: ghostty-org/ghostty
+    kind: desktop
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: ghostty
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: ghostty
+        guidance: https://ghostty.org/docs/install/binary
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: ghostty
+  tabby:
+    homepage: https://tabby.sh
+    github: Eugeny/tabby
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify the Tabby desktop application is installed and usable
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: tabby
+        guidance: https://github.com/Eugeny/tabby/releases/latest
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: tabby
+      windows:
+        install: winget
+        owner: dot
+        package: Eugeny.Tabby
+  warp:
+    homepage: https://www.warp.dev
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify the Warp desktop application is installed and usable
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: warp
+        guidance: https://docs.warp.dev/getting-started/getting-started-with-warp
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: warp
+      windows:
+        install: winget
+        owner: dot
+        package: Warp.Warp
+  wezterm:
+    homepage: https://wezterm.org
+    github: wez/wezterm
+    kind: desktop
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: wezterm
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: wezterm
+        guidance: https://wezfurlong.org/wezterm/install/linux.html
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: wezterm
+      windows:
+        install: winget
+        owner: dot
+        package: wez.wezterm
+  visual-studio-code:
+    homepage: https://code.visualstudio.com
+    github: microsoft/vscode
+    kind: desktop
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: code
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: visual-studio-code
+        guidance: https://code.visualstudio.com/docs/setup/linux
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: visual-studio-code
+      windows:
+        install: winget
+        owner: dot
+        package: Microsoft.VisualStudioCode
+  cursor:
+    homepage: https://cursor.com
+    github: getcursor/cursor
+    kind: desktop
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: cursor
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: cursor
+        guidance: https://cursor.com/downloads
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: cursor
+      windows:
+        install: winget
+        owner: dot
+        package: Anysphere.Cursor
+  httpie-desktop:
+    homepage: https://httpie.io/product
+    kind: desktop
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: httpie
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: httpie-desktop
+        guidance: https://httpie.io/product
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: httpie-desktop
+      windows:
+        install: winget
+        owner: dot
+        package: HTTPie.HTTPie
+  bruno:
+    homepage: https://www.usebruno.com
+    github: usebruno/bruno
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify the Bruno desktop application is installed and usable
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: bruno
+        guidance: https://www.usebruno.com/downloads
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: bruno
+      windows:
+        install: winget
+        owner: dot
+        package: Bruno.Bruno
+  zed:
+    homepage: https://zed.dev
+    github: zed-industries/zed
+    kind: desktop
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: zed
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: zed
+        guidance: https://zed.dev/download
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: zed
+      windows:
+        install: winget
+        owner: dot
+        package: ZedIndustries.Zed
+  github-desktop:
+    homepage: https://desktop.github.com
+    github: desktop/desktop
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify GitHub Desktop is installed and usable
+    platforms:
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: github
+      windows:
+        install: winget
+        owner: dot
+        package: GitHub.GitHubDesktop
+  tableplus:
+    homepage: https://tableplus.com
+    github: TablePlus/TablePlus
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify TablePlus is installed and usable
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: tableplus
+        guidance: https://tableplus.com/download/linux
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: tableplus
+      windows:
+        install: fallback
+        owner: user
+        package: tableplus
+        guidance: https://tableplus.com/windows
+  redis-insight:
+    homepage: https://redis.io/insight
+    github: RedisInsight/RedisInsight
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify Redis Insight is installed and usable
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: redis-insight
+        guidance: https://redis.io/insight
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: redis-insight
+      windows:
+        install: fallback
+        owner: user
+        package: redis-insight
+        guidance: https://redis.io/insight
+  orbstack:
+    homepage: https://orbstack.dev
+    kind: desktop
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: docker
+        - type: command
+          command: docker
+          args:
+            - compose
+            - version
+    platforms:
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: orbstack
+  utm:
+    homepage: https://mac.getutm.app
+    github: utmapp/UTM
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify UTM is installed and usable
+    platforms:
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: utm
+  codex-cli:
+    homepage: https://developers.openai.com/codex/cli
+    github: openai/codex
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: codex
+    platforms:
+      linux:
+        install: official
+        owner: dot
+        handler: codex-cli
+        package: codex-cli
+        guidance: curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: codex
+      windows:
+        install: fallback
+        owner: user
+        package: codex-cli
+        guidance: https://developers.openai.com/codex/cli
+  claude-code:
+    homepage: https://code.claude.com/docs/en/overview
+    github: anthropics/claude-code
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: claude
+    platforms:
+      linux:
+        install: official
+        owner: dot
+        handler: claude-code
+        package: claude-code
+        guidance: curl -fsSL https://claude.ai/install.sh | bash
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: claude-code
+      windows:
+        install: winget
+        owner: dot
+        package: Anthropic.ClaudeCode
+  opencode-cli:
+    homepage: https://opencode.ai
+    github: anomalyco/opencode
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: opencode
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: opencode-cli
+        guidance: curl -fsSL https://opencode.ai/install | bash
+      darwin:
+        install: brew
+        owner: dot
+        package: anomalyco/tap/opencode
+      windows:
+        install: winget
+        owner: dot
+        package: SST.opencode
+  hermes-cli:
+    homepage: https://hermes-agent.nousresearch.com
+    github: NousResearch/hermes-agent
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: hermes
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: hermes-cli
+        guidance: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+      darwin:
+        install: fallback
+        owner: user
+        package: hermes-cli
+        guidance: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+      windows:
+        install: fallback
+        owner: user
+        package: hermes-cli
+        guidance: iex (irm https://hermes-agent.nousresearch.com/install.ps1)
+  codex-app:
+    homepage: https://developers.openai.com/codex/app
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify the Codex desktop application is installed and usable
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: codex-app
+        guidance: https://developers.openai.com/codex/app
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: codex-app
+      windows:
+        install: fallback
+        owner: user
+        package: codex-app
+        guidance: https://developers.openai.com/codex/app
+  opencode-app:
+    homepage: https://opencode.ai/download
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify the OpenCode desktop application is installed and usable
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: opencode-app
+        guidance: https://opencode.ai/download
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: opencode-desktop
+      windows:
+        install: winget
+        owner: dot
+        package: SST.OpenCodeDesktop
+  zcode-app:
+    homepage: https://zcode.z.ai
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify the ZCode desktop application is installed and usable
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: zcode-app
+        guidance: https://zcode.z.ai/en/docs/install
+      darwin:
+        install: fallback
+        owner: user
+        package: zcode-app
+        guidance: https://zcode.z.ai/en/docs/install
+      windows:
+        install: winget
+        owner: dot
+        package: ZhipuAI.ZCode
+  hermes-app:
+    homepage: https://hermes-agent.nousresearch.com
+    github: NousResearch/hermes-agent
+    kind: desktop
+    health:
+      mode: manual
+      severity: optional
+      guidance: verify the Hermes desktop application is installed and usable
+    platforms:
+      linux:
+        install: fallback
+        owner: user
+        package: hermes-app
+        guidance: https://hermes-agent.nousresearch.com
+      darwin:
+        install: fallback
+        owner: user
+        package: hermes-app
+        guidance: https://hermes-agent.nousresearch.com
+      windows:
+        install: fallback
+        owner: user
+        package: hermes-app
+        guidance: https://hermes-agent.nousresearch.com
+  docker-engine:
+    homepage: https://docs.docker.com/engine
+    github: moby/moby
+    kind: service
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: docker
+        - type: systemd
+          unit: docker.service
+    platforms:
+      linux:
+        install: official
+        owner: dot
+        handler: docker-engine
+        package: docker-engine
+        guidance: https://docs.docker.com/engine/install/
+  docker-desktop:
+    homepage: https://docs.docker.com/desktop
+    kind: desktop
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: docker
+        - type: command
+          command: docker
+          args:
+            - compose
+            - version
+    platforms:
+      darwin:
+        install: brew-cask
+        owner: dot
+        package: docker
+      windows:
+        install: fallback
+        owner: user
+        package: docker-desktop
+        guidance: https://docs.docker.com/desktop/setup/install/windows-install/
+  kubernetes-cli:
+    homepage: https://kubernetes.io/docs/reference/kubectl
+    github: kubernetes/kubernetes
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: kubectl
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: kubernetes-cli
+      darwin:
+        install: brew
+        owner: dot
+        package: kubernetes-cli
+      windows:
+        install: winget
+        owner: dot
+        package: Kubernetes.kubectl
+  helm:
+    homepage: https://helm.sh
+    github: helm/helm
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: helm
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: helm
+      darwin:
+        install: brew
+        owner: dot
+        package: helm
+      windows:
+        install: winget
+        owner: dot
+        package: Helm.Helm
+  kustomize:
+    homepage: https://kustomize.io
+    github: kubernetes-sigs/kustomize
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: kustomize
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: kustomize
+      darwin:
+        install: brew
+        owner: dot
+        package: kustomize
+      windows:
+        install: winget
+        owner: dot
+        package: Kubernetes.kustomize
+  kubectx:
+    homepage: https://github.com/ahmetb/kubectx
+    github: ahmetb/kubectx
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: kubectx
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: kubectx
+      darwin:
+        install: brew
+        owner: dot
+        package: kubectx
+      windows:
+        install: fallback
+        owner: user
+        package: kubectx
+        guidance: https://github.com/ahmetb/kubectx
+  k9s:
+    homepage: https://k9scli.io
+    github: derailed/k9s
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: k9s
+    platforms:
+      linux:
+        install: official
+        owner: dot
+        handler: official-release
+        package: k9s
+        guidance: https://github.com/derailed/k9s/releases
+        version: v0.51.0
+        release:
+          version: v0.51.0
+          destination: /usr/local/bin/k9s
+          artifacts:
+            amd64:
+              url: https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_amd64.tar.gz
+              sha256: c3752ad51a5a4015a113819c4eeb6e55a4d0e4b8e652494797532f6fc8161dd7
+            arm64:
+              url: https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_arm64.tar.gz
+              sha256: 3ee05c82e5f9198928a4e86133608ba6a2c10a2244d6a7789e820f78319d640c
+      darwin:
+        install: brew
+        owner: dot
+        package: k9s
+      windows:
+        install: winget
+        owner: dot
+        package: Derailed.k9s
+  openssh-client:
+    homepage: https://www.openssh.com
+    github: openssh/openssh-portable
+    kind: command
+    health:
+      mode: automatic
+      severity: blocking
+      checks:
+        - type: command
+          command: ssh
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: openssh-client
+  rsync:
+    homepage: https://rsync.samba.org
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: rsync
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: rsync
+  lsof:
+    homepage: https://lsof.itap.purdue.edu
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: lsof
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: lsof
+  iproute2:
+    homepage: https://wiki.linuxfoundation.org/networking/iproute2
+    github: iproute2/iproute2
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: ip
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: iproute2
+  dnsutils:
+    homepage: https://www.isc.org/bind/
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: dig
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: dnsutils
+  unattended-upgrades:
+    homepage: https://wiki.debian.org/UnattendedUpgrades
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: unattended-upgrade
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: unattended-upgrades
+  k3s:
+    homepage: https://k3s.io
+    github: k3s-io/k3s
+    kind: service
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: k3s
+        - type: systemd
+          unit: k3s.service
+          enabled: true
+        - type: systemd
+          unit: k3s.service
+          active: true
+        - type: kubernetes-api
+          command: k3s
+          args:
+            - kubectl
+            - get
+            - --raw=/readyz
+        - type: kubeconfig
+          path: /etc/rancher/k3s/k3s.yaml
+          owner: root
+          group: k3s-admin
+          mode: "0640"
+    platforms:
+      linux:
+        install: official
+        owner: dot
+        handler: k3s
+        package: k3s
+        guidance: https://get.k3s.io
+        version: v1.36.3+k3s1
+        service:
+          config_path: /etc/rancher/k3s/config.yaml
+          kubeconfig:
+            path: /etc/rancher/k3s/k3s.yaml
+            owner: root
+            group: k3s-admin
+            mode: "0640"
+          fresh_install:
+            disable:
+              - traefik
+              - servicelb
+              - local-storage
+              - metrics-server
+            enable:
+              - coredns
+  socket-vmnet:
+    homepage: https://github.com/lima-vm/socket_vmnet
+    github: lima-vm/socket_vmnet
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: socket_vmnet
+    platforms:
+      darwin:
+        install: brew
+        owner: dot
+        package: socket_vmnet
+  glow:
+    homepage: https://github.com/charmbracelet/glow
+    github: charmbracelet/glow
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: glow
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: glow
+      darwin:
+        install: brew
+        owner: dot
+        package: glow
+      windows:
+        install: winget
+        owner: dot
+        package: charmbracelet.glow
+  f2:
+    homepage: https://github.com/ayoisaiah/f2
+    github: ayoisaiah/f2
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: f2
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: f2
+      darwin:
+        install: brew
+        owner: dot
+        package: f2
+      windows:
+        install: winget
+        owner: dot
+        package: ayoisaiah.f2
+  yazi:
+    homepage: https://yazi-rs.github.io
+    github: sxyazi/yazi
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: yazi
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: yazi
+      darwin:
+        install: brew
+        owner: dot
+        package: yazi
+      windows:
+        install: winget
+        owner: dot
+        package: sxyazi.yazi
+  ast-grep:
+    homepage: https://ast-grep.github.io
+    github: ast-grep/ast-grep
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: ast-grep
+    aliases:
+      linux:
+        - sg
+      darwin:
+        - sg
+      windows:
+        - sg
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: ast-grep
+      darwin:
+        install: brew
+        owner: dot
+        package: ast-grep
+      windows:
+        install: winget
+        owner: dot
+        package: ast-grep.ast-grep
+  bats-core:
+    homepage: https://github.com/bats-core/bats-core
+    github: bats-core/bats-core
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: bats
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: bats
+      darwin:
+        install: brew
+        owner: dot
+        package: bats-core
+  dyff:
+    homepage: https://github.com/homeport/dyff
+    github: homeport/dyff
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: dyff
+    platforms:
+      linux:
+        install: brew
+        owner: dot
+        package: homeport/tap/dyff
+      darwin:
+        install: brew
+        owner: dot
+        package: homeport/tap/dyff
+  visidata:
+    homepage: https://www.visidata.org
+    github: saulpw/visidata
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: vd
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: visidata
+      darwin:
+        install: brew
+        owner: dot
+        package: visidata
+  aria2:
+    homepage: https://aria2.github.io
+    github: aria2/aria2
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: aria2c
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: aria2
+      darwin:
+        install: brew
+        owner: dot
+        package: aria2
+      windows:
+        install: winget
+        owner: dot
+        package: aria2.aria2
+  mosh:
+    homepage: https://mosh.org
+    github: mobile-shell/mosh
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: mosh
+    platforms:
+      linux:
+        install: apt
+        owner: dot
+        package: mosh
+      darwin:
+        install: brew
+        owner: dot
+        package: mosh

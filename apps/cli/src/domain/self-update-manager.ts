@@ -4,6 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveNodeCommand } from '../infra/node-command';
 import { createWorktreeSourceId } from './cli-source-id';
 
 export const defaultSelfUpdateRepo =
@@ -1142,7 +1143,8 @@ function runCommand(
   options: { readonly cwd?: string; readonly allowFailure?: boolean } = {},
 ): Promise<SelfUpdateCommandResult> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, [...args], {
+    const invocation = resolveNodeCommand(command, args);
+    const child = spawn(invocation.command, invocation.args, {
       cwd: options.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });

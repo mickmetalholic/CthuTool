@@ -1,0 +1,418 @@
+{
+  "version": 1,
+  "modelVersion": 1,
+  "alignmentReviewed": false,
+  "baseline": "8e59d3283eba2d99b8abcc327e694b23a2d4cc8e",
+  "identities": {
+    "software": {
+      "3daafcec-eb90-817f-b59f-e3f33a12ed1e": {
+        "key": "argocd",
+        "state": "active"
+      },
+      "3daafcec-eb90-81a4-9cee-dc20e17f2d1b": {
+        "key": "bat",
+        "state": "active"
+      },
+      "3daafcec-eb90-8188-b919-fd754dc37ae9": {
+        "key": "bottom",
+        "state": "active"
+      },
+      "3daafcec-eb90-81f5-b4df-d868a0cc1ae8": {
+        "key": "bruno",
+        "state": "active"
+      },
+      "3daafcec-eb90-81b9-b5a4-ebb7521a0b6d": {
+        "key": "btop",
+        "state": "active"
+      },
+      "3daafcec-eb90-8194-b633-f5b92c11aa00": {
+        "key": "claude-code",
+        "state": "active"
+      },
+      "3daafcec-eb90-8110-9fca-e5db2a68ca35": {
+        "key": "codex-app",
+        "state": "active"
+      },
+      "3daafcec-eb90-814d-a5a1-dfd4b8379621": {
+        "key": "codex-cli",
+        "state": "active"
+      },
+      "3daafcec-eb90-8153-808e-e1fd4f70848e": {
+        "key": "curl",
+        "state": "active"
+      },
+      "3daafcec-eb90-8119-bde5-cb42467bef40": {
+        "key": "cursor",
+        "state": "active"
+      },
+      "3daafcec-eb90-81df-8cbd-d2a64cc4199e": {
+        "key": "deepseek-harness",
+        "state": "active"
+      },
+      "3daafcec-eb90-81ef-9ec8-f873a6c941cc": {
+        "key": "direnv",
+        "state": "active"
+      },
+      "3daafcec-eb90-81d5-98b6-d6815a5a53bc": {
+        "key": "docker-desktop",
+        "state": "active"
+      },
+      "3daafcec-eb90-81a6-94b3-cb1379f22f73": {
+        "key": "docker-engine",
+        "state": "active"
+      },
+      "3daafcec-eb90-810b-a02c-cc35de1fe515": {
+        "key": "duckdb",
+        "state": "active"
+      },
+      "3daafcec-eb90-8119-a343-d80ccca13db0": {
+        "key": "duf",
+        "state": "active"
+      },
+      "3daafcec-eb90-8105-8130-edf6b2d50347": {
+        "key": "dust",
+        "state": "active"
+      },
+      "3daafcec-eb90-8134-8bae-f4e5eaed8461": {
+        "key": "emacs",
+        "state": "active"
+      },
+      "3daafcec-eb90-81a8-80e9-e2d8bb3f8e29": {
+        "key": "eza",
+        "state": "active"
+      },
+      "3daafcec-eb90-81ac-b76a-d76370a3fb0b": {
+        "key": "fastfetch",
+        "state": "active"
+      },
+      "3daafcec-eb90-813e-984d-ee040dae3794": {
+        "key": "fd",
+        "state": "active"
+      },
+      "3daafcec-eb90-81b0-8717-dc2866f2e749": {
+        "key": "fish",
+        "state": "active"
+      },
+      "3daafcec-eb90-81f3-8db5-d07ad63b2d9e": {
+        "key": "flux",
+        "state": "active"
+      },
+      "3daafcec-eb90-8141-a839-f6db5448a556": {
+        "key": "fzf",
+        "state": "active"
+      },
+      "3daafcec-eb90-81da-9a23-edea281c945f": {
+        "key": "gh",
+        "state": "active"
+      },
+      "3daafcec-eb90-816a-991a-e9e035431e89": {
+        "key": "ghostty",
+        "state": "active"
+      },
+      "3daafcec-eb90-81ff-aa97-ddd3efd290f9": {
+        "key": "git",
+        "state": "active"
+      },
+      "3daafcec-eb90-8144-955c-ff5aec98b655": {
+        "key": "git-delta",
+        "state": "active"
+      },
+      "3daafcec-eb90-817e-aca7-ed046e04581a": {
+        "key": "github-desktop",
+        "state": "active"
+      },
+      "3daafcec-eb90-81eb-9b91-f1f0c1b7445d": {
+        "key": "helm",
+        "state": "active"
+      },
+      "3daafcec-eb90-8189-b2b2-ef8a3c7e2cf4": {
+        "key": "hermes-app",
+        "state": "active"
+      },
+      "3daafcec-eb90-81a2-99c0-f1d6de4c67f6": {
+        "key": "hermes-cli",
+        "state": "active"
+      },
+      "3daafcec-eb90-81e5-82b6-e78ec2df1f99": {
+        "key": "httpie-cli",
+        "state": "active"
+      },
+      "3daafcec-eb90-8183-8063-da016b0c3f52": {
+        "key": "httpie-desktop",
+        "state": "active"
+      },
+      "3daafcec-eb90-812b-b96e-d0efc0fc8759": {
+        "key": "hyperfine",
+        "state": "active"
+      },
+      "3daafcec-eb90-815d-9140-ded5378ccfbd": {
+        "key": "jq",
+        "state": "active"
+      },
+      "3daafcec-eb90-813d-aa62-d946e69b6eec": {
+        "key": "just",
+        "state": "active"
+      },
+      "3daafcec-eb90-819c-b8c8-e5d3d0b92deb": {
+        "key": "k3s",
+        "state": "active"
+      },
+      "3daafcec-eb90-816e-8ee0-edf084604abd": {
+        "key": "k9s",
+        "state": "active"
+      },
+      "3daafcec-eb90-812c-9585-ed7bb1b31824": {
+        "key": "kubectx",
+        "state": "active"
+      },
+      "3daafcec-eb90-81ca-9db6-fa0556df2d41": {
+        "key": "kubernetes-cli",
+        "state": "active"
+      },
+      "3daafcec-eb90-814b-add3-e19ee724cabe": {
+        "key": "kustomize",
+        "state": "active"
+      },
+      "3daafcec-eb90-81a1-a513-dfb571850e7e": {
+        "key": "lazygit",
+        "state": "active"
+      },
+      "3daafcec-eb90-81b6-a214-e4026aaef52e": {
+        "key": "libpq",
+        "state": "active"
+      },
+      "3daafcec-eb90-819a-8e51-e14b3773e1af": {
+        "key": "mas",
+        "state": "active"
+      },
+      "3daafcec-eb90-81fd-aa33-f3c33ea7f27e": {
+        "key": "mise",
+        "state": "active"
+      },
+      "3daafcec-eb90-8199-a73a-e137387fe351": {
+        "key": "mkcert",
+        "state": "active"
+      },
+      "3daafcec-eb90-8171-90b6-d53c114bc603": {
+        "key": "neovim",
+        "state": "active"
+      },
+      "3daafcec-eb90-8188-9080-fbf3dca38d53": {
+        "key": "nushell",
+        "state": "active"
+      },
+      "3daafcec-eb90-81b2-a171-fb4b5bf008fa": {
+        "key": "oh-my-zsh",
+        "state": "active"
+      },
+      "3daafcec-eb90-8128-9810-fcdc256fbcae": {
+        "key": "opencode-app",
+        "state": "active"
+      },
+      "3daafcec-eb90-81a0-87fc-da246f8726db": {
+        "key": "opencode-cli",
+        "state": "active"
+      },
+      "3daafcec-eb90-8128-a5d2-c5ea9a890b1e": {
+        "key": "openspec-cli",
+        "state": "active"
+      },
+      "3daafcec-eb90-81c8-95b5-cc67a736d470": {
+        "key": "orbstack",
+        "state": "active"
+      },
+      "3daafcec-eb90-81b3-ba7a-dacd8d6df976": {
+        "key": "powershell",
+        "state": "active"
+      },
+      "3daafcec-eb90-81bf-805e-cdeb18761d45": {
+        "key": "psscriptanalyzer",
+        "state": "active"
+      },
+      "3daafcec-eb90-81bb-aa43-d88b36b4866a": {
+        "key": "redis",
+        "state": "active"
+      },
+      "3daafcec-eb90-8164-ac3d-f855179f5dce": {
+        "key": "redis-insight",
+        "state": "active"
+      },
+      "3daafcec-eb90-81f1-a6d7-fc7b753fe776": {
+        "key": "ripgrep",
+        "state": "active"
+      },
+      "3daafcec-eb90-8101-b67a-e7a888750161": {
+        "key": "shellcheck",
+        "state": "active"
+      },
+      "3daafcec-eb90-81ad-befa-d2df69f07251": {
+        "key": "shfmt",
+        "state": "active"
+      },
+      "3daafcec-eb90-81de-881a-e5ce71a98bfa": {
+        "key": "socket-vmnet",
+        "state": "active"
+      },
+      "3daafcec-eb90-81ed-a5d2-c31ed2b5a3f8": {
+        "key": "sqlite",
+        "state": "active"
+      },
+      "3daafcec-eb90-8104-bff2-df07192f0afc": {
+        "key": "starship",
+        "state": "active"
+      },
+      "3daafcec-eb90-81eb-9975-df83b839ac87": {
+        "key": "stylua",
+        "state": "active"
+      },
+      "3daafcec-eb90-81e9-8316-f9ad0f07b440": {
+        "key": "tabby",
+        "state": "active"
+      },
+      "3daafcec-eb90-818a-8ed7-fb3cb8c7ea4a": {
+        "key": "tableplus",
+        "state": "active"
+      },
+      "3daafcec-eb90-8175-b5b8-e8e4df9bf2df": {
+        "key": "taplo",
+        "state": "active"
+      },
+      "3daafcec-eb90-811c-870c-eb84f87f23eb": {
+        "key": "tlrc",
+        "state": "active"
+      },
+      "3daafcec-eb90-8104-b1ad-ee2404f85dde": {
+        "key": "tmux",
+        "state": "active"
+      },
+      "3daafcec-eb90-8159-a3b3-d7470c55ccd4": {
+        "key": "tree",
+        "state": "active"
+      },
+      "3daafcec-eb90-8192-9542-f6a99fcdc3c3": {
+        "key": "unzip",
+        "state": "active"
+      },
+      "3daafcec-eb90-8148-b74d-fde7449a113d": {
+        "key": "utm",
+        "state": "active"
+      },
+      "3daafcec-eb90-818a-bd94-f2545cc78fb2": {
+        "key": "visual-studio-code",
+        "state": "active"
+      },
+      "3daafcec-eb90-818a-95d5-ec3f7e3d4f0b": {
+        "key": "warp",
+        "state": "active"
+      },
+      "3daafcec-eb90-8177-9e76-f7e85c8e1195": {
+        "key": "watchman",
+        "state": "active"
+      },
+      "3daafcec-eb90-8142-8132-c29b3e7c3ee5": {
+        "key": "wezterm",
+        "state": "active"
+      },
+      "3daafcec-eb90-8175-b944-fca9f06fb00e": {
+        "key": "windows-terminal",
+        "state": "active"
+      },
+      "3daafcec-eb90-8101-99ee-fe27493d1871": {
+        "key": "yq",
+        "state": "active"
+      },
+      "3daafcec-eb90-81cd-89f8-c3cce82013f2": {
+        "key": "zcode-app",
+        "state": "active"
+      },
+      "3daafcec-eb90-8158-85fe-de035deb5208": {
+        "key": "zed",
+        "state": "active"
+      },
+      "3daafcec-eb90-8181-91f2-d6b0ceff7ac5": {
+        "key": "zellij",
+        "state": "active"
+      },
+      "3daafcec-eb90-8143-902f-cc60f9cc69c3": {
+        "key": "zoxide",
+        "state": "active"
+      },
+      "3daafcec-eb90-818e-b0ad-d2f0c4e41299": {
+        "key": "zsh",
+        "state": "active"
+      },
+      "3daafcec-eb90-81a8-9815-e6136ff5bc6e": {
+        "key": "zsh-autosuggestions",
+        "state": "active"
+      },
+      "3daafcec-eb90-8180-b755-ec2357eb7538": {
+        "key": "zsh-completions",
+        "state": "active"
+      },
+      "3daafcec-eb90-810f-b264-ecacb4daefdc": {
+        "key": "zsh-history-substring-search",
+        "state": "active"
+      },
+      "3daafcec-eb90-81bf-903e-de8b9b1fbeb8": {
+        "key": "zsh-syntax-highlighting",
+        "state": "active"
+      }
+    },
+    "toolsets": {
+      "3daafcec-eb90-8163-92c8-e04dd2ce8879": {
+        "key": "base",
+        "state": "active"
+      },
+      "3daafcec-eb90-81d4-832b-c0f1e1a1be96": {
+        "key": "desktop",
+        "state": "active"
+      },
+      "3daafcec-eb90-81e9-85aa-cbabd5efc6d4": {
+        "key": "devops",
+        "state": "active"
+      },
+      "3daafcec-eb90-817c-838a-d0e1471fa4e5": {
+        "key": "shell-fish",
+        "state": "active"
+      },
+      "3daafcec-eb90-81ad-a341-e27405afe4bc": {
+        "key": "shell-nushell",
+        "state": "active"
+      },
+      "3daafcec-eb90-8109-ad0c-eb48fb859509": {
+        "key": "shell-zsh",
+        "state": "active"
+      },
+      "3daafcec-eb90-81b0-8852-d8818b843103": {
+        "key": "terminal-multiplexers",
+        "state": "active"
+      }
+    },
+    "hosts": {
+      "3daafcec-eb90-8139-b700-eeef2da7aaeb": {
+        "key": "linux-devbox",
+        "state": "active"
+      },
+      "3daafcec-eb90-818e-8ba1-ca9b475ee9f6": {
+        "key": "macbook-pro",
+        "state": "active"
+      },
+      "3daafcec-eb90-8152-b62d-db8b2d001069": {
+        "key": "win-desktop",
+        "state": "active"
+      },
+      "3daafcec-eb90-8139-bf41-d8b82f9026b5": {
+        "key": "work-mac",
+        "state": "active"
+      }
+    }
+  },
+  "identityMigrations": [],
+  "files": {
+    "dotfiles/data/packages.yaml": "e0c7aea7563bf0990c40b02b37eacbbe455d3c44176c2773ca755fb7d3073305",
+    "dotfiles/data/runtime-tools.yaml": "793ea69737908c8a088229778555d0d376d0a30c583df7743116f56b8447c84d",
+    "dotfiles/data/toolsets.yaml": "df5f6909e244ded41df80f25d6cbafaab59911860aa5866ef435f9c13cd991e0",
+    "dotfiles/home/.chezmoidata/hosts.yaml": "27d4eb56c5a8fdf0a0669f9c8a3e33e6896b7e51f0e9573e64f4c42b63b1be5b"
+  },
+  "generation": 0
+}

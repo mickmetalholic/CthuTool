@@ -510,3 +510,7 @@ pnpm --filter @cthutool/cli typecheck
 - In `--json` mode, write exactly one JSON value to stdout.
 - Keep warnings and diagnostics on stderr.
 - Add focused tests for non-interactive missing input and JSON output.
+
+### Dotfiles
+
+`chc dotfiles init` binds a machine to an already published host. `env setup/doctor` manages software environment; `config add/diff/apply` reviews and applies home files; `notion auth/diff/pull/validate` manages direct API access and local plan snapshots. Setup, home apply and `mise install` are separate explicit steps. See [the dotfiles guide](../../docs/dotfiles/README.md) for standalone SSH bootstrap, existing-source migration, Token caching and first Notion alignment.

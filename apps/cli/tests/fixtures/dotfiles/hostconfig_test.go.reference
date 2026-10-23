@@ -1,0 +1,869 @@
+package dotcli
+
+import (
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
+	"testing"
+)
+
+func TestLoadHostConfigLoadsCanonicalDefaults(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	config, err := loadHostConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Defaults.Name != "Test User" || config.Defaults.Email != "test@example.com" || config.Defaults.Editor != "nvim" {
+		t.Fatalf("defaults = %#v", config.Defaults)
+	}
+	if config.Defaults.SSHAgent != "system" || config.Defaults.Repo != "git@github.com:mickmetalholic/dotfiles.git" {
+		t.Fatalf("defaults = %#v", config.Defaults)
+	}
+	if config.Platforms["windows"].Shell != "pwsh" || config.Platforms["linux"].Terminal != "wezterm" {
+		t.Fatalf("platforms = %#v", config.Platforms)
+	}
+	if len(config.Hosts) != 5 || config.Hosts["windows-desktop"].OS != "windows" {
+		t.Fatalf("hosts = %#v", config.Hosts)
+	}
+	if !contains(config.Hosts["windows-desktop"].Aliases, "SARGERAS") {
+		t.Fatalf("windows-desktop aliases = %#v", config.Hosts["windows-desktop"].Aliases)
+	}
+}
+
+func TestLoadHostConfigMissingDefaultsRejects(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "home", ".chezmoidata"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadHostConfig(root); err == nil || !strings.Contains(err.Error(), "canonical defaults") {
+		t.Fatalf("expected missing defaults error, got %v", err)
+	}
+}
+
+func TestLoadHostConfigRejectsMalformedYAML(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	if err := os.WriteFile(filepath.Join(root, "home", ".chezmoidata", "hosts.yaml"), []byte("hosts:\n  windows-desktop: [unclosed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadHostConfig(root); err == nil || !strings.Contains(err.Error(), "decode canonical hosts") {
+		t.Fatalf("expected decode error, got %v", err)
+	}
+}
+
+func TestLoadHostConfigRejectsUnknownFields(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	if err := os.WriteFile(filepath.Join(root, "home", ".chezmoidata", "hosts.yaml"), []byte("hosts:\n  windows-desktop:\n    os: windows\n    mysteryField: true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadHostConfig(root); err == nil || !strings.Contains(err.Error(), "field mysteryField not found") {
+		t.Fatalf("expected unknown field error, got %v", err)
+	}
+}
+
+func TestResolveHostByCanonicalIDCaseInsensitive(t *testing.T) {
+	config := &hostConfig{Hosts: map[string]canonicalHost{
+		"windows-desktop": {OS: "windows", Toolsets: []string{"core"}},
+	}}
+	for _, requested := range []string{"windows-desktop", "WINDOWS-DESKTOP", "Windows-Desktop"} {
+		host, err := config.resolveHost(requested, identitySourceEnv, "windows")
+		if err != nil {
+			t.Fatalf("%s: %v", requested, err)
+		}
+		if !host.Declared || host.ID != "windows-desktop" || host.Requested != requested {
+			t.Fatalf("%s resolved to %#v", requested, host)
+		}
+	}
+}
+
+func TestResolveHostByAliasCaseInsensitive(t *testing.T) {
+	config := &hostConfig{Hosts: map[string]canonicalHost{
+		"windows-desktop": {OS: "windows", Aliases: []string{"SARGERAS"}},
+	}}
+	for _, requested := range []string{"SARGERAS", "sargeras", "Sargeras"} {
+		host, err := config.resolveHost(requested, identitySourceHostname, "windows")
+		if err != nil {
+			t.Fatalf("%s: %v", requested, err)
+		}
+		if !host.Declared || host.ID != "windows-desktop" {
+			t.Fatalf("%s resolved to %#v", requested, host)
+		}
+	}
+}
+
+func TestWSLIdentityIsExplicitAndWindowsAliasReserved(t *testing.T) {
+	root := repoRootDir(t)
+	config, err := loadHostConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wsl, err := config.resolveHost("MARDUM", identitySourceEnv, "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !wsl.Declared || wsl.ID != "linux-wsl" || wsl.OS != "linux" {
+		t.Fatalf("MARDUM resolved to %#v", wsl)
+	}
+	if _, err := config.resolveHost("SARGERAS", identitySourceHostname, "linux"); err == nil || !strings.Contains(err.Error(), "host windows-desktop is declared for windows") {
+		t.Fatalf("SARGERAS must remain reserved for Windows, got %v", err)
+	}
+}
+
+func TestStandardizedDeviceAliasesResolveToCanonicalHosts(t *testing.T) {
+	root := repoRootDir(t)
+	config, err := loadHostConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		alias     string
+		canonical string
+		runtimeOS string
+	}{
+		{alias: "SARGERAS", canonical: "windows-desktop", runtimeOS: "windows"},
+		{alias: "NYARLATHOTEP", canonical: "darwin-macbook-pro", runtimeOS: "darwin"},
+		{alias: "NZOTH", canonical: "darwin-mac-mini", runtimeOS: "darwin"},
+		{alias: "MARDUM", canonical: "linux-wsl", runtimeOS: "linux"},
+		{alias: "CTHULHU", canonical: "linux-ubuntu-server", runtimeOS: "linux"},
+	} {
+		host, err := config.resolveHost(tc.alias, identitySourceEnv, tc.runtimeOS)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.alias, err)
+		}
+		if host.ID != tc.canonical {
+			t.Fatalf("%s resolved to %s, want %s", tc.alias, host.ID, tc.canonical)
+		}
+	}
+}
+
+func TestRemovedPlaceholderHostsAreUndeclared(t *testing.T) {
+	root := repoRootDir(t)
+	config, err := loadHostConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"work-mac", "linux-devbox"} {
+		host, err := config.resolveHost(id, identitySourceEnv, "linux")
+		if err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+		if host.Declared {
+			t.Fatalf("removed host %s still resolved to %#v", id, host)
+		}
+	}
+}
+
+func TestResolveHostMergesPlatformDefaults(t *testing.T) {
+	config := &hostConfig{
+		Platforms: map[string]platformDefaults{
+			"darwin": {Shell: "zsh", Terminal: "ghostty"},
+		},
+		Hosts: map[string]canonicalHost{
+			"darwin-macbook-pro": {OS: "darwin"},
+		},
+	}
+	host, err := config.resolveHost("darwin-macbook-pro", identitySourceEnv, "darwin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Shell != "zsh" || host.Terminal != "ghostty" {
+		t.Fatalf("platform defaults not inherited: %#v", host)
+	}
+}
+
+func TestResolveHostOverridesPlatformDefaults(t *testing.T) {
+	config := &hostConfig{
+		Platforms: map[string]platformDefaults{
+			"windows": {Shell: "powershell", Terminal: "windows-terminal"},
+		},
+		Hosts: map[string]canonicalHost{
+			"windows-desktop": {OS: "windows", Shell: "pwsh"},
+		},
+	}
+	host, err := config.resolveHost("windows-desktop", identitySourceEnv, "windows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Shell != "pwsh" {
+		t.Fatalf("host override lost: %#v", host)
+	}
+	if host.Terminal != "windows-terminal" {
+		t.Fatalf("platform default lost: %#v", host)
+	}
+}
+
+func TestResolveHostUndeclaredIdentity(t *testing.T) {
+	config := &hostConfig{Hosts: map[string]canonicalHost{
+		"windows-desktop": {OS: "windows"},
+	}}
+	host, err := config.resolveHost("mystery-box", identitySourceHostname, "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Declared || host.ID != "" || host.Requested != "mystery-box" {
+		t.Fatalf("undeclared host = %#v", host)
+	}
+}
+
+func TestResolveHostRejectsOSMismatch(t *testing.T) {
+	config := &hostConfig{Hosts: map[string]canonicalHost{
+		"windows-desktop": {OS: "windows"},
+	}}
+	_, err := config.resolveHost("windows-desktop", identitySourceEnv, "darwin")
+	if err == nil || !strings.Contains(err.Error(), "declared for windows") {
+		t.Fatalf("expected OS mismatch error, got %v", err)
+	}
+}
+
+func TestResolveHostRejectsAmbiguousAlias(t *testing.T) {
+	config := &hostConfig{Hosts: map[string]canonicalHost{
+		"windows-desktop": {OS: "windows", Aliases: []string{"SARGERAS"}},
+		"darwin-mac-mini": {OS: "darwin", Aliases: []string{"sargeras"}},
+	}}
+	_, err := config.resolveHost("SARGERAS", identitySourceEnv, "windows")
+	if err == nil || !strings.Contains(err.Error(), "ambiguously") {
+		t.Fatalf("expected ambiguous alias error, got %v", err)
+	}
+}
+
+func TestResolveHostRejectsDuplicateCaseInsensitiveID(t *testing.T) {
+	config := &hostConfig{Hosts: map[string]canonicalHost{
+		"windows-desktop": {OS: "windows"},
+		"Windows-Desktop": {OS: "windows"},
+	}}
+	_, err := config.resolveHost("windows-desktop", identitySourceEnv, "windows")
+	if err == nil || !strings.Contains(err.Error(), "ambiguously") {
+		t.Fatalf("expected duplicate ID error, got %v", err)
+	}
+}
+
+func TestResolveRequestedIdentityPrefersEnvironment(t *testing.T) {
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath chezmoi":           []byte(""),
+		"chezmoi data --format json": []byte(`{"local":{"host":"persisted-host"},"host":"legacy-host"}`),
+	}}
+	identity := resolveRequestedIdentity(runner, []string{"PATH=/bin", "DOTFILES_HOST=windows-desktop"})
+	if identity.Requested != "windows-desktop" || identity.Source != identitySourceEnv {
+		t.Fatalf("identity = %#v", identity)
+	}
+}
+
+func TestResolveRequestedIdentityLocalOverLegacyAndHostname(t *testing.T) {
+	prev := osHostname
+	osHostname = func() (string, error) { return "sargeras", nil }
+	defer func() { osHostname = prev }()
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath chezmoi":           []byte(""),
+		"chezmoi data --format json": []byte(`{"local":{"host":"darwin-macbook-pro"},"host":"legacy-host"}`),
+	}}
+	identity := resolveRequestedIdentity(runner, []string{"PATH=/bin"})
+	if identity.Requested != "darwin-macbook-pro" || identity.Source != identitySourceLocal {
+		t.Fatalf("identity = %#v", identity)
+	}
+}
+
+func TestResolveRequestedIdentityLegacyOverHostname(t *testing.T) {
+	prev := osHostname
+	osHostname = func() (string, error) { return "sargeras", nil }
+	defer func() { osHostname = prev }()
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath chezmoi":           []byte(""),
+		"chezmoi data --format json": []byte(`{"host":"legacy-host"}`),
+	}}
+	identity := resolveRequestedIdentity(runner, []string{"PATH=/bin"})
+	if identity.Requested != "legacy-host" || identity.Source != identitySourceLegacy {
+		t.Fatalf("identity = %#v", identity)
+	}
+}
+
+func TestResolveRequestedIdentityFallsBackToHostname(t *testing.T) {
+	prev := osHostname
+	osHostname = func() (string, error) { return "sargeras", nil }
+	defer func() { osHostname = prev }()
+	identity := resolveRequestedIdentity(&fakeRunner{}, []string{"PATH=/bin"})
+	if identity.Requested != "sargeras" || identity.Source != identitySourceHostname {
+		t.Fatalf("identity = %#v", identity)
+	}
+}
+
+func TestResolveRequestedIdentityIgnoresInvalidChezmoiData(t *testing.T) {
+	prev := osHostname
+	osHostname = func() (string, error) { return "sargeras", nil }
+	defer func() { osHostname = prev }()
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath chezmoi":           []byte(""),
+		"chezmoi data --format json": []byte("not-json"),
+	}}
+	identity := resolveRequestedIdentity(runner, []string{"PATH=/bin"})
+	if identity.Source != identitySourceHostname {
+		t.Fatalf("identity = %#v", identity)
+	}
+}
+
+func TestResolveRequestedIdentityUnknownFallback(t *testing.T) {
+	prev := osHostname
+	osHostname = func() (string, error) { return "", os.ErrNotExist }
+	defer func() { osHostname = prev }()
+	identity := resolveRequestedIdentity(&fakeRunner{}, []string{"PATH=/bin"})
+	if identity.Requested != "unknown" || identity.Source != identitySourceUnknown {
+		t.Fatalf("identity = %#v", identity)
+	}
+}
+
+func TestValidateCanonicalHostConfigAcceptsFixture(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	var out strings.Builder
+	rep := newReporter(&out)
+	if !validateCanonicalHostConfig(root, rep) {
+		t.Fatalf("canonical host config validation failed:\n%s", out.String())
+	}
+}
+
+func TestValidateCanonicalHostConfigRejectsDuplicateAlias(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	hosts := "hosts:\n  windows-desktop:\n    os: windows\n    aliases:\n      - SARGERAS\n  darwin-mac-mini:\n    os: darwin\n    aliases:\n      - sargeras\n"
+	if err := os.WriteFile(filepath.Join(root, "home", ".chezmoidata", "hosts.yaml"), []byte(hosts), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if validateCanonicalHostConfig(root, rep) {
+		t.Fatalf("expected duplicate alias validation failure:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "collides with") {
+		t.Fatalf("validation output missing collision detail:\n%s", out.String())
+	}
+}
+
+func TestValidateCanonicalHostConfigRejectsEmptyIdentities(t *testing.T) {
+	for name, hosts := range map[string]string{
+		"host id": "hosts:\n  '':\n    os: windows\n    shell: pwsh\n    terminal: windows-terminal\n",
+		"alias":   "hosts:\n  windows-desktop:\n    os: windows\n    aliases:\n      - '  '\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			writeManagedToolData(t, root)
+			if err := os.WriteFile(filepath.Join(root, "home", ".chezmoidata", "hosts.yaml"), []byte(hosts), 0644); err != nil {
+				t.Fatal(err)
+			}
+			var out strings.Builder
+			rep := newReporter(&out)
+			if validateCanonicalHostConfig(root, rep) {
+				t.Fatalf("expected empty %s validation failure:\n%s", name, out.String())
+			}
+			if !strings.Contains(out.String(), "empty") {
+				t.Fatalf("validation output missing empty identity detail:\n%s", out.String())
+			}
+		})
+	}
+}
+
+func TestValidateCanonicalHostConfigRejectsUnsupportedOS(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	hosts := "hosts:\n  windows-desktop:\n    os: windows\n  weird-box:\n    os: templeos\n"
+	if err := os.WriteFile(filepath.Join(root, "home", ".chezmoidata", "hosts.yaml"), []byte(hosts), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if validateCanonicalHostConfig(root, rep) {
+		t.Fatalf("expected unsupported OS validation failure:\n%s", out.String())
+	}
+}
+
+func TestValidateLegacyHostDataRemovedRejectsLegacyFiles(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	if err := os.MkdirAll(filepath.Join(root, "data"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "data", "hosts.yaml"), []byte("hosts: {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if validateLegacyHostDataRemoved(root, rep) {
+		t.Fatalf("expected legacy hosts removal failure:\n%s", out.String())
+	}
+}
+
+func TestValidateLegacyHostDataRemovedAcceptsCleanTree(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	var out strings.Builder
+	rep := newReporter(&out)
+	if !validateLegacyHostDataRemoved(root, rep) {
+		t.Fatalf("legacy data removal validation failed:\n%s", out.String())
+	}
+}
+
+func TestValidateChezmoiConfigHostFactsRejectsEmbeddedHost(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	template := `[data.local]
+host = "windows-desktop"
+`
+	if err := os.WriteFile(filepath.Join(root, "home", ".chezmoi.toml.tmpl"), []byte(template), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if validateChezmoiConfigHostFacts(root, rep) {
+		t.Fatalf("expected embedded host fact rejection:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "windows-desktop") || !strings.Contains(out.String(), "embedded") {
+		t.Fatalf("expected embedded host fact message:\n%s", out.String())
+	}
+}
+
+func TestValidateChezmoiConfigHostFactsRejectsEmbeddedAlias(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	template := `[data.local]
+host = "SARGERAS"
+`
+	if err := os.WriteFile(filepath.Join(root, "home", ".chezmoi.toml.tmpl"), []byte(template), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if validateChezmoiConfigHostFacts(root, rep) {
+		t.Fatalf("expected embedded alias rejection:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "SARGERAS") || !strings.Contains(out.String(), "embedded") {
+		t.Fatalf("expected embedded alias message:\n%s", out.String())
+	}
+}
+
+func TestValidateChezmoiConfigHostFactsAcceptsCleanTemplate(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	var out strings.Builder
+	rep := newReporter(&out)
+	if !validateChezmoiConfigHostFacts(root, rep) {
+		t.Fatalf("clean config template validation failed:\n%s", out.String())
+	}
+}
+
+func TestValidateChezmoiConfigHostFactsRejectsEmbeddedRepositoryFact(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	template := `sourceDir = "~/.local/share/chezmoi"
+
+[data]
+shell = "pwsh"
+`
+	if err := os.WriteFile(filepath.Join(root, "home", ".chezmoi.toml.tmpl"), []byte(template), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if validateChezmoiConfigHostFacts(root, rep) {
+		t.Fatalf("expected embedded repository fact rejection:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "shell") || !strings.Contains(out.String(), "repository fact") {
+		t.Fatalf("validation output missing embedded fact detail:\n%s", out.String())
+	}
+}
+
+func TestChezmoiRenderingIntegrationFixtures(t *testing.T) {
+	if _, err := exec.LookPath("chezmoi"); err != nil {
+		t.Skip("chezmoi not installed")
+	}
+	root := repoRootDir(t)
+	source := filepath.Join(root, "home")
+	config, err := loadHostConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	winDesktop := renderChezmoiIgnoreFixture(t, source, "windows-desktop", "windows")
+	for id, host := range config.Hosts {
+		shell := host.Shell
+		if shell == "" {
+			shell = config.Platforms[host.OS].Shell
+		}
+		terminal := host.Terminal
+		if terminal == "" {
+			terminal = config.Platforms[host.OS].Terminal
+		}
+		rendered := renderChezmoiIgnoreFixture(t, source, id, host.OS)
+		if mismatches := ignoreMatrixMismatches(ignoreLines(rendered), shell, terminal, host.Toolsets); len(mismatches) > 0 {
+			t.Fatalf("host %s: %s\nrendered:\n%s", id, strings.Join(mismatches, "; "), rendered)
+		}
+	}
+	for _, pair := range []struct {
+		canonical string
+		alias     string
+		runtimeOS string
+	}{
+		{canonical: "windows-desktop", alias: "SARGERAS", runtimeOS: "windows"},
+		{canonical: "darwin-macbook-pro", alias: "NYARLATHOTEP", runtimeOS: "darwin"},
+		{canonical: "darwin-mac-mini", alias: "NZOTH", runtimeOS: "darwin"},
+		{canonical: "linux-wsl", alias: "MARDUM", runtimeOS: "linux"},
+		{canonical: "linux-ubuntu-server", alias: "CTHULHU", runtimeOS: "linux"},
+		{canonical: "windows-desktop", alias: "win-desktop", runtimeOS: "windows"},
+		{canonical: "darwin-macbook-pro", alias: "macbook-pro", runtimeOS: "darwin"},
+		{canonical: "linux-ubuntu-server", alias: "cthulhu", runtimeOS: "linux"},
+	} {
+		canonical := renderChezmoiIgnoreFixture(t, source, pair.canonical, pair.runtimeOS)
+		alias := renderChezmoiIgnoreFixture(t, source, pair.alias, pair.runtimeOS)
+		if alias != canonical {
+			t.Fatalf("%s alias rendered differently from %s:\n%s", pair.alias, pair.canonical, alias)
+		}
+	}
+	legacy := renderChezmoiTemplateFixture(t, source, ".chezmoiignore.tmpl", map[string]any{
+		"chezmoi": map[string]any{"os": "windows"},
+		"host":    "win-desktop",
+	})
+	if legacy != winDesktop {
+		t.Fatalf("legacy host rendered differently from windows-desktop:\n%s", legacy)
+	}
+	if selected := undeclaredSelectedFiles(ignoreLines(renderChezmoiIgnoreFixture(t, source, "dot-validate-undeclared", "linux"))); len(selected) > 0 {
+		t.Fatalf("undeclared identity selected host-dependent files: %s", strings.Join(selected, ", "))
+	}
+	if out, err := executeChezmoiTemplateFixture(t, source, ".chezmoiignore.tmpl", map[string]any{
+		"chezmoi": map[string]any{"os": "windows"},
+		"local":   map[string]any{"host": "linux-wsl"},
+	}); err == nil || !strings.Contains(string(out), "declared for linux") || !strings.Contains(string(out), "machine is windows") {
+		t.Fatalf("expected OS mismatch error, got %v\n%s", err, out)
+	}
+}
+
+func TestChezmoiIgnoreEnvironmentOverridesPersistedIdentity(t *testing.T) {
+	if _, err := exec.LookPath("chezmoi"); err != nil {
+		t.Skip("chezmoi not installed")
+	}
+	root := repoRootDir(t)
+	source := filepath.Join(root, "home")
+	want := renderChezmoiIgnoreFixture(t, source, "darwin-macbook-pro", "darwin")
+	t.Setenv("DOTFILES_HOST", "macbook-pro")
+	rendered := renderChezmoiTemplateFixture(t, source, ".chezmoiignore.tmpl", map[string]any{
+		"chezmoi": map[string]any{"os": "darwin"},
+		"local":   map[string]any{"host": "windows-desktop"},
+	})
+	if rendered != want {
+		t.Fatalf("DOTFILES_HOST did not override local.host:\n%s", rendered)
+	}
+}
+
+func TestChezmoiConfigRegenerationPreservesOnlyExplicitEmail(t *testing.T) {
+	if _, err := exec.LookPath("chezmoi"); err != nil {
+		t.Skip("chezmoi not installed")
+	}
+	root := repoRootDir(t)
+	source := filepath.Join(root, "home")
+	rendered := renderChezmoiTemplateFixture(t, source, ".chezmoi.toml.tmpl", map[string]any{
+		"chezmoi": map[string]any{"hostname": "SARGERAS", "os": "windows"},
+		"local":   map[string]any{"host": "windows-desktop"},
+	})
+	if !strings.Contains(rendered, `host = "windows-desktop"`) || strings.Contains(rendered, "email =") {
+		t.Fatalf("partial local identity rendered incorrectly:\n%s", rendered)
+	}
+	legacy := renderChezmoiTemplateFixture(t, source, ".chezmoi.toml.tmpl", map[string]any{
+		"chezmoi": map[string]any{"hostname": "SARGERAS", "os": "windows"},
+		"host":    "windows-desktop",
+		"email":   "legacy@example.com",
+	})
+	if !strings.Contains(legacy, `host = "windows-desktop"`) || !strings.Contains(legacy, `email = "legacy@example.com"`) {
+		t.Fatalf("legacy identity was not preserved:\n%s", legacy)
+	}
+}
+
+func renderChezmoiIgnoreFixture(t *testing.T, source, host, runtimeOS string) string {
+	t.Helper()
+	return renderChezmoiTemplateFixture(t, source, ".chezmoiignore.tmpl", map[string]any{
+		"chezmoi": map[string]any{"os": runtimeOS},
+		"local":   map[string]any{"host": host},
+	})
+}
+
+func renderChezmoiTemplateFixture(t *testing.T, source, template string, overrideData map[string]any) string {
+	t.Helper()
+	out, err := executeChezmoiTemplateFixture(t, source, template, overrideData)
+	if err != nil {
+		t.Fatalf("render %s: %v\n%s", template, err, out)
+	}
+	return string(out)
+}
+
+func executeChezmoiTemplateFixture(t *testing.T, source, template string, overrideData map[string]any) ([]byte, error) {
+	t.Helper()
+	data, err := json.Marshal(overrideData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "chezmoi.toml")
+	if err := os.WriteFile(configPath, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"-c", configPath, "--config-format", "toml", "execute-template", "-S", source, "--override-data", string(data), "-f", filepath.Join(source, template)}
+	return exec.Command("chezmoi", args...).CombinedOutput()
+}
+
+func repoRootDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for len(dir) > 1 && !dirExists(dir+"/home/.chezmoidata") {
+		dir = parentDir(dir)
+	}
+	if !dirExists(dir + "/home/.chezmoidata") {
+		t.Skip("repository home not found")
+	}
+	return dir
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+func parentDir(path string) string {
+	return path[:strings.LastIndex(path, string(os.PathSeparator))]
+}
+
+func TestDeclaredHostInventoryFixtures(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	catalog, err := loadCatalog(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedPackage := map[string]map[string]string{
+		"linux-wsl": {
+			"git": "apt", "fd": "apt", "bat": "apt",
+			"codex-cli": "official", "claude-code": "official",
+		},
+		"linux-ubuntu-server": {"git": "apt", "fd": "apt", "bat": "apt", "docker-engine": "official", "k3s": "official"},
+		"windows-desktop":     {"git": "winget"},
+		"darwin-macbook-pro":  {"git": "brew"},
+		"darwin-mac-mini":     {"git": "brew"},
+	}
+	expectedSkipped := map[string][]string{
+		"linux-wsl":           {},
+		"linux-ubuntu-server": {},
+		"windows-desktop":     {"fd", "bat", "codex-cli", "claude-code"},
+		"darwin-macbook-pro":  {"fd", "bat", "codex-cli", "claude-code"},
+		"darwin-mac-mini":     {"fd", "bat", "codex-cli", "claude-code"},
+	}
+	expectedRuntime := map[string][]string{
+		"linux-wsl":           {"reasonix-cli", "openspec-cli"},
+		"windows-desktop":     {"reasonix-cli", "openspec-cli"},
+		"darwin-macbook-pro":  {"reasonix-cli", "openspec-cli"},
+		"darwin-mac-mini":     {"reasonix-cli", "openspec-cli"},
+		"linux-ubuntu-server": {},
+	}
+	for id, wantPackage := range expectedPackage {
+		host := catalog.Hosts[id]
+		plan, skipped, err := resolveManagedPlanFromCatalog(catalog, host, host.OS)
+		if err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+		got := map[string]string{}
+		for _, entry := range plan {
+			got[entry.Tool.ID] = string(entry.Platform.Install)
+		}
+		if len(got) != len(wantPackage) {
+			t.Fatalf("%s: package plan = %#v, want %#v", id, got, wantPackage)
+		}
+		for tool, install := range wantPackage {
+			if got[tool] != install {
+				t.Fatalf("%s: %s plan = %q, want %q", id, tool, got[tool], install)
+			}
+		}
+		var skippedIDs = []string{}
+		for _, item := range skipped {
+			skippedIDs = append(skippedIDs, item.ID)
+		}
+		sort.Strings(skippedIDs)
+		wantSkipped := append([]string{}, expectedSkipped[id]...)
+		sort.Strings(wantSkipped)
+		if !reflect.DeepEqual(skippedIDs, wantSkipped) {
+			t.Fatalf("%s: skipped = %v, want %v", id, skippedIDs, wantSkipped)
+		}
+		runtime, err := resolveRuntimePlanFromCatalog(catalog, host, host.OS)
+		if err != nil {
+			t.Fatalf("%s runtime: %v", id, err)
+		}
+		var runtimeIDs = []string{}
+		for _, entry := range runtime {
+			runtimeIDs = append(runtimeIDs, entry.Tool.ID)
+		}
+		if !reflect.DeepEqual(runtimeIDs, expectedRuntime[id]) {
+			t.Fatalf("%s: runtime plan = %v, want %v", id, runtimeIDs, expectedRuntime[id])
+		}
+	}
+}
+
+func TestValidateChezmoiConfigHostFactsMissingTemplate(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	if err := os.Remove(filepath.Join(root, "home", ".chezmoi.toml.tmpl")); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if validateChezmoiConfigHostFacts(root, rep) {
+		t.Fatalf("expected missing template failure:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "cannot read") {
+		t.Fatalf("expected missing template message:\n%s", out.String())
+	}
+}
+
+func TestValidateChezmoiRenderingPassesMatrix(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	outputs := map[string][]byte{"lookpath chezmoi": []byte("")}
+	addStandardRenderingOutputs(outputs, root)
+	addRenderingOutput(outputs, root, "dot-validate-undeclared", []string{
+		"dot_zshrc.tmpl", "dot_bashrc.tmpl", "dot_profile.tmpl",
+		"Documents/PowerShell/Microsoft.PowerShell_profile.ps1.tmpl",
+		"dot_config/ghostty/config.tmpl", "dot_config/wezterm/wezterm.lua.tmpl", "dot_config/zellij/config.kdl",
+	})
+	runner := &fakeRunner{outputs: outputs}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if !validateChezmoiRendering(root, runner, []string{"PATH=/bin", "DOTFILES_HOST=windows-desktop"}, rep) {
+		t.Fatalf("rendering matrix validation failed:\n%s", out.String())
+	}
+	for _, command := range runner.commands {
+		if command.name == "chezmoi" && envValue(command.env, "DOTFILES_HOST") != "" {
+			t.Fatalf("synthetic rendering leaked ambient DOTFILES_HOST: %#v", command)
+		}
+	}
+}
+
+func TestValidateChezmoiRenderingRejectsWrongShellSelection(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	outputs := map[string][]byte{"lookpath chezmoi": []byte("")}
+	addStandardRenderingOutputs(outputs, root)
+	addRenderingOutput(outputs, root, "windows-desktop", []string{
+		"dot_bashrc.tmpl", "dot_profile.tmpl",
+		"dot_config/ghostty/config.tmpl", "dot_config/wezterm/wezterm.lua.tmpl", "dot_config/zellij/config.kdl",
+	})
+	runner := &fakeRunner{outputs: outputs}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if validateChezmoiRendering(root, runner, []string{"PATH=/bin"}, rep) {
+		t.Fatalf("expected wrong shell selection rejection:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "dot_zshrc.tmpl should be ignored") {
+		t.Fatalf("expected zshrc mismatch message:\n%s", out.String())
+	}
+}
+
+func TestValidateChezmoiRenderingRejectsUndeclaredBoundary(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	outputs := map[string][]byte{"lookpath chezmoi": []byte("")}
+	addStandardRenderingOutputs(outputs, root)
+	addRenderingOutput(outputs, root, "windows-desktop", []string{
+		"dot_zshrc.tmpl", "dot_bashrc.tmpl", "dot_profile.tmpl",
+		"dot_config/ghostty/config.tmpl", "dot_config/wezterm/wezterm.lua.tmpl", "dot_config/zellij/config.kdl",
+	})
+	addRenderingOutput(outputs, root, "dot-validate-undeclared", []string{
+		"dot_bashrc.tmpl", "dot_profile.tmpl",
+		"Documents/PowerShell/Microsoft.PowerShell_profile.ps1.tmpl",
+		"dot_config/ghostty/config.tmpl", "dot_config/wezterm/wezterm.lua.tmpl", "dot_config/zellij/config.kdl",
+	})
+	runner := &fakeRunner{outputs: outputs}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if validateChezmoiRendering(root, runner, []string{"PATH=/bin"}, rep) {
+		t.Fatalf("expected undeclared boundary rejection:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "dot_zshrc.tmpl") || !strings.Contains(out.String(), "host-dependent files selected") {
+		t.Fatalf("expected undeclared boundary message:\n%s", out.String())
+	}
+}
+
+func TestValidateChezmoiRenderingSkipsWhenUnavailable(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	runner := &fakeRunner{}
+	var out strings.Builder
+	rep := newReporter(&out)
+	if !validateChezmoiRendering(root, runner, []string{"PATH=/bin"}, rep) {
+		t.Fatalf("rendering should skip when chezmoi is unavailable:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "skipped") {
+		t.Fatalf("expected skipped status:\n%s", out.String())
+	}
+}
+
+func addRenderingOutput(outputs map[string][]byte, root, host string, ignored []string) {
+	source := filepath.Join(root, "home")
+	runtimeOS := "linux"
+	switch host {
+	case "windows-desktop":
+		runtimeOS = "windows"
+	case "darwin-macbook-pro", "darwin-mac-mini":
+		runtimeOS = "darwin"
+	}
+	overrideData, err := json.Marshal(map[string]any{
+		"chezmoi": map[string]any{"os": runtimeOS},
+		"local":   map[string]any{"host": host},
+	})
+	if err != nil {
+		panic(err)
+	}
+	args := []string{"execute-template", "-S", source, "--override-data", string(overrideData), "-f", filepath.Join(source, ".chezmoiignore.tmpl")}
+	outputs[commandKey("chezmoi", args)] = []byte(renderingOutput(ignored))
+}
+
+func addStandardRenderingOutputs(outputs map[string][]byte, root string) {
+	addRenderingOutput(outputs, root, "windows-desktop", []string{
+		"dot_zshrc.tmpl", "dot_bashrc.tmpl", "dot_profile.tmpl",
+		"dot_config/ghostty/config.tmpl", "dot_config/wezterm/wezterm.lua.tmpl", "dot_config/zellij/config.kdl",
+	})
+	for _, host := range []string{"darwin-macbook-pro", "darwin-mac-mini"} {
+		addRenderingOutput(outputs, root, host, []string{
+			"dot_bashrc.tmpl", "Documents/PowerShell/Microsoft.PowerShell_profile.ps1.tmpl",
+			"dot_config/wezterm/wezterm.lua.tmpl", "dot_config/zellij/config.kdl",
+		})
+	}
+	addRenderingOutput(outputs, root, "linux-wsl", []string{
+		"dot_bashrc.tmpl", "Documents/PowerShell/Microsoft.PowerShell_profile.ps1.tmpl",
+		"dot_config/ghostty/config.tmpl", "dot_config/wezterm/wezterm.lua.tmpl", "dot_config/zellij/config.kdl",
+	})
+	addRenderingOutput(outputs, root, "linux-ubuntu-server", []string{
+		"dot_zshrc.tmpl", "Documents/PowerShell/Microsoft.PowerShell_profile.ps1.tmpl",
+		"dot_config/ghostty/config.tmpl", "dot_config/wezterm/wezterm.lua.tmpl", "dot_config/zellij/config.kdl",
+	})
+}
+
+func renderingOutput(ignored []string) string {
+	files := []string{
+		"dot_zshrc.tmpl",
+		"dot_bashrc.tmpl",
+		"dot_profile.tmpl",
+		"Documents/PowerShell/Microsoft.PowerShell_profile.ps1.tmpl",
+		"dot_config/ghostty/config.tmpl",
+		"dot_config/wezterm/wezterm.lua.tmpl",
+		"dot_config/zellij/config.kdl",
+	}
+	set := map[string]bool{}
+	for _, file := range ignored {
+		set[file] = true
+	}
+	var lines []string
+	for _, file := range files {
+		if set[file] {
+			lines = append(lines, file)
+		}
+	}
+	return strings.Join(lines, "\n") + "\n"
+}

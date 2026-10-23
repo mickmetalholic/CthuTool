@@ -1,0 +1,27 @@
+runtime_tools:
+  deepseek-harness:
+    homepage: https://deepseek.com/harness/en/
+    github: deepseek-ai/deepseek-harness
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: dsh
+    runtime: node
+    owner: runtime
+    guidance: npm install -g @deepseek-ai/dsh
+
+  openspec-cli:
+    homepage: https://openspec.dev
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: openspec
+    runtime: node
+    owner: runtime
+    guidance: npm install -g @fission-ai/openspec
