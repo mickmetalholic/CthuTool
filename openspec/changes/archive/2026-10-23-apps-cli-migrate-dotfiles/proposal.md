@@ -8,7 +8,7 @@
 - 统一版本化软件模型，覆盖当前平台安装归属、health、固定版本 release、service 和 CTHULHU/k3s 行为；先对齐 Notion 与最新 Git 快照中的主机、toolset、软件差异，再允许首次导出。
 - 新增独立 POSIX/PowerShell bootstrap：通过 HTTPS 下载脚本，准备 Git/OpenSSH/Node 24/npm，配置并验证 GitHub SSH，随后通过 SSH 克隆 CthuTool，默认路径为 `~/Documents/GitHub/CthuTool`；从已提交的 CLI bundle 安装 `chc`，无需目标机器构建。
 - init 的主机选择只绑定已发布快照中的 Notion Host ID；软件、toolset、shell、terminal 等方案全部在 Notion 维护。绑定和固定 chezmoi sourceDir 保存在本机，不回写 Notion。init 可在首次引导中衔接文件接入，后续只需在调整绑定时重跑。
-- env 提供 setup（含 dry-run）和 doctor；config 提供 add、diff、apply。config add 先比较并备份，再按用户选择导入或合并指定 home 配置，生成可审查的仓库改动；暂缓的文件不被覆盖。config apply 只负责仓库到本机，遇到未处理的本机冲突先阻止写入，接入完成后可独立运行，无需先 env setup。
+- env 提供 setup（含 dry-run）和 doctor；config 提供 add、diff、apply。config add 备份后复用 chezmoi add/merge，生成可审查的仓库改动，不维护影子收据或冲突状态。config apply 只负责仓库到本机，复用原生逐文件冲突提示；非交互先做原生 dry-run，接入完成后可独立运行，无需先 env setup。
 - **BREAKING**：方案访问命令统一为 `chc dotfiles notion`：auth 管理 Token，diff 比较 Notion 与快照，pull 直连 Notion API 生成本地快照，validate 离线校验快照（高级/CI 用途）。pull 内置失败回滚及下次重试前的安全恢复。快照再经 Git 审查发布；不保留连接器导入、`--snapshot` 或双模式开关，不触发安装、配置应用、提交或推送。
 - bootstrap 与需要 Notion 访问的 notion 操作共用 Token 获取流程：`NOTION_TOKEN` → 本地缓存 → 交互式隐藏输入；验证 Token 和三个数据源的读权限后缓存。缓存位于 `~/.cthutool/credentials/notion.json`，不进入仓库或 chezmoi；无 TTY、`--no-interactive`、`--json` 时缺少凭据直接报错。notion validate 无需 Token。
 - Git 姓名、邮箱仅只读展示；迁移保留现有 Git 配置，不因移除旧模板中的身份字段而清空用户配置。模板与现有 `chc` shell completion 共存。

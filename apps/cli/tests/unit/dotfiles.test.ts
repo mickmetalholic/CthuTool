@@ -924,28 +924,79 @@ test('official releases enforce architecture/checksum and preserve an installed 
   expect((await installEntry(e, s)).status).toBe('manual');
 });
 
-test('init tooling preparation installs only missing chezmoi/mise and reuses them thereafter', async () => {
+test('init tooling reports installation choices, detected versions and reuse without reinstalling', async () => {
   const { ensureDotfilesTools } = await import(
     '../../src/infra/dotfiles/tooling'
   );
   const { s, calls } = await testSystem();
+  const messages: string[] = [];
   const installed = new Set(['brew']);
   s.os = 'darwin';
   s.which = async (c) => (installed.has(c) ? `/fake/${c}` : undefined);
   s.run = async (command, args) => {
     calls.push({ command, args });
-    installed.add(args[1]);
-    return { code: 0, stdout: '', stderr: '' };
+    if (command === 'brew') installed.add(args[1]);
+    return {
+      code: 0,
+      stdout: args[0] === '--version' ? `${command} fixture-version\n` : '',
+      stderr: '',
+    };
   };
   const previous = process.env.PATH;
   try {
-    await ensureDotfilesTools(s);
-    expect(calls).toEqual([
+    const fresh = await ensureDotfilesTools(s, (message) =>
+      messages.push(message),
+    );
+    expect(fresh.map((t) => t.status)).toEqual(['installed', 'installed']);
+    expect(fresh[0]).toMatchObject({
+      tool: 'chezmoi',
+      version: 'chezmoi fixture-version',
+      path: '/fake/chezmoi',
+      installer: 'Homebrew',
+    });
+    expect(messages).toContain(
+      'chezmoi: not found; installing with Homebrew...',
+    );
+    expect(messages.some((m) => m.includes('installed successfully'))).toBe(
+      true,
+    );
+    messages.length = 0;
+    const reused = await ensureDotfilesTools(s, (message) =>
+      messages.push(message),
+    );
+    expect(reused.map((t) => t.status)).toEqual(['reused', 'reused']);
+    expect(
+      messages.some((m) => m.includes('reusing existing installation')),
+    ).toBe(true);
+    expect(calls.filter((c) => c.command === 'brew')).toEqual([
       { command: 'brew', args: ['install', 'chezmoi'] },
       { command: 'brew', args: ['install', 'mise'] },
     ]);
-    await ensureDotfilesTools(s);
-    expect(calls).toHaveLength(2);
+  } finally {
+    process.env.PATH = previous;
+  }
+});
+test('init tooling reports the selected installer before a failed installation', async () => {
+  const { ensureDotfilesTools } = await import(
+    '../../src/infra/dotfiles/tooling'
+  );
+  const { s } = await testSystem();
+  s.os = 'windows';
+  const messages: string[] = [];
+  s.run = async () => ({
+    code: 1,
+    stdout: '',
+    stderr: 'fixture installer failed',
+  });
+  const previous = process.env.PATH;
+  try {
+    await expect(
+      ensureDotfilesTools(s, (m) => messages.push(m)),
+    ).rejects.toThrow('fixture installer failed');
+    expect(messages).toEqual([
+      'Checking chezmoi...',
+      'chezmoi: not found; installing with winget...',
+    ]);
   } finally {
     process.env.PATH = previous;
   }

@@ -1,11 +1,6 @@
 import { lstat } from 'node:fs/promises';
-import {
-  confirm,
-  isCancel,
-  multiselect,
-  password,
-  select,
-} from '@clack/prompts';
+import { join } from 'node:path';
+import { isCancel, multiselect, password, select } from '@clack/prompts';
 import { type ArgsDef, defineCommand } from 'citty';
 import { type AuthInteraction, ensureAuth } from '../domain/dotfiles/auth';
 import {
@@ -13,7 +8,6 @@ import {
   applyConfiguration,
   type ConfigInteraction,
   chezmoi,
-  configurationPreflight,
   managedTargets,
   saveBinding,
 } from '../domain/dotfiles/configuration';
@@ -108,45 +102,11 @@ const defaultConfig: ConfigInteraction = {
     if (!paths.length) return [];
     const r = await multiselect({
       message:
-        'Select existing home files to review (none applies automatically)',
+        'Select files to import (templates open the chezmoi merge tool; none applies automatically)',
       options: paths.map((p) => ({ value: p, label: p })),
       required: false,
     });
     return isCancel(r) ? [] : r;
-  },
-  async resolveFile(input) {
-    processOutput.stderr.write(
-      `\n${input.path}\n--- local\n${input.local}\n--- repository rendered\n${input.rendered}\n`,
-    );
-    const r = await select<'defer' | 'repository' | 'import'>({
-      message: input.template
-        ? `Template review copy: ${input.candidate}`
-        : 'Choose how to adopt this file',
-      initialValue: 'defer',
-      options: [
-        { value: 'defer' as const, label: 'Defer; preserve local file' },
-        {
-          value: 'repository' as const,
-          label: 'Approve repository version on next apply',
-        },
-        {
-          value: 'import' as const,
-          label: input.template
-            ? 'Merge in private template copy, then review'
-            : 'Import local file into reviewable source',
-        },
-      ],
-    });
-    return isCancel(r) ? undefined : r;
-  },
-  async reviewCandidate(path) {
-    processOutput.stderr.write(
-      `Edit the private template copy in your editor, preserving cross-platform variables: ${path}\n`,
-    );
-    const r = await confirm({
-      message: 'Finished editing and approve importing this candidate?',
-    });
-    return !isCancel(r) && r;
   },
 };
 export type DotfilesCommandDeps = {
@@ -172,6 +132,7 @@ export function createDotfilesCommand(
     action: (
       args: Record<string, unknown>,
       interactive: boolean,
+      report: (message: string) => void,
     ) => Promise<Record<string, unknown>>,
   ) {
     return defineCommand({
@@ -203,6 +164,8 @@ export function createDotfilesCommand(
                 scope.context.isTty &&
                   scope.context.interactive &&
                   !scope.context.json,
+                (message) =>
+                  writeHumanStatus(scope.context, processOutput, message),
               );
               if (scope.context.json)
                 writeJsonValue(processOutput, {
@@ -270,8 +233,14 @@ export function createDotfilesCommand(
           'Explicit previous chezmoi source to migrate, preserving backup',
       },
     },
-    async (args, interactive) => {
-      await ensureDotfilesTools(deps.system);
+    async (args, interactive, report) => {
+      report(
+        `[init] Checking environment: ${deps.system.os}/${deps.system.arch}${deps.system.wsl ? ' (WSL)' : ''}, Node ${process.version}`,
+      );
+      const tools = await ensureDotfilesTools(deps.system, (message) =>
+        report(`[init] ${message}`),
+      );
+      report('[init] Environment checks complete. Preparing host binding...');
       const { source } = await resolveSource(deps.system, string(args.source));
       const { catalog } = await loadSnapshot(source);
       const result = await saveBinding(deps.system, {
@@ -287,6 +256,7 @@ export function createDotfilesCommand(
         const targets = await managedTargets(deps.system, source, result.host);
         const existing = [];
         for (const path of targets) {
+          if (path === join(deps.system.home, '.ssh/config')) continue;
           try {
             await lstat(path);
             existing.push(path);
@@ -302,21 +272,17 @@ export function createDotfilesCommand(
             result.host,
             paths,
             true,
-            deps.config,
           );
       }
-      const preflight = await configurationPreflight(
-        deps.system,
-        source,
-        result.host,
-      );
-      if (!interactive && preflight.conflicts.length)
-        throw new Error(
-          `Host binding saved (${result.host}); reconcile existing files with chc dotfiles config add before completing onboarding:\n${preflight.conflicts.join('\n')}`,
-        );
       return {
         ...result,
-        pendingFiles: preflight.conflicts,
+        environment: {
+          os: deps.system.os,
+          arch: deps.system.arch,
+          wsl: deps.system.wsl,
+          node: process.version,
+          tools,
+        },
         plan: resolvePlan(catalog, result.host),
         adoption,
         next: [
@@ -392,7 +358,7 @@ export function createDotfilesCommand(
   );
   const add = leaf(
     'config add',
-    'Review explicit home files for import/merge; never apply them',
+    'Use chezmoi add for files and its configured merge tool for templates',
     {
       path: {
         type: 'positional',
@@ -411,7 +377,6 @@ export function createDotfilesCommand(
         b.host as string,
         paths,
         interactive,
-        deps.config,
       );
     },
   );
@@ -432,11 +397,16 @@ export function createDotfilesCommand(
   );
   const apply = leaf(
     'config apply',
-    'Preflight all conflicts, back up and apply home files only',
+    'Back up files and apply with native chezmoi conflict prompts',
     hostArg,
-    async (args) => {
+    async (args, interactive) => {
       const b = await bound(args);
-      return applyConfiguration(deps.system, b.source, b.host as string);
+      return applyConfiguration(
+        deps.system,
+        b.source,
+        b.host as string,
+        interactive,
+      );
     },
   );
   const auth = leaf(

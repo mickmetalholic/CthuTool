@@ -19512,6 +19512,7 @@ function createInternalCompleteCommand(resolveRootCommand) {
 
 // src/command/dotfiles.command.ts
 import { lstat as lstat6 } from "node:fs/promises";
+import { join as join25 } from "node:path";
 
 // src/domain/dotfiles/auth.ts
 import { lstat as lstat2, rm as rm10 } from "node:fs/promises";
@@ -19698,10 +19699,10 @@ function createDotfilesSystem(home = homedir7()) {
           cwd: options.cwd,
           env: environment,
           windowsHide: true,
-          stdio: [options.live ? "inherit" : "pipe", "pipe", "pipe"]
+          stdio: options.terminal ? "inherit" : [options.live ? "inherit" : "pipe", "pipe", "pipe"]
         });
-        const timer = setTimeout(() => p.kill("SIGTERM"), 300000);
-        timer.unref();
+        const timer = options.terminal ? undefined : setTimeout(() => p.kill("SIGTERM"), 300000);
+        timer?.unref();
         let stdout2 = "";
         let stderr = "";
         p.stdout?.on("data", (c4) => {
@@ -21992,42 +21993,37 @@ function installedSource() {
 async function readBinding(system) {
   const environment = system.environment ?? process.env;
   const directory = join19(environment.XDG_CONFIG_HOME ?? join19(system.home, ".config"), "chezmoi");
-  let raw = {};
+  let config = {};
   let configFile;
-  for (const extension of ["toml", "yaml", "yml", "json"]) {
-    const path = join19(directory, `chezmoi.${extension}`);
-    const content = await readOptional(path);
-    if (content === undefined)
-      continue;
-    if (configFile)
-      throw new Error("Multiple chezmoi configuration files found; keep the authoritative file before using dotfiles.");
-    configFile = path;
-    try {
-      raw = extension === "toml" ? parse(content) : extension === "json" ? JSON.parse(content) : $parse(content);
-    } catch {
-      throw new Error(`Cannot parse chezmoi configuration: ${path}`);
-    }
-  }
-  let config = raw;
-  if (await system.which("chezmoi")) {
-    const result = await system.run("chezmoi", [
-      "dump-config",
-      "--format",
-      "json"
-    ]);
-    if (result.code !== 0)
-      throw new Error("Cannot read chezmoi configuration; repair it before using dotfiles.");
-    try {
-      config = JSON.parse(result.stdout);
-    } catch {
-      throw new Error("Invalid chezmoi dump-config response");
+  const native = !!await system.which("chezmoi");
+  if (native) {
+    config = JSON.parse(await checkedRun(system, "chezmoi", ["dump-config", "--format", "json"]));
+    configFile = (await checkedRun(system, "chezmoi", [
+      "execute-template",
+      "{{ .chezmoi.configFile }}"
+    ])).trim() || undefined;
+  } else {
+    for (const extension of ["toml", "yaml", "yml", "json"]) {
+      const path = join19(directory, `chezmoi.${extension}`);
+      const content = await readOptional(path);
+      if (content === undefined)
+        continue;
+      if (configFile)
+        throw new Error("Multiple chezmoi configuration files found; install chezmoi to resolve the authoritative configuration.");
+      configFile = path;
+      try {
+        config = extension === "toml" ? parse(content) : extension === "json" ? JSON.parse(content) : $parse(content);
+      } catch {
+        throw new Error(`Cannot parse chezmoi configuration: ${path}`);
+      }
     }
   }
   const data = config.data;
   const host = typeof data?.local?.host === "string" && data.local.host ? data.local.host : undefined;
+  const defaultSource = join19(environment.XDG_DATA_HOME ?? join19(system.home, ".local/share"), "chezmoi");
   const candidate = typeof config.sourceDir === "string" ? config.sourceDir : join19(environment.XDG_DATA_HOME ?? join19(system.home, ".local/share"), "chezmoi");
   const source = candidate.replace(/^~(?=\/|\\|$)/, system.home);
-  const configured = !!host || typeof raw.sourceDir === "string" && !!raw.sourceDir || existsSync6(source);
+  const configured = !!host || (native ? source !== defaultSource : typeof config.sourceDir === "string" && !!config.sourceDir) || existsSync6(source);
   if (configured && !isAbsolute3(source))
     throw new Error("chezmoi sourceDir must be absolute; use init with an explicit --source path.");
   return { source: configured ? source : undefined, host, configFile };
@@ -22252,7 +22248,7 @@ import {
   resolve as resolve12,
   sep as sep5
 } from "node:path";
-function chezmoi(system, source, host, args) {
+function chezmoi(system, source, host, args, options) {
   return checkedRun(system, "chezmoi", [
     "--source",
     source,
@@ -22260,24 +22256,22 @@ function chezmoi(system, source, host, args) {
     system.home,
     "--override-data",
     JSON.stringify({ local: { host } }),
+    "--force=false",
+    "--interactive=false",
+    "--no-pager",
+    ...!options?.terminal ? ["--no-tty"] : [],
     ...args
-  ]);
-}
-async function renderedTargets(system, source, host) {
-  const dump = JSON.parse(await chezmoi(system, source, host, ["dump", "--format", "json"]));
-  return Object.fromEntries(Object.entries(dump).filter(([, entry]) => entry.type === "file" || entry.type === "symlink").map(([path, entry]) => [
-    join21(system.home, path),
-    entry.contents ?? entry.target ?? ""
-  ]));
+  ], options);
 }
 async function managedTargets(system, source, host) {
-  return Object.keys(await renderedTargets(system, source, host));
-}
-async function renderTarget(system, source, host, target) {
-  const rendered = await renderedTargets(system, source, host);
-  if (!(target in rendered))
-    throw new Error(`Target is not managed for this host: ${target}`);
-  return rendered[target];
+  return (await chezmoi(system, source, host, [
+    "managed",
+    "--include",
+    "files,symlinks",
+    "--path-style",
+    "absolute",
+    "--nul-path-separator"
+  ])).split("\x00").filter(Boolean);
 }
 async function saveBinding(system, input) {
   const old = await readBinding(system);
@@ -22356,22 +22350,13 @@ async function directoryExists(path) {
   }
 }
 var stateRoot = (s2, source) => join21(s2.home, ".cthutool/state/dotfiles", digest(source).slice(0, 24));
-async function receipts(s2, source) {
-  const raw = await privateRead(join21(stateRoot(s2, source), "receipts.json"), s2);
-  if (!raw)
-    return { version: 1, files: {} };
-  const r4 = JSON.parse(raw);
-  if (r4.version !== 1)
-    throw new Error("Unsupported adoption receipt version");
-  return r4;
-}
 function validateTarget(path, s2) {
   const target = resolve12(path.replace(/^~(?=\/|\\|$)/, s2.home));
   const rel = relative4(s2.home, target);
   if (!rel || rel === ".." || rel.startsWith(`..${sep5}`) || isAbsolute4(rel))
     throw new Error("Select explicit files under home; do not import the home directory");
   const normalized = rel.replaceAll("\\", "/").toLowerCase();
-  if (normalized.startsWith(".ssh/") && normalized !== ".ssh/config" || /(^|\/)(\.cthutool|\.aws|\.gnupg|\.kube|\.git|\.gitconfig|\.netrc|\.npmrc|\.env(?:\..*)?|credentials?|secrets?|id_[^/]+)(\/|$)/.test(normalized) || /\.(pem|key|p12|pfx)$/.test(normalized))
+  if (normalized.startsWith(".ssh/") || /(^|\/)(\.cthutool|\.aws|\.gnupg|\.kube|\.git|\.gitconfig|\.netrc|\.npmrc|\.env(?:\..*)?|credentials?|secrets?|id_[^/]+)(\/|$)/.test(normalized) || /\.(pem|key|p12|pfx)$/.test(normalized))
     throw new Error(`Sensitive configuration is excluded: ${rel}`);
   return target;
 }
@@ -22389,7 +22374,6 @@ async function fileState(path) {
     throw e3;
   }
 }
-var stateDigest = (s2) => digest(JSON.stringify(s2));
 async function backupTarget(target, source, s2) {
   const state = await fileState(target);
   if (state.text === undefined)
@@ -22398,153 +22382,73 @@ async function backupTarget(target, source, s2) {
   await privateWrite(path, JSON.stringify({ target, ...state }), s2);
   return path;
 }
-async function sourcePath(s2, source, host, target) {
-  const r4 = await s2.run("chezmoi", [
-    "--source",
-    source,
-    "--destination",
-    s2.home,
-    "--override-data",
-    JSON.stringify({ local: { host } }),
-    "source-path",
-    "--",
-    target
-  ]);
-  const path = r4.code === 0 ? r4.stdout.trim() : join21(source, "dotfiles/home", ...relative4(s2.home, target).split(sep5).map((p) => p.startsWith(".") ? `dot_${p.slice(1)}` : p));
-  const rel = relative4(join21(source, "dotfiles/home"), path);
-  if (rel.startsWith("..") || isAbsolute4(rel) || !rel)
-    throw new Error("Source target must remain inside dotfiles/home");
-  return path;
-}
-async function adoptFiles(s2, source, host, paths, interactive, interaction) {
+async function adoptFiles(s2, source, host, paths, interactive) {
   if (!paths.length)
     throw new Error("Usage: chc dotfiles config add <home-path...>");
-  if (!interactive)
-    throw new Error("Unresolved adoption requires interactive review. Run config add in a terminal.");
-  const targets = paths.map((p) => validateTarget(p, s2));
-  const receipt = await receipts(s2, source);
+  const targets = [...new Set(paths.map((p) => validateTarget(p, s2)))];
+  const managed = new Set(await managedTargets(s2, source, host));
+  const operations = [];
   for (const target of targets) {
     await assertNoLinks(dirname16(target), s2.home);
     const local = await fileState(target);
     if (local.text === undefined)
       throw new Error(`Adoption target does not exist: ${target}`);
-    const path = await sourcePath(s2, source, host, target);
-    const template = path.endsWith(".tmpl");
-    const old = await readOptional(path);
-    const rendered = old === undefined ? "" : await renderTarget(s2, source, host, target);
-    const backup = await backupTarget(target, source, s2);
-    const candidate = join21(stateRoot(s2, source), "review", `${digest(target)}${template ? ".tmpl" : ".txt"}`);
-    await privateWrite(candidate, old ?? local.text, s2);
-    const decision = await interaction.resolveFile({
-      path: target,
-      local: local.text,
-      rendered,
-      template,
-      candidate
-    }) ?? "defer";
-    if (decision === "import") {
-      if (relative4(s2.home, target).replaceAll("\\", "/") === ".ssh/config")
-        throw new Error("SSH host configuration remains local; choose repository or defer.");
-      if (local.link)
-        throw new Error("Importing links requires a reviewed chezmoi symlink source; use repository/defer for this target.");
-      if (template) {
-        if (!await interaction.reviewCandidate(candidate))
-          throw new Error("Template review cancelled; home unchanged.");
-        const merged = await readFile16(candidate, "utf8");
-        if (!merged.includes("{{") && old?.includes("{{"))
-          throw new Error("Template variables were removed; refusing a machine-specific replacement.");
-        const probe = await s2.run("chezmoi", [
-          "--source",
-          source,
-          "--override-data",
-          JSON.stringify({ local: { host } }),
-          "execute-template",
-          merged
-        ]);
-        if (probe.code !== 0)
-          throw new Error("Merged template did not render; original source preserved");
-        await writeHomeSource(path, merged, source);
-      } else
-        await writeHomeSource(path, local.text, source);
+    if (local.link)
+      throw new Error(`Select a regular home file: ${target}`);
+    let template = false;
+    if (managed.has(target)) {
+      const path = (await chezmoi(s2, source, host, ["source-path", "--", target])).trim();
+      const root = await realpath3(join21(source, "dotfiles/home"));
+      await assertNoLinks(path, root);
+      template = path.endsWith(".tmpl");
     }
-    const renderedAfter = decision === "import" ? await renderTarget(s2, source, host, target) : rendered;
-    receipt.files[target] = {
-      decision,
-      sourceDigest: digest(await readOptional(path) ?? renderedAfter),
-      targetDigest: stateDigest(local),
-      backup
-    };
-    await privateWrite(join21(stateRoot(s2, source), "receipts.json"), `${JSON.stringify(receipt, null, 2)}
-`, s2);
+    if (template && !interactive)
+      throw new Error(`Template reconciliation requires an interactive terminal: ${target}. Run config add without --json or --no-interactive to open the configured chezmoi merge tool.`);
+    operations.push({ target, command: template ? "merge" : "add" });
+  }
+  const config = JSON.parse(await chezmoi(s2, source, host, ["dump-config", "--format", "json"]));
+  if (config.git?.autoadd || config.git?.autocommit || config.git?.autopush)
+    throw new Error("Disable chezmoi git.autoAdd, git.autoCommit and git.autoPush before config add; source changes must remain available for Git review.");
+  const backups = await Promise.all(targets.map((target) => backupTarget(target, source, s2)));
+  for (const operation of operations) {
+    await chezmoi(s2, source, host, [
+      operation.command,
+      ...operation.command === "add" ? ["--recursive=false", "--secrets=error"] : [],
+      "--",
+      operation.target
+    ], { terminal: operation.command === "merge" });
   }
   return {
     reviewed: targets,
     source,
-    notice: "Review dotfiles/home with Git. Home files were not changed."
+    operations,
+    backups,
+    notice: "chezmoi updated source files. Review dotfiles/home with Git, then run config diff/apply. No configuration was applied by chc."
   };
 }
-async function writeHomeSource(path, text2, source) {
-  const root = await realpath3(join21(source, "dotfiles/home"));
-  await mkdir11(dirname16(path), { recursive: true });
-  if (!(await realpath3(dirname16(path))).startsWith(`${root}${sep5}`) && await realpath3(dirname16(path)) !== root)
-    throw new Error("Source parent escapes home asset tree");
-  try {
-    if ((await lstat3(path)).isSymbolicLink())
-      throw new Error("Refusing linked source file");
-  } catch (e3) {
-    if (e3.code !== "ENOENT")
-      throw e3;
+async function applyConfiguration(s2, source, host, interactive = false) {
+  const args = ["--less-interactive", "--include", "files,symlinks,dirs"];
+  if (!interactive) {
+    try {
+      await chezmoi(s2, source, host, [
+        "--error-on-conflict",
+        "apply",
+        "--dry-run",
+        ...args
+      ]);
+    } catch (error) {
+      throw new Error(`chezmoi preflight failed; no home files applied. Resolve local differences with config add or run config apply in a terminal for native diff/overwrite/skip prompts. ${error instanceof Error ? error.message : ""}`);
+    }
   }
-  const { writeFile: writeFile8 } = await import("node:fs/promises");
-  await writeFile8(path, text2);
-}
-async function configurationPreflight(s2, source, host) {
   const targets = await managedTargets(s2, source, host);
-  const receipt = await receipts(s2, source);
-  const status = await chezmoi(s2, source, host, [
-    "status",
-    "--include",
-    "files,symlinks",
-    "--path-style",
-    "absolute"
-  ]);
-  const locallyChanged = new Set(status.split(`
-`).filter((l3) => l3[0] && l3[0] !== " ").map((l3) => l3.slice(3)));
-  const lastWritten = JSON.parse(await chezmoi(s2, source, host, ["state", "dump"])).entryState ?? {};
-  const conflicts = [];
   for (const target of targets) {
     await assertNoLinks(dirname16(target), s2.home);
-    const local = await fileState(target);
-    const rendered = await renderTarget(s2, source, host, target);
-    if (local.text === undefined)
-      continue;
-    if (!local.link && local.text === rendered)
-      continue;
-    const r4 = receipt.files[target];
-    if (r4?.decision === "defer" || r4 && (r4.sourceDigest !== digest(await readOptional(await sourcePath(s2, source, host, target)) ?? rendered) || r4.targetDigest !== stateDigest(local)) || !r4 && (!lastWritten[target] || locallyChanged.has(target)))
-      conflicts.push(target);
-  }
-  return { targets, receipt, conflicts };
-}
-async function applyConfiguration(s2, source, host) {
-  const { targets, receipt, conflicts } = await configurationPreflight(s2, source, host);
-  if (conflicts.length)
-    throw new Error(`Reconcile with chc dotfiles config add before applying (no targets written):
-${conflicts.join(`
-`)}`);
-  for (const target of targets)
     await backupTarget(target, source, s2);
-  await chezmoi(s2, source, host, [
-    "apply",
-    "--force",
-    "--include",
-    "files,symlinks,dirs"
-  ]);
-  for (const target of targets)
-    delete receipt.files[target];
-  await privateWrite(join21(stateRoot(s2, source), "receipts.json"), JSON.stringify(receipt), s2);
+  }
+  await chezmoi(s2, source, host, [`--error-on-conflict=${!interactive}`, "apply", ...args], { terminal: interactive });
   return {
-    applied: targets.length,
+    completed: true,
+    interactive,
     source,
     host,
     next: "Runtime versions remain explicit: mise install"
@@ -23300,51 +23204,68 @@ function candidateSnapshot(normalized, previous, existing) {
 import { mkdir as mkdir13, mkdtemp as mkdtemp3, rm as rm13, writeFile as writeFile9 } from "node:fs/promises";
 import { tmpdir as tmpdir3 } from "node:os";
 import { delimiter as delimiter2, join as join23 } from "node:path";
-async function ensureDotfilesTools(system) {
+async function ensureDotfilesTools(system, report = () => {}) {
   const bin = join23(system.home, ".local/bin");
   await mkdir13(bin, { recursive: true });
   process.env.PATH = `${bin}${delimiter2}${process.env.PATH ?? ""}`;
+  const tools = [];
   for (const tool of ["chezmoi", "mise"]) {
-    if (await system.which(tool))
-      continue;
-    if (system.os === "windows") {
-      await checkedRun(system, "winget", [
-        "install",
-        "--exact",
-        "--id",
-        tool === "chezmoi" ? "twpayne.chezmoi" : "jdx.mise",
-        "--scope",
-        "user",
-        "--accept-source-agreements",
-        "--accept-package-agreements",
-        "--disable-interactivity"
-      ]);
-    } else if (await system.which("brew"))
-      await checkedRun(system, "brew", ["install", tool]);
-    else {
-      const temp = await mkdtemp3(join23(tmpdir3(), "chc-tooling-"));
-      try {
-        const response = await system.fetch(tool === "chezmoi" ? "https://get.chezmoi.io" : "https://mise.run", { signal: AbortSignal.timeout(60000) });
-        if (!response.ok)
-          throw new Error(`Cannot download official ${tool} installer`);
-        const script = join23(temp, "install.sh");
-        await writeFile9(script, new Uint8Array(await response.arrayBuffer()), {
-          mode: 384
-        });
-        await checkedRun(system, "sh", [script, ...tool === "chezmoi" ? ["-b", bin] : []], {
-          env: {
-            ...process.env,
-            HOME: system.home,
-            MISE_INSTALL_PATH: join23(bin, "mise")
-          }
-        });
-      } finally {
-        await rm13(temp, { recursive: true, force: true });
+    report(`Checking ${tool}...`);
+    const existing = await system.which(tool);
+    let installer;
+    if (!existing) {
+      installer = system.os === "windows" ? "winget" : await system.which("brew") ? "Homebrew" : "official installer";
+      report(`${tool}: not found; installing with ${installer}...`);
+      if (system.os === "windows") {
+        await checkedRun(system, "winget", [
+          "install",
+          "--exact",
+          "--id",
+          tool === "chezmoi" ? "twpayne.chezmoi" : "jdx.mise",
+          "--scope",
+          "user",
+          "--accept-source-agreements",
+          "--accept-package-agreements",
+          "--disable-interactivity"
+        ]);
+      } else if (installer === "Homebrew")
+        await checkedRun(system, "brew", ["install", tool]);
+      else {
+        const temp = await mkdtemp3(join23(tmpdir3(), "chc-tooling-"));
+        try {
+          const response = await system.fetch(tool === "chezmoi" ? "https://get.chezmoi.io" : "https://mise.run", { signal: AbortSignal.timeout(60000) });
+          if (!response.ok)
+            throw new Error(`Cannot download official ${tool} installer`);
+          const script = join23(temp, "install.sh");
+          await writeFile9(script, new Uint8Array(await response.arrayBuffer()), {
+            mode: 384
+          });
+          await checkedRun(system, "sh", [script, ...tool === "chezmoi" ? ["-b", bin] : []], {
+            env: {
+              ...process.env,
+              HOME: system.home,
+              MISE_INSTALL_PATH: join23(bin, "mise")
+            }
+          });
+        } finally {
+          await rm13(temp, { recursive: true, force: true });
+        }
       }
     }
-    if (!await system.which(tool))
+    const path = existing ?? await system.which(tool);
+    if (!path)
       throw new Error(`${tool} installation finished but its user launcher is not on PATH. Open a new terminal and rerun chc dotfiles init.`);
+    let version;
+    try {
+      const result = await system.run(tool, ["--version"]);
+      if (result.code === 0)
+        version = result.stdout.trim().split(/\r?\n/)[0]?.slice(0, 200) || undefined;
+    } catch {}
+    const status = existing ? "reused" : "installed";
+    report(`${tool}: ${version ?? "version unavailable"} at ${path} (${existing ? "reusing existing installation" : "installed successfully"})`);
+    tools.push({ tool, path, status, version, installer });
   }
+  return tools;
 }
 
 // src/infra/dotfiles/transaction.ts
@@ -23547,44 +23468,11 @@ var defaultConfig = {
     if (!paths.length)
       return [];
     const r4 = await $e({
-      message: "Select existing home files to review (none applies automatically)",
+      message: "Select files to import (templates open the chezmoi merge tool; none applies automatically)",
       options: paths.map((p) => ({ value: p, label: p })),
       required: false
     });
     return lD2(r4) ? [] : r4;
-  },
-  async resolveFile(input) {
-    processOutput.stderr.write(`
-${input.path}
---- local
-${input.local}
---- repository rendered
-${input.rendered}
-`);
-    const r4 = await le2({
-      message: input.template ? `Template review copy: ${input.candidate}` : "Choose how to adopt this file",
-      initialValue: "defer",
-      options: [
-        { value: "defer", label: "Defer; preserve local file" },
-        {
-          value: "repository",
-          label: "Approve repository version on next apply"
-        },
-        {
-          value: "import",
-          label: input.template ? "Merge in private template copy, then review" : "Import local file into reviewable source"
-        }
-      ]
-    });
-    return lD2(r4) ? undefined : r4;
-  },
-  async reviewCandidate(path) {
-    processOutput.stderr.write(`Edit the private template copy in your editor, preserving cross-platform variables: ${path}
-`);
-    const r4 = await ce2({
-      message: "Finished editing and approve importing this candidate?"
-    });
-    return !lD2(r4) && r4;
   }
 };
 function createDotfilesCommand(overrides = {}) {
@@ -23610,7 +23498,7 @@ function createDotfilesCommand(overrides = {}) {
             for (const arg of rawArgs)
               if (arg.startsWith("--") && !allowed2.has(arg.slice(2).split("=")[0]) && arg !== "--")
                 throw new Error(`Unknown dotfiles option: ${arg.split("=")[0]}`);
-            const result = await action(args, scope.context.isTty && scope.context.interactive && !scope.context.json);
+            const result = await action(args, scope.context.isTty && scope.context.interactive && !scope.context.json, (message) => writeHumanStatus(scope.context, processOutput, message));
             if (scope.context.json)
               writeJsonValue(processOutput, {
                 ok: true,
@@ -23649,8 +23537,10 @@ function createDotfilesCommand(overrides = {}) {
       type: "string",
       description: "Explicit previous chezmoi source to migrate, preserving backup"
     }
-  }, async (args, interactive) => {
-    await ensureDotfilesTools(deps.system);
+  }, async (args, interactive, report) => {
+    report(`[init] Checking environment: ${deps.system.os}/${deps.system.arch}${deps.system.wsl ? " (WSL)" : ""}, Node ${process.version}`);
+    const tools = await ensureDotfilesTools(deps.system, (message) => report(`[init] ${message}`));
+    report("[init] Environment checks complete. Preparing host binding...");
     const { source } = await resolveSource(deps.system, string2(args.source));
     const { catalog } = await loadSnapshot(source);
     const result = await saveBinding(deps.system, {
@@ -23666,6 +23556,8 @@ function createDotfilesCommand(overrides = {}) {
       const targets = await managedTargets(deps.system, source, result.host);
       const existing = [];
       for (const path of targets) {
+        if (path === join25(deps.system.home, ".ssh/config"))
+          continue;
         try {
           await lstat6(path);
           existing.push(path);
@@ -23676,16 +23568,17 @@ function createDotfilesCommand(overrides = {}) {
       }
       const paths = await deps.config.chooseFiles(existing);
       if (paths.length)
-        adoption = await adoptFiles(deps.system, source, result.host, paths, true, deps.config);
+        adoption = await adoptFiles(deps.system, source, result.host, paths, true);
     }
-    const preflight = await configurationPreflight(deps.system, source, result.host);
-    if (!interactive && preflight.conflicts.length)
-      throw new Error(`Host binding saved (${result.host}); reconcile existing files with chc dotfiles config add before completing onboarding:
-${preflight.conflicts.join(`
-`)}`);
     return {
       ...result,
-      pendingFiles: preflight.conflicts,
+      environment: {
+        os: deps.system.os,
+        arch: deps.system.arch,
+        wsl: deps.system.wsl,
+        node: process.version,
+        tools
+      },
       plan: resolvePlan(catalog, result.host),
       adoption,
       next: [
@@ -23742,7 +23635,7 @@ ${preflight.conflicts.join(`
       ...await diagnose(entries, deps.system)
     };
   });
-  const add = leaf("config add", "Review explicit home files for import/merge; never apply them", {
+  const add = leaf("config add", "Use chezmoi add for files and its configured merge tool for templates", {
     path: {
       type: "positional",
       required: false,
@@ -23751,7 +23644,7 @@ ${preflight.conflicts.join(`
   }, async (args, interactive) => {
     const b5 = await bound(args);
     const paths = Array.isArray(args._) ? args._.filter((p) => typeof p === "string") : [];
-    return adoptFiles(deps.system, b5.source, b5.host, paths, interactive, deps.config);
+    return adoptFiles(deps.system, b5.source, b5.host, paths, interactive);
   });
   const diff = leaf("config diff", "Compare rendered repository templates with actual home files", hostArg, async (args) => {
     const b5 = await bound(args);
@@ -23763,9 +23656,9 @@ ${preflight.conflicts.join(`
       ])
     };
   });
-  const apply = leaf("config apply", "Preflight all conflicts, back up and apply home files only", hostArg, async (args) => {
+  const apply = leaf("config apply", "Back up files and apply with native chezmoi conflict prompts", hostArg, async (args, interactive) => {
     const b5 = await bound(args);
-    return applyConfiguration(deps.system, b5.source, b5.host);
+    return applyConfiguration(deps.system, b5.source, b5.host, interactive);
   });
   const auth = leaf("notion auth", "Validate, replace or clear the local Token cache (interactive menu)", sourceArg, async (args, interactive) => {
     const result = await ensureAuth({
@@ -23881,13 +23774,13 @@ ${preflight.conflicts.join(`
 var dotfilesCommand = createDotfilesCommand();
 
 // src/command/obsidian.command.ts
-import { join as join28 } from "node:path";
+import { join as join29 } from "node:path";
 var import_picocolors5 = __toESM(require_picocolors(), 1);
 
 // src/domain/obsidian-agents-config.ts
 import { randomUUID as randomUUID4 } from "node:crypto";
 import { mkdir as mkdir15, readFile as readFile19, realpath as realpath4, rename as rename8, writeFile as writeFile10 } from "node:fs/promises";
-import { isAbsolute as isAbsolute5, join as join25, relative as relative5, resolve as resolve14, sep as sep6 } from "node:path";
+import { isAbsolute as isAbsolute5, join as join26, relative as relative5, resolve as resolve14, sep as sep6 } from "node:path";
 var OBSIDIAN_AGENTS_CONFIG_VERSION = 3;
 
 class ObsidianAgentsConfigError extends Error {
@@ -23904,19 +23797,19 @@ function createEmptyObsidianAgentsConfig() {
 }
 function normalizeObsidianAgentsProfile(input) {
   const vaultPath = normalizeAbsolutePath(input.vaultPath, "vault path");
-  const sourcePath2 = normalizeAbsolutePath(input.sourcePath?.trim() || join25(vaultPath, "Agents"), "visible source path");
-  const agentsPath = join25(vaultPath, ".agents");
-  const sourceRelative = relative5(vaultPath, sourcePath2);
+  const sourcePath = normalizeAbsolutePath(input.sourcePath?.trim() || join26(vaultPath, "Agents"), "visible source path");
+  const agentsPath = join26(vaultPath, ".agents");
+  const sourceRelative = relative5(vaultPath, sourcePath);
   if (sourceRelative.length === 0 || sourceRelative === ".." || sourceRelative.startsWith(`..${sep6}`) || isAbsolute5(sourceRelative)) {
     throw new ObsidianAgentsConfigError("The visible source path must be a directory inside the Obsidian vault.");
   }
   if (sourceRelative.split(/[\\/]/u).some((part) => part.startsWith("."))) {
     throw new ObsidianAgentsConfigError("The visible source path must not contain hidden dot-prefixed directories.");
   }
-  if (sourcePath2 === agentsPath) {
+  if (sourcePath === agentsPath) {
     throw new ObsidianAgentsConfigError("The visible source path must be different from the vault .agents compatibility path.");
   }
-  return { vaultPath, sourcePath: sourcePath2, agentsPath };
+  return { vaultPath, sourcePath, agentsPath };
 }
 async function readObsidianAgentsConfig(paths) {
   let raw;
@@ -23940,9 +23833,9 @@ async function writeObsidianAgentsConfig(paths, config) {
   const normalized = await parseObsidianAgentsConfig(config);
   const persisted = {
     version: normalized.version,
-    vaults: normalized.vaults.map(({ vaultPath, sourcePath: sourcePath2 }) => ({
+    vaults: normalized.vaults.map(({ vaultPath, sourcePath }) => ({
       vaultPath,
-      sourcePath: sourcePath2
+      sourcePath
     }))
   };
   await mkdir15(paths.dataRoot, { recursive: true });
@@ -23964,12 +23857,12 @@ async function canonicalVaultPath(value2) {
 async function canonicalizeObsidianAgentsProfile(input) {
   const originalPath = normalizeAbsolutePath(input.vaultPath, "vault path");
   const vaultPath = await canonicalVaultPath(originalPath);
-  const sourcePath2 = normalizeAbsolutePath(input.sourcePath ?? join25(originalPath, "Agents"), "visible source path");
-  const sourceRelative = relative5(originalPath, sourcePath2);
+  const sourcePath = normalizeAbsolutePath(input.sourcePath ?? join26(originalPath, "Agents"), "visible source path");
+  const sourceRelative = relative5(originalPath, sourcePath);
   const throughOriginalPath = sourceRelative.length > 0 && sourceRelative !== ".." && !sourceRelative.startsWith(`..${sep6}`) && !isAbsolute5(sourceRelative);
   return normalizeObsidianAgentsProfile({
     vaultPath,
-    sourcePath: throughOriginalPath ? join25(vaultPath, sourceRelative) : sourcePath2
+    sourcePath: throughOriginalPath ? join26(vaultPath, sourceRelative) : sourcePath
   });
 }
 async function parseObsidianAgentsConfig(value2) {
@@ -24053,7 +23946,7 @@ import {
   basename as basename3,
   dirname as dirname18,
   isAbsolute as isAbsolute6,
-  join as join26,
+  join as join27,
   normalize,
   relative as relative6,
   resolve as resolve15,
@@ -24088,7 +23981,7 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
   switch (topology.agents.kind) {
     case "absent":
       transition = topology.source.kind === "absent" ? "create" : "link_existing_source";
-      actions.push(topology.source.kind === "absent" ? `create visible source ${profile.sourcePath}` : `preserve visible source ${profile.sourcePath}`, `ensure ${join26(profile.sourcePath, "skills")} and ${join26(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
+      actions.push(topology.source.kind === "absent" ? `create visible source ${profile.sourcePath}` : `preserve visible source ${profile.sourcePath}`, `ensure ${join27(profile.sourcePath, "skills")} and ${join27(profile.sourcePath, "state")}`, `create ${getObsidianAgentsLinkType(platform3)} ${profile.agentsPath} -> ${profile.sourcePath}`);
       break;
     case "directory":
       throw new ObsidianAgentsServiceError("conflict", `A real directory occupies ${profile.agentsPath}. Relocate it manually before rerunning setup; automatic directory migration is not supported.`);
@@ -24096,11 +23989,11 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
       if (topology.linkStatus === "correct") {
         transition = "reuse";
         actions.push(`validate existing link ${profile.agentsPath}`);
-        if ((await inspectObsidianAgentsPath(join26(profile.sourcePath, "skills"))).kind !== "directory") {
-          actions.push(`create ${join26(profile.sourcePath, "skills")}`);
+        if ((await inspectObsidianAgentsPath(join27(profile.sourcePath, "skills"))).kind !== "directory") {
+          actions.push(`create ${join27(profile.sourcePath, "skills")}`);
         }
-        if ((await inspectObsidianAgentsPath(join26(profile.sourcePath, "state"))).kind !== "directory") {
-          actions.push(`create ${join26(profile.sourcePath, "state")}`);
+        if ((await inspectObsidianAgentsPath(join27(profile.sourcePath, "state"))).kind !== "directory") {
+          actions.push(`create ${join27(profile.sourcePath, "state")}`);
         }
       } else {
         transition = "repair_link";
@@ -24119,7 +24012,7 @@ async function createObsidianAgentsSetupPlan(_paths, input, options = {}) {
     throw new ObsidianAgentsServiceError("conflict", `The Claude parent path must be a real directory: ${topology.claudeParent.path}. Relocate it manually before rerunning setup.`);
   }
   const claudePath = topology.claudeSkills.path;
-  const claudeTarget = join26(profile.sourcePath, "skills");
+  const claudeTarget = join27(profile.sourcePath, "skills");
   if (topology.claudeLinkStatus === "not_link" || topology.claudeLinkStatus === "unsupported") {
     throw new ObsidianAgentsServiceError("conflict", `An occupied ${topology.claudeSkills.kind} exists at ${claudePath}. Relocate it manually before rerunning setup; automatic directory migration is not supported.`);
   }
@@ -24173,7 +24066,7 @@ async function applyObsidianAgentsSetup(paths, plan) {
       if (plan.topology.claudeSkills.kind !== "absent") {
         await unlink(plan.topology.claudeSkills.path);
       }
-      await createObsidianAgentsDirectoryLink(plan.topology.claudeSkills.path, join26(plan.vault.sourcePath, "skills"), { platform: plan.platform });
+      await createObsidianAgentsDirectoryLink(plan.topology.claudeSkills.path, join27(plan.vault.sourcePath, "skills"), { platform: plan.platform });
     }
     const topology = await inspectObsidianAgentsTopology(plan.vault, {
       platform: plan.platform
@@ -24224,8 +24117,8 @@ async function inspectVaultStatus(profile, platform3 = process.platform) {
   const vaultExists = await isDirectory2(profile.vaultPath);
   const sourceInsideVault = vaultExists && await isCanonicalSourceInsideVault(profile);
   const sourceExists = topology.source.kind === "directory";
-  const skillsExists = sourceExists ? (await inspectObsidianAgentsPath(join26(profile.sourcePath, "skills"))).kind === "directory" : false;
-  const stateExists = sourceExists ? (await inspectObsidianAgentsPath(join26(profile.sourcePath, "state"))).kind === "directory" : false;
+  const skillsExists = sourceExists ? (await inspectObsidianAgentsPath(join27(profile.sourcePath, "skills"))).kind === "directory" : false;
+  const stateExists = sourceExists ? (await inspectObsidianAgentsPath(join27(profile.sourcePath, "state"))).kind === "directory" : false;
   const issues = [];
   if (!vaultExists)
     issues.push(`Vault directory is missing: ${profile.vaultPath}. Restore it or set up its new location.`);
@@ -24246,7 +24139,7 @@ async function inspectVaultStatus(profile, platform3 = process.platform) {
     issues.push(`The Claude parent path must be a real directory: ${topology.claudeParent.path}. Relocate it manually before rerunning setup.`);
   }
   if (topology.claudeLinkStatus !== "correct") {
-    issues.push(`The .claude/skills link is ${topology.claudeLinkStatus}: ${topology.claudeSkills.path}; current target ${topology.claudeSkills.resolvedTarget ?? topology.claudeSkills.target ?? "unavailable"}; expected ${join26(profile.sourcePath, "skills")}.${topology.claudeLinkStatus === "not_link" || topology.claudeLinkStatus === "unsupported" ? " Relocate it manually before rerunning setup." : ""}`);
+    issues.push(`The .claude/skills link is ${topology.claudeLinkStatus}: ${topology.claudeSkills.path}; current target ${topology.claudeSkills.resolvedTarget ?? topology.claudeSkills.target ?? "unavailable"}; expected ${join27(profile.sourcePath, "skills")}.${topology.claudeLinkStatus === "not_link" || topology.claudeLinkStatus === "unsupported" ? " Relocate it manually before rerunning setup." : ""}`);
   }
   if (!skillsExists)
     issues.push("The visible source is missing a real skills/ directory.");
@@ -24280,8 +24173,8 @@ async function inspectVaultStatus(profile, platform3 = process.platform) {
 }
 async function inspectObsidianAgentsTopology(profile, options = {}) {
   const platform3 = options.platform ?? process.platform;
-  const claudeParent = await inspectObsidianAgentsPath(join26(profile.vaultPath, ".claude"), platform3);
-  const claudeSkillsPath = join26(profile.vaultPath, ".claude", "skills");
+  const claudeParent = await inspectObsidianAgentsPath(join27(profile.vaultPath, ".claude"), platform3);
+  const claudeSkillsPath = join27(profile.vaultPath, ".claude", "skills");
   const [source, agents, claudeSkills] = await Promise.all([
     inspectObsidianAgentsPath(profile.sourcePath, platform3),
     inspectObsidianAgentsPath(profile.agentsPath, platform3),
@@ -24296,7 +24189,7 @@ async function inspectObsidianAgentsTopology(profile, options = {}) {
     claudeParent,
     claudeSkills,
     linkStatus: await inspectLinkStatus(agents, profile.sourcePath, platform3),
-    claudeLinkStatus: await inspectLinkStatus(claudeSkills, join26(profile.sourcePath, "skills"), platform3),
+    claudeLinkStatus: await inspectLinkStatus(claudeSkills, join27(profile.sourcePath, "skills"), platform3),
     expectedTarget: profile.sourcePath
   };
 }
@@ -24318,7 +24211,7 @@ function claudeLinkDetails(topology, profile) {
     type: topology.claudeSkills.linkType,
     target: topology.claudeSkills.target,
     resolvedTarget: topology.claudeSkills.resolvedTarget,
-    expectedTarget: join26(profile.sourcePath, "skills")
+    expectedTarget: join27(profile.sourcePath, "skills")
   };
 }
 async function inspectObsidianAgentsPath(path, platform3 = process.platform) {
@@ -24367,14 +24260,14 @@ async function inspectObsidianAgentsPath(path, platform3 = process.platform) {
 function getObsidianAgentsLinkType(platform3 = process.platform) {
   return platform3 === "win32" ? "junction" : "symbolic_link";
 }
-async function createObsidianAgentsDirectoryLink(linkPath, sourcePath2, options = {}) {
+async function createObsidianAgentsDirectoryLink(linkPath, sourcePath, options = {}) {
   const platform3 = options.platform ?? process.platform;
-  if (!await isDirectory2(sourcePath2)) {
-    throw new ObsidianAgentsServiceError("invalid_configuration", `Cannot create the directory link because its source is not a directory: ${sourcePath2}`);
+  if (!await isDirectory2(sourcePath)) {
+    throw new ObsidianAgentsServiceError("invalid_configuration", `Cannot create the directory link because its source is not a directory: ${sourcePath}`);
   }
-  await symlink2(sourcePath2, linkPath, platform3 === "win32" ? "junction" : "dir");
+  await symlink2(sourcePath, linkPath, platform3 === "win32" ? "junction" : "dir");
   const state = await inspectObsidianAgentsPath(linkPath, platform3);
-  if (state.kind !== "link" || !state.resolvedTarget || !await sameCanonicalPath(state.resolvedTarget, sourcePath2, platform3)) {
+  if (state.kind !== "link" || !state.resolvedTarget || !await sameCanonicalPath(state.resolvedTarget, sourcePath, platform3)) {
     throw new ObsidianAgentsServiceError("filesystem_failed", `The directory link does not resolve to its configured source: ${linkPath}`);
   }
 }
@@ -24389,7 +24282,7 @@ function createMissingStatus(vaultPath) {
   const vault = normalizeObsidianAgentsProfile({ vaultPath });
   return {
     ...vault,
-    claudeSkillsPath: join26(vaultPath, ".claude", "skills"),
+    claudeSkillsPath: join27(vaultPath, ".claude", "skills"),
     claudeLink: { status: "missing", kind: "absent" },
     configured: false,
     healthy: false,
@@ -24406,12 +24299,12 @@ function createMissingStatus(vaultPath) {
     issues: ["This vault is not configured. Run setup for this vault."]
   };
 }
-async function ensureSourceDirectories(sourcePath2) {
-  await mkdir16(join26(sourcePath2, "skills"), { recursive: true });
-  await mkdir16(join26(sourcePath2, "state"), { recursive: true });
+async function ensureSourceDirectories(sourcePath) {
+  await mkdir16(join27(sourcePath, "skills"), { recursive: true });
+  await mkdir16(join27(sourcePath, "state"), { recursive: true });
 }
-async function assertContentDirectory(sourcePath2, name) {
-  const state = await inspectObsidianAgentsPath(join26(sourcePath2, name));
+async function assertContentDirectory(sourcePath, name) {
+  const state = await inspectObsidianAgentsPath(join27(sourcePath, name));
   if (state.kind !== "absent" && state.kind !== "directory") {
     throw new ObsidianAgentsServiceError("invalid_configuration", `The visible source ${name}/ path is not a real directory: ${state.path}`);
   }
@@ -24492,7 +24385,7 @@ function isMissingFileError5(error) {
 
 // src/infra/obsidian-agents-paths.ts
 import { homedir as homedir8 } from "node:os";
-import { join as join27, resolve as resolve16 } from "node:path";
+import { join as join28, resolve as resolve16 } from "node:path";
 function resolveCthuToolChcDataRoot(options = {}) {
   const env2 = options.env ?? process.env;
   const explicit = options.dataRoot?.trim() || env2.CTHUTOOL_CHC_DATA_DIR;
@@ -24501,18 +24394,18 @@ function resolveCthuToolChcDataRoot(options = {}) {
   const homeRoot = options.homeRoot ?? homedir8();
   const platform3 = options.platform ?? process.platform;
   if (platform3 === "win32") {
-    return resolve16(join27(env2.APPDATA ?? join27(homeRoot, "AppData", "Roaming"), "CthuTool", "chc"));
+    return resolve16(join28(env2.APPDATA ?? join28(homeRoot, "AppData", "Roaming"), "CthuTool", "chc"));
   }
   if (platform3 === "darwin") {
-    return resolve16(join27(homeRoot, "Library", "Application Support", "CthuTool", "chc"));
+    return resolve16(join28(homeRoot, "Library", "Application Support", "CthuTool", "chc"));
   }
-  return resolve16(join27(env2.XDG_STATE_HOME ?? join27(homeRoot, ".local", "state"), "cthutool", "chc"));
+  return resolve16(join28(env2.XDG_STATE_HOME ?? join28(homeRoot, ".local", "state"), "cthutool", "chc"));
 }
 function createObsidianAgentsDataPaths(options = {}) {
   const dataRoot = resolveCthuToolChcDataRoot(options);
   return {
     dataRoot,
-    configPath: join27(dataRoot, "obsidian-agents.json")
+    configPath: join28(dataRoot, "obsidian-agents.json")
   };
 }
 
@@ -24782,12 +24675,12 @@ Link: ${current.agentsPath}`);
     if (choice === "keep")
       return current;
   }
-  const sourcePath2 = suppliedSource ?? (interactive ? await promptString("Visible Agents source path", current?.sourcePath ?? join28(vaultPath, "Agents"), (value2) => value2.trim() ? undefined : "A source path is required.") : current?.sourcePath ?? join28(vaultPath, "Agents"));
-  if (!sourcePath2)
+  const sourcePath = suppliedSource ?? (interactive ? await promptString("Visible Agents source path", current?.sourcePath ?? join29(vaultPath, "Agents"), (value2) => value2.trim() ? undefined : "A source path is required.") : current?.sourcePath ?? join29(vaultPath, "Agents"));
+  if (!sourcePath)
     return;
   return canonicalizeObsidianAgentsProfile({
     vaultPath: chosenVault,
-    sourcePath: sourcePath2
+    sourcePath
   });
 }
 async function promptString(message, initialValue, validate2) {
@@ -24812,7 +24705,7 @@ function writeSetupResult(context, result) {
   if (profile) {
     writeHumanStatus(context, processOutput, `source: ${profile.sourcePath}`);
     writeHumanStatus(context, processOutput, `.agents: ${profile.agentsPath}`);
-    writeHumanStatus(context, processOutput, `.claude/skills: ${join28(profile.vaultPath, ".claude", "skills")}`);
+    writeHumanStatus(context, processOutput, `.claude/skills: ${join29(profile.vaultPath, ".claude", "skills")}`);
   }
 }
 function toObsidianCliError(error) {
@@ -25364,10 +25257,10 @@ var resolvePackage = (catalog, id) => {
 };
 
 // src/flow/run-bundled-script.ts
-import { join as join29 } from "node:path";
+import { join as join30 } from "node:path";
 import { pathToFileURL } from "node:url";
 function runBundledScript(pkg, args, context) {
-  const entryPath = join29(pkg.rootPath, pkg.entryRelative);
+  const entryPath = join30(pkg.rootPath, pkg.entryRelative);
   const href = pathToFileURL(entryPath).href;
   const startedAt = Date.now();
   const diagnostics = context.diagnostics?.child({ scriptId: pkg.id });
@@ -25448,21 +25341,21 @@ var import_picocolors6 = __toESM(require_picocolors(), 1);
 
 // src/infra/bundled-scripts-root.ts
 import { existsSync as existsSync7 } from "node:fs";
-import { dirname as dirname19, join as join30 } from "node:path";
+import { dirname as dirname19, join as join31 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function getBundledScriptsRoot() {
   const moduleDir = dirname19(fileURLToPath3(import.meta.url));
   const candidates = [
-    join30(moduleDir, "scripts"),
-    join30(moduleDir, "../scripts"),
-    join30(moduleDir, "../src/scripts")
+    join31(moduleDir, "scripts"),
+    join31(moduleDir, "../scripts"),
+    join31(moduleDir, "../src/scripts")
   ];
   return candidates.find((candidate) => existsSync7(candidate)) ?? candidates[0];
 }
 
 // src/infra/discover-scripts.ts
 import { readdir as readdir4, readFile as readFile20, stat as stat6 } from "node:fs/promises";
-import { join as join31 } from "node:path";
+import { join as join32 } from "node:path";
 
 // src/domain/script-id.ts
 var KEBAB_CASE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -25527,18 +25420,18 @@ async function scanScriptsRoot(scriptsRoot) {
   }
   const names = entries.filter((e3) => e3.isDirectory()).map((e3) => e3.name).sort((a4, b5) => a4.localeCompare(b5));
   for (const name of names) {
-    const dirPath = join31(scriptsRoot, name);
+    const dirPath = join32(scriptsRoot, name);
     const dirIdResult = validateScriptId(name);
     if (dirIdResult.isErr()) {
       pushWarning(warnings, dirPath, `skip non-kebab-case script folder: ${dirIdResult.error.message}`);
       continue;
     }
-    const manifestPath = join31(dirPath, MANIFEST_FILE);
+    const manifestPath = join32(dirPath, MANIFEST_FILE);
     let entryRelative;
     let entryStat;
     for (const candidate of ENTRY_FILES) {
       try {
-        const candidateStat = await stat6(join31(dirPath, candidate));
+        const candidateStat = await stat6(join32(dirPath, candidate));
         if (candidateStat.isFile()) {
           entryRelative = candidate;
           entryStat = candidateStat;
@@ -26374,7 +26267,7 @@ import {
   writeFile as writeFile11
 } from "node:fs/promises";
 import { homedir as homedir9 } from "node:os";
-import { dirname as dirname20, isAbsolute as isAbsolute7, join as join32, resolve as resolve17 } from "node:path";
+import { dirname as dirname20, isAbsolute as isAbsolute7, join as join33, resolve as resolve17 } from "node:path";
 var sourceRegistryVersion = 1;
 var sourceSwitchWaitMs = 2000;
 var sourceSwitchPollMs = 50;
@@ -26429,7 +26322,7 @@ var defaultDeps4 = {
     if (result.code !== 0 || result.stdout.trim().length === 0) {
       return;
     }
-    const packagePath = join32(result.stdout.trim(), "cthutool");
+    const packagePath = join33(result.stdout.trim(), "cthutool");
     if (!existsSync8(packagePath)) {
       return;
     }
@@ -26443,10 +26336,10 @@ function createCliSourceManagerDeps(overrides = {}) {
   return { ...defaultDeps4, ...overrides };
 }
 function getCliSourceRegistryPath(home = homedir9()) {
-  return join32(home, ".cthutool", "cli", "source-registry.json");
+  return join33(home, ".cthutool", "cli", "source-registry.json");
 }
 function getCliSourceSwitchLockPath(home = homedir9()) {
-  return join32(home, ".cthutool", "locks", "cli-source-switch.lock");
+  return join33(home, ".cthutool", "locks", "cli-source-switch.lock");
 }
 function parseGitWorktreeList(value2) {
   const records = [];
@@ -26755,7 +26648,7 @@ async function tryResolveDevelopmentCheckout(path, deps) {
 async function inspectWorktreeCandidate(record2, kind2, mainRoot, runtimeRoot, deps) {
   const path = record2.path;
   const active = sameSourcePath(path, runtimeRoot);
-  const bundlePresent = existsSync8(join32(path, committedCliBundlePath));
+  const bundlePresent = existsSync8(join33(path, committedCliBundlePath));
   const packageValid = isCthuToolPackage(path);
   const exists = existsSync8(path);
   const available2 = exists && packageValid && bundlePresent && !record2.prunable;
@@ -26794,7 +26687,7 @@ async function inspectWorktreeCandidate(record2, kind2, mainRoot, runtimeRoot, d
 }
 async function inspectManagedCandidate(path, runtimeRoot, deps) {
   const active = sameSourcePath(path, runtimeRoot);
-  const bundlePresent = existsSync8(join32(path, committedCliBundlePath));
+  const bundlePresent = existsSync8(join33(path, committedCliBundlePath));
   if (!existsSync8(path)) {
     return unavailableCandidate({
       id: "remote",
@@ -26841,11 +26734,11 @@ async function inspectManagedCandidate(path, runtimeRoot, deps) {
     locked: record2?.locked,
     prunable: record2?.prunable,
     [cliManagedSourceState]: bundlePresent ? "ready" : "invalid",
-    reason: bundlePresent ? undefined : `Missing committed CLI bundle: ${join32(path, committedCliBundlePath)}`
+    reason: bundlePresent ? undefined : `Missing committed CLI bundle: ${join33(path, committedCliBundlePath)}`
   };
 }
 async function inspectFallbackRuntimeCandidate(path, deps) {
-  const bundlePresent = existsSync8(join32(path, committedCliBundlePath));
+  const bundlePresent = existsSync8(join33(path, committedCliBundlePath));
   const status = await deps.runGit(path, [
     "status",
     "--porcelain",
@@ -26860,7 +26753,7 @@ async function inspectFallbackRuntimeCandidate(path, deps) {
     available: isCthuToolPackage(path) && bundlePresent,
     bundlePresent,
     dirty: status.code === 0 ? status.stdout.trim().length > 0 : undefined,
-    reason: bundlePresent ? "The running source is not part of a discoverable Git worktree topology." : `Missing committed CLI bundle: ${join32(path, committedCliBundlePath)}`
+    reason: bundlePresent ? "The running source is not part of a discoverable Git worktree topology." : `Missing committed CLI bundle: ${join33(path, committedCliBundlePath)}`
   };
 }
 function unavailableCandidate(input) {
@@ -26999,7 +26892,7 @@ function assertCthuToolPackage(path) {
 }
 function isCthuToolPackage(path) {
   try {
-    const pkg = JSON.parse(readFileSync5(join32(path, "package.json"), "utf8"));
+    const pkg = JSON.parse(readFileSync5(join33(path, "package.json"), "utf8"));
     return pkg.name === "cthutool";
   } catch {
     return false;

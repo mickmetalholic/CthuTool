@@ -23,7 +23,7 @@
     "dotfiles/home/dot_gitignore_global",
     "dotfiles/home/dot_profile.tmpl",
     "dotfiles/home/dot_zshrc.tmpl",
-    "dotfiles/home/private_dot_ssh/config.tmpl",
+    "dotfiles/home/private_dot_ssh/create_config",
     "dotfiles/notion/manifest.json",
     "dotfiles/notion/sources.json"
   ]

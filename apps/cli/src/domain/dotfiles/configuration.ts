@@ -22,7 +22,6 @@ import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   assertNoLinks,
-  privateRead,
   privateWrite,
 } from '../../infra/dotfiles/private-store';
 import { digest, readBinding } from '../../infra/dotfiles/source';
@@ -35,50 +34,32 @@ import { assertCompatibleHost, type Catalog } from './model';
 export type ConfigInteraction = {
   selectHost: (ids: string[]) => Promise<string | undefined>;
   chooseFiles: (paths: string[]) => Promise<string[]>;
-  resolveFile: (input: {
-    path: string;
-    local: string;
-    rendered: string;
-    template: boolean;
-    candidate: string;
-  }) => Promise<'import' | 'repository' | 'defer' | undefined>;
-  reviewCandidate: (path: string) => Promise<boolean>;
 };
 export function chezmoi(
   system: DotfilesSystem,
   source: string,
   host: string,
   args: string[],
+  options?: Parameters<DotfilesSystem['run']>[2],
 ) {
   // A data override selects this invocation; persisted binding remains authoritative otherwise.
-  return checkedRun(system, 'chezmoi', [
-    '--source',
-    source,
-    '--destination',
-    system.home,
-    '--override-data',
-    JSON.stringify({ local: { host } }),
-    ...args,
-  ]);
-}
-export async function renderedTargets(
-  system: DotfilesSystem,
-  source: string,
-  host: string,
-) {
-  const dump: Record<
-    string,
-    { type: string; contents?: string; target?: string }
-  > = JSON.parse(
-    await chezmoi(system, source, host, ['dump', '--format', 'json']),
-  );
-  return Object.fromEntries(
-    Object.entries(dump)
-      .filter(([, entry]) => entry.type === 'file' || entry.type === 'symlink')
-      .map(([path, entry]) => [
-        join(system.home, path),
-        entry.contents ?? entry.target ?? '',
-      ]),
+  return checkedRun(
+    system,
+    'chezmoi',
+    [
+      '--source',
+      source,
+      '--destination',
+      system.home,
+      '--override-data',
+      JSON.stringify({ local: { host } }),
+      '--force=false',
+      '--interactive=false',
+      '--no-pager',
+      ...(!options?.terminal ? ['--no-tty'] : []),
+      ...args,
+    ],
+    options,
   );
 }
 export async function managedTargets(
@@ -86,18 +67,18 @@ export async function managedTargets(
   source: string,
   host: string,
 ): Promise<string[]> {
-  return Object.keys(await renderedTargets(system, source, host));
-}
-async function renderTarget(
-  system: DotfilesSystem,
-  source: string,
-  host: string,
-  target: string,
-) {
-  const rendered = await renderedTargets(system, source, host);
-  if (!(target in rendered))
-    throw new Error(`Target is not managed for this host: ${target}`);
-  return rendered[target];
+  return (
+    await chezmoi(system, source, host, [
+      'managed',
+      '--include',
+      'files,symlinks',
+      '--path-style',
+      'absolute',
+      '--nul-path-separator',
+    ])
+  )
+    .split('\0')
+    .filter(Boolean);
 }
 export async function saveBinding(
   system: DotfilesSystem,
@@ -227,25 +208,6 @@ async function directoryExists(path: string) {
 }
 export const stateRoot = (s: DotfilesSystem, source: string) =>
   join(s.home, '.cthutool/state/dotfiles', digest(source).slice(0, 24));
-type Receipt = {
-  version: 1;
-  files: Record<
-    string,
-    {
-      decision: 'repository' | 'import' | 'defer';
-      sourceDigest: string;
-      targetDigest: string;
-      backup?: string;
-    }
-  >;
-};
-async function receipts(s: DotfilesSystem, source: string): Promise<Receipt> {
-  const raw = await privateRead(join(stateRoot(s, source), 'receipts.json'), s);
-  if (!raw) return { version: 1, files: {} };
-  const r = JSON.parse(raw);
-  if (r.version !== 1) throw new Error('Unsupported adoption receipt version');
-  return r;
-}
 function validateTarget(path: string, s: DotfilesSystem) {
   const target = resolve(path.replace(/^~(?=\/|\\|$)/, s.home));
   const rel = relative(s.home, target);
@@ -255,7 +217,7 @@ function validateTarget(path: string, s: DotfilesSystem) {
     );
   const normalized = rel.replaceAll('\\', '/').toLowerCase();
   if (
-    (normalized.startsWith('.ssh/') && normalized !== '.ssh/config') ||
+    normalized.startsWith('.ssh/') ||
     /(^|\/)(\.cthutool|\.aws|\.gnupg|\.kube|\.git|\.gitconfig|\.netrc|\.npmrc|\.env(?:\..*)?|credentials?|secrets?|id_[^/]+)(\/|$)/.test(
       normalized,
     ) ||
@@ -280,8 +242,6 @@ async function fileState(path: string) {
     throw e;
   }
 }
-const stateDigest = (s: Awaited<ReturnType<typeof fileState>>) =>
-  digest(JSON.stringify(s));
 async function backupTarget(target: string, source: string, s: DotfilesSystem) {
   const state = await fileState(target);
   if (state.text === undefined) return undefined;
@@ -293,227 +253,112 @@ async function backupTarget(target: string, source: string, s: DotfilesSystem) {
   await privateWrite(path, JSON.stringify({ target, ...state }), s);
   return path;
 }
-async function sourcePath(
-  s: DotfilesSystem,
-  source: string,
-  host: string,
-  target: string,
-) {
-  const r = await s.run('chezmoi', [
-    '--source',
-    source,
-    '--destination',
-    s.home,
-    '--override-data',
-    JSON.stringify({ local: { host } }),
-    'source-path',
-    '--',
-    target,
-  ]);
-  const path =
-    r.code === 0
-      ? r.stdout.trim()
-      : join(
-          source,
-          'dotfiles/home',
-          ...relative(s.home, target)
-            .split(sep)
-            .map((p) => (p.startsWith('.') ? `dot_${p.slice(1)}` : p)),
-        );
-  const rel = relative(join(source, 'dotfiles/home'), path);
-  if (rel.startsWith('..') || isAbsolute(rel) || !rel)
-    throw new Error('Source target must remain inside dotfiles/home');
-  return path;
-}
+// Let chezmoi own source path attributes, templates, conflict state and merge tools.
 export async function adoptFiles(
   s: DotfilesSystem,
   source: string,
   host: string,
   paths: string[],
   interactive: boolean,
-  interaction: ConfigInteraction,
 ) {
   if (!paths.length)
     throw new Error('Usage: chc dotfiles config add <home-path...>');
-  if (!interactive)
-    throw new Error(
-      'Unresolved adoption requires interactive review. Run config add in a terminal.',
-    );
-  const targets = paths.map((p) => validateTarget(p, s));
-  const receipt = await receipts(s, source);
+  const targets = [...new Set(paths.map((p) => validateTarget(p, s)))];
+  const managed = new Set(await managedTargets(s, source, host));
+  const operations: { target: string; command: 'add' | 'merge' }[] = [];
   for (const target of targets) {
-    // Never follow a parent directory into another checkout or secret location.
     await assertNoLinks(dirname(target), s.home);
     const local = await fileState(target);
     if (local.text === undefined)
       throw new Error(`Adoption target does not exist: ${target}`);
-    const path = await sourcePath(s, source, host, target);
-    const template = path.endsWith('.tmpl');
-    const old = await readOptional(path);
-    const rendered =
-      old === undefined ? '' : await renderTarget(s, source, host, target);
-    const backup = await backupTarget(target, source, s);
-    const candidate = join(
-      stateRoot(s, source),
-      'review',
-      `${digest(target)}${template ? '.tmpl' : '.txt'}`,
-    );
-    await privateWrite(candidate, old ?? local.text, s);
-    const decision =
-      (await interaction.resolveFile({
-        path: target,
-        local: local.text,
-        rendered,
-        template,
-        candidate,
-      })) ?? 'defer';
-    if (decision === 'import') {
-      if (relative(s.home, target).replaceAll('\\', '/') === '.ssh/config')
-        throw new Error(
-          'SSH host configuration remains local; choose repository or defer.',
-        );
-      if (local.link)
-        throw new Error(
-          'Importing links requires a reviewed chezmoi symlink source; use repository/defer for this target.',
-        );
-      if (template) {
-        if (!(await interaction.reviewCandidate(candidate)))
-          throw new Error('Template review cancelled; home unchanged.');
-        const merged = await readFile(candidate, 'utf8');
-        if (!merged.includes('{{') && old?.includes('{{'))
-          throw new Error(
-            'Template variables were removed; refusing a machine-specific replacement.',
-          );
-        const probe = await s.run('chezmoi', [
-          '--source',
-          source,
-          '--override-data',
-          JSON.stringify({ local: { host } }),
-          'execute-template',
-          merged,
-        ]);
-        if (probe.code !== 0)
-          throw new Error(
-            'Merged template did not render; original source preserved',
-          );
-        await writeHomeSource(path, merged, source);
-      } else await writeHomeSource(path, local.text, source);
+    if (local.link) throw new Error(`Select a regular home file: ${target}`);
+    let template = false;
+    if (managed.has(target)) {
+      const path = (
+        await chezmoi(s, source, host, ['source-path', '--', target])
+      ).trim();
+      const root = await realpath(join(source, 'dotfiles/home'));
+      await assertNoLinks(path, root);
+      template = path.endsWith('.tmpl');
     }
-    const renderedAfter =
-      decision === 'import'
-        ? await renderTarget(s, source, host, target)
-        : rendered;
-    receipt.files[target] = {
-      decision,
-      sourceDigest: digest((await readOptional(path)) ?? renderedAfter),
-      targetDigest: stateDigest(local),
-      backup,
-    };
-    await privateWrite(
-      join(stateRoot(s, source), 'receipts.json'),
-      `${JSON.stringify(receipt, null, 2)}\n`,
+    if (template && !interactive)
+      throw new Error(
+        `Template reconciliation requires an interactive terminal: ${target}. Run config add without --json or --no-interactive to open the configured chezmoi merge tool.`,
+      );
+    operations.push({ target, command: template ? 'merge' : 'add' });
+  }
+  const config = JSON.parse(
+    await chezmoi(s, source, host, ['dump-config', '--format', 'json']),
+  );
+  if (config.git?.autoadd || config.git?.autocommit || config.git?.autopush)
+    throw new Error(
+      'Disable chezmoi git.autoAdd, git.autoCommit and git.autoPush before config add; source changes must remain available for Git review.',
+    );
+  const backups = await Promise.all(
+    targets.map((target) => backupTarget(target, source, s)),
+  );
+  for (const operation of operations) {
+    await chezmoi(
       s,
+      source,
+      host,
+      [
+        operation.command,
+        ...(operation.command === 'add'
+          ? ['--recursive=false', '--secrets=error']
+          : []),
+        '--',
+        operation.target,
+      ],
+      { terminal: operation.command === 'merge' },
     );
   }
   return {
     reviewed: targets,
     source,
-    notice: 'Review dotfiles/home with Git. Home files were not changed.',
+    operations,
+    backups,
+    notice:
+      'chezmoi updated source files. Review dotfiles/home with Git, then run config diff/apply. No configuration was applied by chc.',
   };
-}
-async function writeHomeSource(path: string, text: string, source: string) {
-  const root = await realpath(join(source, 'dotfiles/home'));
-  await mkdir(dirname(path), { recursive: true });
-  if (
-    !(await realpath(dirname(path))).startsWith(`${root}${sep}`) &&
-    (await realpath(dirname(path))) !== root
-  )
-    throw new Error('Source parent escapes home asset tree');
-  try {
-    if ((await lstat(path)).isSymbolicLink())
-      throw new Error('Refusing linked source file');
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
-  }
-  const { writeFile } = await import('node:fs/promises');
-  await writeFile(path, text);
-}
-export async function configurationPreflight(
-  s: DotfilesSystem,
-  source: string,
-  host: string,
-) {
-  const targets = await managedTargets(s, source, host);
-  const receipt = await receipts(s, source);
-  const status = await chezmoi(s, source, host, [
-    'status',
-    '--include',
-    'files,symlinks',
-    '--path-style',
-    'absolute',
-  ]);
-  const locallyChanged = new Set(
-    status
-      .split('\n')
-      .filter((l) => l[0] && l[0] !== ' ')
-      .map((l) => l.slice(3)),
-  );
-  const lastWritten =
-    JSON.parse(await chezmoi(s, source, host, ['state', 'dump'])).entryState ??
-    {};
-  const conflicts: string[] = [];
-  for (const target of targets) {
-    await assertNoLinks(dirname(target), s.home);
-    const local = await fileState(target);
-    const rendered = await renderTarget(s, source, host, target);
-    if (local.text === undefined) continue;
-    if (!local.link && local.text === rendered) continue;
-    const r = receipt.files[target];
-    if (
-      r?.decision === 'defer' ||
-      (r &&
-        (r.sourceDigest !==
-          digest(
-            (await readOptional(await sourcePath(s, source, host, target))) ??
-              rendered,
-          ) ||
-          r.targetDigest !== stateDigest(local))) ||
-      (!r && (!lastWritten[target] || locallyChanged.has(target)))
-    )
-      conflicts.push(target);
-  }
-  return { targets, receipt, conflicts };
 }
 export async function applyConfiguration(
   s: DotfilesSystem,
   source: string,
   host: string,
+  interactive = false,
 ) {
-  const { targets, receipt, conflicts } = await configurationPreflight(
+  const args = ['--less-interactive', '--include', 'files,symlinks,dirs'];
+  if (!interactive) {
+    try {
+      await chezmoi(s, source, host, [
+        '--error-on-conflict',
+        'apply',
+        '--dry-run',
+        ...args,
+      ]);
+    } catch (error) {
+      throw new Error(
+        `chezmoi preflight failed; no home files applied. Resolve local differences with config add or run config apply in a terminal for native diff/overwrite/skip prompts. ${error instanceof Error ? error.message : ''}`,
+      );
+    }
+  }
+  const targets = await managedTargets(s, source, host);
+  // Only backup policy remains in chc; chezmoi decides whether each file conflicts.
+  for (const target of targets) {
+    await assertNoLinks(dirname(target), s.home);
+    await backupTarget(target, source, s);
+  }
+  await chezmoi(
     s,
     source,
     host,
-  );
-  if (conflicts.length)
-    throw new Error(
-      `Reconcile with chc dotfiles config add before applying (no targets written):\n${conflicts.join('\n')}`,
-    );
-  for (const target of targets) await backupTarget(target, source, s);
-  await chezmoi(s, source, host, [
-    'apply',
-    '--force',
-    '--include',
-    'files,symlinks,dirs',
-  ]);
-  // Receipts are onboarding decisions only, not a replacement for chezmoi's normal state.
-  for (const target of targets) delete receipt.files[target];
-  await privateWrite(
-    join(stateRoot(s, source), 'receipts.json'),
-    JSON.stringify(receipt),
-    s,
+    [`--error-on-conflict=${!interactive}`, 'apply', ...args],
+    { terminal: interactive },
   );
   return {
-    applied: targets.length,
+    completed: true,
+    interactive,
     source,
     host,
     next: 'Runtime versions remain explicit: mise install',

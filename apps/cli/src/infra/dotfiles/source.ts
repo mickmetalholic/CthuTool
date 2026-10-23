@@ -63,43 +63,42 @@ export async function readBinding(system: DotfilesSystem): Promise<Binding> {
     environment.XDG_CONFIG_HOME ?? join(system.home, '.config'),
     'chezmoi',
   );
-  let raw: Record<string, unknown> = {};
+  let config: Record<string, unknown> = {};
   let configFile: string | undefined;
-  for (const extension of ['toml', 'yaml', 'yml', 'json']) {
-    const path = join(directory, `chezmoi.${extension}`);
-    const content = await readOptional(path);
-    if (content === undefined) continue;
-    if (configFile)
-      throw new Error(
-        'Multiple chezmoi configuration files found; keep the authoritative file before using dotfiles.',
-      );
-    configFile = path;
-    try {
-      raw =
-        extension === 'toml'
-          ? parseToml(content)
-          : extension === 'json'
-            ? JSON.parse(content)
-            : parse(content);
-    } catch {
-      throw new Error(`Cannot parse chezmoi configuration: ${path}`);
-    }
-  }
-  let config = raw;
-  if (await system.which('chezmoi')) {
-    const result = await system.run('chezmoi', [
-      'dump-config',
-      '--format',
-      'json',
-    ]);
-    if (result.code !== 0)
-      throw new Error(
-        'Cannot read chezmoi configuration; repair it before using dotfiles.',
-      );
-    try {
-      config = JSON.parse(result.stdout);
-    } catch {
-      throw new Error('Invalid chezmoi dump-config response');
+  const native = !!(await system.which('chezmoi'));
+  if (native) {
+    // chezmoi owns config discovery and format handling while it is available.
+    config = JSON.parse(
+      await checkedRun(system, 'chezmoi', ['dump-config', '--format', 'json']),
+    );
+    configFile =
+      (
+        await checkedRun(system, 'chezmoi', [
+          'execute-template',
+          '{{ .chezmoi.configFile }}',
+        ])
+      ).trim() || undefined;
+  } else {
+    // Offline plan/validate still work before tooling is installed. Read only; never write a fallback binding.
+    for (const extension of ['toml', 'yaml', 'yml', 'json']) {
+      const path = join(directory, `chezmoi.${extension}`);
+      const content = await readOptional(path);
+      if (content === undefined) continue;
+      if (configFile)
+        throw new Error(
+          'Multiple chezmoi configuration files found; install chezmoi to resolve the authoritative configuration.',
+        );
+      configFile = path;
+      try {
+        config =
+          extension === 'toml'
+            ? parseToml(content)
+            : extension === 'json'
+              ? JSON.parse(content)
+              : parse(content);
+      } catch {
+        throw new Error(`Cannot parse chezmoi configuration: ${path}`);
+      }
     }
   }
   const data = config.data as { local?: { host?: unknown } } | undefined;
@@ -107,6 +106,10 @@ export async function readBinding(system: DotfilesSystem): Promise<Binding> {
     typeof data?.local?.host === 'string' && data.local.host
       ? data.local.host
       : undefined;
+  const defaultSource = join(
+    environment.XDG_DATA_HOME ?? join(system.home, '.local/share'),
+    'chezmoi',
+  );
   const candidate =
     typeof config.sourceDir === 'string'
       ? config.sourceDir
@@ -117,7 +120,9 @@ export async function readBinding(system: DotfilesSystem): Promise<Binding> {
   const source = candidate.replace(/^~(?=\/|\\|$)/, system.home);
   const configured =
     !!host ||
-    (typeof raw.sourceDir === 'string' && !!raw.sourceDir) ||
+    (native
+      ? source !== defaultSource
+      : typeof config.sourceDir === 'string' && !!config.sourceDir) ||
     existsSync(source);
   if (configured && !isAbsolute(source))
     throw new Error(

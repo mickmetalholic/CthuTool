@@ -132,19 +132,23 @@ async function renderer() {
     environment: env(home),
     os: 'darwin',
     wsl: false,
-    run: async (command, args) => {
+    run: async (command, args, options) => {
       if (command !== 'chezmoi')
         throw new Error(`Unexpected side-effect command ${command}`);
       calls.push(args);
       try {
-        const r = await exec(
+        const pending = exec(
           binary as string,
           [
             ...(!args.includes('--config') ? ['--config', configFile] : []),
+            ...(options?.terminal ? ['--no-tty'] : []),
             ...args,
           ],
           { env: env(home) },
         );
+        if (options?.terminal && args.includes('apply'))
+          pending.child.stdin?.end('a\n');
+        const r = await pending;
         return { code: 0, ...r };
       } catch (e) {
         const r = e as { code: number; stdout: string; stderr: string };
@@ -160,83 +164,110 @@ async function renderer() {
   const interaction: ConfigInteraction = {
     selectHost: async () => undefined,
     chooseFiles: async () => [],
-    resolveFile: async () => 'repository',
-    reviewCandidate: async () => true,
   };
   return { home, source, system, interaction, calls, configFile };
 }
 rendererTest(
-  'host binding, config adoption, whole-selection protection, Git identity and repeated completion apply',
+  'native add/merge preserve templates and home, apply uses chezmoi state without receipts',
   async () => {
-    const { home, source, system, interaction, calls } = await renderer();
+    const { home, source, system, interaction, calls, configFile } =
+      await renderer();
     const { catalog } = await loadSnapshot(source);
-    const result = await saveBinding(system, {
+    const host = 'darwin-macbook-pro';
+    await saveBinding(system, {
       source,
-      host: 'darwin-macbook-pro',
+      host,
       interactive: false,
       interaction,
       catalog,
     });
-    expect(result.host).toBe('darwin-macbook-pro');
-    expect((await readBinding(system)).host).toBe('darwin-macbook-pro');
     await writeFile(
       join(home, '.gitconfig'),
       '[user]\n name = Existing User\n email = existing@example.invalid\n[include]\n path = custom\n',
     );
+    const file = join(home, '.example');
+    await writeFile(file, 'local content');
+    await adoptFiles(system, source, host, [file], false);
+    expect(
+      await readFile(join(source, 'dotfiles/home/dot_example'), 'utf8'),
+    ).toBe('local content');
+    const zsh = join(home, '.zshrc');
     const completion =
       '# >>> cthutool chc completion >>>\nsource <(chc completion zsh)\n# <<< cthutool chc completion <<<';
     const bootstrap =
       '# >>> cthutool bootstrap PATH >>>\nexport PATH="$HOME/.cthutool/bin:$PATH"\n# <<< cthutool bootstrap PATH <<<';
-    const zsh = join(home, '.zshrc');
     await writeFile(
       zsh,
       `# local customization\n${completion}\n${bootstrap}\n`,
     );
-    await expect(
-      applyConfiguration(system, source, result.host),
-    ).rejects.toThrow('config add');
-    expect(await readFile(zsh, 'utf8')).toContain('local customization');
-    await adoptFiles(system, source, result.host, [zsh], true, interaction);
-    await writeFile(zsh, '# changed after review');
-    await expect(
-      applyConfiguration(system, source, result.host),
-    ).rejects.toThrow('config add');
-    await writeFile(
-      zsh,
-      `# local customization\n${completion}\n${bootstrap}\n`,
+    await expect(applyConfiguration(system, source, host)).rejects.toThrow(
+      'chezmoi preflight',
     );
-    await adoptFiles(system, source, result.host, [zsh], true, interaction);
-    await applyConfiguration(system, source, result.host);
-    await applyConfiguration(system, source, result.host);
-    const content = await readFile(zsh, 'utf8');
-    expect(content.match(/# >>> cthutool chc completion >>>/g)).toHaveLength(1);
-    expect(content.match(/# >>> cthutool bootstrap PATH >>>/g)).toHaveLength(1);
+    await expect(readFile(join(home, '.editorconfig'))).rejects.toThrow();
+    await expect(
+      adoptFiles(system, source, host, [zsh], false),
+    ).rejects.toThrow('interactive terminal');
+    const merger = join(home, 'merge fixture.mjs');
+    await writeFile(
+      merger,
+      "import {readFileSync,appendFileSync} from 'node:fs';if(!readFileSync(process.argv[3],'utf8').includes('local customization'))appendFileSync(process.argv[3],'\\n# local customization\\n');",
+    );
+    await writeFile(
+      configFile,
+      (await readFile(configFile, 'utf8')) +
+        `\n[merge]\ncommand = ${JSON.stringify(node)}\nargs = [${JSON.stringify(merger)}, "{{ .Destination }}", "{{ .Source }}", "{{ .Target }}"]\n`,
+    );
+    const before = await readFile(zsh, 'utf8');
+    await adoptFiles(system, source, host, [zsh], true);
+    expect(await readFile(zsh, 'utf8')).toBe(before);
+    const template = await readFile(
+      join(source, 'dotfiles/home/dot_zshrc.tmpl'),
+      'utf8',
+    );
+    expect(template).toContain('{{');
+    expect(template).toContain('local customization');
+    // The native merge reconciles content; apply remains an explicit separate step.
+    const desired = await system.run('chezmoi', [
+      '--source',
+      source,
+      '--destination',
+      home,
+      '--override-data',
+      JSON.stringify({ local: { host } }),
+      'cat',
+      zsh,
+    ]);
+    await writeFile(zsh, desired.stdout);
+    await applyConfiguration(system, source, host, true);
+    await applyConfiguration(system, source, host);
+    expect(
+      (await readFile(zsh, 'utf8')).match(/# >>> cthutool chc completion >>>/g),
+    ).toHaveLength(1);
+    expect(
+      (await readFile(zsh, 'utf8')).match(/# >>> cthutool bootstrap PATH >>>/g),
+    ).toHaveLength(1);
     expect(await readFile(join(home, '.gitconfig'), 'utf8')).toContain(
       'Existing User',
     );
-    expect(calls.some((a) => a.includes('add') || a.includes('init'))).toBe(
-      false,
+    await writeFile(
+      join(source, 'dotfiles/home/dot_example'),
+      'repository update',
     );
-    await expect(
-      adoptFiles(
-        system,
-        source,
-        result.host,
-        [join(home, '.gitconfig')],
-        true,
-        interaction,
-      ),
-    ).rejects.toThrow('Sensitive');
-    const file = join(home, '.example');
-    await writeFile(file, 'local content');
-    await adoptFiles(system, source, result.host, [file], true, {
-      ...interaction,
-      resolveFile: async () => 'import',
-    });
-    expect(
-      await readFile(join(source, 'dotfiles/home/dot_example'), 'utf8'),
-    ).toBe('local content');
-    expect(await readFile(file, 'utf8')).toBe('local content');
+    await applyConfiguration(system, source, host);
+    expect(await readFile(file, 'utf8')).toBe('repository update');
+    await writeFile(file, 'later local edit');
+    await expect(applyConfiguration(system, source, host)).rejects.toThrow(
+      'chezmoi preflight',
+    );
+    expect(await readFile(file, 'utf8')).toBe('later local edit');
+    expect(calls.some((a) => a.includes('merge'))).toBe(true);
+    expect(calls.some((a) => a.includes('add'))).toBe(true);
+    expect(calls.some((a) => a.includes('state'))).toBe(false);
+    expect(calls.some((a) => a.includes('--force'))).toBe(false);
+    const { readdir } = await import('node:fs/promises');
+    const states = join(home, '.cthutool/state/dotfiles');
+    for (const dir of await readdir(states))
+      expect(await readdir(join(states, dir))).not.toContain('receipts.json');
   },
 );
 rendererTest(
@@ -383,54 +414,61 @@ rendererTest(
   },
 );
 rendererTest(
-  'adoption missing paths, deferred conflicts and backup failure leave source and home intact',
+  'native adoption validates all paths and backup/Git policy before source mutation',
   async () => {
-    const { home, source, system, interaction } = await renderer();
+    const { home, source, system, interaction, configFile } = await renderer();
     const { catalog } = await loadSnapshot(source);
+    const host = 'darwin-macbook-pro';
     await saveBinding(system, {
       source,
-      host: 'darwin-macbook-pro',
+      host,
       interactive: false,
       interaction,
       catalog,
     });
+    await expect(adoptFiles(system, source, host, [], true)).rejects.toThrow(
+      'Usage',
+    );
+    const file = join(home, '.example');
+    await writeFile(file, 'local');
+    for (const excluded of [
+      '.gitconfig',
+      '.ssh/config',
+      '.ssh/id_ed25519',
+      '.cthutool/credentials/notion.json',
+    ])
+      await expect(
+        adoptFiles(system, source, host, [file, join(home, excluded)], true),
+      ).rejects.toThrow('Sensitive');
     await expect(
-      adoptFiles(system, source, 'darwin-macbook-pro', [], true, interaction),
-    ).rejects.toThrow('Usage');
-    const zsh = join(home, '.zshrc');
-    await writeFile(zsh, 'local');
-    const sourceFile = join(source, 'dotfiles/home/dot_zshrc.tmpl');
-    const original = await readFile(sourceFile, 'utf8');
-    await adoptFiles(system, source, 'darwin-macbook-pro', [zsh], true, {
-      ...interaction,
-      resolveFile: async () => 'defer',
-    });
+      readFile(join(source, 'dotfiles/home/dot_example')),
+    ).rejects.toThrow();
     await expect(
-      applyConfiguration(system, source, 'darwin-macbook-pro'),
-    ).rejects.toThrow('config add');
-    expect(await readFile(zsh, 'utf8')).toBe('local');
-    expect(await readFile(sourceFile, 'utf8')).toBe(original);
-    const { rename } = await import('node:fs/promises');
+      adoptFiles(system, source, host, [file, join(home, '.missing')], true),
+    ).rejects.toThrow('does not exist');
     const state = join(home, '.cthutool/state');
+    const { rename } = await import('node:fs/promises');
     await rename(state, `${state}-preserved`);
     await writeFile(state, 'not a directory');
-    try {
-      await expect(
-        adoptFiles(
-          system,
-          source,
-          'darwin-macbook-pro',
-          [zsh],
-          true,
-          interaction,
-        ),
-      ).rejects.toThrow();
-      expect(await readFile(zsh, 'utf8')).toBe('local');
-      expect(await readFile(sourceFile, 'utf8')).toBe(original);
-    } finally {
-      await rm(state);
-      await rename(`${state}-preserved`, state);
-    }
+    await expect(
+      adoptFiles(system, source, host, [file], true),
+    ).rejects.toThrow();
+    expect(await readFile(file, 'utf8')).toBe('local');
+    await expect(
+      readFile(join(source, 'dotfiles/home/dot_example')),
+    ).rejects.toThrow();
+    await rm(state);
+    await rename(`${state}-preserved`, state);
+    await writeFile(
+      configFile,
+      `${await readFile(configFile, 'utf8')}\n[git]\nautoCommit = true\n`,
+    );
+    await expect(
+      adoptFiles(system, source, host, [file], true),
+    ).rejects.toThrow('git.autoCommit');
+    await expect(
+      readFile(join(source, 'dotfiles/home/dot_example')),
+    ).rejects.toThrow();
   },
 );
 
@@ -581,18 +619,11 @@ rendererTest(
       process.platform === 'darwin'
         ? 'darwin-macbook-pro'
         : 'linux-ubuntu-server';
-    await expect(
-      exec(
-        'bash',
-        [
-          join(root, 'scripts/bootstrap.sh'),
-          '--no-interactive',
-          '--host',
-          host,
-        ],
-        { env: childEnv, timeout: 120000 },
-      ),
-    ).rejects.toThrow('config add');
+    await exec(
+      'bash',
+      [join(root, 'scripts/bootstrap.sh'), '--no-interactive', '--host', host],
+      { env: childEnv, timeout: 120000 },
+    );
     const launcher = join(home, '.cthutool/bin/chc');
     const run = (args: string[]) =>
       exec(launcher, args, { env: childEnv, cwd: home, timeout: 120000 });
@@ -650,5 +681,172 @@ rendererTest(
     ]);
     expect(output.code).toBe(0);
     expect(output.stdout.trimEnd()).toBe(local.trimEnd());
+  },
+);
+
+// Exercise the real process adapter: native editors/prompts require all three TTY streams.
+async function terminalCli(args: string[], home: string, response = 'skip\r') {
+  const python = `import os,pty,sys,signal
+pid,fd=pty.fork()
+if pid==0: os.execvp(sys.argv[1],sys.argv[1:])
+signal.signal(signal.SIGTERM, lambda *_: os.kill(pid,signal.SIGHUP))
+pending=b''
+while True:
+ try: data=os.read(fd,4096)
+ except OSError: break
+ if not data: break
+ sys.stdout.buffer.write(data);sys.stdout.buffer.flush()
+ pending+=data
+ if b'?2004h' in pending and b'overwrite/all-overwrite/skip/quit' in pending:
+  os.write(fd,os.environ['FIXTURE_RESPONSE'].encode());pending=b''
+_,status=os.waitpid(pid,0)
+sys.exit(os.waitstatus_to_exitcode(status))
+`;
+  return exec(
+    'python3',
+    ['-c', python, node, entry, 'dotfiles', 'config', ...args],
+    {
+      env: {
+        ...env(home),
+        PATH: `${resolve(binary as string, '..')}:${process.env.PATH}`,
+        FIXTURE_RESPONSE: response,
+        NO_COLOR: '1',
+      },
+      timeout: 30000,
+    },
+  );
+}
+rendererTest(
+  'configured native merge receives a real terminal and JSON never opens an editor',
+  async () => {
+    const { home, source, system, configFile, interaction } = await renderer();
+    const { catalog } = await loadSnapshot(source);
+    await saveBinding(system, {
+      source,
+      host: 'darwin-macbook-pro',
+      interactive: false,
+      interaction,
+      catalog,
+    });
+    const target = join(home, '.zshrc');
+    await writeFile(target, '# local');
+    const record = join(home, 'merge-record.json');
+    const merger = join(home, 'native merge.mjs');
+    await writeFile(
+      merger,
+      `import fs from 'node:fs';fs.writeFileSync(${JSON.stringify(record)},JSON.stringify({tty:[process.stdin.isTTY,process.stdout.isTTY,process.stderr.isTTY],args:process.argv.slice(2)}));fs.appendFileSync(process.argv[3],'\\n# native merge kept this\\n');`,
+    );
+    await writeFile(
+      configFile,
+      `${await readFile(configFile, 'utf8')}\n[merge]\ncommand = ${JSON.stringify(node)}\nargs = [${JSON.stringify(merger)}, "{{ .Destination }}", "{{ .Source }}", "{{ .Target }}"]\n`,
+    );
+    const denied = await cli(
+      ['dotfiles', 'config', 'add', target, '--json'],
+      home,
+    );
+    expect(denied.code).not.toBe(0);
+    expect(denied.stdout.trim().split('\n')).toHaveLength(1);
+    await expect(readFile(record)).rejects.toThrow();
+    await terminalCli(['add', target], home);
+    const captured = JSON.parse(await readFile(record, 'utf8'));
+    expect(captured.tty).toEqual([true, true, true]);
+    expect(captured.args[0]).toBe(target);
+    expect(captured.args[1]).toBe(join(source, 'dotfiles/home/dot_zshrc.tmpl'));
+    expect(await readFile(target, 'utf8')).toBe('# local');
+    expect(await readFile(captured.args[1], 'utf8')).toContain(
+      'native merge kept this',
+    );
+  },
+);
+rendererTest(
+  'interactive native apply supports skip then explicit overwrite without approval receipts',
+  async () => {
+    const { home, source, system, interaction } = await renderer();
+    const { catalog } = await loadSnapshot(source);
+    await saveBinding(system, {
+      source,
+      host: 'darwin-macbook-pro',
+      interactive: false,
+      interaction,
+      catalog,
+    });
+    const target = join(home, '.zshrc');
+    await writeFile(target, '# preserve local');
+    const skipped = await terminalCli(['apply'], home);
+    expect(skipped.stdout).toContain('already exists');
+    expect(await readFile(target, 'utf8')).toBe('# preserve local');
+    await terminalCli(['apply'], home, 'all-overwrite\r');
+    expect(await readFile(target, 'utf8')).not.toBe('# preserve local');
+    expect(await readFile(target, 'utf8')).toContain('mise activate');
+    await writeFile(target, '# another local edit');
+    const checked = await exec(
+      node,
+      [entry, 'dotfiles', 'config', 'apply', '--json'],
+      {
+        env: {
+          ...env(home),
+          PATH: `${resolve(binary as string, '..')}:${process.env.PATH}`,
+        },
+      },
+    ).catch((e) => e);
+    expect(checked.code).not.toBe(0);
+    expect(checked.stdout.trim().split('\n')).toHaveLength(1);
+    expect(await readFile(target, 'utf8')).toBe('# another local edit');
+  },
+);
+
+rendererTest(
+  'init prints environment checks, returns structured JSON and honors quiet output',
+  async () => {
+    const { home, source } = await renderer();
+    const bin = join(home, 'fixture-bin');
+    await mkdir(bin);
+    const mise = join(bin, 'mise');
+    await writeFile(mise, '#!/bin/sh\necho "mise fixture-version"\n');
+    const { chmod } = await import('node:fs/promises');
+    await chmod(mise, 0o755);
+    const executionEnv = {
+      ...env(home),
+      PATH: `${bin}:${resolve(binary as string, '..')}:${process.env.PATH}`,
+    };
+    const host =
+      process.platform === 'darwin'
+        ? 'darwin-macbook-pro'
+        : 'linux-ubuntu-server';
+    const base = [
+      entry,
+      'dotfiles',
+      'init',
+      '--source',
+      source,
+      '--host',
+      host,
+      '--no-interactive',
+    ];
+    const human = await exec(node, base, { env: executionEnv });
+    expect(human.stdout).toContain('[init] Checking environment:');
+    expect(human.stdout).toContain('[init] Checking chezmoi...');
+    expect(human.stdout).toContain('[init] Checking mise...');
+    expect(human.stdout).toContain('mise fixture-version');
+    expect(human.stdout).toContain('reusing existing installation');
+    expect(human.stdout).toContain(
+      'Environment checks complete. Preparing host binding...',
+    );
+    const json = await exec(node, [...base, '--json'], { env: executionEnv });
+    expect(json.stdout.trim().split('\n')).toHaveLength(1);
+    const report = JSON.parse(json.stdout);
+    expect(report.ok).toBe(true);
+    expect(report.result.environment.node).toMatch(/^v24\./);
+    expect(report.result.environment.tools).toContainEqual({
+      tool: 'mise',
+      path: mise,
+      status: 'reused',
+      version: 'mise fixture-version',
+    });
+    expect(json.stdout).not.toContain('[init]');
+    expect(json.stderr).toBe('');
+    const quiet = await exec(node, [...base, '--quiet'], { env: executionEnv });
+    expect(quiet.stdout).toBe('');
+    expect(quiet.stderr).toBe('');
   },
 );
