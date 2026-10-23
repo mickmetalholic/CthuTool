@@ -11,6 +11,13 @@ const exactCliDistInputs = new Set([
   'package.json',
   'pnpm-lock.yaml',
   'tsconfig.json',
+  '.chezmoiroot',
+  '.chezmoiversion',
+  'scripts/bootstrap.sh',
+  'scripts/bootstrap.ps1',
+  'scripts/bootstrap-node-runtime.tsv',
+  'scripts/check-dotfiles-assets.mjs',
+  'scripts/smoke-cli-dotfiles.mjs',
 ]);
 
 export function normalizeGitPath(path) {
@@ -21,6 +28,7 @@ export function isCliDistInputPath(path) {
   const normalized = normalizeGitPath(path);
   return (
     normalized.startsWith('apps/cli/src/') ||
+    normalized.startsWith('dotfiles/') ||
     exactCliDistInputs.has(normalized)
   );
 }

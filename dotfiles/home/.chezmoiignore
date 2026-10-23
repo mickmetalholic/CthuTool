@@ -1,0 +1,47 @@
+{{- $local := dict -}}
+{{- if and (hasKey . "local") (kindIs "map" (get . "local")) -}}
+{{-   $local = get . "local" -}}
+{{- end -}}
+{{- $key := get $local "host" -}}
+{{- $id := "" -}}
+{{- range $name, $h := .hosts -}}
+{{-   if eq (lower $name) (lower $key) }}{{ $id = $name }}{{ end -}}
+{{- if kindIs "slice" (get $h "aliases") -}}
+{{-   range $a := get $h "aliases" -}}
+{{-     if eq (lower $a) (lower $key) }}{{ $id = $name }}{{ end -}}
+{{-   end -}}
+{{- end -}}
+{{- end -}}
+{{- $shell := "" -}}
+{{- $terminal := "" -}}
+{{- $toolsets := list -}}
+{{- if $id -}}
+{{-   $h := index .hosts $id -}}
+{{-   $hostOS := get $h "os" -}}
+{{-   if ne $hostOS .chezmoi.os -}}
+{{-     fail (printf "host %s is declared for %s but this machine is %s" $id $hostOS .chezmoi.os) -}}
+{{-   end -}}
+{{-   $shell = get $h "shell" | default (get (index .platforms (get $h "os")) "shell") | default "" -}}
+{{-   $terminal = get $h "terminal" | default (get (index .platforms (get $h "os")) "terminal") | default "" -}}
+{{-   if kindIs "slice" (get $h "toolsets") -}}
+{{-     $toolsets = get $h "toolsets" -}}
+{{-   end -}}
+{{- end -}}
+{{- $shellKnown := and $id (ne $shell "") -}}
+{{- $terminalKnown := and $id (ne $terminal "") -}}
+{{- $multiplexerSelected := and $id (has "terminal-multiplexers" $toolsets) -}}
+{{- if or (not $shellKnown) (ne $shell "zsh") }}.zshrc{{ "\n" }}{{ end -}}
+{{- if or (not $shellKnown) (ne $shell "bash") }}.bashrc{{ "\n" }}{{ end -}}
+{{- if or (not $shellKnown) (and (ne $shell "zsh") (ne $shell "bash")) }}.profile{{ "\n" }}{{ end -}}
+{{- if or (not $shellKnown) (ne $shell "pwsh") }}Documents/PowerShell/Microsoft.PowerShell_profile.ps1{{ "\n" }}{{ end -}}
+{{- if or (not $terminalKnown) (ne $terminal "ghostty") }}.config/ghostty/config{{ "\n" }}{{ end -}}
+{{- if or (not $terminalKnown) (ne $terminal "wezterm") }}.config/wezterm/wezterm.lua{{ "\n" }}{{ end -}}
+{{- if or (not $multiplexerSelected) }}.config/zellij/config.kdl{{ "\n" }}{{ end -}}
+.ssh/id_*
+.ssh/*.pem
+.ssh/*.key
+**/.env
+**/.env.*
+**/node_modules/**
+**/*history*
+**/cookies*

@@ -1,0 +1,45 @@
+exit-code=0
+
+
+Setup Plan
+  [ok] data: C:\Users\fixture-user\.codex\worktrees\fb0c\dotfiles\data\packages.yaml
+  [ok] host: linux-ubuntu-server
+  [ok] identity source: environment DOTFILES_HOST
+  [skipped] apt-get: not available
+  [skipped] brew: not available for supplemental CLI packages
+        fix: install Homebrew on Linux for supplemental CLI packages, or install these tools from official sources
+  [skipped] git: apt package skipped package=git command=git
+  [skipped] curl: apt package skipped package=curl command=curl
+  [skipped] unzip: apt package skipped package=unzip command=unzip
+  [skipped] gh: brew package skipped package=gh command=gh
+  [skipped] jq: apt package skipped package=jq command=jq
+  [skipped] ripgrep: apt package skipped package=ripgrep command=rg
+  [skipped] fd: apt package skipped package=fd-find command=fd aliases=fdfind
+  [skipped] fzf: apt package skipped package=fzf command=fzf
+  [skipped] tree: apt package skipped package=tree command=tree
+  [skipped] yq: brew package skipped package=yq command=yq
+  [skipped] bottom: brew package skipped package=bottom command=btm
+  [skipped] btop: brew package skipped package=btop command=btop
+  [skipped] fastfetch: brew package skipped package=fastfetch command=fastfetch
+  [skipped] duf: brew package skipped package=duf command=duf
+  [skipped] dust: brew package skipped package=dust command=dust
+  [skipped] mkcert: brew package skipped package=mkcert command=mkcert
+  [skipped] openssh-client: apt package skipped package=openssh-client command=ssh
+  [skipped] rsync: apt package skipped package=rsync command=rsync
+  [skipped] lsof: apt package skipped package=lsof command=lsof
+  [skipped] iproute2: apt package skipped package=iproute2 command=ip
+  [skipped] dnsutils: apt package skipped package=dnsutils command=dig
+  [skipped] unattended-upgrades: apt package skipped package=unattended-upgrades command=unattended-upgrade
+  [planned] k3s readiness: systemd units=k3s.service; typed readiness checks
+  [planned] k3s: would install k3s version=v1.36.3+k3s1
+  [planned] k3s group: would ensure group k3s-admin
+  [planned] k3s config: would write /etc/rancher/k3s/config.yaml before service start
+  [planned] k3s components: fresh install disable=traefik,servicelb,local-storage,metrics-server
+  [planned] k3s kubeconfig: path=/etc/rancher/k3s/k3s.yaml owner=root group=k3s-admin mode=0640
+  [planned] k3s service: would enable and start k3s.service
+        fix: https://get.k3s.io
+  [planned] k9s: would download v0.51.0 arch=amd64 destination=/usr/local/bin/k9s
+        fix: https://github.com/derailed/k9s/releases
+
+Summary
+  [dry-run] setup plan: preview complete; no packages, installers, services, or compatibility links were changed

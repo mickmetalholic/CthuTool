@@ -1,0 +1,13 @@
+{{- /* GitHub SSH identity and host mappings are local. Preserve bootstrap/user configuration. */ -}}
+{{- $existing := joinPath .chezmoi.destDir ".ssh" "config" -}}
+{{- if stat $existing -}}
+{{ include $existing }}
+{{- else -}}
+Host github.com
+  HostName github.com
+  User git
+  AddKeysToAgent yes
+  IdentityFile ~/.ssh/id_ed25519
+
+# Private keys and local host mappings stay on this machine.
+{{ end -}}

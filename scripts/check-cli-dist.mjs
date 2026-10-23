@@ -85,6 +85,8 @@ try {
       );
     }
   }
+  await import('./check-dotfiles-assets.mjs');
+  await import('./smoke-cli-dotfiles.mjs');
   process.stdout.write(`CLI bundle is current: ${expectedRoot}\n`);
 } catch (error) {
   process.stderr.write(

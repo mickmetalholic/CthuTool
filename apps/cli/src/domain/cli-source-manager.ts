@@ -11,6 +11,7 @@ import {
 } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { resolveNodeCommand } from '../infra/node-command';
 import { createWorktreeSourceId, sameSourcePath } from './cli-source-id';
 import {
   committedCliBundlePath,
@@ -1012,7 +1013,8 @@ function runProcess(
   args: readonly string[],
 ): Promise<CliSourceCommandResult> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, [...args], {
+    const invocation = resolveNodeCommand(command, args);
+    const child = spawn(invocation.command, invocation.args, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';

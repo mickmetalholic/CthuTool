@@ -1,0 +1,15 @@
+defaults:
+  editor: nvim
+  sshAgent: system
+  repo: git@github.com:mickmetalholic/CthuTool.git
+
+platforms:
+  windows:
+    shell: pwsh
+    terminal: windows-terminal
+  darwin:
+    shell: zsh
+    terminal: ghostty
+  linux:
+    shell: zsh
+    terminal: wezterm

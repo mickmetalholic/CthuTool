@@ -61,6 +61,7 @@ describe('command discovery registry', () => {
       'agent',
       'codex',
       'completion',
+      'dotfiles',
       'obsidian',
       'scripts',
       'source',

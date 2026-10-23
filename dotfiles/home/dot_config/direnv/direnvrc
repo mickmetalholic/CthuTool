@@ -1,0 +1,3 @@
+use_mise() {
+  eval "$(mise activate bash)"
+}

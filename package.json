@@ -9,7 +9,15 @@
     "apps/cli/bin/chc.mjs",
     "apps/cli/dist",
     "apps/cli/package.json",
-    "apps/cli/README.md"
+    "apps/cli/README.md",
+    "dotfiles/data",
+    "dotfiles/home",
+    "dotfiles/notion/sources.json",
+    "dotfiles/notion/manifest.json",
+    "dotfiles/asset-inventory.json",
+    ".chezmoiroot",
+    ".chezmoiversion",
+    "docs/dotfiles"
   ],
   "scripts": {
     "dev": "turbo run dev",
@@ -24,7 +32,8 @@
     "precommit:cli-dist": "node scripts/precommit-refresh-cli-dist.mjs",
     "prepare": "node scripts/install-git-hooks.mjs",
     "prepack": "pnpm --filter @cthutool/cli build",
-    "commit": "git-cz"
+    "commit": "git-cz",
+    "check:dotfiles": "node scripts/check-dotfiles-assets.mjs"
   },
   "config": {
     "commitizen": {

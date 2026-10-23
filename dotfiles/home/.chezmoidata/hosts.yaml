@@ -1,0 +1,130 @@
+hosts:
+  windows-desktop:
+    aliases:
+      - SARGERAS
+      - win-desktop
+    os: windows
+    purpose: desktop
+    shell: pwsh
+    terminal: windows-terminal
+    toolsets:
+      - core
+      - cli-productivity
+      - documentation
+      - file-management
+      - code-analysis
+      - config-review
+      - download-tools
+      - development
+      - data-tools
+      - operations
+      - ai-development
+      - desktop-terminals
+      - desktop-editors
+      - desktop-api
+      - desktop-data
+      - desktop-platform
+      - desktop-ai
+    tools:
+      - powershell
+
+  darwin-macbook-pro:
+    aliases:
+      - NYARLATHOTEP
+      - macbook-pro
+    os: darwin
+    purpose: personal-laptop
+    shell: zsh
+    terminal: ghostty
+    toolsets:
+      - core
+      - cli-productivity
+      - documentation
+      - file-management
+      - code-analysis
+      - shell-testing
+      - config-review
+      - data-exploration
+      - download-tools
+      - remote-operations
+      - development
+      - data-tools
+      - operations
+      - ai-development
+      - shell-zsh
+      - desktop-terminals
+      - desktop-editors
+      - desktop-api
+      - desktop-data
+      - desktop-platform
+      - desktop-ai
+    tools:
+      - socket-vmnet
+
+  darwin-mac-mini:
+    aliases:
+      - NZOTH
+    os: darwin
+    purpose: personal-desktop
+    shell: zsh
+    terminal: ghostty
+    toolsets:
+      - core
+      - cli-productivity
+      - documentation
+      - file-management
+      - code-analysis
+      - shell-testing
+      - config-review
+      - data-exploration
+      - download-tools
+      - remote-operations
+      - development
+      - data-tools
+      - operations
+      - ai-development
+      - shell-zsh
+      - desktop-terminals
+      - desktop-editors
+      - desktop-api
+      - desktop-data
+      - desktop-platform
+      - desktop-ai
+
+  linux-wsl:
+    aliases:
+      - MARDUM
+    os: linux
+    purpose: development-wsl
+    shell: zsh
+    terminal: none
+    toolsets:
+      - core
+      - cli-productivity
+      - documentation
+      - file-management
+      - code-analysis
+      - shell-testing
+      - config-review
+      - data-exploration
+      - download-tools
+      - remote-operations
+      - development
+      - data-tools
+      - operations
+      - ai-development
+      - shell-zsh
+
+  linux-ubuntu-server:
+    aliases:
+      - CTHULHU
+    os: linux
+    purpose: homelab
+    shell: bash
+    terminal: none
+    toolsets:
+      - core
+      - operations
+    tools:
+      - k3s
+      - k9s

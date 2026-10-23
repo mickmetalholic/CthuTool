@@ -43,6 +43,7 @@ describe("CI affected workflow detector", () => {
     expectChanged("cli-dist", ["scripts/run-bun.sh"]);
     expectChanged("cli-dist", ["pnpm-lock.yaml"]);
     expectChanged("cli-dist", ["tsconfig.json"]);
+    for(const path of ["dotfiles/home/dot_zshrc.tmpl", "dotfiles/data/packages.yaml", ".chezmoiroot", ".chezmoiversion", "scripts/bootstrap.sh", "scripts/bootstrap.ps1", "scripts/bootstrap-node-runtime.tsv", "scripts/check-dotfiles-assets.mjs"]) expectChanged("cli-dist",[path]);
     expectUnchanged("cli-dist", ["apps/backend/src/main.ts"]);
   });
 });

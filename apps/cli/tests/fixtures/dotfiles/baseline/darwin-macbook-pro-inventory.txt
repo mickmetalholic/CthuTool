@@ -1,0 +1,94 @@
+HOST: darwin-macbook-pro
+OS: darwin
+TOOLSETS: [core cli-productivity documentation file-management code-analysis shell-testing config-review data-exploration download-tools remote-operations development data-tools operations ai-development shell-zsh desktop-terminals desktop-editors desktop-api desktop-data desktop-platform desktop-ai]
+TOOLS: [socket-vmnet]
+EXCLUDE: []
+PACKAGE:
+    git install=brew pkg=git check=git severity=blocking src=toolset:core
+    curl install=system pkg=curl check=curl severity=blocking src=toolset:core
+    unzip install=system pkg=unzip check=unzip severity=blocking src=toolset:core
+    gh install=brew pkg=gh check=gh severity=blocking src=toolset:core
+    jq install=brew pkg=jq check=jq severity=blocking src=toolset:core
+    ripgrep install=brew pkg=ripgrep check=rg severity=blocking src=toolset:core
+    fd install=brew pkg=fd check=fd severity=blocking src=toolset:core
+    fzf install=brew pkg=fzf check=fzf severity=blocking src=toolset:core
+    tree install=brew pkg=tree check=tree severity=optional src=toolset:core
+    yq install=brew pkg=yq check=yq severity=optional src=toolset:core
+    eza install=brew pkg=eza check=eza severity=optional src=toolset:cli-productivity
+    zoxide install=brew pkg=zoxide check=zoxide severity=optional src=toolset:cli-productivity
+    starship install=brew pkg=starship check=starship severity=optional src=toolset:cli-productivity
+    direnv install=brew pkg=direnv check=direnv severity=optional src=toolset:cli-productivity
+    httpie-cli install=brew pkg=httpie check=http severity=optional src=toolset:cli-productivity
+    hyperfine install=brew pkg=hyperfine check=hyperfine severity=optional src=toolset:cli-productivity
+    bat install=brew pkg=bat check=bat severity=optional src=toolset:cli-productivity
+    tlrc install=brew pkg=tlrc check=tlrc severity=optional src=toolset:cli-productivity
+    git-delta install=brew pkg=git-delta check=delta severity=optional src=toolset:cli-productivity
+    lazygit install=brew pkg=lazygit check=lazygit severity=optional src=toolset:cli-productivity
+    just install=brew pkg=just check=just severity=optional src=toolset:cli-productivity
+    glow install=brew pkg=glow check=glow severity=optional src=toolset:documentation
+    yazi install=brew pkg=yazi check=yazi severity=optional src=toolset:file-management
+    f2 install=brew pkg=f2 check=f2 severity=optional src=toolset:file-management
+    ast-grep install=brew pkg=ast-grep check=ast-grep severity=optional src=toolset:code-analysis
+    bats-core install=brew pkg=bats-core check=bats severity=optional src=toolset:shell-testing
+    dyff install=brew pkg=homeport/tap/dyff check=dyff severity=optional src=toolset:config-review
+    visidata install=brew pkg=visidata check=vd severity=optional src=toolset:data-exploration
+    aria2 install=brew pkg=aria2 check=aria2c severity=optional src=toolset:download-tools
+    mosh install=brew pkg=mosh check=mosh severity=optional src=toolset:remote-operations
+    mise install=brew pkg=mise check=mise severity=blocking src=toolset:development
+    neovim install=brew pkg=neovim check=nvim severity=optional src=toolset:development
+    emacs install=brew pkg=emacs check=emacs severity=optional src=toolset:development
+    watchman install=brew pkg=watchman check=watchman severity=optional src=toolset:development
+    shellcheck install=brew pkg=shellcheck check=shellcheck severity=optional src=toolset:development
+    shfmt install=brew pkg=shfmt check=shfmt severity=optional src=toolset:development
+    taplo install=brew pkg=taplo check=taplo severity=optional src=toolset:development
+    stylua install=brew pkg=stylua check=stylua severity=optional src=toolset:development
+    psscriptanalyzer install=fallback pkg=psscriptanalyzer check=Invoke-ScriptAnalyzer severity=optional src=toolset:development
+    duckdb install=brew pkg=duckdb check=duckdb severity=optional src=toolset:data-tools
+    sqlite install=brew pkg=sqlite check=sqlite3 severity=optional src=toolset:data-tools
+    libpq install=brew pkg=libpq check=psql severity=optional src=toolset:data-tools
+    redis install=brew pkg=redis check=redis-cli severity=optional src=toolset:data-tools
+    bottom install=brew pkg=bottom check=btm severity=optional src=toolset:operations
+    btop install=brew pkg=btop check=btop severity=optional src=toolset:operations
+    fastfetch install=brew pkg=fastfetch check=fastfetch severity=optional src=toolset:operations
+    duf install=brew pkg=duf check=duf severity=optional src=toolset:operations
+    dust install=brew pkg=dust check=dust severity=optional src=toolset:operations
+    mkcert install=brew pkg=mkcert check=mkcert severity=optional src=toolset:operations
+    codex-cli install=brew-cask pkg=codex check=codex severity=optional src=toolset:ai-development
+    claude-code install=brew-cask pkg=claude-code check=claude severity=optional src=toolset:ai-development
+    opencode-cli install=brew pkg=anomalyco/tap/opencode check=opencode severity=optional src=toolset:ai-development
+    hermes-cli install=fallback pkg=hermes-cli check=hermes severity=optional src=toolset:ai-development
+    zsh install=brew pkg=zsh check=zsh severity=optional src=toolset:shell-zsh
+    oh-my-zsh install=official pkg=oh-my-zsh check= severity=optional src=toolset:shell-zsh
+    zsh-completions install=brew pkg=zsh-completions check= severity=optional src=toolset:shell-zsh
+    zsh-autosuggestions install=brew pkg=zsh-autosuggestions check= severity=optional src=toolset:shell-zsh
+    zsh-syntax-highlighting install=brew pkg=zsh-syntax-highlighting check= severity=optional src=toolset:shell-zsh
+    ghostty install=brew-cask pkg=ghostty check=ghostty severity=optional src=toolset:desktop-terminals
+    tabby install=brew-cask pkg=tabby check= severity=optional src=toolset:desktop-terminals
+    warp install=brew-cask pkg=warp check= severity=optional src=toolset:desktop-terminals
+    visual-studio-code install=brew-cask pkg=visual-studio-code check=code severity=optional src=toolset:desktop-editors
+    cursor install=brew-cask pkg=cursor check=cursor severity=optional src=toolset:desktop-editors
+    zed install=brew-cask pkg=zed check=zed severity=optional src=toolset:desktop-editors
+    httpie-desktop install=brew-cask pkg=httpie-desktop check=httpie severity=optional src=toolset:desktop-api
+    bruno install=brew-cask pkg=bruno check= severity=optional src=toolset:desktop-api
+    github-desktop install=brew-cask pkg=github check= severity=optional src=toolset:desktop-data
+    tableplus install=brew-cask pkg=tableplus check= severity=optional src=toolset:desktop-data
+    redis-insight install=brew-cask pkg=redis-insight check= severity=optional src=toolset:desktop-data
+    mas install=brew pkg=mas check=mas severity=optional src=toolset:desktop-platform
+    orbstack install=brew-cask pkg=orbstack check=docker severity=optional src=toolset:desktop-platform
+    utm install=brew-cask pkg=utm check= severity=optional src=toolset:desktop-platform
+    codex-app install=brew-cask pkg=codex-app check= severity=optional src=toolset:desktop-ai
+    opencode-app install=brew-cask pkg=opencode-desktop check= severity=optional src=toolset:desktop-ai
+    zcode-app install=fallback pkg=zcode-app check= severity=optional src=toolset:desktop-ai
+    hermes-app install=fallback pkg=hermes-app check= severity=optional src=toolset:desktop-ai
+    socket-vmnet install=brew pkg=socket_vmnet check=socket_vmnet severity=optional src=host
+SKIPPED:
+    openssh-client src=toolset:operations
+    rsync src=toolset:operations
+    lsof src=toolset:operations
+    iproute2 src=toolset:operations
+    dnsutils src=toolset:operations
+    unattended-upgrades src=toolset:operations
+    windows-terminal src=toolset:desktop-terminals
+RUNTIME:
+    deepseek-harness runtime=node check=dsh severity=optional guidance="npm install -g @deepseek-ai/dsh" src=toolset:ai-development
+    openspec-cli runtime=node check=openspec severity=optional guidance="npm install -g @fission-ai/openspec" src=toolset:ai-development
