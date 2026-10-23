@@ -42,7 +42,6 @@ import { runObservedCliCommand } from '../runtime/command-diagnostics';
 import {
   processOutput,
   writeCommandError,
-  writeHumanStatus,
   writeJsonValue,
 } from '../runtime/output';
 import {
@@ -51,6 +50,11 @@ import {
   type CliCommandRegistration,
   registerCommandGroup,
 } from './command-discovery';
+import {
+  createDotfilesRenderer,
+  type DotfilesProgress,
+  type DotfilesResults,
+} from './dotfiles-output';
 
 const sourceArg = {
   source: {
@@ -125,15 +129,15 @@ export function createDotfilesCommand(
     isTty: () => process.stdin.isTTY === true,
     ...overrides,
   };
-  function leaf(
-    name: string,
+  function leaf<K extends keyof DotfilesResults>(
+    name: K,
     description: string,
     extra: ArgsDef,
     action: (
       args: Record<string, unknown>,
       interactive: boolean,
-      report: (message: string) => void,
-    ) => Promise<Record<string, unknown>>,
+      report: (event: DotfilesProgress) => void,
+    ) => Promise<DotfilesResults[K]>,
   ) {
     return defineCommand({
       meta: { name: name.split(' ').at(-1), description },
@@ -143,6 +147,7 @@ export function createDotfilesCommand(
           args,
           { command: 'dotfiles', subcommand: name },
           async (scope) => {
+            const renderer = createDotfilesRenderer(scope.context, name);
             try {
               // Citty accepts unknown flags. Dotfiles intentionally has no mode/token/legacy aliases.
               const allowed = new Set([
@@ -159,13 +164,13 @@ export function createDotfilesCommand(
                   throw new Error(
                     `Unknown dotfiles option: ${arg.split('=')[0]}`,
                   );
+              renderer.start();
               const result = await action(
                 args,
                 scope.context.isTty &&
                   scope.context.interactive &&
                   !scope.context.json,
-                (message) =>
-                  writeHumanStatus(scope.context, processOutput, message),
+                renderer.progress,
               );
               if (scope.context.json)
                 writeJsonValue(processOutput, {
@@ -173,17 +178,9 @@ export function createDotfilesCommand(
                   command: `dotfiles ${name}`,
                   result,
                 });
-              else
-                writeHumanStatus(
-                  scope.context,
-                  processOutput,
-                  typeof result.output === 'string'
-                    ? result.output
-                    : JSON.stringify(result, null, 2),
-                );
+              else renderer.result(name, result);
               process.exitCode =
-                typeof result.blockingFailures === 'number' &&
-                result.blockingFailures > 0
+                'blockingFailures' in result && result.blockingFailures > 0
                   ? 1
                   : 0;
             } catch (error) {
@@ -234,13 +231,19 @@ export function createDotfilesCommand(
       },
     },
     async (args, interactive, report) => {
-      report(
-        `[init] Checking environment: ${deps.system.os}/${deps.system.arch}${deps.system.wsl ? ' (WSL)' : ''}, Node ${process.version}`,
-      );
-      const tools = await ensureDotfilesTools(deps.system, (message) =>
-        report(`[init] ${message}`),
-      );
-      report('[init] Environment checks complete. Preparing host binding...');
+      report({
+        type: 'environment',
+        os: deps.system.os,
+        arch: deps.system.arch,
+        wsl: deps.system.wsl,
+        node: process.version,
+      });
+      const tools = await ensureDotfilesTools(deps.system, report);
+      report({
+        type: 'phase',
+        title: 'Host binding',
+        detail: 'Preparing published host selection…',
+      });
       const { source } = await resolveSource(deps.system, string(args.source));
       const { catalog } = await loadSnapshot(source);
       const result = await saveBinding(deps.system, {
@@ -251,7 +254,7 @@ export function createDotfilesCommand(
         interaction: deps.config,
         catalog,
       });
-      let adoption: unknown;
+      let adoption: DotfilesResults['init']['adoption'];
       if (interactive) {
         const targets = await managedTargets(deps.system, source, result.host);
         const existing = [];
@@ -304,12 +307,20 @@ export function createDotfilesCommand(
         description: 'Report a plan without running installers',
       },
     },
-    async (args, interactive) => {
+    async (args, interactive, report) => {
       const b = await bound(args);
       const plan = resolvePlan(b.catalog, b.host as string);
       if (args['dry-run']) return { source: b.source, dryRun: true, plan };
-      const results = [];
-      for (const e of plan.entries) {
+      const results: Exclude<
+        DotfilesResults['env setup'],
+        { dryRun: true }
+      >['results'] = [];
+      for (const [index, e] of plan.entries.entries()) {
+        report({
+          type: 'phase',
+          title: `Software ${index + 1}/${plan.entries.length} · ${e.id}`,
+          detail: 'Checking availability and installation policy…',
+        });
         try {
           results.push(
             await installEntry(e, {
@@ -399,8 +410,14 @@ export function createDotfilesCommand(
     'config apply',
     'Back up files and apply with native chezmoi conflict prompts',
     hostArg,
-    async (args, interactive) => {
+    async (args, interactive, report) => {
       const b = await bound(args);
+      report({
+        type: 'phase',
+        title: 'Home configuration',
+        detail:
+          'Backing up files and starting native chezmoi conflict handling…',
+      });
       return applyConfiguration(
         deps.system,
         b.source,
@@ -422,8 +439,11 @@ export function createDotfilesCommand(
         interaction: deps.auth,
         manage: true,
       });
-      return 'cleared' in result
-        ? result
+      return result.cleared
+        ? {
+            cleared: true,
+            environmentStillActive: result.environmentStillActive,
+          }
         : { authenticated: true, credentialSource: result.credentialSource };
     },
   );
@@ -461,7 +481,7 @@ export function createDotfilesCommand(
             }
           : {}),
       },
-      async (args, interactive) => {
+      async (args, interactive, report) => {
         const { source } = await resolveSource(
           deps.system,
           string(args.source),
@@ -473,6 +493,11 @@ export function createDotfilesCommand(
             ...old.files,
             [MANIFEST]: old.manifestText,
           };
+          report({
+            type: 'phase',
+            title: 'Notion access',
+            detail: 'Verifying credentials and data source access…',
+          });
           const auth = await ensureAuth({
             system: deps.system,
             source: async () => source,
@@ -481,6 +506,11 @@ export function createDotfilesCommand(
           });
           if (!('client' in auth) || !auth.client)
             throw new Error('Authentication did not produce an API client');
+          report({
+            type: 'phase',
+            title: 'Notion data',
+            detail: 'Reading software, toolsets and hosts…',
+          });
           const data = await readNotion(auth.client);
           const normalized = normalizeNotion(data, old.catalog, old.manifest);
           const candidate = candidateSnapshot(
