@@ -23,6 +23,7 @@ export type DotfilesSystem = {
       env?: NodeJS.ProcessEnv;
       input?: string;
       live?: boolean;
+      terminal?: boolean;
     },
   ) => Promise<CommandResult>;
   which: (command: string) => Promise<string | undefined>;
@@ -72,10 +73,14 @@ export function createDotfilesSystem(home = homedir()): DotfilesSystem {
           cwd: options.cwd,
           env: environment,
           windowsHide: true,
-          stdio: [options.live ? 'inherit' : 'pipe', 'pipe', 'pipe'],
+          stdio: options.terminal
+            ? 'inherit'
+            : [options.live ? 'inherit' : 'pipe', 'pipe', 'pipe'],
         });
-        const timer = setTimeout(() => p.kill('SIGTERM'), 300000);
-        timer.unref();
+        const timer = options.terminal
+          ? undefined
+          : setTimeout(() => p.kill('SIGTERM'), 300000);
+        timer?.unref();
         let stdout = '';
         let stderr = '';
         p.stdout?.on('data', (c) => {

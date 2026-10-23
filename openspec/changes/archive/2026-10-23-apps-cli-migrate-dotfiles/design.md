@@ -54,7 +54,7 @@ dotfiles/
   notion/sources.json             # API 版本、三个 data_source_id、字段映射版本
   notion/manifest.json            # schema 版本、page ID 连续性、内容摘要
 .chezmoiroot                      # dotfiles/home
-.chezmoiversion                   # 保留基准的最低版本要求
+.chezmoiversion                   # 2.73.3：原生 less-interactive/error-on-conflict 契约
 ```
 
 以 CthuTool checkout 根作为 chezmoi source，`.chezmoiroot` 选择其子树，不另维护一份镜像模板树。数据在 `data/` 与 `.chezmoidata/` 的职责沿用基准；必要的 template include 路径按新根重定位并做真实 render 验证。
@@ -80,7 +80,7 @@ init 包含准备工具、选择源、绑定主机和接入已有文件的一个
 
 基准 host：`windows-desktop`、`darwin-macbook-pro`、`darwin-mac-mini`、`linux-wsl`、`linux-ubuntu-server`。旧 `DOTFILES_HOST`、hostname、别名仅用于提示迁移候选；常规安装以持久绑定或显式 `--host` 为准，环境变量不能悄悄覆盖持久绑定。只有 init 保存 Host ID；setup、doctor、diff、apply 的 `--host` 只选择本次执行方案，不持久化。未知/未绑定状态不回落到通用安装清单。
 
-init 负责确保 chezmoi/mise 可用和配置源接入；已有有效绑定时默认保留，交互可调整主机，或用 `init --host <id>` 显式切换。`init --source <checkout> --host <id>` 支持明确接入；非交互初次接入必须指定 host，文件冲突未有明确决策时直接报错。init 不执行软件 setup、chezmoi apply 或 mise install。现有别的 sourceDir 默认报冲突；通过 `init --migrate-from <path>` 显式迁移，核对旧路径，先保存可恢复配置备份，再验证/写入新 sourceDir 和 canonical host。旧源、旧仓库、本机 home 文件均保留。
+init 在准备前输出 OS/架构/WSL 和当前 Node 版本，并逐项报告 chezmoi/mise 的检查、发现路径/可读版本、复用或所选安装方式。版本探测仅作展示，不自动升级已有工具；兼容性继续由源的 .chezmoiversion 原生约束。JSON 结果包含 environment/tools 且不混入进度，quiet 抑制进度。init 负责确保 chezmoi/mise 可用和配置源接入；已有有效绑定时默认保留，交互可调整主机，或用 `init --host <id>` 显式切换。`init --source <checkout> --host <id>` 支持明确接入；非交互初次接入必须指定 host；已有 home 文件留到显式 config add/apply 处理，不把尚未应用文件视为绑定失败。init 不执行软件 setup、chezmoi apply 或 mise install。现有别的 sourceDir 默认报冲突；通过 `init --migrate-from <path>` 显式迁移，核对旧路径，先保存可恢复配置备份，再验证/写入新 sourceDir 和 canonical host。旧源、旧仓库、本机 home 文件均保留。
 
 重复 init 可调整绑定，已有前置条件不重新安装。日常文件接入独立使用 `chc dotfiles config add <path...>`，不再把导入选项塞进 init 参数。init 可在首次交互中衔接同一文件接入服务；config add 只使用已保存绑定，不重新选择主机。导入仅涉及文件内容，不允许用本机数据覆盖 Notion 发布的 host/toolset/software。具体冲突、备份和 config apply 规则见第 8 节。
 
@@ -188,17 +188,18 @@ GitHub SSH 复用用户明确选择/已有可用 key，处理 agent 与带 passp
 
 config apply 负责 source → home；config add 负责本机已有文件 → 可审查 source 改动。仓库刚初始化时不会自动吸收本机配置；没有对应受管目标也不表示要删除本机文件。chezmoi 的 [apply](https://www.chezmoi.io/reference/commands/apply/) 按目标状态更新文件，[add](https://www.chezmoi.io/reference/commands/add/) 把本机内容纳入源，[merge](https://www.chezmoi.io/reference/commands/merge/) 提供合并能力。chc 在 config 组呈现这两个方向；init 的首次引导可委托同一文件接入流程。
 
-config add 的文件接入流程（init 首次接入可委托同一服务）：
+配置文件管理采用 chezmoi 薄封装：
 
-1. 日常 config add 必须显式提供一个或多个 home 路径，使用已保存绑定；init 首次引导可先列出当前主机的受管目标让用户选择。不提供路径时给出用法，不递归导入整个 home。展示新建、相同、已有差异和不在管理范围的状态。
-2. 对将纳入接入决策的现有文件保存私有备份，保留原权限/链接信息；备份不可写则停止相关操作。凭据目录、私钥和 Git 身份不纳入导入。
-3. 对差异文件逐项选择“导入/合并本机内容到仓库”“下一次 config apply 使用仓库版本”“暂缓”。默认暂缓且保留本机，接入操作不自动覆盖 home。
-4. 简单未托管文件可按 chezmoi 路径映射生成候选源文件；已有 `.tmpl` 必须用临时副本审查/合并，保留跨平台变量和公共结构，不盲目用 add/force 把模板替换为本机展开文本。编辑器只写候选副本或受审查源文件，不把真实 home 当可写合并输出。
-5. 用户确认导入/合并结果后，只写选定 `dotfiles/home/` 下的可审查改动，再按当前 host 验证渲染。机器私密值留在本机；导入不写软件/主机快照、不自动提交/推送、不回写 Notion。未选中的本机内容保留。
+1. `config add <path...>` 仅接收显式常规 home 文件，先验证整个输入集合并私有备份；排除凭据、Git 身份和整个 SSH 配置目录。普通文件直接 `chezmoi add --recursive=false --secrets=error`，路径属性由 chezmoi 处理，不自行生成 `dot_` 路径。禁止 force 替换模板。
+2. 已有 `.tmpl` 直接调用 `chezmoi merge`，保留用户 `merge.command/args` 并继承真实终端。使用者在原生工具中把保留内容合入源模板；不再自建候选编辑器、三选一决策、收据或 source/target 审查摘要。非交互/JSON 选中模板时，整个输入批次在改源前失败。明确导入的普通文件可非交互处理。
+3. chezmoi 的 Git autoAdd/autoCommit/autoPush 开启时拒绝导入，先由用户关闭，确保源改动留待 Git 审查。config add 不执行 apply；外部 merge 工具的编辑行为遵从用户配置。
+4. `config apply` 仅保留私有内容/权限/链接备份和链接路径保护。交互模式用 `--less-interactive --force=false` 交给原生逐文件 diff/overwrite/skip/quit；取消或后续失败时，之前明确确认的文件可能已写入，不再承诺交互式整批原子性。非交互/JSON 先跑原生 `apply --dry-run --error-on-conflict --less-interactive --no-tty`，存在需确认的覆盖时整批停止；真正 apply 继续启用冲突检查，禁止强制覆盖。
+5. 受管目标查询使用原生 managed，不重复 dump/render 整组内容并逐文件重算；状态与冲突完全由 chezmoi 维护。运行时有 chezmoi 时用 dump-config/execute-template 读取其有效配置和配置路径；未安装时只为离线快照/计划提供只读解析，不保存影子绑定。
+6. SSH 配置使用 `private_dot_ssh/create_config` 的原生 create-only 属性：已有 bootstrap key 选择和主机映射保留；缺失时才创建默认配置，不再用模板反读本地文件。
 
-备份、未处理路径及本次审查的 source/target 摘要位于用户私有 `~/.cthutool/state/dotfiles/<source-id>/`。这里只是迁移收据与备份，不保存第二份主机方案；Host ID/sourceDir 仍以 chezmoi 配置为唯一绑定。暂缓项记为未完成接入，init 和 env doctor 明确报告。
+私有备份仍位于 `~/.cthutool/state/dotfiles/<source-id>/`，旧 receipts.json 可保留作历史材料，但不再读取或作为 apply 的权威。Host ID/sourceDir 仍以 chezmoi 配置为唯一绑定；init 完成绑定后仅提供未应用文件的下一步，不因选择跳过文件而失败。config apply 无需先 env setup。
 
-config apply 开始前对本次全部目标做 preflight：未处理的已有文件、新增模板碰到未审查文件、或审查后 source/target 已改变时，拒绝整次目标写入并提示用 config add 重新处理相关路径，或在初次接入时继续 init；非交互不能默认覆盖。要覆盖的现有内容先有私有可恢复备份，再委托 chezmoi 执行。正常管理后的本机改动仍通过 chezmoi 的状态/差异检查识别；不实现另一套配置内容数据库。config apply 不做本机到仓库的导入，也不调用 env setup。接入已完成且前置工具可用时，可以单独 config apply，不必每次先安装软件。
+重复封装审查同时核对 env、notion 和 bootstrap：包管理器仍执行真实包安装，mise 保有运行时管理职责；Notion HTTP 的分页/认证/重试及 allowlist 多文件事务是本项目发布契约，chezmoi 不处理该 YAML/manifest 代次，因此保留；固定 Node 24 launcher/完整 npm 运行时保证 chc 与用户 mise 版本独立，保留现有安装器衔接。模型校验和秘密权限策略不作为工具已有合并能力而删除。
 
 旧 `home/dot_gitconfig.tmpl` 包含身份字段，直接删掉字段后 apply 会清空现有 `[user]`。迁移时先备份并将现有 `.gitconfig` 从强制整文件托管移出，身份继续由 Git 自身读取；可选通用 Git 设置写到独立 include 文件，由显式接入动作添加一次 include，不能重写 Git 身份。`env doctor` 显示只读值和来源，缺失时提示 Git 原生命令。
 
@@ -216,7 +217,7 @@ Node 24 独立环境从 committed bundle 运行，安装包移到另一个 cwd �
 
 ### 10. 按三类对象组织命令
 
-以下是本变更的规划接口，尚未实现。`chc dotfiles` 根层只显示 init 和 env/config/notion 三个组；按操作对象选择分组后再选择动作，避免在根层混排安装、模板应用和数据同步。三个组均沿用项目共享的 bare-group help 行为，不因查看帮助触发初始化。
+以下是本变更的命令接口。`chc dotfiles` 根层只显示 init 和 env/config/notion 三个组；按操作对象选择分组后再选择动作，避免在根层混排安装、模板应用和数据同步。三个组均沿用项目共享的 bare-group help 行为，不因查看帮助触发初始化。
 
 ```text
 chc dotfiles
@@ -298,7 +299,7 @@ git -C ~/Documents/GitHub/CthuTool diff
 - [高级 Notion JSON 字段降低表格编辑便利性] → 只用于嵌套 health/release/service；常用字段保留列，提供 schema/示例和字段位置诊断，不接受任意脚本。
 - [Token 是本机明文缓存] → 独立路径、严格权限、秘密值脱敏、可清除；不将其包装成加密存储，也不进入模板与发布物。
 - [多文件写入、Windows 文件锁和断电] → 暂存/备份/journal、操作互斥及 generation 校验；中断时阻止运行，下次 pull 内部恢复，冲突保留备份并报告人工处理路径。
-- [已有机器配置被新模板覆盖或本机值污染跨平台模板] → init 逐文件接入、临时副本合并、私有备份与摘要检查；未处理冲突时 apply 拒绝写入，导入结果进入 Git 审查。
+- [已有机器配置被新模板覆盖或本机值污染跨平台模板] → 原生 add/merge、less-interactive 冲突提示与私有备份；非交互原生 dry-run，导入结果进入 Git 审查。
 - [Node/npm/PATH、sudo、PowerShell profile 的平台差异] → 用户 prefix + 固定 Node launcher、保留 PATH 片段、原用户执行；新终端和 source relink/update 单独验证。
 - [安装 service 的副作用] → fixture/parity 为主，真实 k3s 仅在隔离测试机显式验收；不重置已有集群。
 - [公开仓库带入旧个人信息] → 迁移资产审查清除 Git 身份默认值与主机私密地址；保留必要的非秘密 schema/page 身份，不复制凭据或用户本地状态。

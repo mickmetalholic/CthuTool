@@ -61,40 +61,49 @@ An initialized machine SHALL be able to invoke apply independently of setup. App
 - **THEN** only the selected home configuration is applied
 - **AND** no software installer, mise install, or Notion operation runs
 
-### Requirement: Configuration files have a focused adoption entry point
-`chc dotfiles config add <path...>` SHALL compare explicitly selected home files with the bound source's rendered configuration and provide choices to import or merge local configuration into reviewable source changes, use the repository version on a later config apply, or defer the conflict while leaving the local file untouched. Init SHALL be able to delegate first-time file reconciliation to the same behavior. Config add SHALL require a valid binding, SHALL NOT alter that binding, and SHALL NOT bulk-import the home directory. Existing source templates MUST NOT be replaced with rendered machine-specific content automatically. Credentials, SSH private keys, and Git identity SHALL remain outside adoption. Imports SHALL NOT change Notion-managed software/host data or commit/push changes.
+### Requirement: Configuration files delegate adoption and merging to chezmoi
+`chc dotfiles config add <path...>` SHALL require a valid saved binding and explicit regular home file paths. It SHALL delegate ordinary file import and source attribute mapping to `chezmoi add`, without forcing template replacement. Existing templates SHALL use `chezmoi merge` with the user's configured merge tool in an interactive terminal. Imports SHALL remain reviewable source changes without implicitly invoking apply, installation, Notion synchronization, or Git publication. Credentials, SSH configuration/private keys and Git identity SHALL remain outside adoption. Native Git auto-add/commit/push MUST be disabled before adoption. Init MAY offer the same selected-file entry point; leaving files unapplied SHALL NOT make a successful binding fail.
 
-#### Scenario: Adopting a file after initialization
-- **WHEN** a bound machine invokes config add for its shell configuration
-- **THEN** the file is compared, backed up, and explicitly resolved into reviewable source changes
-- **AND** the machine's binding, installed software, and home file remain unchanged
+#### Scenario: Adopting a regular file
+- **WHEN** a bound machine explicitly selects regular home files for config add
+- **THEN** chc validates paths and saves private backups before delegating import to chezmoi add
+- **AND** chezmoi handles source paths and attributes without a handwritten mapping or chc adoption receipt
 
-#### Scenario: Missing adoption targets
-- **WHEN** config add is invoked without a target path
-- **THEN** it reports the required input without scanning or importing the home directory
+#### Scenario: Reconciling a template
+- **WHEN** an existing template is selected interactively
+- **THEN** chc opens chezmoi merge using the user's configured tool and inherited terminal
+- **AND** the user merges into the source template and reviews the resulting Git diff without an automatic home apply
 
-#### Scenario: An existing machine meets a newly initialized repository
-- **WHEN** init finds an existing shell configuration differing from the source template
-- **THEN** it presents the difference and backs up the selected local file before accepting a resolution
-- **AND** an approved import or merge produces reviewable repository changes without applying home configuration
+#### Scenario: Template merging requested through JSON
+- **WHEN** a template is selected without interactive input or with JSON output
+- **THEN** the command reports that interactive merge is required before any selected source file changes
+- **AND** no editor or prompt starts
 
-#### Scenario: Deferring a local conflict
-- **WHEN** the user defers a differing existing file during init
-- **THEN** the local file remains unchanged and the pending conflict is reported
-- **AND** apply refuses to overwrite that unresolved file
+#### Scenario: Rejecting unsafe adoption inputs
+- **WHEN** a selected path is missing, outside home, a directory, a private credential or an SSH/Git identity file
+- **THEN** the selected batch is rejected before source mutation
 
-### Requirement: Apply protects existing local content
-Before writing selected home targets, apply SHALL preflight unresolved adoption conflicts and local edits, preserve a private recoverable backup of existing content to be overwritten, and refuse unresolved changes without partially applying the selected targets. Approved resolutions MUST be revalidated if the source or local files changed after review. Unattended execution SHALL fail on unresolved conflicts instead of assuming overwrite consent. Existing files absent from the managed target set SHALL remain untouched.
+### Requirement: Apply uses native conflict state with bounded safeguards
+Chezmoi SHALL own applied-file state and conflict decisions. Chc SHALL NOT maintain adoption receipts, source/target approval digests, or a separate conflict decision store. Interactive config apply SHALL back up existing targets and delegate to native apply with less-interactive prompting, including pre-existing targets; it SHALL NOT force overwrite. Users may diff, overwrite, skip or quit using native prompts. Interactive application follows chezmoi's sequential semantics: already confirmed targets may have changed when a later target is skipped, cancelled or fails. Noninteractive/JSON apply SHALL first run native dry-run with error-on-conflict and no TTY, and SHALL fail before home writes on an existing conflict. Both phases SHALL retain conflict checks; an edit after preflight MUST NOT be force-overwritten. Unmanaged home files SHALL remain untouched.
 
-#### Scenario: Local configuration changes after initialization review
-- **WHEN** a reviewed file is edited locally before apply
-- **THEN** config apply reports the changed file and requests renewed reconciliation through config add or first-time init
-- **AND** it writes none of the selected home targets
+#### Scenario: Existing local content on first apply
+- **WHEN** a selected target already exists and differs from the desired state
+- **THEN** interactive apply asks through chezmoi before replacement and can skip that target
+- **AND** noninteractive apply reports failed native preflight without writing selected home targets
 
-#### Scenario: A newly introduced template collides with a local file
-- **WHEN** an updated snapshot introduces a managed target whose existing local content has not been reviewed
-- **THEN** apply reports the adoption conflict without overwriting it
-- **AND** unrelated unmanaged home files remain untouched
+#### Scenario: A local edit after a previous application
+- **WHEN** the user changes a managed file locally
+- **THEN** native chezmoi state detects the local modification on the next apply
+- **AND** no chc receipt or forced overwrite bypasses that conflict
+
+#### Scenario: Repository-only update
+- **WHEN** the source changes and the local target still matches chezmoi's last applied state
+- **THEN** native apply can update it normally without a separate adoption approval
+
+#### Scenario: Preserving local SSH mappings
+- **WHEN** bootstrap or the user already configured SSH
+- **THEN** the native create-only SSH source leaves that configuration intact
+- **AND** it creates the default configuration only when absent, without reading the destination back into a self-referential template
 
 ### Requirement: Service handling preserves baseline boundaries
 Service installation and health behavior SHALL preserve the baseline's fresh-install safeguards, version checks, and kubeconfig access policy. Existing clusters SHALL NOT be reset, replaced, or downgraded implicitly. Dotfiles setup SHALL NOT install Kubernetes workloads or configure GitOps.

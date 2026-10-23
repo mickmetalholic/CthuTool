@@ -1,8 +1,10 @@
+# apps-cli-dotfiles-host-binding Specification
+
 ## Purpose
 
 Bind a physical machine to a canonical host definition already published from Notion, keeping local identity and the configuration source stable without creating a second place to author machine software plans.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Init binds only published host identities
 The host-selection portion of `chc dotfiles init` SHALL select an existing canonical Host ID from the local published snapshot and persist only the local binding and source location. It SHALL NOT author local host plans, override software/toolsets/shell/terminal definitions, create Notion hosts, or synchronize automatically. Explicit host selection SHALL support unattended binding without interactive prompts.
@@ -74,3 +76,21 @@ The system SHALL maintain one authoritative local binding in chezmoi configurati
 - **WHEN** the user explicitly migrates the recognized legacy source and selects a valid host
 - **THEN** the new binding and sourceDir are saved with a recoverable previous configuration
 - **AND** no home apply, package setup, or runtime installation runs automatically
+
+### Requirement: Init makes environment preparation visible
+Init SHALL display its detected OS/architecture/WSL context and running Node version, then report checks of chezmoi and mise. For each tool it SHALL state whether the installation is reused or missing, name the selected installer before installation, and report the available executable path and observed version when obtainable. Version probing SHALL be observational and SHALL NOT introduce automatic upgrades or replace native source compatibility enforcement. Quiet mode SHALL suppress progress. JSON mode SHALL return structured environment/tool results within the existing single-result contract without human progress text.
+
+#### Scenario: Existing tools are reused
+- **WHEN** init finds chezmoi and mise already available
+- **THEN** human output shows their paths, observed versions and reuse decisions before binding
+- **AND** no reinstall or automatic upgrade runs
+
+#### Scenario: A required tool is missing
+- **WHEN** init must install a tool
+- **THEN** it prints the selected platform installer before running it and reports the installed executable on success
+- **AND** a failed installation retains the preceding progress and an actionable error
+
+#### Scenario: JSON or quiet environment reporting
+- **WHEN** init runs with JSON or quiet output
+- **THEN** human check/install progress is suppressed
+- **AND** successful JSON includes structured environment/tool results in one stdout value

@@ -37,9 +37,9 @@
 - [x] 5.5 验证 `chc source use` 切换 CLI worktree 后保留固定 dotfiles source；补充跨源集成测试，源缺失或版本不兼容必须报错而非静默回退。
 - [x] 5.6 将 Git 身份改为只读诊断并迁移旧整文件 Git 模板；用包含 user/include/自定义项的现有 `.gitconfig` 验证身份及无关配置保留，可选通用设置只接入一次 include。
 - [x] 5.7 让 shell/PowerShell 模板保留现有 completion 与 bootstrap PATH 片段；验证 enable → apply → apply 后补全有效、PATH 仍能找到 chc、初始化块不重复。
-- [x] 5.8 实现 `config add <path...>` 对显式 home 路径的有限扫描、差异预览与私有备份/迁移收据，init 首次接入可委托同一服务；测试缺路径、缺绑定、仓库刚初始化但本机文件已存在、未托管文件、凭据/私钥排除及备份失败，不递归纳入整个 home，不改绑定。
-- [x] 5.9 在 config add 与 init 共用接入服务中实现导入/合并、下一次采用仓库版本和暂缓三类决策，对已有模板使用临时副本保留跨平台变量；验证仅产生经确认的 home 源改动、不写真实 home/Notion/生成数据、不自动提交，未处理冲突在非交互模式报错。
-- [x] 5.10 在 config apply 前统一检查未处理接入、首次目标碰撞、source/target 审查摘要和已有本机改动，备份后再应用；测试冲突时全部选定目标零写入、暂缓文件不覆盖、审查后改动提示 config add 重新处理及正常独立应用，不要求先 env setup。
+- [x] 5.8 config add 对显式常规 home 路径做整批验证与私有备份，复用 chezmoi add 管理源路径/属性；排除身份、凭据和 SSH 配置，旧审查收据不再参与运行。
+- [x] 5.9 已有模板复用 chezmoi merge 和用户 merge.command/args，继承真实终端；非交互/JSON 不启动模板编辑器，源改动保留 Git 审查，不自动提交/推送。
+- [x] 5.10 config apply 复用原生状态和 less-interactive 冲突提示，备份后应用；非交互先原生 dry-run/error-on-conflict，真正应用禁止 force，交互明确采用原生逐文件语义，可独立于 env setup。
 
 ## 6. notion auth、Notion HTTP 与私有凭据
 
@@ -92,3 +92,14 @@
 - [x] 11.3 汇总模型、计划、五主机 doctor、绑定、凭据、同步和 bootstrap 的集成测试，执行 CLI 目标 lint/typecheck/tests 及 `pnpm run check:cli-dist`；记录通过结果，不以真实服务安装代替自动测试。
 - [ ] 11.4 在隔离 macOS/Windows/Linux 测试环境验收新安装、已有源迁移及本机已有配置/仓库刚初始化的接入，并覆盖 WSL 及目标架构；交付验收矩阵与未覆盖项，真实 k3s/软件安装只在显式选择的测试机进行，未通过前不切换旧入口。
 - [x] 11.5 执行 `openspec validate apps-cli-migrate-dotfiles --strict` 和 `git diff --check`，核对实际 diff 范围；确认生成的 `.agents/.zcode` OpenSpec skills、受保护业务插件及邻近 changes 均未修改。
+
+## 12. 原生能力复用与重复封装审查
+
+- [x] 12.1 删除自建接入决策/收据/摘要/模板临时副本和路径映射，使用原生 add/merge/apply/managed；读取配置优先原生，SSH 改为 create-only。核对 env/Notion/bootstrap 保留模块的职责与必要性。
+- [x] 12.2 用真实 chezmoi 验证普通文件导入、模板合并工具/终端、交互 skip/overwrite、非交互冲突与审查后改动、源更新、私有备份和 JSON 输出；无真实 home/系统安装副作用。
+- [x] 12.3 更新规格、操作与回滚文档，重新生成 CLI bundle 并通过目标 lint/typecheck/tests、分发校验、OpenSpec strict 和 diff/scope 检查。
+
+## 13. init 环境检查可见性
+
+- [x] 13.1 init 输出 OS/架构/WSL、Node、chezmoi/mise 的检查、安装选择、路径和可读版本，保持已有工具复用且不自动升级；JSON 返回结构化结果，quiet 抑制进度。
+- [x] 13.2 验证安装/失败/复用事件及真实 CLI 的普通、JSON、quiet 输出，更新操作文档并重新验证类型、目标测试、bundle、OpenSpec 与 diff 范围。
