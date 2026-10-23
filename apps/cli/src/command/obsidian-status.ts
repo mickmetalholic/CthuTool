@@ -146,6 +146,10 @@ export function formatObsidianAgentsStatus(
             : 'No link',
       );
       detail(
+        'Codex',
+        `${vault.codexConfigPath} (${vault.paths.codexConfigExists ? 'present' : 'missing or invalid'})`,
+      );
+      detail(
         'Contents',
         `Skills ${vault.paths.skillsExists ? 'OK' : 'MISSING'}  /  State ${vault.paths.stateExists ? 'OK' : 'MISSING'}`,
       );
@@ -183,6 +187,14 @@ function actionForVault(vault: ObsidianAgentsStatus): string {
     vault.claudeLink.status === 'unsupported'
   )
     return 'Relocate the occupied .claude/skills path manually, then rerun setup:';
+  if (
+    vault.issues.some(
+      (issue) =>
+        issue.startsWith('The Codex parent path must be a real directory:') ||
+        issue.startsWith('The Codex config path must be a regular file:'),
+    )
+  )
+    return 'Relocate the occupied Codex config path manually, then rerun setup:';
   if (!vault.paths.sourceInsideVault)
     return 'Choose a visible source inside the vault during setup:';
   if (vault.source.kind !== 'absent' && vault.source.kind !== 'directory') {
