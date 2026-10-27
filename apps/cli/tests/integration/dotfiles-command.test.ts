@@ -30,6 +30,18 @@ const node = execFileSync('node', ['-p', 'process.execPath'], {
 }).trim();
 const root = resolve(import.meta.dir, '../../../..');
 const entry = join(root, 'apps/cli/bin/chc.mjs');
+const machine = createDotfilesSystem();
+// Real chezmoi and CLI subprocesses must agree with the fixture's platform.
+const host =
+  machine.os === 'windows'
+    ? 'windows-desktop'
+    : machine.os === 'darwin'
+      ? 'darwin-macbook-pro'
+      : machine.wsl
+        ? 'linux-wsl'
+        : 'linux-ubuntu-server';
+const otherHost = machine.os === 'darwin' ? 'darwin-mac-mini' : host;
+const shell = machine.os === 'darwin' || machine.wsl ? 'zsh' : 'bash';
 const dirs: string[] = [];
 async function temporary() {
   const p = await mkdtemp(join(tmpdir(), 'chc-config-integration-'));
@@ -76,12 +88,6 @@ test('bare groups/help/completion and offline validate work from another cwd wit
   );
   expect(r.code).toBe(0);
   expect(JSON.parse(r.stdout).result.hosts).toHaveLength(5);
-  const host =
-    process.platform === 'win32'
-      ? 'windows-desktop'
-      : process.platform === 'darwin'
-        ? 'darwin-macbook-pro'
-        : 'linux-ubuntu-server';
   const dry = await cli(
     ['dotfiles', 'env', 'setup', '--host', host, '--dry-run', '--json'],
     home,
@@ -130,8 +136,6 @@ async function renderer() {
     ...base,
     home,
     environment: env(home),
-    os: 'darwin',
-    wsl: false,
     run: async (command, args, options) => {
       if (command !== 'chezmoi')
         throw new Error(`Unexpected side-effect command ${command}`);
@@ -173,7 +177,6 @@ rendererTest(
     const { home, source, system, interaction, calls, configFile } =
       await renderer();
     const { catalog } = await loadSnapshot(source);
-    const host = 'darwin-macbook-pro';
     await saveBinding(system, {
       source,
       host,
@@ -191,13 +194,12 @@ rendererTest(
     expect(
       await readFile(join(source, 'dotfiles/home/dot_example'), 'utf8'),
     ).toBe('local content');
-    const zsh = join(home, '.zshrc');
-    const completion =
-      '# >>> cthutool chc completion >>>\nsource <(chc completion zsh)\n# <<< cthutool chc completion <<<';
+    const profile = join(home, `.${shell}rc`);
+    const completion = `# >>> cthutool chc completion >>>\nsource <(chc completion ${shell})\n# <<< cthutool chc completion <<<`;
     const bootstrap =
       '# >>> cthutool bootstrap PATH >>>\nexport PATH="$HOME/.cthutool/bin:$PATH"\n# <<< cthutool bootstrap PATH <<<';
     await writeFile(
-      zsh,
+      profile,
       `# local customization\n${completion}\n${bootstrap}\n`,
     );
     await expect(applyConfiguration(system, source, host)).rejects.toThrow(
@@ -205,7 +207,7 @@ rendererTest(
     );
     await expect(readFile(join(home, '.editorconfig'))).rejects.toThrow();
     await expect(
-      adoptFiles(system, source, host, [zsh], false),
+      adoptFiles(system, source, host, [profile], false),
     ).rejects.toThrow('interactive terminal');
     const merger = join(home, 'merge fixture.mjs');
     await writeFile(
@@ -217,11 +219,11 @@ rendererTest(
       (await readFile(configFile, 'utf8')) +
         `\n[merge]\ncommand = ${JSON.stringify(node)}\nargs = [${JSON.stringify(merger)}, "{{ .Destination }}", "{{ .Source }}", "{{ .Target }}"]\n`,
     );
-    const before = await readFile(zsh, 'utf8');
-    await adoptFiles(system, source, host, [zsh], true);
-    expect(await readFile(zsh, 'utf8')).toBe(before);
+    const before = await readFile(profile, 'utf8');
+    await adoptFiles(system, source, host, [profile], true);
+    expect(await readFile(profile, 'utf8')).toBe(before);
     const template = await readFile(
-      join(source, 'dotfiles/home/dot_zshrc.tmpl'),
+      join(source, `dotfiles/home/dot_${shell}rc.tmpl`),
       'utf8',
     );
     expect(template).toContain('{{');
@@ -235,16 +237,20 @@ rendererTest(
       '--override-data',
       JSON.stringify({ local: { host } }),
       'cat',
-      zsh,
+      profile,
     ]);
-    await writeFile(zsh, desired.stdout);
+    await writeFile(profile, desired.stdout);
     await applyConfiguration(system, source, host, true);
     await applyConfiguration(system, source, host);
     expect(
-      (await readFile(zsh, 'utf8')).match(/# >>> cthutool chc completion >>>/g),
+      (await readFile(profile, 'utf8')).match(
+        /# >>> cthutool chc completion >>>/g,
+      ),
     ).toHaveLength(1);
     expect(
-      (await readFile(zsh, 'utf8')).match(/# >>> cthutool bootstrap PATH >>>/g),
+      (await readFile(profile, 'utf8')).match(
+        /# >>> cthutool bootstrap PATH >>>/g,
+      ),
     ).toHaveLength(1);
     expect(await readFile(join(home, '.gitconfig'), 'utf8')).toContain(
       'Existing User',
@@ -325,7 +331,7 @@ rendererTest(
     const { catalog } = await loadSnapshot(source);
     await saveBinding(system, {
       source,
-      host: 'darwin-macbook-pro',
+      host,
       interactive: false,
       interaction,
       catalog,
@@ -340,7 +346,7 @@ rendererTest(
     await expect(
       saveBinding(system, {
         source: other,
-        host: 'darwin-macbook-pro',
+        host,
         interactive: false,
         interaction,
         catalog,
@@ -350,7 +356,8 @@ rendererTest(
     await expect(
       saveBinding(system, {
         source: other,
-        host: 'windows-desktop',
+        host:
+          machine.os === 'windows' ? 'darwin-macbook-pro' : 'windows-desktop',
         migrateFrom: source,
         interactive: false,
         interaction,
@@ -360,7 +367,7 @@ rendererTest(
     expect(await readFile(configFile, 'utf8')).toBe(before);
     const moved = await saveBinding(system, {
       source: other,
-      host: 'darwin-mac-mini',
+      host: otherHost,
       migrateFrom: source,
       interactive: false,
       interaction,
@@ -372,7 +379,7 @@ rendererTest(
     expect((await readBinding(system)).source).toBe(other);
     await saveBinding(system, {
       source,
-      host: 'darwin-macbook-pro',
+      host,
       migrateFrom: other,
       interactive: false,
       interaction,
@@ -418,7 +425,6 @@ rendererTest(
   async () => {
     const { home, source, system, interaction, configFile } = await renderer();
     const { catalog } = await loadSnapshot(source);
-    const host = 'darwin-macbook-pro';
     await saveBinding(system, {
       source,
       host,
@@ -490,7 +496,7 @@ rendererTest(
     ).rejects.toThrow('Missing host');
     await saveBinding(system, {
       source,
-      host: 'darwin-macbook-pro',
+      host,
       interactive: false,
       interaction,
       catalog,
@@ -504,7 +510,7 @@ rendererTest(
     await expect(
       saveBinding(system, {
         source,
-        host: 'darwin-mac-mini',
+        host: otherHost,
         interactive: false,
         interaction,
         catalog,
@@ -615,10 +621,6 @@ rendererTest(
       NODE_OPTIONS: `--import=${preload}`,
       NOTION_TOKEN: 'fake-local-bootstrap-token',
     };
-    const host =
-      process.platform === 'darwin'
-        ? 'darwin-macbook-pro'
-        : 'linux-ubuntu-server';
     await exec(
       'bash',
       [join(root, 'scripts/bootstrap.sh'), '--no-interactive', '--host', host],
@@ -675,7 +677,7 @@ rendererTest(
       '--destination',
       home,
       '--override-data',
-      '{"local":{"host":"darwin-macbook-pro"}}',
+      JSON.stringify({ local: { host } }),
       'cat',
       join(home, '.ssh/config'),
     ]);
@@ -723,12 +725,12 @@ rendererTest(
     const { catalog } = await loadSnapshot(source);
     await saveBinding(system, {
       source,
-      host: 'darwin-macbook-pro',
+      host,
       interactive: false,
       interaction,
       catalog,
     });
-    const target = join(home, '.zshrc');
+    const target = join(home, `.${shell}rc`);
     await writeFile(target, '# local');
     const record = join(home, 'merge-record.json');
     const merger = join(home, 'native merge.mjs');
@@ -751,7 +753,9 @@ rendererTest(
     const captured = JSON.parse(await readFile(record, 'utf8'));
     expect(captured.tty).toEqual([true, true, true]);
     expect(captured.args[0]).toBe(target);
-    expect(captured.args[1]).toBe(join(source, 'dotfiles/home/dot_zshrc.tmpl'));
+    expect(captured.args[1]).toBe(
+      join(source, `dotfiles/home/dot_${shell}rc.tmpl`),
+    );
     expect(await readFile(target, 'utf8')).toBe('# local');
     expect(await readFile(captured.args[1], 'utf8')).toContain(
       'native merge kept this',
@@ -765,12 +769,12 @@ rendererTest(
     const { catalog } = await loadSnapshot(source);
     await saveBinding(system, {
       source,
-      host: 'darwin-macbook-pro',
+      host,
       interactive: false,
       interaction,
       catalog,
     });
-    const target = join(home, '.zshrc');
+    const target = join(home, `.${shell}rc`);
     await writeFile(target, '# preserve local');
     const skipped = await terminalCli(['apply'], home);
     expect(skipped.stdout).toContain('already exists');
@@ -809,10 +813,6 @@ rendererTest(
       ...env(home),
       PATH: `${bin}:${resolve(binary as string, '..')}:${process.env.PATH}`,
     };
-    const host =
-      process.platform === 'darwin'
-        ? 'darwin-macbook-pro'
-        : 'linux-ubuntu-server';
     const base = [
       entry,
       'dotfiles',
