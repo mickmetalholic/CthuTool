@@ -58,10 +58,10 @@ async function expectCoaching(input: unknown) {
     'version 1, variant "compact"',
   );
   expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
-    "continue with and fully answer the user's actual request",
+    "Before starting the user's requested task",
   );
   expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
-    '## English polish',
+    '## English feedback',
   );
   expect(result.parsed.hookSpecificOutput.additionalContext).toContain(
     'unavailable or its call fails',
@@ -81,7 +81,7 @@ describe('language coach hook', () => {
     });
   });
 
-  test('keeps progressive UI and Markdown fallback instructions together', async () => {
+  test('presents the styled card first and puts the fallback before the main reply', async () => {
     const result = await runHook({
       user_prompt: 'Please make these corrections easier to notice.',
     });
@@ -94,8 +94,32 @@ describe('language coach hook', () => {
       'grammar, naturalness, tone, idiom, clarity, or other',
     );
     expect(context).toContain('do not let the presentation failure block');
+    expect(context).toContain("before starting the user's actual task");
+    expect(context).not.toContain("after completing the user's actual task");
+    expect(context).toContain('styled card whenever the tool is available');
+    expect(context).toContain(
+      'before other task-related tool calls and the main answer',
+    );
+    expect(context).toContain(
+      "continue with and fully answer the user's actual request",
+    );
+    expect(context).toContain("The host controls the card's visual placement");
+    expect(context).toContain('**Suggested wording:**');
+    expect(context).toContain('No changes needed');
+    expect(context).toContain(
+      'Your message is grammatically correct and sounds natural.',
+    );
+    expect(context).toContain(
+      'Do not add a note solely to confirm that it is correct',
+    );
+    expect(context).toContain(
+      'distinguish corrections from optional style suggestions',
+    );
+    expect(context.indexOf('## English feedback')).toBeLessThan(
+      context.indexOf('<actual reply>'),
+    );
     expect(context.indexOf('cthu_language_feedback_present')).toBeLessThan(
-      context.indexOf('## English polish'),
+      context.indexOf('## English feedback'),
     );
   });
 

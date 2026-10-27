@@ -15,6 +15,14 @@ export const LANGUAGE_FEEDBACK_NOTE_CATEGORIES = Object.freeze([
   'clarity',
   'other',
 ]);
+const CATEGORY_LABELS = Object.freeze({
+  grammar: 'Grammar',
+  naturalness: 'Phrasing',
+  tone: 'Tone',
+  idiom: 'Idioms',
+  clarity: 'Clarity',
+  other: 'Usage',
+});
 
 const MAX_PROSE_LENGTH = 8_000;
 const MAX_NOTES = 12;
@@ -66,9 +74,9 @@ const LANGUAGE_FEEDBACK_SCHEMA = {
 
 export const LANGUAGE_FEEDBACK_TOOL_DEFINITION = Object.freeze({
   name: LANGUAGE_FEEDBACK_TOOL_NAME,
-  title: 'Present English polish',
+  title: 'Show English feedback',
   description:
-    "Present a model-written English correction as a prominent read-only card. Call this before continuing with the user's requested task.",
+    "Present a model-written English correction as a read-only styled card before starting the user's requested task. Call this before other task-related tool calls and the main answer, then continue with the user's request. The host controls the card's visual placement.",
   inputSchema: LANGUAGE_FEEDBACK_SCHEMA,
   outputSchema: LANGUAGE_FEEDBACK_SCHEMA,
   annotations: {
@@ -80,8 +88,8 @@ export const LANGUAGE_FEEDBACK_TOOL_DEFINITION = Object.freeze({
   _meta: {
     ui: { resourceUri: LANGUAGE_FEEDBACK_RESOURCE_URI },
     'openai/outputTemplate': LANGUAGE_FEEDBACK_RESOURCE_URI,
-    'openai/toolInvocation/invoking': 'Preparing English polish…',
-    'openai/toolInvocation/invoked': 'English polish ready',
+    'openai/toolInvocation/invoking': 'Loading English feedback…',
+    'openai/toolInvocation/invoked': 'English feedback ready',
   },
 });
 
@@ -265,22 +273,23 @@ export function normalizeLanguageFeedbackPayload(input) {
   return validation.value;
 }
 
-function titleCaseCategory(category) {
-  return `${category.charAt(0).toUpperCase()}${category.slice(1)}`;
-}
-
 export function createLanguageFeedbackFallbackText(input) {
   const feedback = normalizeLanguageFeedbackPayload(input);
-  const notes =
+  if (
+    feedback.original.trim() === feedback.bestVersion.trim() &&
     feedback.notes.length === 0
-      ? '- No additional notes.'
-      : feedback.notes
-          .map(
-            (note) => `- ${titleCaseCategory(note.category)}: ${note.message}`,
-          )
-          .join('\n');
+  ) {
+    return 'English feedback\n\nYour message is grammatically correct and sounds natural.';
+  }
+  const suggestionLabel =
+    feedback.original.trim() === feedback.bestVersion.trim()
+      ? 'No changes needed'
+      : 'Suggested wording';
+  const notes = feedback.notes
+    .map((note) => `- ${CATEGORY_LABELS[note.category]}: ${note.message}`)
+    .join('\n');
 
-  return `English polish\n\nBest version:\n${feedback.bestVersion}\n\nOriginal:\n${feedback.original}\n\nNotes:\n${notes}`;
+  return `English feedback\n\nYou wrote:\n${feedback.original}\n\n${suggestionLabel}:\n${feedback.bestVersion}${notes ? `\n\nNotes:\n${notes}` : ''}`;
 }
 
 export function summarizeLanguageFeedbackError(error) {
@@ -313,7 +322,7 @@ export function presentLanguageFeedback(input) {
       content: [
         {
           type: 'text',
-          text: `English polish could not be presented: ${details.message}`,
+          text: `Couldn't display English feedback: ${details.message}`,
         },
       ],
       structuredContent: {
@@ -405,7 +414,7 @@ export async function handleJsonRpcMessage(message, options = {}) {
           {
             uri: LANGUAGE_FEEDBACK_RESOURCE_URI,
             name: 'CthuCodex language feedback',
-            title: 'English polish card',
+            title: 'English feedback card',
             description:
               'Self-contained compact UI for read-only English language feedback.',
             mimeType: LANGUAGE_FEEDBACK_RESOURCE_MIME_TYPE,
@@ -438,6 +447,8 @@ export async function handleJsonRpcMessage(message, options = {}) {
               mimeType: LANGUAGE_FEEDBACK_RESOURCE_MIME_TYPE,
               text: html,
               _meta: {
+                // Codex otherwise clamps inline frames to at least 200px.
+                'openai/widgetMinFrameHeight': 0,
                 ui: {
                   prefersBorder: false,
                   csp: {

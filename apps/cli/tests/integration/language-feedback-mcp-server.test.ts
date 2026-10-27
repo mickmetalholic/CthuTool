@@ -121,6 +121,13 @@ describe('CthuCodex language-feedback MCP server', () => {
 
     const tool = result.responses[1].result.tools[0];
     expect(tool.name).toBe('cthu_language_feedback_present');
+    expect(tool.description).toContain(
+      "before starting the user's requested task",
+    );
+    expect(tool.description).not.toContain('after completing');
+    expect(tool.description).toContain(
+      'before other task-related tool calls and the main answer',
+    );
     expect(tool.annotations).toMatchObject({
       readOnlyHint: true,
       destructiveHint: false,
@@ -144,6 +151,7 @@ describe('CthuCodex language-feedback MCP server', () => {
     const resource = result.responses[3].result.contents[0];
     expect(resource.uri).toBe('ui://cthu-language-feedback/v1.html');
     expect(resource.mimeType).toBe('text/html;profile=mcp-app');
+    expect(resource._meta['openai/widgetMinFrameHeight']).toBe(0);
     expect(resource._meta.ui.csp).toEqual({
       connectDomains: [],
       resourceDomains: [],
@@ -170,17 +178,38 @@ describe('CthuCodex language-feedback MCP server', () => {
 
     expect(normalized.isError).toBe(false);
     expect(normalized.structuredContent).toEqual(validFeedback);
-    expect(normalized.content[0].text).toContain('English polish');
+    expect(normalized.content[0].text).toContain('English feedback');
     expect(normalized.content[0].text).toContain(validFeedback.bestVersion);
     expect(normalized.content[0].text).toContain(validFeedback.original);
+    expect(normalized.content[0].text).toContain('You wrote:');
+    expect(normalized.content[0].text).toContain('Suggested wording:');
     expect(normalized.content[0].text).toContain(
-      `Naturalness: ${validFeedback.notes[0].message}`,
+      `Phrasing: ${validFeedback.notes[0].message}`,
     );
     expect(normalized.content[0].text).toContain(
       `Clarity: ${validFeedback.notes[1].message}`,
     );
-    expect(normalized.content[0].text.indexOf('Naturalness')).toBeLessThan(
+    expect(normalized.content[0].text.indexOf('Phrasing')).toBeLessThan(
       normalized.content[0].text.indexOf('Clarity'),
+    );
+
+    const unchanged = presentLanguageFeedback({
+      ...validFeedback,
+      original: validFeedback.bestVersion,
+      notes: [],
+    });
+    expect(unchanged.content[0].text).toBe(
+      'English feedback\n\nYour message is grammatically correct and sounds natural.',
+    );
+
+    const optionalNotes = presentLanguageFeedback({
+      ...validFeedback,
+      original: validFeedback.bestVersion,
+    });
+    expect(optionalNotes.content[0].text).toContain('No changes needed:');
+    expect(optionalNotes.content[0].text).toContain('Notes:');
+    expect(optionalNotes.content[0].text).not.toContain(
+      'Your message is grammatically correct and sounds natural.',
     );
   });
 
@@ -248,7 +277,7 @@ describe('CthuCodex language-feedback MCP server', () => {
       expect(Array.isArray(issues)).toBe(true);
       expect(issues.length > 0).toBe(true);
       expect(result.content[0].text).toContain(
-        'English polish could not be presented',
+        "Couldn't display English feedback",
       );
     }
   });
@@ -318,7 +347,7 @@ describe('CthuCodex language-feedback MCP server', () => {
       expect(result.code).toBe(0);
       expect(result.error).toBe('');
       expect(result.responses[0].result.contents[0].text).toContain(
-        '<title>English polish</title>',
+        '<title>English feedback</title>',
       );
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
@@ -344,7 +373,13 @@ describeBrowser('CthuCodex language-feedback component', () => {
   });
 
   async function createComponentPage(options?: {
-    feedback?: typeof validFeedback | { notes: readonly [] };
+    feedback?: {
+      version: number;
+      variant?: string;
+      original: string;
+      bestVersion: string;
+      notes: readonly { category: string; message: string }[];
+    };
     theme?: 'light' | 'dark';
     clipboard?: 'success' | 'denied';
     width?: number;
@@ -399,11 +434,11 @@ describeBrowser('CthuCodex language-feedback component', () => {
       },
     );
     await page.setContent(resourceHtml, { waitUntil: 'load' });
-    await page.getByRole('heading', { name: 'English polish' }).waitFor();
+    await page.locator('#app').waitFor({ state: 'visible' });
     return page;
   }
 
-  test('renders the standard bridge result with labelled ordered content', async () => {
+  test('renders bridge feedback immediately and reports its content height', async () => {
     const page = await browser.newPage({
       viewport: { width: 560, height: 900 },
     });
@@ -424,9 +459,16 @@ describeBrowser('CthuCodex language-feedback component', () => {
               jsonrpc?: string;
               id?: string;
               method?: string;
+              params?: { height?: number };
             };
             if (event.source !== frame.contentWindow) return;
             testWindow.bridgeMessages.push(message);
+            if (
+              message.method === 'ui/notifications/size-changed' &&
+              typeof message.params?.height === 'number'
+            ) {
+              frame.style.height = `${message.params.height}px`;
+            }
             if (message.method === 'ui/initialize') {
               frame.contentWindow?.postMessage(
                 {
@@ -460,7 +502,7 @@ describeBrowser('CthuCodex language-feedback component', () => {
 
       const component = page.frameLocator('#component');
       await component
-        .getByRole('heading', { name: 'English polish' })
+        .getByRole('heading', { name: 'English feedback' })
         .waitFor();
       expect(
         await component.getByText(validFeedback.original).isVisible(),
@@ -468,9 +510,17 @@ describeBrowser('CthuCodex language-feedback component', () => {
       expect(
         await component.getByText(validFeedback.bestVersion).isVisible(),
       ).toBe(true);
+      expect(
+        await component.getByRole('heading', { name: 'You wrote' }).isVisible(),
+      ).toBe(true);
+      expect(
+        await component
+          .getByRole('heading', { name: 'Suggested wording' })
+          .isVisible(),
+      ).toBe(true);
       await expect(
         component.locator('.note-category').allTextContents(),
-      ).resolves.toEqual(['Naturalness', 'Clarity']);
+      ).resolves.toEqual(['Phrasing', 'Clarity']);
       const messages = await page.evaluate(() =>
         (
           window as unknown as {
@@ -480,6 +530,131 @@ describeBrowser('CthuCodex language-feedback component', () => {
       );
       expect(messages[0]).toBe('ui/initialize');
       expect(messages).toContain('ui/notifications/initialized');
+
+      await page.waitForFunction(() => {
+        const frame = document.querySelector('#component') as HTMLIFrameElement;
+        const contentHeight =
+          frame.contentDocument?.body.getBoundingClientRect().height;
+        return (
+          contentHeight !== undefined &&
+          Number.parseFloat(frame.style.height) === Math.ceil(contentHeight)
+        );
+      });
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('resizes below the Codex default minimum without MCP Apps initialization', async () => {
+    const page = await browser.newPage({
+      viewport: { width: 620, height: 900 },
+    });
+    const { handleJsonRpcMessage } = await loadServerModule();
+    const resourceResult = await handleJsonRpcMessage({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'resources/read',
+      params: { uri: 'ui://cthu-language-feedback/v1.html' },
+    });
+    const resource = resourceResult.result.contents[0];
+    const noSuggestions = {
+      ...validFeedback,
+      original: validFeedback.bestVersion,
+      notes: [],
+    };
+
+    try {
+      await page.setContent(
+        '<iframe id="component" style="width:560px;height:480px;border:0"></iframe>',
+      );
+      await page.evaluate(
+        ({ html, feedback, minimumHeight }) => {
+          const frame = document.querySelector(
+            '#component',
+          ) as HTMLIFrameElement;
+          const host = window as unknown as {
+            reportedHeights: number[];
+            compatibilityBridge: {
+              toolOutput: unknown;
+              notifyIntrinsicHeight: (height: number) => void;
+            };
+          };
+          host.reportedHeights = [];
+          host.compatibilityBridge = {
+            toolOutput: feedback,
+            notifyIntrinsicHeight: (height) => {
+              host.reportedHeights.push(height);
+              // Codex uses a 200px floor unless resource metadata overrides it.
+              frame.style.height = `${Math.max(height, minimumHeight)}px`;
+            },
+          };
+          // This host exposes window.openai but does not answer ui/initialize.
+          frame.srcdoc = html.replace(
+            '<script>',
+            '<script>window.openai = window.parent.compatibilityBridge;',
+          );
+        },
+        {
+          html: resource.text,
+          feedback: noSuggestions,
+          minimumHeight: resource._meta?.['openai/widgetMinFrameHeight'] ?? 200,
+        },
+      );
+      const component = page.frameLocator('#component');
+      await component.locator('#no-suggestions').waitFor({ state: 'visible' });
+      await page.waitForFunction(
+        () =>
+          (window as unknown as { reportedHeights: number[] }).reportedHeights
+            .length > 0,
+        undefined,
+        { timeout: 1500 },
+      );
+
+      const compactHeight = await page
+        .locator('#component')
+        .evaluate((frame) => frame.clientHeight);
+      expect(compactHeight).toBeGreaterThan(0);
+      expect(compactHeight).toBeLessThan(120);
+
+      await component.locator('body').evaluate((_, feedback) => {
+        window.dispatchEvent(
+          new CustomEvent('openai:set_globals', {
+            detail: { globals: { toolOutput: feedback } },
+          }),
+        );
+      }, validFeedback);
+      await component.locator('#best-text').waitFor({ state: 'visible' });
+      await page.waitForFunction(
+        (height) =>
+          (document.querySelector('#component') as HTMLIFrameElement)
+            .clientHeight > height,
+        compactHeight,
+      );
+
+      await component.locator('body').evaluate((_, feedback) => {
+        window.dispatchEvent(
+          new CustomEvent('openai:set_globals', {
+            detail: { globals: { toolOutput: feedback } },
+          }),
+        );
+      }, noSuggestions);
+      await component.locator('#no-suggestions').waitFor({ state: 'visible' });
+      await page.waitForFunction(
+        (height) =>
+          (document.querySelector('#component') as HTMLIFrameElement)
+            .clientHeight === height,
+        compactHeight,
+      );
+      expect(
+        await page.locator('#component').evaluate((frame) => {
+          const iframe = frame as HTMLIFrameElement;
+          const body = iframe.contentDocument?.body;
+          if (!body) throw new Error('Expected the feedback document to load.');
+          return (
+            iframe.clientHeight - Math.ceil(body.getBoundingClientRect().height)
+          );
+        }),
+      ).toBe(0);
     } finally {
       await page.close();
     }
@@ -498,7 +673,7 @@ describeBrowser('CthuCodex language-feedback component', () => {
         true,
       );
       expect(
-        await page.getByRole('heading', { name: 'Why it works' }).isHidden(),
+        await page.getByRole('heading', { name: 'Notes' }).isHidden(),
       ).toBe(true);
       const sizes = await page.evaluate(() => {
         const original = document.querySelector('.original-text');
@@ -512,6 +687,147 @@ describeBrowser('CthuCodex language-feedback component', () => {
         };
       });
       expect(sizes.best).toBeGreaterThan(sizes.original);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('replaces the loading placeholder when feedback arrives through the bridge', async () => {
+    const page = await browser.newPage({
+      viewport: { width: 560, height: 900 },
+    });
+    try {
+      await page.setContent(resourceHtml, { waitUntil: 'load' });
+      expect(await page.locator('#loading').isVisible()).toBe(true);
+      expect(await page.locator('#app').isHidden()).toBe(true);
+      expect(await page.locator('#loading').textContent()).toContain(
+        'Loading feedback…',
+      );
+
+      await page.evaluate((feedback) => {
+        window.postMessage(
+          {
+            jsonrpc: '2.0',
+            method: 'ui/notifications/tool-result',
+            params: { structuredContent: feedback },
+          },
+          '*',
+        );
+      }, validFeedback);
+      await page.locator('#app').waitFor({ state: 'visible' });
+
+      // Test rendered visibility, not just the hidden attribute: author CSS can override it.
+      expect(await page.locator('#loading').isHidden()).toBe(true);
+      expect(await page.locator('#loading').boundingBox()).toBeNull();
+      expect(await page.getByText(validFeedback.bestVersion).isVisible()).toBe(
+        true,
+      );
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('shows a short confirmation without suggestions and restores detail for edits', async () => {
+    const page = await createComponentPage({
+      feedback: {
+        ...validFeedback,
+        original: validFeedback.bestVersion,
+        notes: [],
+      },
+    });
+
+    try {
+      expect(
+        await page
+          .getByText(
+            'Your message is grammatically correct and sounds natural.',
+          )
+          .isVisible(),
+      ).toBe(true);
+      expect((await page.locator('#app').innerText()).trim()).toBe(
+        'Your message is grammatically correct and sounds natural.',
+      );
+      expect(await page.locator('#original-text').isHidden()).toBe(true);
+      expect(await page.locator('#best-text').isHidden()).toBe(true);
+      expect(await page.locator('#copy-button').isHidden()).toBe(true);
+      expect(await page.locator('#notes-block').isHidden()).toBe(true);
+      const compactHeight =
+        (await page.locator('.coach-card').boundingBox())?.height ?? 0;
+
+      await page.evaluate((feedback) => {
+        window.postMessage(
+          {
+            jsonrpc: '2.0',
+            method: 'ui/notifications/tool-result',
+            params: { structuredContent: feedback },
+          },
+          '*',
+        );
+      }, validFeedback);
+      await page
+        .getByRole('heading', { name: 'Suggested wording', exact: true })
+        .waitFor();
+      expect(
+        await page.getByRole('button', { name: 'Copy suggestion' }).isVisible(),
+      ).toBe(true);
+      expect(await page.locator('#copy-status').textContent()).toBe('');
+      expect(
+        await page.getByRole('heading', { name: 'Notes' }).isVisible(),
+      ).toBe(true);
+      expect(await page.locator('#no-suggestions').isHidden()).toBe(true);
+      expect(
+        (await page.locator('.coach-card').boundingBox())?.height ?? 0,
+      ).toBeGreaterThan(compactHeight);
+      await page.getByRole('button', { name: 'Copy suggestion' }).click();
+      expect(await page.locator('#copy-status').textContent()).toBe(
+        'Copied to clipboard.',
+      );
+
+      await page.evaluate((feedback) => {
+        window.dispatchEvent(
+          new CustomEvent('openai:set_globals', {
+            detail: {
+              globals: {
+                toolOutput: {
+                  ...feedback,
+                  original: feedback.bestVersion,
+                  notes: [],
+                },
+              },
+            },
+          }),
+        );
+      }, validFeedback);
+      await page.locator('#no-suggestions').waitFor({ state: 'visible' });
+      expect(await page.locator('#copy-status').textContent()).toBe('');
+      expect(await page.locator('#copy-button').isHidden()).toBe(true);
+      expect((await page.locator('.coach-card').boundingBox())?.height).toBe(
+        compactHeight,
+      );
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('keeps optional notes visible even when the wording is unchanged', async () => {
+    const page = await createComponentPage({
+      feedback: { ...validFeedback, original: validFeedback.bestVersion },
+    });
+
+    try {
+      expect(await page.locator('#no-suggestions').isHidden()).toBe(true);
+      expect(
+        await page
+          .getByRole('heading', { name: 'No changes needed' })
+          .isVisible(),
+      ).toBe(true);
+      expect(await page.locator('#notes-block').isVisible()).toBe(true);
+      await page
+        .getByRole('button', { name: 'Copy text', exact: true })
+        .click();
+      expect(await page.locator('#copy-status').textContent()).toBe(
+        'Copied to clipboard.',
+      );
     } finally {
       await page.close();
     }
@@ -545,11 +861,11 @@ describeBrowser('CthuCodex language-feedback component', () => {
     const page = await createComponentPage();
 
     try {
-      const button = page.getByRole('button', { name: 'Copy' });
+      const button = page.getByRole('button', { name: 'Copy suggestion' });
       await button.focus();
       await page.keyboard.press('Enter');
       expect(await page.getByRole('status').last().textContent()).toBe(
-        'Best version copied.',
+        'Copied to clipboard.',
       );
       const activity = await page.evaluate(() => {
         const testWindow = window as unknown as {
@@ -569,12 +885,14 @@ describeBrowser('CthuCodex language-feedback component', () => {
   });
 
   test('reports denied clipboard access and selects the best version', async () => {
-    const page = await createComponentPage({ clipboard: 'denied' });
+    const page = await createComponentPage({
+      clipboard: 'denied',
+    });
 
     try {
-      await page.getByRole('button', { name: 'Copy' }).click();
+      await page.getByRole('button', { name: 'Copy suggestion' }).click();
       expect(await page.getByRole('status').last().textContent()).toContain(
-        'selected for manual copying',
+        'Copy the selected text manually',
       );
       expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
         validFeedback.bestVersion,
