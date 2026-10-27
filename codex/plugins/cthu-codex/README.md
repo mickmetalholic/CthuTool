@@ -37,18 +37,32 @@ After installing the updated plugin, start a fresh Codex thread to discover it.
 
 The language coach still uses deterministic local filtering to decide whether
 the latest prompt contains English prose. When coaching is active, the current
-Codex model writes the correction and calls the read-only
-`cthu_language_feedback_present` tool. MCP Apps-compatible hosts can render the
-result as a prominent inline card with the original prose, an emphasized best
-version, categorized notes, and a local copy control.
+Codex model uses the read-only `cthu_language_feedback_present` tool before
+starting the user's actual request, then completes the task and delivers the
+main answer. The styled card is preferred whenever the tool is
+available. MCP Apps-compatible hosts can render the result as an inline card
+with the user's message, emphasized suggested wording, brief categorized notes,
+and a local copy control. The full feedback is visible immediately. When the
+wording is unchanged and there are no notes, the card shows only "Your message
+is grammatically correct and sounds natural." Unchanged wording with optional
+notes keeps the detailed view, labeled "No changes needed".
+
+The component reports its content height through MCP Apps notifications and,
+when available, `window.openai.notifyIntrinsicHeight`. Compatibility height
+reporting works even when the host does not complete MCP Apps initialization.
+The resource also sets the Codex-specific `openai/widgetMinFrameHeight` hint
+to `0`; otherwise Codex can keep a 200px minimum despite smaller measurements.
+This server metadata requires reloading the MCP server after an update; an
+already running server can read new HTML while still returning old metadata.
 
 Version `1` uses the `compact` variant and the resource URI
 `ui://cthu-language-feedback/v1.html`. The versioned payload leaves room for
 future presentation variants without moving correction generation into the
 hook or MCP server. Clients that do not render MCP Apps still receive complete
 standard text content. If the tool is unavailable or fails, the model is
-instructed to put the same feedback in a prominent Markdown section before
-continuing the user's requested task.
+instructed to put the same feedback in an English feedback section at the
+beginning of the final answer, followed by the actual reply. The host controls
+the exact placement of native tool cards.
 
 The presentation server and component are local and read-only. They do not
 call a model, load remote assets, send feedback over the network, persist

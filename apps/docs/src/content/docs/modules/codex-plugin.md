@@ -75,9 +75,22 @@ thread to load the new skill.
 When the local language-coach detector recognizes English prose, it asks the
 active Codex model to generate structured feedback and call
 `cthu_language_feedback_present`. On hosts that render MCP Apps resources, the
-tool displays a prominent inline card: the original prose is muted, the best
-natural rewrite is emphasized, coaching notes keep stable categories, and a
-keyboard-accessible control copies only the best version.
+tool displays an inline "English feedback" card: "You wrote" shows the original
+message, "Suggested wording" emphasizes the rewrite, and brief notes explain
+meaningful edits. A keyboard-accessible control copies only the suggested
+wording. When there is no rewrite and no notes, the card shows just "Your message
+is grammatically correct and sounds natural." It omits the repeated message,
+copy button, and detailed sections. Unchanged wording with optional notes keeps
+the detailed view, labeled "No changes needed".
+
+The component reports content height through MCP Apps notifications and the
+available `window.openai.notifyIntrinsicHeight` compatibility API. The latter
+does not depend on an MCP Apps initialization response, so compatible hosts can
+resize the iframe for either a short confirmation or detailed feedback.
+The resource sets the Codex-specific `openai/widgetMinFrameHeight` hint to `0`
+so the host can honor measurements below its default 200px minimum. Reload
+the MCP server after updating this metadata; reopening a card only refreshes
+the HTML when the server process is still running its older code.
 
 The version `1` contract currently supports the `compact` variant:
 
@@ -96,12 +109,16 @@ The version `1` contract currently supports the `compact` variant:
 }
 ```
 
-The tool advertises `ui://cthu-language-feedback/v1.html`. Compatible clients
+The model calls the presentation tool before other task-related tools and the
+main answer, then completes the user's task. It prefers the
+styled card whenever the tool is available. The tool advertises
+`ui://cthu-language-feedback/v1.html`. Compatible clients
 read that self-contained resource with the MCP Apps media type. Clients without
-component rendering still receive a complete text result containing the best
-version and every note. If the presentation tool is missing or fails, the
-language-coach instruction falls back to a prominent Markdown section and then
-continues the user's actual task.
+component rendering still receive a complete text result containing the
+suggested wording and every note. If the presentation tool is missing or fails,
+the language-coach instruction places an English feedback section at the
+beginning of the final answer, followed by the actual reply. The host controls
+the exact placement of native tool cards.
 
 This surface is local and read-only: it performs no external network requests,
 persists no correction history or preferences, records no telemetry, and does

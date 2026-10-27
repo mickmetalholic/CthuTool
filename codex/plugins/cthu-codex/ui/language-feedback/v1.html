@@ -4,50 +4,45 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>English polish</title>
+    <title>English feedback</title>
     <style>
       :root {
         color-scheme: light dark;
         font-family:
-          var(--font-sans, Inter),
-          ui-sans-serif,
-          -apple-system,
+          var(--font-sans, -apple-system),
           BlinkMacSystemFont,
           "Segoe UI",
           sans-serif;
         --surface: var(--color-background-primary, #ffffff);
-        --surface-muted: var(--color-background-secondary, #f6f7fb);
-        --surface-best: #f1efff;
-        --text: var(--color-text-primary, #17151f);
-        --text-muted: var(--color-text-secondary, #676271);
-        --border: var(--color-border-secondary, #e2dfea);
-        --accent: #6750e8;
-        --accent-deep: #4e38c7;
-        --accent-soft: #ded8ff;
-        --success: var(--color-text-success, #20744a);
-        --danger: var(--color-text-danger, #b2333f);
-        --focus: var(--color-ring-info, #5c7cfa);
-        --shadow: 0 16px 44px rgb(42 32 84 / 12%);
+        --surface-muted: var(--color-background-secondary, #f5f6f6);
+        --text: var(--color-text-primary, #25292c);
+        --text-muted: var(--color-text-secondary, #60676c);
+        --border: var(--color-border-secondary, #dce0e2);
+        --rule: #bdc4c8;
+        --success: var(--color-text-success, #26704a);
+        --danger: var(--color-text-danger, #ad343c);
+        --focus: var(--color-ring-info, #526a80);
       }
 
       :root[data-theme="dark"] {
-        --surface: var(--color-background-primary, #1c1a22);
-        --surface-muted: var(--color-background-secondary, #26232c);
-        --surface-best: #292342;
-        --text: var(--color-text-primary, #f7f4fc);
-        --text-muted: var(--color-text-secondary, #b9b3c2);
-        --border: var(--color-border-secondary, #3b3644);
-        --accent: #ae9dff;
-        --accent-deep: #c7bcff;
-        --accent-soft: #483d76;
-        --success: var(--color-text-success, #76d6a1);
-        --danger: var(--color-text-danger, #ff9ca5);
-        --focus: var(--color-ring-info, #9aadff);
-        --shadow: 0 18px 48px rgb(0 0 0 / 28%);
+        --surface: var(--color-background-primary, #202224);
+        --surface-muted: var(--color-background-secondary, #2b2e31);
+        --text: var(--color-text-primary, #e9ebed);
+        --text-muted: var(--color-text-secondary, #a6aeb4);
+        --border: var(--color-border-secondary, #3b4044);
+        --rule: #626b73;
+        --success: var(--color-text-success, #8dc8a5);
+        --danger: var(--color-text-danger, #ef9b9b);
+        --focus: var(--color-ring-info, #a4bbcd);
       }
 
       * {
         box-sizing: border-box;
+      }
+
+      /* Component layout rules must not override the HTML hidden state. */
+      [hidden] {
+        display: none !important;
       }
 
       body {
@@ -55,8 +50,8 @@
         padding: 2px;
         background: transparent;
         color: var(--text);
-        font-size: 15px;
-        line-height: 1.55;
+        font-size: 14px;
+        line-height: 1.6;
       }
 
       button {
@@ -66,64 +61,29 @@
       .loading {
         display: flex;
         align-items: center;
-        min-height: 88px;
-        padding: 20px;
+        min-height: 72px;
+        padding: 16px 20px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
         color: var(--text-muted);
-        border: 1px dashed var(--border);
-        border-radius: 16px;
-        background: var(--surface-muted);
+        font-size: 13px;
       }
 
       .coach-card {
-        position: relative;
-        isolation: isolate;
         overflow: hidden;
         border: 1px solid var(--border);
-        border-radius: 18px;
+        border-radius: 8px;
         background: var(--surface);
-        box-shadow: var(--shadow);
-      }
-
-      .coach-card::before {
-        position: absolute;
-        z-index: -1;
-        top: -70px;
-        right: -56px;
-        width: 180px;
-        height: 180px;
-        border-radius: 50%;
-        background: radial-gradient(
-          circle,
-          color-mix(in srgb, var(--accent) 18%, transparent),
-          transparent 68%
-        );
-        content: "";
-        pointer-events: none;
       }
 
       .card-header {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 18px 20px 15px;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 20px;
         border-bottom: 1px solid var(--border);
-      }
-
-      .mark {
-        display: grid;
-        flex: 0 0 auto;
-        width: 34px;
-        height: 34px;
-        place-items: center;
-        border-radius: 11px;
-        color: white;
-        background: linear-gradient(145deg, #806df1, #5540cc);
-        box-shadow: 0 7px 18px rgb(103 80 232 / 28%);
-      }
-
-      .mark svg {
-        width: 18px;
-        height: 18px;
       }
 
       h1,
@@ -133,78 +93,60 @@
       }
 
       h1 {
-        font-size: 17px;
-        font-weight: 720;
-        line-height: 1.25;
-        letter-spacing: -0.015em;
-      }
-
-      .header-copy p {
-        margin-top: 2px;
-        color: var(--text-muted);
-        font-size: 12px;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.4;
       }
 
       .content {
         display: grid;
-        gap: 14px;
-        padding: 16px 20px 20px;
+        gap: 20px;
+        padding: 18px 20px 20px;
+      }
+
+      .no-suggestions {
+        padding: 16px 20px;
+        font-size: 13px;
       }
 
       .section-label {
         color: var(--text-muted);
-        font-size: 11px;
-        font-weight: 700;
-        line-height: 1.3;
-        letter-spacing: 0.075em;
-        text-transform: uppercase;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.4;
       }
 
       .original-block {
         display: grid;
         gap: 6px;
-        padding: 0 2px;
       }
 
       .original-text {
         color: var(--text-muted);
         font-size: 13px;
-        line-height: 1.5;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
       }
 
       .best-block {
         display: grid;
-        gap: 10px;
-        padding: 15px 16px 16px;
-        border: 1px solid var(--accent-soft);
-        border-radius: 14px;
-        background:
-          linear-gradient(
-            125deg,
-            color-mix(in srgb, var(--surface-best) 90%, transparent),
-            var(--surface-best)
-          );
+        padding-left: 14px;
+        border-left: 2px solid var(--rule);
       }
 
-      .best-header {
+      .suggestion-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-      }
-
-      .best-header .section-label {
-        color: var(--accent-deep);
+        margin-bottom: 8px;
       }
 
       .best-text {
-        color: var(--text);
-        font-size: clamp(17px, 3.7vw, 20px);
-        font-weight: 650;
-        line-height: 1.45;
-        letter-spacing: -0.012em;
+        font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+        font-size: 21px;
+        font-weight: 400;
+        line-height: 1.5;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
         user-select: text;
@@ -212,47 +154,43 @@
 
       .copy-button {
         display: inline-flex;
-        min-height: 32px;
+        flex: 0 0 auto;
+        min-height: 30px;
         align-items: center;
         gap: 6px;
-        padding: 6px 10px;
-        border: 1px solid var(--accent-soft);
-        border-radius: 9px;
-        color: var(--accent-deep);
-        background: color-mix(in srgb, var(--surface) 75%, transparent);
+        padding: 4px 9px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: transparent;
+        color: var(--text-muted);
         cursor: pointer;
         font-size: 12px;
-        font-weight: 650;
-        transition:
-          transform 140ms ease,
-          background 140ms ease,
-          border-color 140ms ease;
+        line-height: 1.5;
       }
 
       .copy-button:hover {
-        border-color: var(--accent);
-        background: var(--surface);
-        transform: translateY(-1px);
-      }
-
-      .copy-button:active {
-        transform: translateY(0);
+        background: var(--surface-muted);
+        color: var(--text);
       }
 
       .copy-button:focus-visible {
-        outline: 3px solid color-mix(in srgb, var(--focus) 42%, transparent);
-        outline-offset: 2px;
+        outline: 2px solid var(--focus);
+        outline-offset: 3px;
       }
 
       .copy-button svg {
-        width: 14px;
-        height: 14px;
+        width: 13px;
+        height: 13px;
       }
 
       .copy-status {
-        min-height: 18px;
         color: var(--success);
+        font-family: inherit;
         font-size: 12px;
+      }
+
+      .copy-status:not(:empty) {
+        margin-top: 8px;
       }
 
       .copy-status[data-state="error"] {
@@ -261,17 +199,14 @@
 
       .notes-block {
         display: grid;
-        gap: 9px;
-        padding-top: 1px;
-      }
-
-      .notes-block[hidden] {
-        display: none;
+        gap: 12px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
       }
 
       .note-list {
         display: grid;
-        gap: 8px;
+        gap: 12px;
         margin: 0;
         padding: 0;
         list-style: none;
@@ -279,114 +214,79 @@
 
       .note-item {
         display: grid;
-        grid-template-columns: minmax(88px, auto) 1fr;
-        gap: 10px;
-        align-items: start;
-        padding: 9px 11px;
-        border-radius: 11px;
-        background: var(--surface-muted);
+        grid-template-columns: 80px minmax(0, 1fr);
+        align-items: baseline;
+        gap: 12px;
       }
 
       .note-category {
-        width: fit-content;
-        padding: 2px 7px;
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        color: var(--accent-deep);
-        background: var(--surface);
-        font-size: 10px;
-        font-weight: 720;
-        letter-spacing: 0.035em;
+        color: var(--text-muted);
+        font-size: 11px;
         line-height: 1.6;
-        text-transform: uppercase;
       }
 
       .note-message {
-        color: var(--text);
         font-size: 13px;
-        line-height: 1.5;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
       }
 
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) {
-          --surface: var(--color-background-primary, #1c1a22);
-          --surface-muted: var(--color-background-secondary, #26232c);
-          --surface-best: #292342;
-          --text: var(--color-text-primary, #f7f4fc);
-          --text-muted: var(--color-text-secondary, #b9b3c2);
-          --border: var(--color-border-secondary, #3b3644);
-          --accent: #ae9dff;
-          --accent-deep: #c7bcff;
-          --accent-soft: #483d76;
-          --success: var(--color-text-success, #76d6a1);
-          --danger: var(--color-text-danger, #ff9ca5);
-          --focus: var(--color-ring-info, #9aadff);
-          --shadow: 0 18px 48px rgb(0 0 0 / 28%);
+          --surface: var(--color-background-primary, #202224);
+          --surface-muted: var(--color-background-secondary, #2b2e31);
+          --text: var(--color-text-primary, #e9ebed);
+          --text-muted: var(--color-text-secondary, #a6aeb4);
+          --border: var(--color-border-secondary, #3b4044);
+          --rule: #626b73;
+          --success: var(--color-text-success, #8dc8a5);
+          --danger: var(--color-text-danger, #ef9b9b);
+          --focus: var(--color-ring-info, #a4bbcd);
         }
       }
 
       @media (max-width: 420px) {
         .card-header,
-        .content {
-          padding-right: 15px;
-          padding-left: 15px;
+        .content,
+        .no-suggestions {
+          padding-right: 16px;
+          padding-left: 16px;
         }
 
-        .best-header {
-          align-items: flex-start;
+        .best-text {
+          font-size: 20px;
         }
 
         .note-item {
           grid-template-columns: 1fr;
-          gap: 6px;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .copy-button {
-          transition: none;
+          gap: 2px;
         }
       }
     </style>
   </head>
   <body>
     <div id="loading" class="loading" role="status">
-      Waiting for language feedback…
+      Loading feedback…
     </div>
 
     <main id="app" hidden>
       <article class="coach-card" aria-labelledby="coach-title">
-        <header class="card-header">
-          <span class="mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18l-1.8-5.4-5.7-1.8L10.2 9 12 3.5Z"
-                fill="currentColor"
-              />
-              <path
-                d="m18.2 15 .7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1Z"
-                fill="currentColor"
-                opacity=".75"
-              />
-            </svg>
-          </span>
-          <div class="header-copy">
-            <h1 id="coach-title">English polish</h1>
-            <p>A clearer, more natural way to say it</p>
-          </div>
+        <p id="no-suggestions" class="no-suggestions" hidden>
+          Your message is grammatically correct and sounds natural.
+        </p>
+        <header id="feedback-header" class="card-header">
+          <h1 id="coach-title">English feedback</h1>
         </header>
 
-        <div class="content">
+        <div id="feedback-details" class="content">
           <section class="original-block" aria-labelledby="original-label">
-            <h2 id="original-label" class="section-label">Original</h2>
+            <h2 id="original-label" class="section-label">You wrote</h2>
             <p id="original-text" class="original-text"></p>
           </section>
 
           <section class="best-block" aria-labelledby="best-label">
-            <div class="best-header">
-              <h2 id="best-label" class="section-label">Best version</h2>
+            <div class="suggestion-header">
+              <h2 id="best-label" class="section-label">Suggested wording</h2>
               <button id="copy-button" class="copy-button" type="button">
                 <svg
                   viewBox="0 0 24 24"
@@ -398,7 +298,7 @@
                   <rect x="8" y="8" width="11" height="11" rx="2" />
                   <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
                 </svg>
-                <span>Copy</span>
+                <span id="copy-label">Copy suggestion</span>
               </button>
             </div>
             <p id="best-text" class="best-text" tabindex="-1"></p>
@@ -415,7 +315,7 @@
             class="notes-block"
             aria-labelledby="notes-label"
           >
-            <h2 id="notes-label" class="section-label">Why it works</h2>
+            <h2 id="notes-label" class="section-label">Notes</h2>
             <ol id="note-list" class="note-list"></ol>
           </section>
         </div>
@@ -427,11 +327,11 @@
         const MCP_APPS_PROTOCOL_VERSION = "2026-01-26";
         const CATEGORY_LABELS = {
           grammar: "Grammar",
-          naturalness: "Naturalness",
+          naturalness: "Phrasing",
           tone: "Tone",
-          idiom: "Idiom",
+          idiom: "Idioms",
           clarity: "Clarity",
-          other: "Other",
+          other: "Usage",
         };
         const pendingRequests = new Map();
         let nextRequestId = 1;
@@ -441,11 +341,16 @@
 
         const loading = document.getElementById("loading");
         const app = document.getElementById("app");
+        const feedbackHeader = document.getElementById("feedback-header");
+        const feedbackDetails = document.getElementById("feedback-details");
+        const noSuggestionsText = document.getElementById("no-suggestions");
         const originalText = document.getElementById("original-text");
+        const bestLabel = document.getElementById("best-label");
         const bestText = document.getElementById("best-text");
         const notesBlock = document.getElementById("notes-block");
         const noteList = document.getElementById("note-list");
         const copyButton = document.getElementById("copy-button");
+        const copyLabel = document.getElementById("copy-label");
         const copyStatus = document.getElementById("copy-status");
 
         function send(message) {
@@ -479,13 +384,22 @@
         }
 
         function reportSize() {
+          // Measure content independently of the host's viewport height.
+          const height = Math.ceil(document.body.getBoundingClientRect().height);
           if (initialized) {
             notify("ui/notifications/size-changed", {
               width: Math.ceil(document.documentElement.scrollWidth),
-              height: Math.ceil(document.documentElement.scrollHeight),
+              height,
             });
           }
-
+          // Compatibility hosts may never answer ui/initialize.
+          if (typeof window.openai?.notifyIntrinsicHeight === "function") {
+            try {
+              window.openai.notifyIntrinsicHeight(height);
+            } catch {
+              // A failed compatibility notification must not break the card.
+            }
+          }
         }
 
         function renderFeedback(feedback) {
@@ -493,6 +407,16 @@
           currentFeedback = feedback;
           originalText.textContent = feedback.original;
           bestText.textContent = feedback.bestVersion;
+          const unchanged =
+            feedback.original.trim() === feedback.bestVersion.trim();
+          const noSuggestions = unchanged && feedback.notes.length === 0;
+          feedbackHeader.hidden = noSuggestions;
+          feedbackDetails.hidden = noSuggestions;
+          noSuggestionsText.hidden = !noSuggestions;
+          bestLabel.textContent = unchanged
+            ? "No changes needed"
+            : "Suggested wording";
+          copyLabel.textContent = unchanged ? "Copy text" : "Copy suggestion";
           noteList.replaceChildren();
 
           for (const note of feedback.notes) {
@@ -571,12 +495,12 @@
               throw new Error("Clipboard access is unavailable.");
             }
             copyStatus.dataset.state = "success";
-            copyStatus.textContent = "Best version copied.";
+            copyStatus.textContent = "Copied to clipboard.";
           } catch {
             selectBestVersion();
             copyStatus.dataset.state = "error";
             copyStatus.textContent =
-              "Copy unavailable. The best version is selected for manual copying.";
+              "Couldn't copy. Copy the selected text manually.";
           }
           reportSize();
         }
@@ -642,7 +566,7 @@
 
         if (typeof ResizeObserver === "function") {
           resizeObserver = new ResizeObserver(reportSize);
-          resizeObserver.observe(document.documentElement);
+          resizeObserver.observe(document.body);
         }
 
         if (window.parent !== window) {
