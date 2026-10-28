@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createFakeSkillsNpxEnv } from '../fixtures/fake-skills-npx';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -74,6 +75,7 @@ describe('CLI command diagnostics coverage', () => {
   test('keeps JSON stdout parseable while codex command diagnostics use stderr', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-repo-'));
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-home-'));
+    const fakeSkillsEnv = await createFakeSkillsNpxEnv(homeRoot);
 
     const result = await runCli(
       [
@@ -85,7 +87,7 @@ describe('CLI command diagnostics coverage', () => {
         homeRoot,
         '--json',
       ],
-      { CHC_CLI_DIAGNOSTICS: '1' },
+      { ...fakeSkillsEnv, CHC_CLI_DIAGNOSTICS: '1' },
     );
 
     expect(result.code).toBe(0);
