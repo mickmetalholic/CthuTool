@@ -12,10 +12,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - Anki MCP server
 - Anki card-creation skills
 - `cthutool-cli` skill for operating the installed `chc` CLI
-- Notion channel-library skill
-- Notion album-maintenance skill
-- Notion movie-library skill
-- Notion book-library maintenance skill
+- unified `$notion-manage` skill for 12 personal libraries, including belongings inventory
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -210,7 +207,7 @@ The `Sentence` field uses Anki cloze syntax with a short synonym or paraphrase h
 ## Unified Notion management
 
 Invoke `$notion-manage` explicitly and describe the library and operation. One entry
-point covers all eleven libraries below. Its index loads only the relevant library
+point covers all twelve libraries. Its index loads only the relevant library
 reference; Classical Work guidance is conditional on Works matching and does not
 provide independent work CRUD. Music enrichment can use the optional skill-local
 resolver. Implicit invocation remains disabled; the separate library entry points
@@ -224,7 +221,8 @@ original script. Books instead use the selected edition's published title: Chine
 translations use their Chinese edition title, and English editions their English title.
 Translated titles remain useful for search and
 matching. Channels, apps, people, and organizations use verified official/self-used
-names; personal notes retain the user's title. Unrelated updates do not rename entries.
+names; personal notes and inventory items retain the user's own labels.
+Unrelated updates do not rename entries.
 
 Metadata sources follow these library-specific preferences. Ordered fallbacks apply
 when the preferred source is unavailable or lacks the requested field; all sources
@@ -238,6 +236,35 @@ must match the selected work, edition, or season. Report material conflicts.
 | Dramas | TMDB TV → IMDb → Douban |
 | Games | IGDB wherever possible; identify other sources used for gaps |
 | Documentaries / Animation | IMDb → Douban |
+
+Belongings Inventory records are personal possessions, not catalog entries:
+recorded prices, dates, ownership, groupings, and locations must come from the
+user rather than public product metadata.
+
+## Notion Belongings Inventory
+
+Invoke `$notion-manage` explicitly to find, add, update, move, or reversibly
+remove physical belongings in the [Belongings Inventory](https://app.notion.com/p/7f6dfec720e54f2095ff10bc971a4e35)
+database. The skill uses `references/belongings.md`, checks the live schema and
+current records, and preserves separate items that happen to share a name or model.
+It does not infer ownership, purchase price, acquisition date, or location from
+shopping pages.
+
+`Stored place` and `Contents` are self-relations for nested containers. The
+skill resolves exact item/container identities, prevents containment loops,
+verifies reciprocal links after moves, and does not silently change `Group` or
+`Storage Category`. The schema's exact field name is `Prority` (not
+`Priority`). Creation checks available Notion templates; if no suitable live
+template exists, this inventory explicitly allows a no-template record, without
+pretending an icon/template was applied. Existing icons, notes, and other
+relations remain intact. Removing a container requires resolving what happens
+to its existing contents before archiving/trashing it.
+
+```text
+$notion-manage 查找我的充电器，告诉我存放在哪个容器里
+$notion-manage 将指定物品移入已有的收纳盒，保留其他属性
+$notion-manage 添加一件新物品，按我提供的品牌、型号和价格登记
+```
 
 ## Notion Book Library
 
