@@ -72,14 +72,16 @@ host's local clipboard capability when the user activates the control.
 ## Notion Libraries
 
 Use `$notion-manage` explicitly to query, create, update, or reversibly remove
-records in eleven personal Notion libraries: books, channels, comics, music releases,
-movies, dramas, games, knowledge, documentaries, animation, and apps.
+records in twelve personal Notion libraries: books, channels, comics, music releases,
+movies, dramas, games, knowledge, documentaries, animation, apps, and belongings inventory.
 
 The entry point contains common CRUD rules and a library index. It reads only the
 relevant `references/<library>.md`; Classical Work matching and music resolver notes
 are loaded only when needed. People & Organizations is a shared relation reference;
 authorized creation applies the person/band template and verifies its icon. Each reference retains its schema hints, identity rules,
-and template/icon conventions. Live schema remains authoritative.
+and template/icon conventions. Belongings Inventory additionally protects the
+self-referential storage/container relationships and user-recorded purchase values.
+Live schema remains authoritative.
 
 Creation uses available templates, verifies icons, and returns images for manual
 addition. Clear requests authorize scoped operations; ambiguous destinations are
