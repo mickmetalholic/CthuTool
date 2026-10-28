@@ -3,6 +3,7 @@ import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createFakeSkillsNpxEnv } from '../fixtures/fake-skills-npx';
 
 const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const repoRoot = join(cliRoot, '../..');
@@ -85,6 +86,7 @@ describe('global bin', () => {
   test('bin shim forwards arguments to the CLI', async () => {
     const homeRoot = await mkdtemp(join(tmpdir(), 'cthutool-bin-home-'));
     const repoRoot = await mkdtemp(join(tmpdir(), 'cthutool-bin-repo-'));
+    const fakeSkillsEnv = await createFakeSkillsNpxEnv(homeRoot);
 
     const proc = Bun.spawn(
       [
@@ -100,6 +102,7 @@ describe('global bin', () => {
       ],
       {
         cwd: cliRoot,
+        env: { ...process.env, ...fakeSkillsEnv },
         stdout: 'pipe',
         stderr: 'pipe',
         stdin: 'ignore',
