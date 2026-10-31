@@ -1,6 +1,6 @@
-# Persistent Task Log
+# LOG template
 
-`LOG.md` is append-only execution history. Do not use it as the current state; summarize current state in `PLAN.md`. Redact credentials, tokens, cookies, private keys, and unrelated sensitive output.
+Save append-only history under `<workspace>/.agent/tasks/<task-id>/LOG.md`. Redact secrets and unrelated sensitive output. Include fields relevant to each event.
 
 ```markdown
 # Execution Log: <task-id>
@@ -9,33 +9,16 @@ Created: <YYYY-MM-DD HH:mm TZ>
 
 ## <YYYY-MM-DD HH:mm TZ> — <event type>
 
-Event: PHASE_PROPOSED | PHASE_APPROVED | PHASE_RESULT | VERIFICATION | CHECKPOINT | DECISION | DECISION_REQUIRED | PHASE_BLOCKED | RECONCILIATION | FINAL
-Phase: <phase ID>
+Event: <event type>
+Phase: <phase ID, or discovery>
 Actor: agent / user
-
-### Intended action
-
-<What was proposed or approved.>
-
-### Actual action and targets
-
-<What actually happened within the phase; include significant actions, targets, and concise operation details.>
-
-### Result
-
-<Success, failure, partial, skipped, or unknown.>
-
-### Verification
-
-<Checks run, observable evidence, and PASS/FAIL/UNKNOWN.>
-
-### Changes / rollback
-
-<Files, services, data, backups, rollback, or None.>
-
-### Next action / decision
-
-<What happens next, or the exact user decision required.>
+Intent / authority: <action; user authorization or decision source; applicable scope>
+Actions / targets: <significant actions, exact targets, observations, partial changes>
+Result / verification: <outcome; checks and evidence; PASS/FAIL/UNKNOWN>
+Recovery / dependencies: <attempts, rollback, retry safety, dependent and independent work>
+Next action / decision: <runnable action, or required input and recommendation>
 ```
 
-Checkpoint at phase boundaries and when work stops for a blocker, cancellation, plan change, or interruption. Routine included subtasks do not each need a checkpoint. For failed or interrupted work, preserve enough detail to reconstruct the real state: attempt number, exit/result summary, partial changes, recovery attempted, and whether the original action is safe to retry.
+Event types: `AUTHORIZATION`, `PHASE_PROPOSED`, `PHASE_RESULT`, `VERIFICATION`, `CHECKPOINT`, `DECISION`, `DECISION_REQUIRED`, `RECOVERY`, `BLOCKED`, `RECONCILIATION`, `FINAL`.
+
+Follow [checkpoint rules](../SKILL.md#execute-and-checkpoint). Keep authorization and decision sources reconstructable across sessions, including when normalizing legacy PLAN fields.

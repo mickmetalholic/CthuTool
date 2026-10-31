@@ -1,61 +1,59 @@
-# Examples and Manual Test Scenarios
+# Acceptance scenarios
 
-These scenarios are acceptance tests for the workflow. They do not authorize changes to a real system.
+Use these hypothetical cases to review actions, authority, evidence, and stopping points.
 
-## Scenario A — Development environment
+## A — Complete development environment
 
-Request: configure a complete development environment without modifying system Python, deleting existing configuration, or overwriting files without backup.
+**Request:** Configure a development environment while preserving system Python and existing configuration; back up files before overwriting.
 
-Expected flow:
+**Expected:** Inspect available OS, tools, versions, and configuration. Resolve version preferences, target configuration, backup policy, and completion criteria upfront. Record or obtain authorization for one phase covering installation, configuration, recovery, and tool/regression checks. Continue through checkpoints and ordinary recoverable failures.
 
-1. Create `PLAN.md`/`LOG.md`; clarify target OS, package managers, versions, backups, and Definition of Done.
-2. Show the coherent plan and first phase: inventory installed tools, inspect dotfiles, and map missing components. One `继续` approves both plan and phase.
-3. Run all included read-only checks, verify the inventory, and checkpoint once at the phase boundary. Report findings first, then preview the installation/configuration phase with exact targets, backup, and verification.
-4. After `继续`, perform all included installations and configuration within that reviewed scope, verifying each material outcome without asking again between routine operations.
-5. If an unexpected version or package conflict requires a choice, record `PHASE_BLOCKED` and ask for the choice. A clear answer permits resuming the same scope; a new target/risk requires a revised preview.
-6. Include final tool and regression checks in the last approved phase, or preview a bounded final-verification phase. Report missing or unverified tools explicitly.
+**Check:** A complete environment is verified within the authorized phase. Unexpected version trade-offs or missing permissions suspend affected work while safe independent work continues.
 
-Pass condition: no target mutation occurs before the first phase approval; related actions run without micro-confirmation, and each completed phase has verification evidence.
+## B — File organization with a conditional policy
 
-## Scenario B — Thousands of files
+**Request:** Organize a large directory while preserving conflicts, damaged files, and ambiguous versions.
 
-Request: organize a large directory while preserving conflicts, damaged files, and ambiguous versions.
+**Expected:** Obtain a reviewable source/destination mapping read-only. Confirm exclusions, count/bytes/content checks, conflict policy, and whether preserved cases satisfy DoD. Process approved batches and verify results within one phase. Include cleanup only when its targets and recovery are authorized.
 
-Expected flow:
+**Check:** Policy-covered conflicts are preserved automatically. Unexpected conflicts suspend dependent work; independent batches continue safely. Required unresolved items remain incomplete unless preservation satisfies the agreed DoD.
 
-1. Define exact source, destination, exclusions, conflict policy, and count/bytes/content Definition of Done.
-2. Preview an inventory/mapping phase. After `继续`, enumerate, hash where needed, and prepare a bounded batch map; then checkpoint and report the result before previewing the move phase.
-3. Preview a move phase whose exact collections and batch bounds are reviewable. After `继续`, process all included batches, verifying destination count/bytes and source state per batch without asking after each one.
-4. Preserve an unexpected conflict, record partial state, and ask for the user decision. Do not use a bare `继续` to choose a canonical version.
-5. After context loss, reconcile the live tree and recorded batch outcomes before any retry.
-6. Preview cleanup only after independently proving no in-scope source files remain. Cleanup is a separate phase because its target/risk differs from the move phase.
+## C — Troubleshooting within approved bounds
 
-Pass condition: `继续` authorizes only the previewed collection and operations; unresolved files remain in `Residual Issues`.
+**Request:** Locate and fix an intermittent service failure.
 
-## Scenario C — Complex troubleshooting
+**Expected:** Inspect baseline, logs, hypotheses, and recovery options. Settle service targets, configuration/restart limits, and completion evidence. Use one phase for diagnosis, covered remediation, recovery, and regression checks. Adapt internal commands within those bounds.
 
-Request: locate and fix an intermittent service failure using several experiments.
+**Check:** A different service or materially higher impact requires a concrete expansion preview and user decision. An explicit answer approving that expansion supplies authorization. Completion requires observed regression evidence.
 
-Expected flow:
+## D — Execution evidence creates a phase boundary
 
-1. Define baseline, hypotheses, evidence required for root cause, safe-change limits, rollback, and Definition of Done.
-2. Preview a diagnostic phase containing several read-only experiments. After `继续`, run those experiments and verify their observations without per-experiment confirmations.
-3. Report the diagnosis first, then preview a remediation phase containing exact configuration edits, restart if needed, and regression checks. These can share one approval when the full target and rollback are explicit.
-4. If evidence reveals a different service or higher-risk operation, stop and preview a revised phase instead of extending the earlier approval.
-5. After context loss, inspect current service state and recent logs; never blindly replay a restart or configuration change.
-6. Final verification maps each fix and regression check to evidence; unresolved hypotheses remain residual issues.
+**Request:** Generate trial conversions, let the user inspect their quality and select a preset, then convert a named collection.
 
-Pass condition: a transient successful restart is not reported as completed remediation, and routine experiments do not cause repeated approval prompts.
+**Expected:** Settle mappings, presets, recovery, and verification upfront. Record why the quality choice requires actual outputs. P1 produces verified trial outputs and a comparison; P2 depends on the user's preset choice.
 
-## Manual invariant checks
+**Check:** Report P1 evidence before asking for the choice. A reply selecting and authorizing the previewed P2 starts bulk conversion through final checks. Agent-solvable implementation uncertainty stays within a phase.
 
-- A bare registered Skill invocation creates no task files and runs no target command.
-- A draft plan with an unanswered critical question cannot enter execution.
-- The first `继续` approves only a coherent plan and fully previewed first phase; later `继续` approves only one unchanged queued phase.
-- Multiple included actions in an approved phase run without separate user confirmations.
-- A completed phase has a `PLAN.md` state update, matching `LOG.md` checkpoint, and observed verification evidence.
-- A required failed or unknown verification never becomes `[x]`.
-- A mid-phase ambiguous choice requires an explicit answer; a material scope/risk change requires a new preview.
-- A phase checkpoint reports its result before summarizing the next phase and asking for `继续`.
-- A new session resumes from `PLAN.md` and real-state checks, not conversation memory or blind replay.
-- Final output lists residual, deferred, and unknown items even when the Definition of Done passes.
+## E — Recovery and isolated blockers
+
+**Given:** An authorized phase, a failed check with a safe in-scope fix, and a data conflict requiring user judgment.
+
+**Expected:** Inspect partial state, apply a reasonable correction, and verify again. Preserve the conflict and suspend its dependents. Continue work that leaves the choice and shared state safe. Record attempts and retry only with evidence supporting safe correction.
+
+**Check:** Keep `in_progress` while safe work or recovery remains. Set `blocked` when remaining work needs the choice or an external prerequisite. Failed/unknown checks remain incomplete; accepted follow-ups require a passing DoD and explicit user acceptance.
+
+## F — Resume and legacy authority
+
+**Given:** An interrupted task with durable state; an older task may have `Plan Approval: approved` plus P1-only approval.
+
+**Expected:** Read PLAN and LOG, inspect actual state, and distinguish completed and remaining actions. Continue work covered by recorded authorization. Normalize legacy current fields while preserving history and the P1-only scope.
+
+**Check:** Retries follow reconciliation. An unchanged pending preview accepts an unambiguous `继续`; unresolved choices require explicit answers. Request authorization for P2 when it remains uncovered.
+
+## Invocation and lifecycle checks
+
+- Bare invocation shows usage only; status reads state only. Inspection and ordinary complex tasks leave the Skill inactive.
+- Read-only discovery supplies available facts before user questions.
+- Each additional phase names evidence, a necessary user choice, its dependent work, and why the choice must wait.
+- Existing authorization survives checkpoints and context loss; expansions and external destinations require explicit authority.
+- A user pause stops the requested work. Completion reporting includes observed verification, changes, recovery, residuals, and deferred decisions.
