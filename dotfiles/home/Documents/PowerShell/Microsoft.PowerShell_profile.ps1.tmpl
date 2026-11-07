@@ -1,0 +1,31 @@
+$env:EDITOR = "{{ .defaults.editor }}"
+$localBin = Join-Path $HOME ".local\bin"
+if (Test-Path -LiteralPath $localBin) {
+  $paths = $env:PATH -split [IO.Path]::PathSeparator
+  if ($paths -notcontains $localBin) {
+    $env:PATH = "$localBin$([IO.Path]::PathSeparator)$env:PATH"
+  }
+}
+
+if (Get-Command starship -ErrorAction SilentlyContinue) {
+  Invoke-Expression (&starship init powershell)
+}
+
+if (Get-Command zoxide -ErrorAction SilentlyContinue) {
+  Invoke-Expression (&zoxide init powershell)
+}
+
+if (Get-Command mise -ErrorAction SilentlyContinue) {
+  Invoke-Expression (&mise activate pwsh)
+}
+
+{{- $profile := joinPath .chezmoi.destDir "Documents/PowerShell/Microsoft.PowerShell_profile.ps1" -}}
+{{- if stat $profile -}}
+{{- $existing := include $profile -}}
+{{- range $pattern := list "(?ms)^# >>> cthutool chc completion >>>\\r?\\n.*?^# <<< cthutool chc completion <<<" "(?ms)^# >>> cthutool bootstrap PATH >>>\\r?\\n.*?^# <<< cthutool bootstrap PATH <<<" -}}
+{{- $blocks := regexFindAll $pattern $existing -1 -}}
+{{- if $blocks }}
+{{ index $blocks 0 }}
+{{ end -}}
+{{- end -}}
+{{- end }}

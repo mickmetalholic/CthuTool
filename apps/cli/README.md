@@ -133,7 +133,7 @@ chc source use .
 chc source use worktree:<id>
 chc source use remote
 chc source update
-chc source register /path/to/CthuTool
+chc source use /path/to/CthuTool
 ```
 
 `mode` remains `local` or `remote` for compatibility. Source output additionally
@@ -141,6 +141,13 @@ reports `sourceKind: main`, `worktree`, or `managed`; `source list` supplies the
 current `worktree:<id>` selectors from `git worktree list --porcelain`.
 `source status` instead reports detailed diagnostics for the active or
 explicitly selected installation.
+
+`source use .`, `source use <path>`, and `source use worktree:<id>` automatically
+remember the owning main checkout after a successful selection, including when
+the selected source is already active. Switching to `remote` preserves that
+local anchor so `source use local` can return to it from any directory. Failed
+switches keep the previous record; `source list` and `source status` are read-only.
+No separate registration command is needed.
 
 Switching to a main checkout or worktree validates `package.json` and
 `apps/cli/dist/index.js`, then runs `npm install -g --ignore-scripts` for the
@@ -339,15 +346,17 @@ registers them in the personal marketplace, enables them in Codex, normalizes
 plugin metadata, and synchronizes the personal plugin cache. It does not read or
 install skills and does not synchronize prompts or rules.
 
-On the first interactive run, choose the CthuTool repository containing
-`codex/plugins`. The chosen path is saved in
-`~/.cthutool/codex/plugin-source.json` and reused on later runs, even from a
-different working directory. Use `chc codex install --change-source` to choose a
-new default. For a non-interactive change, use
+Without a saved source, install automatically uses the repository containing the
+running `chc` command, even from a different working directory, without prompting
+or saving a fixed path. Use `chc codex install --change-source` to choose a
+default. After a successful install, the chosen path is saved in
+`~/.cthutool/codex/plugin-source.json` and takes priority on later runs. For a
+non-interactive change, use
 `chc codex install --change-source --repo-root <path>`. A plain
 `--repo-root <path>` overrides the source for one run without changing the
-saved default. In non-interactive or JSON mode, a missing or unavailable source
-produces an actionable error. Human output shows the source, each plugin action,
+saved default. If the current CLI repository has no plugin source, interactive
+install asks for a valid repository. In non-interactive or JSON mode, an
+unavailable source produces an actionable error. Human output shows the source, each plugin action,
 cache version, and marketplace/config paths; `--json` includes source metadata.
 If the plugin cache is busy, exit Codex completely and rerun the install
 command; `--json` reports `codex_plugin_cache_busy` with the locked path.
@@ -375,7 +384,28 @@ Windows directory junctions or macOS/Linux symlinks:
   local sessions, including the desktop Code tab.
 
 Setup preserves other files in `.claude/`. It does not upload skills to Claude
-Chat or Cowork. Obsidian Sync transports the visible source. Setup creates the link locally on each machine. CthuTool
+Chat or Cowork. Setup also creates `<vault>/.codex/config.toml` when it is absent:
+
+```toml
+[features]
+hooks = false
+```
+
+This disables all Codex hooks for chats whose working directory is the vault,
+so language practice Skills control their own feedback. Codex Skills and MCP
+servers remain available. Existing `config.toml` files are preserved byte for
+byte, including any explicit hook settings. Setup previews config creation and
+requires the usual confirmation; repeating setup leaves the file unchanged.
+Status checks that a regular config file exists, not whether its hook setting
+is disabled. Occupied or redirected `.codex` paths require manual reconciliation.
+
+Obsidian Sync excludes hidden directories such as `.codex`. Run setup on each
+machine to create this local default; the config does not need to be synced.
+In a non-Git vault, start chats from the vault root because chats started
+directly in a subdirectory may not inherit the root's Codex configuration.
+
+Obsidian Sync transports the visible source. Setup creates the links and local
+Codex config on each machine. CthuTool
 stores paths in the local `chc` data directory and performs no synchronization
 operations itself.
 
@@ -396,7 +426,7 @@ argument quoting.
 
 JSON status always has one summary and a `vaults` array, including for zero or
 one vault. Each entry includes `vaultPath`, `sourcePath`, `agentsPath`,
-`claudeSkillsPath`, `configured`, `healthy`, `paths`, `source`, `link`,
+`claudeSkillsPath`, `codexConfigPath`, `configured`, `healthy`, `paths`, `source`, `link`,
 `claudeLink`, and actual local `issues`:
 
 ```json
@@ -420,7 +450,8 @@ Setup does not move, merge, or remove a real `.agents/` directory, even an empty
 one. The same protection applies to an occupied `.claude/skills` path. The
 `.claude` parent must be absent or a real directory, not a link or file. Relocate
 conflicting paths manually, then rerun setup. Existing vaults configured by older
-versions need setup once more to add the Claude skills link. Link
+versions need setup once more to add missing Claude skills links and the local
+Codex config. Link
 repair previews the existing and expected target and changes only the link after
 confirmation, preserving the old target.
 
@@ -501,3 +532,7 @@ pnpm --filter @cthutool/cli typecheck
 - In `--json` mode, write exactly one JSON value to stdout.
 - Keep warnings and diagnostics on stderr.
 - Add focused tests for non-interactive missing input and JSON output.
+
+### Dotfiles
+
+`chc dotfiles init` binds a machine to an already published host. `env setup/doctor` manages software environment; `config add/diff/apply` reviews and applies home files; `notion auth/diff/pull/validate` manages direct API access and local plan snapshots. Setup, home apply and `mise install` are separate explicit steps. See [the dotfiles guide](../../docs/dotfiles/README.md) for standalone SSH bootstrap, existing-source migration, Token caching and first Notion alignment.

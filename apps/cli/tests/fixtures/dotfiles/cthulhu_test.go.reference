@@ -1,0 +1,498 @@
+package dotcli
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestCthulhuHostPlanExcludesWorkstationNoise(t *testing.T) {
+	root := repoRootDir(t)
+	catalog, err := loadCatalog(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := catalog.Hosts["linux-ubuntu-server"]
+	if host.OS != "linux" || host.Name == "" {
+		t.Fatalf("cthulhu host missing: %#v", host)
+	}
+	plan, err := resolveHostPlanFromCatalog(catalog, host, "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, entry := range plan.Entries {
+		ids[entry.ID] = true
+	}
+	for _, want := range []string{"k3s", "k9s", "git", "openssh-client"} {
+		if !ids[want] {
+			t.Fatalf("cthulhu plan missing %s: %v", want, keys(ids))
+		}
+	}
+	for _, forbidden := range []string{
+		"docker-engine", "docker-desktop", "helm", "kubernetes-cli", "kustomize", "kubectx",
+		"mise", "neovim", "ghostty", "wezterm", "oh-my-zsh", "codex-cli", "claude-code",
+		"reasonix-cli", "argocd", "flux",
+	} {
+		if ids[forbidden] {
+			t.Fatalf("cthulhu plan must not include %s", forbidden)
+		}
+	}
+	for _, setName := range host.Toolsets {
+		if setName == "development" || setName == "ai-development" || setName == "containers" ||
+			setName == "kubernetes-clients" || setName == "desktop-terminals" || setName == "terminal-multiplexers" {
+			t.Fatalf("cthulhu must not select toolset %s", setName)
+		}
+	}
+}
+
+func keys(values map[string]bool) []string {
+	out := make([]string, 0, len(values))
+	for key := range values {
+		out = append(out, key)
+	}
+	return out
+}
+
+func TestCthulhuOSMismatchFailsBeforeDispatch(t *testing.T) {
+	root := repoRootDir(t)
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath apt-get":   []byte(""),
+		"lookpath systemctl": []byte(""),
+		"lookpath curl":      []byte(""),
+		"lookpath sudo":      []byte(""),
+		"lookpath sh":        []byte(""),
+		"lookpath winget":    []byte(""),
+	}}
+	var out strings.Builder
+	code := Execute([]string{"setup", "--dry-run"}, Options{
+		Root:   root,
+		OS:     "windows",
+		Env:    withHost([]string{"PATH=/bin"}, "CTHULHU"),
+		Runner: runner,
+		Stdout: &out,
+		Stderr: &strings.Builder{},
+	})
+	if code == 0 {
+		t.Fatalf("expected OS mismatch failure:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "host resolution") {
+		t.Fatalf("expected host resolution failure:\n%s", out.String())
+	}
+	for _, command := range runner.commands {
+		switch command.name {
+		case "winget", "sudo", "apt-get", "systemctl", "curl", "sh", "groupadd":
+			t.Fatalf("OS mismatch must not dispatch %s: %#v", command.name, runner.commands)
+		}
+	}
+}
+
+func TestInstallK3sDryRunDoesNotMutate(t *testing.T) {
+	runner := &fakeRunner{outputs: map[string][]byte{}}
+	var out strings.Builder
+	installK3s(newReporter(&out), runner, sampleK3sTool(), true, []string{"PATH=/bin"}, &strings.Builder{})
+	got := out.String()
+	for _, want := range []string{
+		"would install k3s version=v1.36.3+k3s1",
+		"would ensure group k3s-admin",
+		"would write /etc/rancher/k3s/config.yaml",
+		"fresh install disable=traefik,servicelb,local-storage,metrics-server",
+		"would enable and start k3s.service",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("dry-run missing %q:\n%s", want, got)
+		}
+	}
+	for _, command := range runner.commands {
+		switch command.name {
+		case "curl", "sudo", "sh", "systemctl", "groupadd", "chmod", "install":
+			t.Fatalf("dry-run must not mutate via %s: %#v", command.name, runner.commands)
+		}
+	}
+}
+
+func TestInstallK3sReportsVersionDriftWithoutReplace(t *testing.T) {
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath k3s":                           []byte("/usr/local/bin/k3s"),
+		commandKey("k3s", []string{"--version"}): []byte("k3s version v1.30.0+k3s1"),
+	}}
+	var out strings.Builder
+	installK3s(newReporter(&out), runner, sampleK3sTool(), false, []string{"PATH=/bin"}, &strings.Builder{})
+	got := out.String()
+	if !strings.Contains(got, "version drift") || !strings.Contains(got, "INSTALL_K3S_VERSION=v1.36.3+k3s1") {
+		t.Fatalf("expected version drift hint:\n%s", got)
+	}
+	for _, command := range runner.commands {
+		if command.name == "curl" || (command.name == "sh" && len(command.args) > 0 && strings.Contains(strings.Join(command.args, " "), "get.k3s.io")) {
+			t.Fatalf("version drift must not reinstall: %#v", runner.commands)
+		}
+	}
+}
+
+func TestInstallOfficialReleaseDryRunAndChecksum(t *testing.T) {
+	tool := sampleK9sTool()
+	t.Run("dry-run", func(t *testing.T) {
+		runner := &fakeRunner{outputs: map[string][]byte{
+			commandKey("uname", []string{"-m"}): []byte("x86_64"),
+		}}
+		var out strings.Builder
+		installOfficialRelease(newReporter(&out), runner, tool, true, []string{"PATH=/bin"}, &strings.Builder{})
+		if !strings.Contains(out.String(), "would download v0.51.0 arch=amd64") {
+			t.Fatalf("dry-run missing download plan:\n%s", out.String())
+		}
+		for _, command := range runner.commands {
+			if command.name == "curl" || command.name == "sudo" {
+				t.Fatalf("dry-run must not download/install: %#v", runner.commands)
+			}
+		}
+	})
+	t.Run("checksum mismatch", func(t *testing.T) {
+		runner := &fakeRunner{outputs: map[string][]byte{
+			"lookpath curl":                      []byte(""),
+			"lookpath sudo":                      []byte(""),
+			"lookpath tar":                       []byte(""),
+			"lookpath sha256sum":                 []byte(""),
+			"lookpath mktemp":                    []byte(""),
+			commandKey("uname", []string{"-m"}):  []byte("x86_64"),
+			commandKey("mktemp", []string{"-d"}): []byte("/tmp/k9s-test"),
+			commandKey("sha256sum", []string{"/tmp/k9s-test/k9s_Linux_amd64.tar.gz"}): []byte("deadbeef  archive"),
+		}}
+		var out strings.Builder
+		installOfficialRelease(newReporter(&out), runner, tool, false, []string{"PATH=/bin"}, &strings.Builder{})
+		if !strings.Contains(out.String(), "checksum mismatch") {
+			t.Fatalf("expected checksum failure:\n%s", out.String())
+		}
+	})
+	t.Run("existing matching command", func(t *testing.T) {
+		runner := &fakeRunner{outputs: map[string][]byte{
+			"lookpath k9s":                         []byte("/usr/local/bin/k9s"),
+			commandKey("uname", []string{"-m"}):    []byte("x86_64"),
+			commandKey("k9s", []string{"version"}): []byte("v0.51.0"),
+		}}
+		var out strings.Builder
+		installOfficialRelease(newReporter(&out), runner, tool, false, []string{"PATH=/bin"}, &strings.Builder{})
+		if !strings.Contains(out.String(), "[ok] k9s") {
+			t.Fatalf("expected available short-circuit:\n%s", out.String())
+		}
+		for _, command := range runner.commands {
+			if command.name == "curl" {
+				t.Fatalf("matching binary must not download: %#v", runner.commands)
+			}
+		}
+	})
+	t.Run("missing artifact metadata", func(t *testing.T) {
+		bad := tool
+		bad.Release = &releaseMetadata{Version: "v0.51.0", Destination: "/usr/local/bin/k9s"}
+		var out strings.Builder
+		installOfficialRelease(newReporter(&out), &fakeRunner{}, bad, true, nil, &strings.Builder{})
+		if !strings.Contains(out.String(), "requires version, destination, and artifacts") {
+			t.Fatalf("expected missing metadata failure:\n%s", out.String())
+		}
+	})
+}
+
+func TestValidateManagedToolDataRejectsInvalidOfficialAndK3sMetadata(t *testing.T) {
+	tests := []struct {
+		name   string
+		record string
+		want   string
+	}{
+		{
+			name: "official-release missing version",
+			record: `  k9s:
+    kind: command
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: k9s
+    platforms:
+      linux:
+        install: official
+        owner: dot
+        handler: official-release
+        package: k9s
+        guidance: https://example.invalid
+        release:
+          version: v0.51.0
+          destination: /usr/local/bin/k9s
+          artifacts:
+            amd64:
+              url: https://example.invalid/k9s.tar.gz
+              sha256: abc
+`,
+			want: "official-release handler must declare version",
+		},
+		{
+			name: "k3s missing service metadata",
+			record: `  k3s:
+    kind: service
+    health:
+      mode: automatic
+      severity: optional
+      checks:
+        - type: command
+          command: k3s
+        - type: systemd
+          unit: k3s.service
+    platforms:
+      linux:
+        install: official
+        owner: dot
+        handler: k3s
+        package: k3s
+        guidance: https://get.k3s.io
+        version: v1.36.3+k3s1
+`,
+			want: "k3s handler must declare service metadata",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeMinimalManagedData(t, root)
+			writeCatalogDataFile(t, root, "packages.yaml", "tools:\n"+tt.record)
+			var out strings.Builder
+			rep := newReporter(&out)
+			if validateManagedToolData(root, rep) {
+				t.Fatalf("expected validation failure for %s", tt.name)
+			}
+			if !strings.Contains(out.String(), tt.want) {
+				t.Fatalf("validation output missing %q:\n%s", tt.want, out.String())
+			}
+		})
+	}
+}
+
+func TestCatalogRejectsRemovedGitOpsTools(t *testing.T) {
+	root := repoRootDir(t)
+	catalog, err := loadCatalog(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"argocd", "flux"} {
+		if _, ok := catalog.Tools[id]; ok {
+			t.Fatalf("%s must not be a managed tool", id)
+		}
+	}
+	plan, err := resolveHostPlanFromCatalog(catalog, catalog.Hosts["linux-ubuntu-server"], "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range plan.Entries {
+		if entry.ID == "argocd" || entry.ID == "flux" {
+			t.Fatalf("cthulhu plan must not include %s", entry.ID)
+		}
+	}
+}
+
+func TestDoctorCthulhuOutputExcludesWorkstationNoise(t *testing.T) {
+	root := repoRootDir(t)
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath git":                           []byte(""),
+		"lookpath ssh":                           []byte(""),
+		"lookpath curl":                          []byte(""),
+		"lookpath jq":                            []byte(""),
+		"lookpath rg":                            []byte(""),
+		"lookpath fd":                            []byte(""),
+		"lookpath fzf":                           []byte(""),
+		"lookpath unzip":                         []byte(""),
+		"lookpath tree":                          []byte(""),
+		"lookpath btm":                           []byte(""),
+		"lookpath btop":                          []byte(""),
+		"lookpath fastfetch":                     []byte(""),
+		"lookpath duf":                           []byte(""),
+		"lookpath dust":                          []byte(""),
+		"lookpath mkcert":                        []byte(""),
+		"lookpath rsync":                         []byte(""),
+		"lookpath lsof":                          []byte(""),
+		"lookpath ip":                            []byte(""),
+		"lookpath dig":                           []byte(""),
+		"lookpath unattended-upgrade":            []byte(""),
+		"lookpath k3s":                           []byte(""),
+		"lookpath k9s":                           []byte(""),
+		"lookpath chezmoi":                       []byte(""),
+		"lookpath gh":                            []byte(""),
+		"lookpath systemctl":                     []byte(""),
+		"lookpath op":                            []byte(""),
+		"lookpath bw":                            []byte(""),
+		commandKey("git", []string{"--version"}): []byte("git version 2.0"),
+		commandKey("k3s", []string{"--version"}): []byte("k3s version v1.36.3+k3s1"),
+		commandKey("k9s", []string{"--version"}): []byte("v0.51.0"),
+		commandKey("systemctl", []string{"is-enabled", "--quiet", "k3s.service"}): []byte(""),
+		commandKey("systemctl", []string{"is-active", "--quiet", "k3s.service"}):  []byte(""),
+		commandKey("k3s", []string{"kubectl", "get", "--raw=/readyz"}):            []byte("ok"),
+		commandKey("id", []string{"-nG"}):                                         []byte("users k3s-admin"),
+	}}
+	var out strings.Builder
+	code := Execute([]string{"doctor"}, Options{
+		Root:   root,
+		OS:     "linux",
+		Env:    withHost([]string{"PATH=/bin", "USER=tester"}, "CTHULHU"),
+		Runner: runner,
+		Stdout: &out,
+		Stderr: &strings.Builder{},
+	})
+	if code != 0 {
+		t.Fatalf("doctor failed:\n%s", out.String())
+	}
+	got := out.String()
+	for _, noise := range []string{"docker", "helm", "Node", "argocd", "flux", "mise", "neovim"} {
+		if strings.Contains(strings.ToLower(got), strings.ToLower(noise)) {
+			// docker/helm/node as substrings can appear in unrelated words; check word-ish markers
+		}
+	}
+	for _, noise := range []string{"docker-engine", "helm", "argocd", "flux", "mise", "neovim", "reasonix"} {
+		if strings.Contains(got, noise) {
+			t.Fatalf("cthulhu doctor must not mention %s:\n%s", noise, got)
+		}
+	}
+	if !strings.Contains(got, "k3s") || !strings.Contains(got, "k9s") {
+		t.Fatalf("cthulhu doctor should report k3s/k9s:\n%s", got)
+	}
+}
+
+func TestDoctorCthulhuJSONStructuredResults(t *testing.T) {
+	root := repoRootDir(t)
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath git":                           []byte(""),
+		"lookpath ssh":                           []byte(""),
+		"lookpath curl":                          []byte(""),
+		"lookpath jq":                            []byte(""),
+		"lookpath rg":                            []byte(""),
+		"lookpath fd":                            []byte(""),
+		"lookpath fzf":                           []byte(""),
+		"lookpath unzip":                         []byte(""),
+		"lookpath tree":                          []byte(""),
+		"lookpath btm":                           []byte(""),
+		"lookpath btop":                          []byte(""),
+		"lookpath fastfetch":                     []byte(""),
+		"lookpath duf":                           []byte(""),
+		"lookpath dust":                          []byte(""),
+		"lookpath mkcert":                        []byte(""),
+		"lookpath rsync":                         []byte(""),
+		"lookpath lsof":                          []byte(""),
+		"lookpath ip":                            []byte(""),
+		"lookpath dig":                           []byte(""),
+		"lookpath unattended-upgrade":            []byte(""),
+		"lookpath k3s":                           []byte(""),
+		"lookpath k9s":                           []byte(""),
+		"lookpath chezmoi":                       []byte(""),
+		"lookpath systemctl":                     []byte(""),
+		commandKey("git", []string{"--version"}): []byte("git version 2.0"),
+		commandKey("k3s", []string{"--version"}): []byte("k3s version v1.36.3+k3s1"),
+		commandKey("k9s", []string{"--version"}): []byte("v0.51.0"),
+		commandKey("systemctl", []string{"is-enabled", "--quiet", "k3s.service"}): []byte(""),
+		commandKey("systemctl", []string{"is-active", "--quiet", "k3s.service"}):  []byte(""),
+		commandKey("k3s", []string{"kubectl", "get", "--raw=/readyz"}):            []byte("ok"),
+		commandKey("id", []string{"-nG"}):                                         []byte("users"),
+	}}
+	var out strings.Builder
+	code := Execute([]string{"doctor", "--json"}, Options{
+		Root:   root,
+		OS:     "linux",
+		Env:    withHost([]string{"PATH=/bin", "USER=tester"}, "CTHULHU"),
+		Runner: runner,
+		Stdout: &out,
+		Stderr: &strings.Builder{},
+	})
+	if code != 0 && !strings.Contains(out.String(), "kubeconfig") {
+		t.Fatalf("doctor --json failed unexpectedly:\n%s", out.String())
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(out.String()), &doc); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, out.String())
+	}
+	raw, _ := json.Marshal(doc)
+	payload := string(raw)
+	if strings.Contains(payload, "\x1b[") {
+		t.Fatalf("json doctor must not include ANSI: %s", payload)
+	}
+	for _, want := range []string{"k3s", "k9s", "kubeconfig", "api"} {
+		if !strings.Contains(payload, want) {
+			t.Fatalf("json doctor missing %q: %s", want, payload)
+		}
+	}
+}
+
+func TestDoctorKubeconfigMembershipHint(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "k3s.yaml")
+	if err := os.WriteFile(path, []byte("apiVersion: v1\n"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	oldOwner := fileOwnerGroupFn
+	oldMember := currentUserInGroupFn
+	defer func() {
+		fileOwnerGroupFn = oldOwner
+		currentUserInGroupFn = oldMember
+	}()
+	fileOwnerGroupFn = func(string) (string, string) { return "root", "k3s-admin" }
+	currentUserInGroupFn = func(Runner, string, []string) bool { return false }
+	var out strings.Builder
+	rep := newReporter(&out)
+	doctorKubeconfigCheck(rep, &fakeRunner{}, resolvedSoftware{
+		ID:     "k3s",
+		Health: healthPolicy{Mode: modeAutomatic, Severity: severityOptional},
+	}, healthCheck{
+		Type:  checkTypeKubeconfig,
+		Path:  path,
+		Owner: "root",
+		Group: "k3s-admin",
+		Mode:  "0640",
+	}, []string{"PATH=/bin", "USER=tester"}, "")
+	got := out.String()
+	if !strings.Contains(got, "sudo usermod -aG k3s-admin") {
+		t.Fatalf("expected membership hint:\n%s", got)
+	}
+	if strings.Contains(got, "chmod") && strings.Contains(got, "777") {
+		t.Fatalf("must not suggest broad chmod:\n%s", got)
+	}
+}
+
+func sampleK3sTool() linuxTool {
+	return linuxTool{
+		Name:     "k3s",
+		Command:  "k3s",
+		Guidance: "https://get.k3s.io",
+		Version:  "v1.36.3+k3s1",
+		Service: &serviceMetadata{
+			ConfigPath: "/etc/rancher/k3s/config.yaml",
+			Kubeconfig: &kubeconfigPolicy{
+				Path:  "/etc/rancher/k3s/k3s.yaml",
+				Owner: "root",
+				Group: "k3s-admin",
+				Mode:  "0640",
+			},
+			FreshInstall: &freshInstallPolicy{
+				Disable: []string{"traefik", "servicelb", "local-storage", "metrics-server"},
+				Enable:  []string{"coredns"},
+			},
+		},
+	}
+}
+
+func sampleK9sTool() linuxTool {
+	return linuxTool{
+		Name:     "k9s",
+		Command:  "k9s",
+		Guidance: "https://github.com/derailed/k9s/releases",
+		Version:  "v0.51.0",
+		Release: &releaseMetadata{
+			Version:     "v0.51.0",
+			Destination: "/usr/local/bin/k9s",
+			Artifacts: map[string]artifactMetadata{
+				"amd64": {
+					URL:    "https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_amd64.tar.gz",
+					SHA256: "c3752ad51a5a4015a113819c4eeb6e55a4d0e4b8e652494797532f6fc8161dd7",
+				},
+				"arm64": {
+					URL:    "https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_arm64.tar.gz",
+					SHA256: "3ee05c82e5f9198928a4e86133608ba6a2c10a2244d6a7789e820f78319d640c",
+				},
+			},
+		},
+	}
+}

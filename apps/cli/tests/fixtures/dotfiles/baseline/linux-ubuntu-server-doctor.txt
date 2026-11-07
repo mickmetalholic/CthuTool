@@ -1,0 +1,96 @@
+exit-code=1
+
+
+System
+  [ok] os: linux
+  [ok] host: linux-ubuntu-server
+  [ok] identity source: environment DOTFILES_HOST
+  [ok] arch: amd64
+  [ok] user: yuans
+  [ok] shell: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe
+  [ok] dot binary: managed by dotfiles-bootstrap: C:\Users\fixture-user\AppData\Local\Temp\go-build258288938\b001\dotcli.test.exe
+
+Host Resolution
+  [ok] resolved host: linux-ubuntu-server
+  [ok] identity source: environment DOTFILES_HOST
+  [ok] declared os: linux
+  [ok] shell: bash
+  [ok] terminal: none
+
+Managed Tools
+  [missing] git: not installed
+        fix: dot setup
+  [missing] curl: not installed
+        fix: dot setup
+  [missing] unzip: not installed
+        fix: dot setup
+  [missing] gh: not installed
+        fix: dot setup
+  [missing] jq: not installed
+        fix: dot setup
+  [missing] ripgrep: not installed
+        fix: dot setup
+  [missing] fd: not installed
+        fix: dot setup
+  [missing] fzf: not installed
+        fix: dot setup
+  [warn] tree: not installed
+        fix: dot setup
+  [warn] yq: not installed
+        fix: dot setup
+  [warn] bottom: not installed
+        fix: dot setup
+  [warn] btop: not installed
+        fix: dot setup
+  [warn] fastfetch: not installed
+        fix: dot setup
+  [warn] duf: not installed
+        fix: dot setup
+  [warn] dust: not installed
+        fix: dot setup
+  [warn] mkcert: not installed
+        fix: dot setup
+  [missing] openssh-client: not installed
+        fix: dot setup
+  [warn] rsync: not installed
+        fix: dot setup
+  [warn] lsof: not installed
+        fix: dot setup
+  [warn] iproute2: not installed
+        fix: dot setup
+  [warn] dnsutils: not installed
+        fix: dot setup
+  [warn] unattended-upgrades: not installed
+        fix: dot setup
+  [warn] k3s: not installed
+        fix: https://get.k3s.io
+  [skipped] k3s api: command unavailable; API readiness not checked
+  [warn] k3s kubeconfig: missing path /etc/rancher/k3s/k3s.yaml
+        fix: https://get.k3s.io
+  [warn] k9s: not installed
+        fix: https://github.com/derailed/k9s/releases
+
+Service Readiness
+  [skipped] k3s: command unavailable; service readiness not checked
+
+Core Tools
+
+Config
+  [missing] chezmoi
+        fix: install chezmoi from https://www.chezmoi.io/install/
+
+Auth
+  [warn] op: not installed
+  [warn] bw: not installed
+
+Security
+  [ok] managed secrets: no suspicious paths
+  [ok] plaintext token scan: no obvious tokens
+
+Summary
+  [blocked] machine setup: 10 blocking issue(s), 18 warning(s)
+        fix: resolve missing/failing required checks first
+        next:
+          dot setup
+          install chezmoi from https://www.chezmoi.io/install/
+          https://get.k3s.io

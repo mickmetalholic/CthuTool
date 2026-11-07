@@ -1,6 +1,6 @@
 ---
 name: notion-manage
-description: Manually query, create, update, and reversibly remove entries in personal Notion libraries for books, channels, comics, music, movies, dramas, games, knowledge, documentaries, animation, and apps. Use only when explicitly invoked.
+description: Manually query, create, update, and reversibly remove entries in personal Notion libraries for books, channels, comics, music, movies, dramas, games, knowledge, documentaries, animation, apps, and belongings inventory. Use only when explicitly invoked.
 ---
 
 # Notion · Manage
@@ -30,6 +30,7 @@ documentary, or another library could fit, clarify rather than write to several.
 | Documentaries / 纪录片 | [documentaries.md](references/documentaries.md) |
 | Animation / 动画 | [animation.md](references/animation.md) |
 | Apps / 应用 | [apps.md](references/apps.md) |
+| Belongings Inventory / 物品库存 | [belongings.md](references/belongings.md) |
 
 When resolving a relation to People & Organizations (formerly People Vault), also
 read [people-organizations.md](references/people-organizations.md). Authorized entity
@@ -74,7 +75,11 @@ Ignore `To Be Downloaded`; it is outside this skill's scope.
   Chinese edition title; English editions use their English title. Match that edition
   across title, metadata, Reference, and cover. Do not replace it with the work's
   original-language title.
-- For other libraries, when creating an entry or setting its `Name`/title, use the
+- Belongings Inventory uses user-defined physical item labels, including meaningful
+  numbered suffixes and nicknames. Follow [belongings.md](references/belongings.md)
+  rather than applying published-work title normalization to possessions.
+- For other libraries except Belongings Inventory, when creating an entry or setting
+  its `Name`/title, use the
   verified original name in its original language and script, not a translated/localized title or an invented
   transliteration. Use translated names and aliases for search and duplicate matching
   only. Follow the selected library's source priorities, but distinguish a catalog's
@@ -84,8 +89,8 @@ Ignore `To Be Downloaded`; it is outside this skill's scope.
   [people-organizations.md](references/people-organizations.md) for people. Preserve work/edition/season scope and identifiers;
   a shared original title does not make different editions duplicates. Personal notes
   retain the user's title. Unrelated updates do not rename existing entries.
-- Across all libraries, do not append a release/publication year to entry names by
-  default. Use ` (YYYY)` only when needed to distinguish verified same-name works
+- Across all libraries except Belongings Inventory, do not append a
+  release/publication year to entry names by default. Use ` (YYYY)` only when needed to distinguish verified same-name works
   or versions, such as remakes; keep the year in the appropriate date field where
   available. Preserve years that belong to the official title and meaningful season,
   volume, edition, or version labels. Do not strip suffixes mechanically: verify
@@ -100,6 +105,8 @@ Ignore `To Be Downloaded`; it is outside this skill's scope.
   Reuse current options and report unmapped values. Add/remove only requested
   relation or multi-select members; replace the set only when requested. Do not
   substitute public ratings or infer personal progress from publication status.
+  Belongings prices, purchase/source details, priorities, grouping, and storage
+  assignments are also personal facts: never derive them from public catalogs.
 - Keep bodies for user notes; metadata enrichment does not generate reviews, catalog
   blurbs, or summaries. Requested note edits or summaries follow the requested scope.
 - Public dates must match the selected work/edition/season and retain their verified
@@ -111,7 +118,8 @@ Ignore `To Be Downloaded`; it is outside this skill's scope.
 - For new books, comics, music releases, movies, dramas, games, documentaries, and
   animation entries, follow [cover handling](references/covers.md) to set the cover
   and report the verified result. Load it also for requested cover completion or
-  replacement. Knowledge, channels, apps, and people/organizations need no covers.
+  replacement. Knowledge, channels, apps, people/organizations, and belongings inventory
+  need no covers.
   Keep cover artwork separate from library-specific icons.
 - Use authorized Notion tools for private records and public sources for delegated
   metadata via agent-native web tools; metadata lookup needs no backend or extra API

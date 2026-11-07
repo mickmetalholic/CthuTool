@@ -1,0 +1,148 @@
+toolsets:
+  core:
+    - git
+    - curl
+    - unzip
+    - gh
+    - jq
+    - ripgrep
+    - fd
+    - fzf
+    - tree
+    - yq
+
+  cli-productivity:
+    - eza
+    - zoxide
+    - starship
+    - direnv
+    - httpie-cli
+    - hyperfine
+    - bat
+    - tlrc
+    - git-delta
+    - lazygit
+    - just
+
+  documentation:
+    - glow
+
+  file-management:
+    - yazi
+    - f2
+
+  code-analysis:
+    - ast-grep
+
+  shell-testing:
+    - bats-core
+
+  config-review:
+    - dyff
+
+  data-exploration:
+    - visidata
+
+  download-tools:
+    - aria2
+
+  remote-operations:
+    - mosh
+
+  development:
+    - mise
+    - neovim
+    - emacs
+    - watchman
+    - shellcheck
+    - shfmt
+    - taplo
+    - stylua
+    - psscriptanalyzer
+
+  data-tools:
+    - duckdb
+    - sqlite
+    - libpq
+    - redis
+
+  operations:
+    - bottom
+    - btop
+    - fastfetch
+    - duf
+    - dust
+    - mkcert
+    - openssh-client
+    - rsync
+    - lsof
+    - iproute2
+    - dnsutils
+    - unattended-upgrades
+
+  ai-development:
+    - codex-cli
+    - claude-code
+    - opencode-cli
+    - deepseek-harness
+    - hermes-cli
+    - openspec-cli
+
+  containers:
+    - docker-engine
+    - docker-desktop
+
+  kubernetes-clients:
+    - kubernetes-cli
+    - helm
+    - kustomize
+    - kubectx
+    - k9s
+
+  shell-zsh:
+    - zsh
+    - oh-my-zsh
+    - zsh-completions
+    - zsh-autosuggestions
+    - zsh-syntax-highlighting
+
+  shell-fish:
+    - fish
+
+  shell-nushell:
+    - nushell
+
+  terminal-multiplexers:
+    - tmux
+    - zellij
+
+  desktop-terminals:
+    - windows-terminal
+    - ghostty
+    - tabby
+    - warp
+
+  desktop-editors:
+    - visual-studio-code
+    - cursor
+    - zed
+
+  desktop-api:
+    - httpie-desktop
+    - bruno
+
+  desktop-data:
+    - github-desktop
+    - tableplus
+    - redis-insight
+
+  desktop-platform:
+    - mas
+    - orbstack
+    - utm
+
+  desktop-ai:
+    - codex-app
+    - opencode-app
+    - zcode-app
+    - hermes-app

@@ -127,19 +127,21 @@ try {
       hookEventName: 'UserPromptSubmit',
       additionalContext: `CthuCodex language coach is active for the user's latest message.
 
-Before doing any requested task, first review the user's English prose if the latest message is written entirely in English, or is mostly English with a few non-English placeholder words. Check grammar, naturalness, tone, and idiomatic usage. The best version should be a natural native-like rewrite of the user's intended meaning, not a minimal grammar correction. If the original sentence sounds Chinglish or structurally unnatural, rewrite it freely and do not preserve the original structure.
+Before starting the user's requested task, review the user's English prose if the latest message is written entirely in English, or is mostly English with a few non-English placeholder words. Check grammar, naturalness, tone, and idiomatic usage. Suggest fluent wording that preserves the user's intended meaning. If the phrasing is unnatural, rewrite it freely rather than preserving its structure. Explain meaningful edits in plain, specific language, distinguish corrections from optional style suggestions, and avoid stock praise or claims that one wording is uniquely best. Do not invent problems in already natural prose.
 
-Do not output the English check in intermediate progress updates. When the cthu_language_feedback_present tool is available, call it once before completing the user's actual task. Pass version 1, variant "compact", the user's English prose as original, the best natural rewrite as bestVersion, and an ordered notes array. Each note must use exactly one category from grammar, naturalness, tone, idiom, clarity, or other and a concise message. If the original is already natural, use it as bestVersion and include zero notes or one optional polish note. After the presentation tool call, continue with and fully answer the user's actual request.
+Keep English feedback out of intermediate progress updates. Use cthu_language_feedback_present for the styled card whenever the tool is available. Call it once before starting the user's actual task, before other task-related tool calls and the main answer. After presenting the card, continue with and fully answer the user's actual request without duplicating the feedback. The host controls the card's visual placement; do not move the main answer into a progress update or omit the final answer to work around that placement. Pass version 1, variant "compact", the user's English prose as original, the best natural rewrite as bestVersion, and an ordered notes array. Each note must use exactly one category from grammar, naturalness, tone, idiom, clarity, or other and a concise message. If the original is grammatically correct and natural and you have no concrete suggestion, return it unchanged as bestVersion with an empty notes array. Do not add a note solely to confirm that it is correct.
 
-If cthu_language_feedback_present is unavailable or its call fails, do not let the presentation failure block the requested task. Instead, start the final answer with this prominent Markdown fallback, with no prose before it:
+If cthu_language_feedback_present is unavailable or its call fails, do not let the presentation failure block the requested task. Instead, place this Markdown fallback at the beginning of the final answer, followed by the actual reply:
 
-## English polish
+## English feedback
 
-> **Best version:** <best natural version>
+> **Suggested wording:** <suggested wording>
 >
-> **Notes:** <brief key corrections, or "Already natural; no changes needed.">
+> **Notes:** <brief explanations of meaningful edits>
 
 <actual reply>
+
+If the wording is unchanged and notes is empty, replace the detailed feedback section with "## English feedback" followed by "Your message is grammatically correct and sounds natural." Do not repeat the original message or include suggestion or notes labels in that case. If unchanged wording has optional notes, use "No changes needed" instead of "Suggested wording" in the detailed section. Omit Notes when there are no notes.
 
 Do not correct source code, commands, logs, file paths, config keys, quoted text, or names unless the user explicitly asks. If the latest message is mostly not English prose, skip the English check silently.`,
     },

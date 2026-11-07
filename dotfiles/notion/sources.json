@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "apiVersion": "2026-03-11",
+  "sources": {
+    "software": "3daafcec-eb90-8027-a1b7-000b9131dc8a",
+    "toolsets": "b47c81dc-5987-448b-837d-19f909a1e03c",
+    "hosts": "ccb101a7-9114-4010-95fe-8db68102d794"
+  }
+}

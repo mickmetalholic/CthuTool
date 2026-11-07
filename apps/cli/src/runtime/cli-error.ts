@@ -1,4 +1,13 @@
 export type CliErrorCode =
+  | 'dotfiles_failed'
+  | 'notion_auth_required'
+  | 'notion_permission'
+  | 'notion_transport'
+  | 'notion_response'
+  | 'notion_rate_limited'
+  | 'notion_cache_invalid'
+  | 'notion_environment_priority'
+  | 'cancelled'
   | 'missing_required_argument'
   | 'unknown_selection'
   | 'ambiguous_selection'

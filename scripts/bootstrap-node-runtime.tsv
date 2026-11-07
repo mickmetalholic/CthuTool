@@ -1,0 +1,7 @@
+# version	target	url	sha256
+24.14.1	darwin-x64	https://nodejs.org/dist/v24.14.1/node-v24.14.1-darwin-x64.tar.gz	2526230ad7d922be82d4fdb1e7ee1e84303e133e3b4b0ec4c2897ab31de0253d
+24.14.1	darwin-arm64	https://nodejs.org/dist/v24.14.1/node-v24.14.1-darwin-arm64.tar.gz	25495ff85bd89e2d8a24d88566d7e2f827c6b0d3d872b2cebf75371f93fcb1fe
+24.14.1	linux-x64	https://nodejs.org/dist/v24.14.1/node-v24.14.1-linux-x64.tar.xz	84d38715d449447117d05c3e71acd78daa49d5b1bfa8aacf610303920c3322be
+24.14.1	linux-arm64	https://nodejs.org/dist/v24.14.1/node-v24.14.1-linux-arm64.tar.xz	71e427e28b78846f201d4d5ecc30cb13d1508ca099ef3871889a1256c7d6f67e
+24.14.1	win-x64	https://nodejs.org/dist/v24.14.1/node-v24.14.1-win-x64.zip	6e50ce5498c0cebc20fd39ab3ff5df836ed2f8a31aa093cecad8497cff126d70
+24.14.1	win-arm64	https://nodejs.org/dist/v24.14.1/node-v24.14.1-win-arm64.zip	a7b7c68490e4a8cde1921fe5a0cfb3001d53f9c839e416903e4f28e727b62f60

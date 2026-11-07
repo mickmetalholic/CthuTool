@@ -1,0 +1,153 @@
+exit-code=1
+
+
+Setup Plan
+  [ok] data: C:\Users\fixture-user\.codex\worktrees\fb0c\dotfiles\data\packages.yaml
+  [ok] host: windows-desktop
+  [ok] identity source: environment DOTFILES_HOST
+  [skipped] dyff: unsupported on windows from toolset:config-review
+  [skipped] btop: unsupported on windows from toolset:operations
+  [skipped] openssh-client: unsupported on windows from toolset:operations
+  [skipped] rsync: unsupported on windows from toolset:operations
+  [skipped] lsof: unsupported on windows from toolset:operations
+  [skipped] iproute2: unsupported on windows from toolset:operations
+  [skipped] dnsutils: unsupported on windows from toolset:operations
+  [skipped] unattended-upgrades: unsupported on windows from toolset:operations
+  [skipped] ghostty: unsupported on windows from toolset:desktop-terminals
+  [skipped] mas: unsupported on windows from toolset:desktop-platform
+  [skipped] orbstack: unsupported on windows from toolset:desktop-platform
+  [skipped] utm: unsupported on windows from toolset:desktop-platform
+
+Runtime Managed Tools
+  [skipped] deepseek-harness: runtime=node; native runtime workflow owns installation
+        fix: npm install -g @deepseek-ai/dsh
+  [skipped] openspec-cli: runtime=node; native runtime workflow owns installation
+        fix: npm install -g @fission-ai/openspec
+
+Setup Plan
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [skipped] curl: system-provided package=curl command=curl
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [skipped] direnv: fallback-only package=direnv command=direnv
+        fix: https://direnv.net/docs/installation.html
+  [skipped] httpie-cli: fallback-only package=httpie-cli command=http
+        fix: https://httpie.io/cli
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [skipped] watchman: fallback-only package=watchman command=watchman
+        fix: https://facebook.github.io/watchman/docs/install.html
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [skipped] taplo: fallback-only package=taplo command=taplo
+        fix: https://taplo.tamasfe.dev/cli/installation/
+  [skipped] stylua: fallback-only package=stylua command=stylua
+        fix: https://github.com/JohnnyMorganz/StyLua
+  [planned] psscriptanalyzer: would install from PowerShell Gallery
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [skipped] libpq: fallback-only package=libpq command=psql
+        fix: https://www.postgresql.org/download/windows/
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [skipped] codex-cli: fallback-only package=codex-cli command=codex
+        fix: https://developers.openai.com/codex/cli
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [skipped] hermes-cli: fallback-only package=hermes-cli command=hermes
+        fix: iex (irm https://hermes-agent.nousresearch.com/install.ps1)
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [skipped] tableplus: fallback-only package=tableplus
+        fix: https://tableplus.com/windows
+  [skipped] redis-insight: fallback-only package=redis-insight
+        fix: https://redis.io/insight
+  [skipped] codex-app: fallback-only package=codex-app
+        fix: https://developers.openai.com/codex/app
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [missing] winget
+        fix: install App Installer from Microsoft Store
+  [skipped] hermes-app: fallback-only package=hermes-app
+        fix: https://hermes-agent.nousresearch.com
+  [missing] winget
+        fix: install App Installer from Microsoft Store

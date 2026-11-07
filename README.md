@@ -179,9 +179,12 @@ chc source update
 status` gives detailed diagnostics for the active or explicitly selected
 installation. Source switching validates the committed CLI bundle and relinks
 the global npm package, but it does not build, fetch, check out, or require a
-clean development worktree. Use `chc source register <path>` to remember a
-development clone while running from managed mode. If the managed checkout is
-absent, selecting `remote` creates it through the safe managed install flow. An
+clean development worktree. Successful `chc source use .`, `use <path>`, or
+`use worktree:<id>` automatically remembers the owning main checkout, including
+when already active. Selecting `remote` keeps that anchor for `use local`;
+failed switches preserve the previous record. `list` and `status` are read-only.
+If the managed checkout is absent, selecting `remote` creates it through the
+safe managed install flow. An
 existing valid remote is only relinked; update it separately with `chc source
 update`. An existing invalid managed path is never overwritten automatically,
 so repair or move it before retrying. Switch away before removing an active

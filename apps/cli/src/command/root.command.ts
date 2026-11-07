@@ -11,6 +11,7 @@ import {
   createCompletionCommand,
   createInternalCompleteCommand,
 } from './completion.command';
+import { dotfilesCommand } from './dotfiles.command';
 import { obsidianCommand } from './obsidian.command';
 import { normalizeScriptsArgs, scriptsCommand } from './run-scripts.command';
 import {
@@ -23,6 +24,12 @@ import { sourceCommand } from './source.command';
 let rootCommand: AnyCommandDef;
 
 const rootCommandRegistrations: readonly CliCommandRegistration[] = [
+  {
+    name: 'dotfiles',
+    command: dotfilesCommand,
+    visibility: 'public',
+    bareBehavior: 'help',
+  },
   {
     name: 'agent',
     command: agentCommand,

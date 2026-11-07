@@ -1,5 +1,5 @@
 {
-  "description": "CthuCodex language coaching hook that asks Codex to review English before continuing.",
+  "description": "CthuCodex language coaching hook that requests English feedback before the main task.",
   "hooks": {
     "UserPromptSubmit": [
       {

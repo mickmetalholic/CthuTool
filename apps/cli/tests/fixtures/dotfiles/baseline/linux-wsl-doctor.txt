@@ -1,0 +1,176 @@
+exit-code=1
+
+
+System
+  [ok] os: linux
+  [ok] host: linux-wsl
+  [ok] identity source: environment DOTFILES_HOST
+  [ok] arch: amd64
+  [ok] user: yuans
+  [ok] shell: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe
+  [ok] dot binary: managed by dotfiles-bootstrap: C:\Users\fixture-user\AppData\Local\Temp\go-build258288938\b001\dotcli.test.exe
+
+Host Resolution
+  [ok] resolved host: linux-wsl
+  [ok] identity source: environment DOTFILES_HOST
+  [ok] declared os: linux
+  [ok] shell: zsh
+  [ok] terminal: none
+
+Managed Tools
+  [missing] git: not installed
+        fix: dot setup
+  [missing] curl: not installed
+        fix: dot setup
+  [missing] unzip: not installed
+        fix: dot setup
+  [missing] gh: not installed
+        fix: dot setup
+  [missing] jq: not installed
+        fix: dot setup
+  [missing] ripgrep: not installed
+        fix: dot setup
+  [missing] fd: not installed
+        fix: dot setup
+  [missing] fzf: not installed
+        fix: dot setup
+  [warn] tree: not installed
+        fix: dot setup
+  [warn] yq: not installed
+        fix: dot setup
+  [warn] eza: not installed
+        fix: dot setup
+  [warn] zoxide: not installed
+        fix: dot setup
+  [warn] starship: not installed
+        fix: dot setup
+  [warn] direnv: not installed
+        fix: dot setup
+  [warn] httpie-cli: not installed
+        fix: dot setup
+  [warn] hyperfine: not installed
+        fix: dot setup
+  [warn] bat: not installed
+        fix: dot setup
+  [warn] tlrc: not installed
+        fix: dot setup
+  [warn] git-delta: not installed
+        fix: dot setup
+  [warn] lazygit: not installed
+        fix: dot setup
+  [warn] just: not installed
+        fix: dot setup
+  [warn] glow: not installed
+        fix: dot setup
+  [warn] yazi: not installed
+        fix: dot setup
+  [warn] f2: not installed
+        fix: dot setup
+  [warn] ast-grep: not installed
+        fix: dot setup
+  [warn] bats-core: not installed
+        fix: dot setup
+  [warn] dyff: not installed
+        fix: dot setup
+  [warn] visidata: not installed
+        fix: dot setup
+  [warn] aria2: not installed
+        fix: dot setup
+  [warn] mosh: not installed
+        fix: dot setup
+  [missing] mise: not installed
+        fix: dot setup
+  [warn] neovim: not installed
+        fix: dot setup
+  [warn] emacs: not installed
+        fix: dot setup
+  [warn] watchman: not installed
+        fix: dot setup
+  [warn] shellcheck: not installed
+        fix: dot setup
+  [warn] shfmt: not installed
+        fix: dot setup
+  [warn] taplo: not installed
+        fix: dot setup
+  [warn] stylua: not installed
+        fix: dot setup
+  [warn] psscriptanalyzer: official fallback required
+        fix: Install-Module PSScriptAnalyzer -Scope CurrentUser
+  [warn] duckdb: not installed
+        fix: dot setup
+  [warn] sqlite: not installed
+        fix: dot setup
+  [warn] libpq: not installed
+        fix: dot setup
+  [warn] redis: not installed
+        fix: dot setup
+  [warn] bottom: not installed
+        fix: dot setup
+  [warn] btop: not installed
+        fix: dot setup
+  [warn] fastfetch: not installed
+        fix: dot setup
+  [warn] duf: not installed
+        fix: dot setup
+  [warn] dust: not installed
+        fix: dot setup
+  [warn] mkcert: not installed
+        fix: dot setup
+  [missing] openssh-client: not installed
+        fix: dot setup
+  [warn] rsync: not installed
+        fix: dot setup
+  [warn] lsof: not installed
+        fix: dot setup
+  [warn] iproute2: not installed
+        fix: dot setup
+  [warn] dnsutils: not installed
+        fix: dot setup
+  [warn] unattended-upgrades: not installed
+        fix: dot setup
+  [warn] codex-cli: not installed
+        fix: curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh
+  [warn] claude-code: not installed
+        fix: curl -fsSL https://claude.ai/install.sh | bash
+  [warn] opencode-cli: official fallback required
+        fix: curl -fsSL https://opencode.ai/install | bash
+  [warn] hermes-cli: official fallback required
+        fix: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+  [warn] zsh: not installed
+        fix: dot setup
+  [warn] oh-my-zsh: not installed
+        fix: RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  [warn] zsh-completions: manual health; verification required
+        fix: verify zsh completions are installed and loaded in the shell
+  [warn] zsh-autosuggestions: manual health; verification required
+        fix: verify zsh autosuggestions are installed and loaded in the shell
+  [warn] zsh-syntax-highlighting: manual health; verification required
+        fix: verify zsh syntax highlighting is installed and loaded in the shell
+
+Runtime Managed Tools
+  [warn] deepseek-harness: runtime node unavailable
+        fix: npm install -g @deepseek-ai/dsh
+  [warn] openspec-cli: runtime node unavailable
+        fix: npm install -g @fission-ai/openspec
+
+Core Tools
+
+Config
+  [missing] chezmoi
+        fix: install chezmoi from https://www.chezmoi.io/install/
+
+Auth
+  [warn] op: not installed
+  [warn] bw: not installed
+
+Security
+  [ok] managed secrets: no suspicious paths
+  [ok] plaintext token scan: no obvious tokens
+
+Summary
+  [blocked] machine setup: 11 blocking issue(s), 58 warning(s)
+        fix: resolve missing/failing required checks first
+        next:
+          dot setup
+          install chezmoi from https://www.chezmoi.io/install/
+          Install-Module PSScriptAnalyzer -Scope CurrentUser

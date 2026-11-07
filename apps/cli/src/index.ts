@@ -107,19 +107,29 @@ async function showNativeUsage<T extends ArgsDef = ArgsDef>(
 
 async function resolveBareTopLevelHelpCommand(
   rawArgs: readonly string[],
-): Promise<CommandDef | undefined> {
-  if (rawArgs.length !== 1) {
+): Promise<{ command: AnyCommandDef; parent: AnyCommandDef } | undefined> {
+  if (
+    !rawArgs.length ||
+    rawArgs.some((word) => word.startsWith('-')) ||
+    rawArgs[0] === '__complete'
+  )
     return undefined;
+  let current: AnyCommandDef = rootCommand;
+  for (const [index, word] of rawArgs.entries()) {
+    const registration = getCommandRegistration(current, word);
+    if (!registration) return undefined;
+    if (index === rawArgs.length - 1)
+      return registration.bareBehavior === 'help'
+        ? {
+            command: registration.command,
+            parent: {
+              meta: { name: ['chc', ...rawArgs.slice(0, -1)].join(' ') },
+            },
+          }
+        : undefined;
+    current = registration.command;
   }
-
-  const [name] = rawArgs;
-  if (!name || name.startsWith('-') || name === '__complete') {
-    return undefined;
-  }
-  const registration = getCommandRegistration(rootCommand, name);
-  return registration?.bareBehavior === 'help'
-    ? registration.command
-    : undefined;
+  return undefined;
 }
 
 const rawArgs = normalizeRegisteredArgs(rootCommand, process.argv.slice(2));
@@ -131,7 +141,10 @@ if (rawArgs.length === 1 && rawArgs[0] === '--version') {
   await showNativeUsage(rootCommand);
   process.exitCode = 0;
 } else if (bareTopLevelHelpCommand) {
-  await showNativeUsage(bareTopLevelHelpCommand, rootCommand);
+  await showNativeUsage(
+    bareTopLevelHelpCommand.command,
+    bareTopLevelHelpCommand.parent,
+  );
   process.exitCode = 0;
 } else {
   await runMain(rootCommand, { rawArgs, showUsage: showNativeUsage }).catch(

@@ -33,7 +33,7 @@ chc source use .
 chc source use worktree:<id>
 chc source use remote
 chc source update
-chc source register /path/to/CthuTool
+chc source use /path/to/CthuTool
 ```
 
 `source list` marks the active runtime and reports `main`, `worktree`, and
@@ -44,6 +44,13 @@ the current directory; worktree ids come from the live Git worktree catalog.
 `source status` is intentionally separate: it provides detailed diagnostics for
 the active or explicitly selected installation instead of another candidate
 inventory.
+
+`source use .`, `source use <path>`, and `source use worktree:<id>` automatically
+remember the owning main checkout after a successful selection, including when
+the selected source is already active. Switching to `remote` preserves that
+local anchor so `source use local` can return to it from any directory. Failed
+switches keep the previous record; `source list` and `source status` are read-only.
+No separate registration command is needed.
 
 Local/worktree switches only validate the CthuTool package and committed bundle
 before relinking global npm state. They allow dirty worktrees and never mutate
@@ -252,13 +259,16 @@ enabled plugins, and synchronizes their cache. It does not manage standalone
 skills, prompts, or rules. The retired `codex status`, `export`, and `apply`
 subcommands are rejected as unknown commands.
 
-The first interactive install asks for the CthuTool repository path and saves
-it at `~/.cthutool/codex/plugin-source.json`. Later installs reuse that source
-from any working directory. `--change-source` prompts for a new default;
+Without a saved source, install uses the repository containing the running `chc`
+command from any working directory, without prompting or saving a fixed path.
+A source saved at `~/.cthutool/codex/plugin-source.json` takes priority.
+`--change-source` prompts for a new default and saves it after successful
+installation;
 `--change-source --repo-root <path>` changes it non-interactively. Plain
-`--repo-root <path>` is a one-run override. JSON and non-interactive runs fail
-with a repair command if no valid source is available. The human result names
-the source and each plugin action/cache version, while JSON includes source
+`--repo-root <path>` is a one-run override. If the current CLI repository has no
+plugin source, interactive install asks for a valid repository. JSON and
+non-interactive runs fail with a repair command if no valid source is available.
+The human result names the source and each plugin action/cache version, while JSON includes source
 path and provenance.
 If cache synchronization reports that a plugin cache path is busy, exit Codex
 completely and rerun `chc codex install`.

@@ -1,0 +1,13 @@
+export EDITOR="{{ .defaults.editor }}"
+export PATH="$HOME/.local/bin:$PATH"
+
+{{- $profile := joinPath .chezmoi.destDir ".profile" -}}
+{{- if stat $profile -}}
+{{- $existing := include $profile -}}
+{{- range $pattern := list "(?ms)^# >>> cthutool chc completion >>>\\r?\\n.*?^# <<< cthutool chc completion <<<" "(?ms)^# >>> cthutool bootstrap PATH >>>\\r?\\n.*?^# <<< cthutool bootstrap PATH <<<" -}}
+{{- $blocks := regexFindAll $pattern $existing -1 -}}
+{{- if $blocks }}
+{{ index $blocks 0 }}
+{{ end -}}
+{{- end -}}
+{{- end }}

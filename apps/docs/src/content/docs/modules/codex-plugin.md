@@ -10,12 +10,9 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - language coach hook
 - language-feedback MCP Apps server and compact correction card
 - Anki MCP server
-- Anki card-creation and mature-card conversion skills
+- Anki card-creation skills
 - `cthutool-cli` skill for operating the installed `chc` CLI
-- Notion channel-library skill
-- Notion album-maintenance skill
-- Notion movie-library skill
-- Notion book-library maintenance skill
+- unified `$notion-manage` skill for 12 personal libraries, including belongings inventory
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -29,9 +26,13 @@ User Codex environment, with local dependencies such as Anki and AnkiConnect whe
 chc codex install
 ```
 
-On first interactive use, enter the CthuTool repository path. The CLI saves it
-for future installs from any directory. Run `chc codex install --change-source`
-to select another default, or add `--repo-root <path>` for a one-run override.
+Without a saved source, the CLI automatically uses the repository containing
+the running `chc` command from any directory. Run
+`chc codex install --change-source` to select and save a default after successful
+installation, or add
+`--repo-root <path>` for a one-run override. A saved default takes priority over
+the running CLI repository. If that repository has no plugin source, interactive
+install asks for a valid path.
 For scripts, `--change-source --repo-root <path>` sets a new default without a
 prompt. Install output identifies the selected source, installed or updated
 plugins, and synchronized cache versions.
@@ -71,9 +72,22 @@ thread to load the new skill.
 When the local language-coach detector recognizes English prose, it asks the
 active Codex model to generate structured feedback and call
 `cthu_language_feedback_present`. On hosts that render MCP Apps resources, the
-tool displays a prominent inline card: the original prose is muted, the best
-natural rewrite is emphasized, coaching notes keep stable categories, and a
-keyboard-accessible control copies only the best version.
+tool displays an inline "English feedback" card: "You wrote" shows the original
+message, "Suggested wording" emphasizes the rewrite, and brief notes explain
+meaningful edits. A keyboard-accessible control copies only the suggested
+wording. When there is no rewrite and no notes, the card shows just "Your message
+is grammatically correct and sounds natural." It omits the repeated message,
+copy button, and detailed sections. Unchanged wording with optional notes keeps
+the detailed view, labeled "No changes needed".
+
+The component reports content height through MCP Apps notifications and the
+available `window.openai.notifyIntrinsicHeight` compatibility API. The latter
+does not depend on an MCP Apps initialization response, so compatible hosts can
+resize the iframe for either a short confirmation or detailed feedback.
+The resource sets the Codex-specific `openai/widgetMinFrameHeight` hint to `0`
+so the host can honor measurements below its default 200px minimum. Reload
+the MCP server after updating this metadata; reopening a card only refreshes
+the HTML when the server process is still running its older code.
 
 The version `1` contract currently supports the `compact` variant:
 
@@ -92,12 +106,16 @@ The version `1` contract currently supports the `compact` variant:
 }
 ```
 
-The tool advertises `ui://cthu-language-feedback/v1.html`. Compatible clients
+The model calls the presentation tool before other task-related tools and the
+main answer, then completes the user's task. It prefers the
+styled card whenever the tool is available. The tool advertises
+`ui://cthu-language-feedback/v1.html`. Compatible clients
 read that self-contained resource with the MCP Apps media type. Clients without
-component rendering still receive a complete text result containing the best
-version and every note. If the presentation tool is missing or fails, the
-language-coach instruction falls back to a prominent Markdown section and then
-continues the user's actual task.
+component rendering still receive a complete text result containing the
+suggested wording and every note. If the presentation tool is missing or fails,
+the language-coach instruction places an English feedback section at the
+beginning of the final answer, followed by the actual reply. The host controls
+the exact placement of native tool cards.
 
 This surface is local and read-only: it performs no external network requests,
 persists no correction history or preferences, records no telemetry, and does
@@ -149,28 +167,6 @@ Or a separate grammar point line:
 
 When `tags:` is provided, or when a standalone line looks like a tag hierarchy, spaced hyphen hierarchy shorthand such as `新完全マスター - N３・文法 - 第１部・１１課` is normalized to `新完全マスター::N３・文法::第１部・１１課`.
 
-## Mature Japanese Sentence Conversion
-
-Use `$anki-convert-mature-japanese-sentence-cards` to preview familiar `Japanese Sentence` notes for promotion from a local grammar cloze to whole-sentence Japanese production.
-
-The default FSRS search requires stability of at least 45 days and at least 3 reviews:
-
-```text
-deck:"0.Japanese::Japanese Sentences" note:"Japanese Sentence" is:review -is:learn -is:suspended -is:buried prop:s>=45 prop:reps>=3
-```
-
-For a supported note, the skill proposes this transformation:
-
-```text
-Before:
-冷蔵庫が壊れたので、新しいのを{{c1::買うことにした::decided to buy}}。
-
-After:
-{{c1::冷蔵庫が壊れたので、新しいのを買うことにした。::The refrigerator broke, so I decided to buy a new one.}}
-```
-
-Every run starts with a read-only preview containing note IDs and exact before/after `文` values. Updating requires a later explicit confirmation, is limited to 20 notes per batch, and uses the previewed `文` and `訳` values to prevent stale overwrites. It does not modify tags, and repeated runs skip notes whose proposed `文` already equals the current value. The skill does not silently replace FSRS stability with an interval query.
-
 ## Japanese Vocabulary Cards
 
 Use `$anki-create-japanese-vocabulary-card` for Japanese vocabulary cards. The skill defaults to deck `0.Japanese::Japanese Vocabulary` and model `Japanese Vocabulary`.
@@ -211,7 +207,7 @@ The `Sentence` field uses Anki cloze syntax with a short synonym or paraphrase h
 ## Unified Notion management
 
 Invoke `$notion-manage` explicitly and describe the library and operation. One entry
-point covers all eleven libraries below. Its index loads only the relevant library
+point covers all twelve libraries. Its index loads only the relevant library
 reference; Classical Work guidance is conditional on Works matching and does not
 provide independent work CRUD. Music enrichment can use the optional skill-local
 resolver. Implicit invocation remains disabled; the separate library entry points
@@ -225,7 +221,8 @@ original script. Books instead use the selected edition's published title: Chine
 translations use their Chinese edition title, and English editions their English title.
 Translated titles remain useful for search and
 matching. Channels, apps, people, and organizations use verified official/self-used
-names; personal notes retain the user's title. Unrelated updates do not rename entries.
+names; personal notes and inventory items retain the user's own labels.
+Unrelated updates do not rename entries.
 
 Metadata sources follow these library-specific preferences. Ordered fallbacks apply
 when the preferred source is unavailable or lacks the requested field; all sources
@@ -239,6 +236,35 @@ must match the selected work, edition, or season. Report material conflicts.
 | Dramas | TMDB TV → IMDb → Douban |
 | Games | IGDB wherever possible; identify other sources used for gaps |
 | Documentaries / Animation | IMDb → Douban |
+
+Belongings Inventory records are personal possessions, not catalog entries:
+recorded prices, dates, ownership, groupings, and locations must come from the
+user rather than public product metadata.
+
+## Notion Belongings Inventory
+
+Invoke `$notion-manage` explicitly to find, add, update, move, or reversibly
+remove physical belongings in the [Belongings Inventory](https://app.notion.com/p/7f6dfec720e54f2095ff10bc971a4e35)
+database. The skill uses `references/belongings.md`, checks the live schema and
+current records, and preserves separate items that happen to share a name or model.
+It does not infer ownership, purchase price, acquisition date, or location from
+shopping pages.
+
+`Stored place` and `Contents` are self-relations for nested containers. The
+skill resolves exact item/container identities, prevents containment loops,
+verifies reciprocal links after moves, and does not silently change `Group` or
+`Storage Category`. The schema's exact field name is `Prority` (not
+`Priority`). Creation checks available Notion templates; if no suitable live
+template exists, this inventory explicitly allows a no-template record, without
+pretending an icon/template was applied. Existing icons, notes, and other
+relations remain intact. Removing a container requires resolving what happens
+to its existing contents before archiving/trashing it.
+
+```text
+$notion-manage 查找我的充电器，告诉我存放在哪个容器里
+$notion-manage 将指定物品移入已有的收纳盒，保留其他属性
+$notion-manage 添加一件新物品，按我提供的品牌、型号和价格登记
+```
 
 ## Notion Book Library
 

@@ -1,0 +1,262 @@
+package dotcli
+
+import (
+	"strings"
+	"testing"
+)
+
+func planEntryFor(t *testing.T, catalog catalogData, id, osLabel string) planEntry {
+	t.Helper()
+	tool, ok := catalog.Tools[id]
+	if !ok {
+		t.Fatalf("tool %s not in fixture", id)
+	}
+	platform, ok := tool.Platforms[osLabel]
+	if !ok {
+		t.Fatalf("tool %s has no %s platform", id, osLabel)
+	}
+	return planEntry{Tool: tool, Platform: platform, Source: "host"}
+}
+
+func TestSetupSystemOwnerDetectsWithoutInstalling(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath apt-get": []byte(""),
+		"lookpath git":     []byte(""),
+	}}
+	var out strings.Builder
+	code := Execute([]string{"setup", "--dry-run"}, Options{
+		Root:   root,
+		OS:     "linux",
+		Env:    withHost([]string{"PATH=/bin"}, "linux-wsl"),
+		Runner: runner,
+		Stdout: &out,
+		Stderr: &strings.Builder{},
+	})
+	if code != 0 {
+		t.Fatalf("code = %d, want 0\n%s", code, out.String())
+	}
+	for _, command := range runner.commands {
+		if command.name == "sudo" || command.name == "apt-get" && len(command.args) > 0 && command.args[0] == "install" {
+			t.Fatalf("dry-run must not mutate with sudo/apt install: %#v", runner.commands)
+		}
+	}
+}
+
+func TestInstallSystemOwnerEmitsStatusWithoutMutation(t *testing.T) {
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath zstd": []byte(""),
+	}}
+	var out strings.Builder
+	rep := newReporter(&out)
+	installPlanEntry(rep, runner, planEntry{
+		Tool: toolMetadata{
+			ID:     "zstd",
+			Kind:   kindCommand,
+			Health: healthPolicy{Mode: modeAutomatic, Severity: severityOptional, Checks: []healthCheck{{Type: checkTypeCommand, Command: "zstd"}}},
+		},
+		Platform: platformMetadata{Install: methodSystem, Owner: ownerSystem, Package: "zstd"},
+		Source:   "host",
+	}, "linux", false, []string{"PATH=/bin"}, &strings.Builder{})
+	if !strings.Contains(out.String(), "zstd") || !strings.Contains(out.String(), "system command=") {
+		t.Fatalf("system owner output missing detection:\n%s", out.String())
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("system owner must never run an installer: %#v", runner.commands)
+	}
+}
+
+func TestInstallFallbackOwnerEmitsGuidanceOnly(t *testing.T) {
+	runner := &fakeRunner{}
+	var out strings.Builder
+	rep := newReporter(&out)
+	installPlanEntry(rep, runner, planEntry{
+		Tool: toolMetadata{
+			ID:     "tool",
+			Kind:   kindCommand,
+			Health: healthPolicy{Mode: modeAutomatic, Severity: severityOptional, Checks: []healthCheck{{Type: checkTypeCommand, Command: "tool"}}},
+		},
+		Platform: platformMetadata{Install: methodFallback, Owner: ownerUser, Package: "tool", Guidance: "https://example.invalid/install"},
+		Source:   "host",
+	}, "linux", false, []string{"PATH=/bin"}, &strings.Builder{})
+	if !strings.Contains(out.String(), "official fallback required") {
+		t.Fatalf("fallback output missing guidance status:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "https://example.invalid/install") {
+		t.Fatalf("fallback output missing guidance fix:\n%s", out.String())
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("fallback owner must never run an unstructured fallback command: %#v", runner.commands)
+	}
+}
+
+func TestInstallFallbackOwnerDryRunReportsPackage(t *testing.T) {
+	runner := &fakeRunner{}
+	var out strings.Builder
+	rep := newReporter(&out)
+	installPlanEntry(rep, runner, planEntry{
+		Tool: toolMetadata{
+			ID:     "tool",
+			Kind:   kindCommand,
+			Health: healthPolicy{Mode: modeAutomatic, Severity: severityOptional, Checks: []healthCheck{{Type: checkTypeCommand, Command: "tool"}}},
+		},
+		Platform: platformMetadata{Install: methodFallback, Owner: ownerUser, Package: "tool", Guidance: "https://example.invalid/install"},
+		Source:   "host",
+	}, "linux", true, []string{"PATH=/bin"}, &strings.Builder{})
+	if !strings.Contains(out.String(), "fallback-only package=tool") {
+		t.Fatalf("fallback dry-run output missing package detail:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "https://example.invalid/install") {
+		t.Fatalf("fallback dry-run output missing guidance fix:\n%s", out.String())
+	}
+}
+
+func TestInstallOfficialHandlerAlreadyInstalledIsIdempotent(t *testing.T) {
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath claude": []byte(""),
+	}}
+	var out strings.Builder
+	rep := newReporter(&out)
+	installPlanEntry(rep, runner, planEntry{
+		Tool: toolMetadata{
+			ID:     "claude-code",
+			Kind:   kindCommand,
+			Health: healthPolicy{Mode: modeAutomatic, Severity: severityOptional, Checks: []healthCheck{{Type: checkTypeCommand, Command: "claude"}}},
+		},
+		Platform: platformMetadata{Install: methodOfficial, Owner: ownerDot, Handler: handlerClaudeCode, Package: "claude-code", Guidance: "curl -fsSL https://claude.ai/install.sh | bash"},
+		Source:   "host",
+	}, "linux", false, []string{"PATH=/bin"}, &strings.Builder{})
+	if !strings.Contains(out.String(), "claude-code") || !strings.Contains(out.String(), "available") {
+		t.Fatalf("official handler already-installed output missing available status:\n%s", out.String())
+	}
+	for _, command := range runner.commands {
+		if command.name == "sh" {
+			t.Fatalf("already-installed official tool must not run installer: %#v", runner.commands)
+		}
+	}
+}
+
+func TestInstallOfficialHandlerMissingPrerequisite(t *testing.T) {
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath sudo": []byte(""),
+	}}
+	var out strings.Builder
+	rep := newReporter(&out)
+	installPlanEntry(rep, runner, planEntry{
+		Tool: toolMetadata{
+			ID:   "docker-engine",
+			Kind: kindService,
+			Health: healthPolicy{
+				Mode:     modeAutomatic,
+				Severity: severityOptional,
+				Checks:   []healthCheck{{Type: checkTypeCommand, Command: "docker"}, {Type: checkTypeSystemd, Unit: "docker.service"}},
+			},
+		},
+		Platform: platformMetadata{Install: methodOfficial, Owner: ownerDot, Handler: handlerDockerEngine, Package: "docker-ce", Guidance: "https://docs.docker.com/engine/install/"},
+		Source:   "host",
+	}, "linux", false, []string{"PATH=/bin"}, &strings.Builder{})
+	if !strings.Contains(out.String(), "requires") {
+		t.Fatalf("official handler missing prerequisite output missing requires detail:\n%s", out.String())
+	}
+	for _, command := range runner.commands {
+		if command.name == "sudo" {
+			t.Fatalf("missing prerequisite must not invoke sudo: %#v", runner.commands)
+		}
+	}
+}
+
+func TestInstallAptAlreadyInstalledSkipsInstall(t *testing.T) {
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath git": []byte(""),
+	}}
+	var out strings.Builder
+	rep := newReporter(&out)
+	installPlanEntry(rep, runner, planEntry{
+		Tool: toolMetadata{
+			ID:     "git",
+			Kind:   kindCommand,
+			Health: healthPolicy{Mode: modeAutomatic, Severity: severityBlocking, Checks: []healthCheck{{Type: checkTypeCommand, Command: "git"}}},
+		},
+		Platform: platformMetadata{Install: methodAPT, Owner: ownerDot, Package: "git"},
+		Source:   "host",
+	}, "linux", false, []string{"PATH=/bin"}, &strings.Builder{})
+	for _, command := range runner.commands {
+		if command.name == "sudo" {
+			t.Fatalf("already-installed apt package must not run sudo install: %#v", runner.commands)
+		}
+	}
+}
+
+func TestInstallWingetAlreadyInstalledSkipsInstall(t *testing.T) {
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath winget": []byte(""),
+	}}
+	var out strings.Builder
+	rep := newReporter(&out)
+	installPlanEntry(rep, runner, planEntry{
+		Tool: toolMetadata{
+			ID:     "git",
+			Kind:   kindCommand,
+			Health: healthPolicy{Mode: modeAutomatic, Severity: severityBlocking, Checks: []healthCheck{{Type: checkTypeCommand, Command: "git"}}},
+		},
+		Platform: platformMetadata{Install: methodWinget, Owner: ownerDot, Package: "Git.Git"},
+		Source:   "host",
+	}, "windows", false, []string{"PATH=/bin"}, &strings.Builder{})
+	for _, command := range runner.commands {
+		if command.name == "winget" && len(command.args) > 0 && command.args[0] == "install" {
+			t.Fatalf("already-installed winget package must not run install: %#v", runner.commands)
+		}
+	}
+}
+
+func TestInstallBrewAlreadyInstalledSkipsInstall(t *testing.T) {
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath git": []byte(""),
+	}}
+	var out strings.Builder
+	rep := newReporter(&out)
+	installPlanEntry(rep, runner, planEntry{
+		Tool: toolMetadata{
+			ID:     "git",
+			Kind:   kindCommand,
+			Health: healthPolicy{Mode: modeAutomatic, Severity: severityBlocking, Checks: []healthCheck{{Type: checkTypeCommand, Command: "git"}}},
+		},
+		Platform: platformMetadata{Install: methodBrew, Owner: ownerDot, Package: "git"},
+		Source:   "host",
+	}, "darwin", false, []string{"PATH=/bin"}, &strings.Builder{})
+	for _, command := range runner.commands {
+		if command.name == "brew" && len(command.args) > 0 && command.args[0] == "install" {
+			t.Fatalf("already-installed brew package must not run install: %#v", runner.commands)
+		}
+	}
+}
+
+func TestSetupHostUnsupportedPlatformFailsBeforeDispatch(t *testing.T) {
+	root := t.TempDir()
+	writeManagedToolData(t, root)
+	runner := &fakeRunner{outputs: map[string][]byte{
+		"lookpath apt-get": []byte(""),
+		"lookpath winget":  []byte(""),
+	}}
+	var out strings.Builder
+	code := Execute([]string{"setup", "--dry-run"}, Options{
+		Root:   root,
+		OS:     "windows",
+		Env:    withHost([]string{"PATH=/bin"}, "linux-wsl"),
+		Runner: runner,
+		Stdout: &out,
+		Stderr: &strings.Builder{},
+	})
+	if code == 0 {
+		t.Fatalf("expected OS mismatch to stop setup\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "host resolution") {
+		t.Fatalf("setup output missing host resolution failure:\n%s", out.String())
+	}
+	for _, command := range runner.commands {
+		if command.name == "winget" || command.name == "sudo" {
+			t.Fatalf("OS mismatch must not dispatch installers: %#v", runner.commands)
+		}
+	}
+}

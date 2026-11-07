@@ -1,6 +1,6 @@
 ---
 name: codex-skill-promoter
-description: Scan eligible locally authored Codex Skills and Hermes Evolution Skills, show a review table, then promote selected Skills into CthuCodex through a scoped OpenSpec change and pull request. Preserve Codex and Hermes availability and retire verified original local copies. Do not use for third-party GitHub Skills or built-in Hermes Skills.
+description: Review local Codex and Hermes Skills, including categorized Hermes packages and uncertain origins, then promote an explicitly confirmed set into CthuCodex. Preserve both agents' availability and retire verified originals through a scoped OpenSpec change and PR. Exclude third-party and managed Skills.
 ---
 
 # Codex Skill Promoter
@@ -18,7 +18,7 @@ authorizes read-only discovery.
 ## 1. Scan local Skills
 
 Resolve `CODEX_HOME` (default `~/.codex`) and `HERMES_HOME` (default
-`~/.hermes`). Scan direct children of their `skills` directories regardless
+`~/.hermes`). Scan Codex direct children and Hermes category directories regardless
 of the caller's directory, branch, HEAD, staged files, or working-tree state.
 Do not prepare Git or write either Skill root during discovery. Report an
 unreadable root or ownership inventory instead of guessing.
@@ -30,12 +30,27 @@ valid `.cthu-skill-bridge.json` as Hermes-absorbed and a malformed or
 conflicting bridge as ambiguous. `chc codex skills` manages GitHub-backed
 third-party Skills only; do not use it for this workflow.
 
-For Hermes, exclude bundled, Hub-managed, protected built-in, external,
-organization-managed, and opted-out Skills using `.bundled_manifest`,
-`.hub/lock.json`, and available protected inventories. Accept only a direct
-child with a valid `.hermes-evolution.json` marker. Usage, author, activity,
-and directory location do not establish Evolution provenance. Never follow
-symlinks, invent a marker, or execute a candidate's scripts.
+For Hermes, run the read-only scanner from the repository root:
+
+```text
+node .agents/skills/codex-skill-promoter/scripts/scan-hermes-skills.mjs
+```
+
+It uses `HERMES_HOME` or `~/.hermes`; `--hermes-home <path>` selects another
+installation. Node and the repository's YAML dependency must be available.
+Keep discovery read-only if a dependency is unavailable; report the gap.
+
+Traverse category directories, stopping at each `SKILL.md` package. Preserve
+the full source-relative path. Exclude links, support/metadata directories,
+bundled, Hub-managed, protected, external, organization-managed, and opted-out
+packages. Missing ownership inventories block affected selection.
+
+Use `.curator_ledger.jsonl` create events matched to the declared identity and
+exact package path for `recorded-local-creation`. Read `.usage.json` as hints:
+management flags, adoption, activity, author, and legacy marker claims alone
+leave origin `source-uncertain`. Show absent, malformed, conflicting, or
+unlinked history as an evidence gap. The [contract](references/promotion-contract.md)
+defines event validation and source confirmation.
 
 Inspect each eligible tree as contained regular files, validate `SKILL.md`
 frontmatter and referenced resources, and fingerprint sorted relative paths,
@@ -46,12 +61,20 @@ mappings. Discovery remains read-only even when no candidate is eligible.
 
 ## 2. Show one complete confirmation table
 
-Show every eligible candidate and relevant exclusion or warning. Use a table
+Show recorded-local candidates and source-uncertain packages in separate
+tables, plus relevant exclusions and warnings. Use a table
 with these fields; use multiple lines per candidate if the file list is long:
 
 | Skill | Source mode and exact path | Ownership/provenance | Files and fingerprint | Codex + Hermes compatibility and warnings | Plugin target/collision choice | Exact original to retire | Action |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `example` | Codex: `<CODEX_HOME>/skills/example` | locally authored | `SKILL.md`, 2 references; `sha256:…` | Codex ready; Hermes adapter needed | `cthu-codex/skills/example`; no collision | `<CODEX_HOME>/skills/example` | Skip (default) / Promote |
+
+For uncertain rows, show evidence gaps and use **Skip / Confirm local source + Promote**.
+Require the user to confirm that the displayed exact path and fingerprint
+are their local source and select its promotion. Record this as user
+attestation. A generic continuation supplies neither that choice nor
+permission to bypass managed/protected/unsafe exclusions. Keep duplicate
+names path-qualified and resolve their target collisions explicitly.
 
 For a Hermes source, also show its planned Codex staging path and the
 Hermes-accessible replacement name/path. A selected candidate's original
@@ -75,7 +98,8 @@ After confirmation, locate the intended CthuTool repository and prepare an
 isolated task branch/worktree from its default branch. Do not stash, reset,
 stage, commit, or publish the caller's unrelated changes. Keep the worktree
 scoped to this selected set and verify its repository path. Recheck source
-identity, containment, marker, eligibility, fingerprint, compatibility, and
+identity, exact package containment, provenance evidence or user attestation,
+eligibility, fingerprint, compatibility, and
 collision choice before copying; stop if any reviewed fact changed.
 
 Create one area-named OpenSpec change for the selected set. Write its
@@ -94,6 +118,10 @@ absorption, write reviewed regular files to Codex staging with a valid
 `.cthu-skill-bridge.json`, retaining source identity and fingerprint. Replace
 machine-specific `sourcePath` with a portable Hermes path in repository
 source. Do not silently drop required behavior or execute source code.
+
+Retain the full nested `sourceRelativePath` and record native event evidence
+or the user's exact local-source attestation in the bridge. Keep the two
+classifications distinct and leave Hermes's ledger, usage, and markers unchanged.
 
 Copy only reviewed files to the confirmed plugin target, using a temporary
 sibling and atomic rename where supported. Apply only the selected collision
@@ -115,9 +143,11 @@ stop before retirement, archive, or PR.
 ## 5. Retire originals, archive, and open the PR
 
 For every selected original and temporary staging tree, recheck the exact
-resolved path is an unchanged, non-symlinked direct child of its expected
-active Skill root. Recheck file list, fingerprint, ownership, and for Hermes
-the same valid Evolution marker and all protected/opt-out inventories.
+resolved path is the unchanged, non-symlinked selected package within its
+expected active Skill root. Codex originals remain direct children; Hermes
+originals may be nested under category directories. Recheck file list,
+fingerprint, ownership, provenance evidence or the scoped user attestation,
+and all protected/opt-out inventories. Preserve category parents and siblings.
 Verify the installed Codex and Hermes replacements again. If any check
 fails, retire none of the originals and report the mismatch.
 

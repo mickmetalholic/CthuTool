@@ -17,6 +17,7 @@ import {
   inspectObsidianAgentsStatus,
   ObsidianAgentsServiceError,
   type ObsidianAgentsSetupInput,
+  type ObsidianAgentsSetupResult,
 } from '../domain/obsidian-agents-service';
 import {
   createObsidianAgentsDataPaths,
@@ -171,7 +172,7 @@ async function runSetup(
     if (!interactive) {
       throw createCliError(
         'invalid_option',
-        'Setup would change the vault topology. Use --yes in non-interactive mode.',
+        'Setup would change vault links or local Codex configuration. Use --yes in non-interactive mode.',
       );
     }
     const answer = await confirm({
@@ -319,6 +320,16 @@ function writeSetupResult(
       processOutput,
       `.claude/skills: ${join(profile.vaultPath, '.claude', 'skills')}`,
     );
+    const codexConfig = result.codexConfig as
+      | ObsidianAgentsSetupResult['codexConfig']
+      | undefined;
+    if (codexConfig) {
+      writeHumanStatus(
+        context,
+        processOutput,
+        `Codex config: ${codexConfig.path} (${codexConfig.created ? 'created with hooks disabled' : 'existing file preserved'})`,
+      );
+    }
   }
 }
 
@@ -378,7 +389,7 @@ export const obsidianCommand = defineCommand({
           meta: {
             name: 'setup',
             description:
-              'Configure or repair the vault-local .agents and .claude/skills links.',
+              'Configure vault-local skill links and create missing Codex config with hooks disabled.',
           },
           args: commonArgs,
           async run({ args }) {
@@ -396,7 +407,7 @@ export const obsidianCommand = defineCommand({
           meta: {
             name: 'status',
             description:
-              'Show local Agents source and agent skill link health.',
+              'Show local Agents source, skill links, and Codex config health.',
           },
           args: commonArgs,
           async run({ args }) {

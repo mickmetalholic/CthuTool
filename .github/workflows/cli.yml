@@ -60,3 +60,18 @@ jobs:
       - name: Check CLI distribution bundle
         if: steps.affected.outputs.changed == 'true'
         run: pnpm run check:cli-dist
+
+      - name: Prepare a verified temporary chezmoi renderer
+        if: steps.affected.outputs.changed == 'true'
+        shell: bash
+        run: |
+          renderer="$RUNNER_TEMP/cthu-chezmoi"
+          mkdir -p "$renderer"
+          curl --fail --location --max-time 120 https://github.com/twpayne/chezmoi/releases/download/v2.73.3/chezmoi_2.73.3_linux_amd64.tar.gz -o "$renderer/chezmoi.tar.gz"
+          printf '%s  %s\n' '6e5827598cbfc02d132b04f95b5ea10efb5b79230e2a4a0e52df4af144a8ee9f' "$renderer/chezmoi.tar.gz" | sha256sum --check
+          tar -xzf "$renderer/chezmoi.tar.gz" -C "$renderer" chezmoi
+          printf 'CHC_TEST_CHEZMOI=%s/chezmoi\n' "$renderer" >> "$GITHUB_ENV"
+
+      - name: Test dotfiles behavior without installation side effects
+        if: steps.affected.outputs.changed == 'true'
+        run: pnpm --filter @cthutool/cli exec bun test --timeout 120000 tests/unit/dotfiles.test.ts tests/unit/dotfiles-bootstrap.test.ts tests/integration/dotfiles-command.test.ts

@@ -1,0 +1,24 @@
+exit-code=1
+
+
+Setup Plan
+  [ok] data: C:\Users\fixture-user\.codex\worktrees\fb0c\dotfiles\data\packages.yaml
+  [ok] host: darwin-macbook-pro
+  [ok] identity source: environment DOTFILES_HOST
+  [skipped] openssh-client: unsupported on darwin from toolset:operations
+  [skipped] rsync: unsupported on darwin from toolset:operations
+  [skipped] lsof: unsupported on darwin from toolset:operations
+  [skipped] iproute2: unsupported on darwin from toolset:operations
+  [skipped] dnsutils: unsupported on darwin from toolset:operations
+  [skipped] unattended-upgrades: unsupported on darwin from toolset:operations
+  [skipped] windows-terminal: unsupported on darwin from toolset:desktop-terminals
+
+Runtime Managed Tools
+  [skipped] deepseek-harness: runtime=node; native runtime workflow owns installation
+        fix: npm install -g @deepseek-ai/dsh
+  [skipped] openspec-cli: runtime=node; native runtime workflow owns installation
+        fix: npm install -g @fission-ai/openspec
+
+Setup Plan
+  [missing] brew
+        fix: install Homebrew from https://brew.sh

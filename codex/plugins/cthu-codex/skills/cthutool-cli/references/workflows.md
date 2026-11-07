@@ -14,7 +14,11 @@ help before execution, particularly on older installations.
 - For authorized switching, use `chc source use <selector> --json --no-interactive`.
   `local` selects the registered main checkout, `remote` the managed checkout,
   `.` the current checkout, and `worktree:<id>` a live listed worktree.
-  `source register <path>` remembers a development checkout.
+  An explicit checkout path is also accepted. Successful selection of `.`, a
+  path, or a worktree id automatically remembers its owning main checkout, even
+  when already active. Switching to `remote` retains that anchor for a later
+  `use local`; failed switches preserve the previous record. `list` and `status`
+  are read-only. No separate registration step is needed.
 - Switching relinks global npm state. It does not build source changes or
   update Git. Selecting an absent managed source can install it. A local/worktree
   source may be dirty; updates still reject unsafe tracked changes or divergence.

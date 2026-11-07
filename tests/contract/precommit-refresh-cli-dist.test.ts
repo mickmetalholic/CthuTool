@@ -67,6 +67,11 @@ describe("precommit CLI dist refresh", () => {
     ]);
   });
 
+  it("includes dotfiles assets and both bootstrap inputs", async()=>{
+    const module=await loadModule();const paths=["dotfiles/data/packages.yaml",".chezmoiroot",".chezmoiversion","scripts/bootstrap.sh","scripts/bootstrap.ps1","scripts/bootstrap-node-runtime.tsv"];
+    expect(module.getCliDistInputPaths(paths)).toEqual(paths);
+  });
+
   it("does not run build commands for unrelated staged paths", async () => {
     const module = await loadModule();
     const calls: CommandCall[] = [];

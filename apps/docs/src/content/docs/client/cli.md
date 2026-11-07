@@ -96,13 +96,17 @@ chc source use .
 chc source use worktree:<id>
 chc source use remote
 chc source update
-chc source register /path/to/CthuTool
+chc source use /path/to/CthuTool
 ```
 
 The existing installation `mode` remains `local` or `remote`. Source commands
 add `sourceKind: main`, `worktree`, or `managed`, and `source list` obtains live
-worktree selectors from Git. Registration stores only the validated main
-checkout anchor; worktrees are rediscovered instead of persisted.
+worktree selectors from Git. Successful `source use .`, `source use <path>`,
+or `source use worktree:<id>` automatically remembers the validated owning main
+checkout, including when already active; worktrees are rediscovered instead of
+persisted. Switching to `remote` keeps the local anchor for `source use local`.
+Failed switches preserve the previous record. `list` and `status` are read-only;
+no separate registration step is needed.
 
 Switching a local or worktree source validates the CthuTool root and committed
 `apps/cli/dist/index.js`, then relinks the global npm package. It does not fetch,

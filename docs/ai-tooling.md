@@ -10,6 +10,7 @@ can discover them without running a repository setup script or a checkout hook.
 | OpenSpec 1.13.0 | `.agents/skills/openspec-*` | Codex, Cursor, OpenCode, Pi |
 | OpenSpec 1.13.0 | `.zcode/skills/openspec-*` | ZCode |
 | Repository authors | `.agents/skills/codex-skill-promoter` | Codex, Cursor, OpenCode, Pi |
+| Repository authors | `.agents/skills/chatgpt-plugin-exporter` | Codex and compatible local agents with Plugin Creator tools |
 | Repository authors | `.cursor/skills/commit`, `.cursor/skills/create-pull-request` | Cursor |
 | `npx skills` | Explicit third-party installation | Selected agents |
 | `chc codex skills` | `codex/skills.manifest.json` | Codex user scope |
@@ -92,3 +93,17 @@ confirmed candidate selection authorizes an isolated task branch, a scoped
 OpenSpec change, implementation, verified Codex and Hermes replacements,
 guarded original retirement, archive, and PR. If either replacement cannot
 be loaded, originals remain active and the dependent stages stop.
+
+## ChatGPT web plugin export
+
+Invoke `$chatgpt-plugin-exporter` to review the repository's CthuCodex skills
+for web Chat. It shows compatibility, dependencies, and proposed adaptations
+before the user selects the workflows. Exported skills form a separate portable
+plugin; the source business plugin remains unchanged.
+
+The skill produces a ZIP and a traceable export report. When requested, it uses
+Plugin Creator to save the package as a private account/workspace plugin and
+returns its link. Local stdio servers, CLI authentication, browser sessions, and
+filesystem persistence do not transfer to Chat. Upload success and actual Chat
+runtime verification are reported separately. This maintenance skill is not
+bundled with CthuCodex or installed by `chc codex install`.

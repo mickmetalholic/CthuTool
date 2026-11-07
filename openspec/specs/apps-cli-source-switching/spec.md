@@ -29,12 +29,12 @@ The CLI SHALL distinguish the active runtime source as `main`, `worktree`, or `m
 
 ### Requirement: Source command group
 
-The CLI SHALL expose a public `source` command group with `list`, `current`, `use`, and `register` operations that share one source discovery and selector-resolution model.
+The CLI SHALL expose a public `source` command group with `list`, `status`, `use`, and `update` operations that share one source discovery and selector-resolution model.
 
 #### Scenario: Bare source group is invoked
 
 - **WHEN** a user runs `chc source` or `chc source --help`
-- **THEN** the CLI renders help containing `list`, `current`, `use`, and `register`
+- **THEN** the CLI renders help containing `list`, `status`, `use`, and `update`
 - **AND** it exits without changing the global installation, Git state, or source registry
 
 #### Scenario: Available sources are listed
@@ -45,7 +45,7 @@ The CLI SHALL expose a public `source` command group with `list`, `current`, `us
 
 #### Scenario: Current source is requested
 
-- **WHEN** a user runs `chc source current`
+- **WHEN** a user runs `chc source status`
 - **THEN** the CLI reports the source that actually provides the running module rather than a separately persisted active value
 
 #### Scenario: Interactive source selection
@@ -68,6 +68,7 @@ The CLI SHALL persist at most one preferred development repository anchor and SH
 
 - **WHEN** a user successfully switches from a development main checkout or linked worktree to the managed source
 - **THEN** the CLI stores the validated main worktree and Git repository identity as the preferred development anchor
+- **AND** it records the anchor only after verifying the managed switch, including automatic provisioning
 - **AND** it does not persist a snapshot of every linked worktree
 
 #### Scenario: Registered repository worktrees are discovered
@@ -78,15 +79,25 @@ The CLI SHALL persist at most one preferred development repository anchor and SH
 
 #### Scenario: Explicit path establishes the development anchor
 
-- **WHEN** a user successfully runs `chc source register <path>` or selects `.` or an explicit development checkout path
-- **THEN** the CLI validates the repository and stores its main worktree as the preferred development anchor
-- **AND** registration alone does not relink the global command
+- **WHEN** a user successfully runs `chc source use .` or `chc source use <path>` for a development checkout
+- **THEN** the CLI validates the repository and stores its main worktree and Git identity as the preferred development anchor after verifying the switch
+- **AND** selecting an already-active development checkout also establishes that anchor without relinking
 
 #### Scenario: Registered repository is unavailable
 
 - **WHEN** the stored main checkout is missing, moved, or no longer matches its stored Git identity
-- **THEN** source discovery marks the local source unavailable with bounded recovery guidance
+- **THEN** source discovery marks the local source unavailable with guidance to select a valid checkout using `chc source use <path>`
 - **AND** it does not scan the home directory or silently select another clone
+
+#### Scenario: Failed source selection preserves the development anchor
+
+- **WHEN** source validation, lock acquisition, bootstrap, relinking, or installed-target verification fails
+- **THEN** the stored development anchor remains unchanged or absent if none was previously saved
+
+#### Scenario: Source inspection remains read-only
+
+- **WHEN** a user runs `chc source list` or `chc source status`
+- **THEN** the CLI does not create or update the development registry
 
 ### Requirement: Deterministic source selectors
 
@@ -113,6 +124,7 @@ The CLI SHALL resolve `local`, `remote`, `.`, dynamic worktree ids, and explicit
 - **WHEN** a user selects a currently discovered worktree id
 - **THEN** the CLI resolves exactly the canonical path represented by that id
 - **AND** duplicate branch names or detached worktrees do not make the selection ambiguous
+- **AND** successful selection records the owning main worktree as the preferred development anchor
 
 #### Scenario: Explicit path is used
 
@@ -144,7 +156,7 @@ Switching to a main checkout or linked worktree SHALL validate and relink the gl
 #### Scenario: Target is not a CthuTool checkout
 
 - **WHEN** the selected path does not contain the expected CthuTool root package and Git identity
-- **THEN** switching and registration fail before changing global installation or registry state
+- **THEN** switching and automatic registration fail before changing global installation or registry state
 
 ### Requirement: Predictable managed source selection
 
@@ -204,6 +216,7 @@ The CLI SHALL serialize source switches, preflight targets before npm mutation, 
 - **WHEN** npm installation or postcondition verification fails
 - **THEN** the command exits non-zero with the previous source, requested target, bounded cause, and public raw installer recovery guidance
 - **AND** it does not claim that the requested source is active
+- **AND** it preserves the previous development anchor
 
 ### Requirement: Structured source output and errors
 
@@ -244,7 +257,7 @@ The CLI SHALL expose source operations through help and shell completion and SHA
 #### Scenario: Source operation completion is requested
 
 - **WHEN** a user requests completion after `chc source`
-- **THEN** candidates include `list`, `current`, `use`, and `register`
+- **THEN** candidates include `list`, `status`, `use`, and `update`
 
 #### Scenario: Dynamic source completion is requested
 
@@ -266,12 +279,12 @@ The CLI SHALL expose source operations through help and shell completion and SHA
 
 ### Requirement: Consolidated source lifecycle command namespace
 
-The CLI SHALL expose installation diagnosis and managed update as public operations of the `source` command group while keeping source inventory and active-installation diagnosis as separate operations. The canonical public source operations SHALL be `list`, `status`, `use`, `update`, and `register`.
+The CLI SHALL expose installation diagnosis and managed update as public operations of the `source` command group while keeping source inventory and active-installation diagnosis as separate operations. The canonical public source operations SHALL be `list`, `status`, `use`, and `update`.
 
 #### Scenario: Bare source group is invoked
 
 - **WHEN** a user runs `chc source` or `chc source --help`
-- **THEN** help contains `list`, `status`, `use`, `update`, and `register`
+- **THEN** help contains `list`, `status`, `use`, and `update`
 - **AND** help does not contain the removed `current` operation
 - **AND** it exits without inspecting remote update state or changing the global installation, Git state, or source registry
 
@@ -284,7 +297,7 @@ The CLI SHALL expose installation diagnosis and managed update as public operati
 #### Scenario: Source operation completion is requested
 
 - **WHEN** a user requests shell completion after `chc source`
-- **THEN** candidates include `list`, `status`, `use`, `update`, and `register`
+- **THEN** candidates include `list`, `status`, `use`, and `update`
 - **AND** candidates do not include `current`
 
 #### Scenario: Source inventory is requested
@@ -304,6 +317,12 @@ The CLI SHALL expose installation diagnosis and managed update as public operati
 - **WHEN** a user runs `chc source update`
 - **THEN** the CLI applies the established managed update behavior to the actual active source or explicit install-directory override
 - **AND** it does not implicitly select another source before updating
+
+#### Scenario: Removed registration command is invoked
+
+- **WHEN** a user runs `chc source register <path>`
+- **THEN** the CLI rejects the unknown operation without changing the source registry or global installation
+- **AND** the command is absent from public help and completion
 
 ### Requirement: Source lifecycle route compatibility
 

@@ -7,7 +7,7 @@ Provide one explicitly invoked entry point that loads only the library-specific 
 ## Requirements
 
 ### Requirement: Single manual entry point
-The plugin SHALL expose only `notion-manage` for these eleven library management workflows, with implicit invocation disabled, replacing the separate `notion-manage-*` entries.
+The plugin SHALL expose only `notion-manage` for these twelve library management workflows, with implicit invocation disabled, replacing the separate `notion-manage-*` entries.
 
 #### Scenario: Explicit invocation
 - **WHEN** the user invokes `$notion-manage` with a clear library request
@@ -48,7 +48,7 @@ Creation SHALL explicitly apply the selected live template using the connector's
 - **THEN** the skill inspects that page, preserves content, reports icon repair separately, and does not recreate it
 
 ### Requirement: Cover source and delivery workflow
-For new media entries and requested cover completion or replacement, the skill SHALL use verified direct image links from Goodreads for English books, TMDB Movie then IMDb for movies, TMDB TV matching season posters for multi-season dramas and TMDB TV then IMDb for other dramas, IGDB where possible for games, TMDB then IMDb for documentaries, IMDb for animation, and MusicBrainz / Cover Art Archive then Discogs front-cover direct links for music releases. Music artwork SHALL match the verified release group or recording; actual image URLs SHALL come from source pages or API responses. Missing TMDB posters for multi-season dramas SHALL be reported without automatic substitution. Other cases SHALL use matching Douban cover files, including Chinese books, comics, and unavailable direct-link covers. For documentaries, the Douban fallback SHALL save the matching image locally under ~/downloads for manual setting without automatic native upload. Existing covers SHALL be preserved unless replacement is requested. Knowledge, channels, apps, and people/organizations SHALL have no cover requirement.
+For new media entries and requested cover completion or replacement, the skill SHALL use verified direct image links from Goodreads for English books, TMDB Movie then IMDb for movies, TMDB TV matching season posters for multi-season dramas and TMDB TV then IMDb for other dramas, IGDB where possible for games, TMDB then IMDb for documentaries, IMDb for animation, and MusicBrainz / Cover Art Archive then Discogs front-cover direct links for music releases. Music artwork SHALL match the verified release group or recording; actual image URLs SHALL come from source pages or API responses. Missing TMDB posters for multi-season dramas SHALL be reported without automatic substitution. Other cases SHALL use matching Douban cover files, including Chinese books, comics, and unavailable direct-link covers. For documentaries, the Douban fallback SHALL save the matching image locally under ~/downloads for manual setting without automatic native upload. Existing covers SHALL be preserved unless replacement is requested. Knowledge, channels, apps, people/organizations, and belongings inventory SHALL have no cover requirement.
 
 #### Scenario: Direct-link cover
 - **WHEN** a matching image from an applicable direct-link source is available
@@ -65,7 +65,7 @@ For new media entries and requested cover completion or replacement, the skill S
 - **AND** if image download failed, it SHALL report the failure without claiming a local file exists
 
 ### Requirement: Original names for entry titles
-When creating entries or setting their names, the skill SHALL use verified original-language names in their original script rather than translated or localized titles. Books SHALL instead use the selected edition's published title, including the Chinese title for a Chinese translation and the English title for an English edition. Translated names and aliases SHALL remain usable for search and identity matching. Official or self-used names SHALL apply to channels, apps, people, and organizations, subject to the person-specific script conventions below; personal notes SHALL retain user-supplied titles. This rule SHALL NOT authorize renaming records during unrelated updates or merging distinct editions or seasons.
+When creating entries or setting their names, the skill SHALL use verified original-language names in their original script rather than translated or localized titles. Books SHALL instead use the selected edition's published title, including the Chinese title for a Chinese translation and the English title for an English edition. Translated names and aliases SHALL remain usable for search and identity matching. Official or self-used names SHALL apply to channels, apps, people, and organizations, subject to the person-specific script conventions below; personal notes and physical belongings SHALL retain user-supplied labels. This rule SHALL NOT authorize renaming records during unrelated updates or merging distinct editions or seasons.
 
 #### Scenario: Translated title supplied
 - **WHEN** a user supplies a translated title to create a non-book work entry
@@ -161,3 +161,32 @@ Entry names SHALL omit added release/publication year suffixes by default. Verif
 #### Scenario: Requested name cleanup
 - **WHEN** the user requests removal of unnecessary year suffixes
 - **THEN** the skill SHALL verify identity and name collisions before renaming, preserve disambiguating years, and avoid merging or changing unrelated records
+
+### Requirement: Manage personal belongings and containment safely
+The unified skill SHALL also provide explicitly invoked CRUD for the existing
+Belongings Inventory data source, with a selectively loaded library reference.
+It SHALL use live property names, options, templates, and relation targets, and
+SHALL NOT modify the database schema, options, or views as part of record CRUD.
+Inventory labels, prices, dates, sources, priority, and storage assignments are
+user-supplied facts, not product catalog metadata. When no applicable live
+template is available, this inventory MAY use its documented no-template
+exception; a missing icon or unapplied template SHALL NOT be reported as
+successfully applied.
+
+#### Scenario: Similar physical items
+- **WHEN** the user asks to add an item with the same name, brand, or model as an existing item
+- **THEN** the skill SHALL check contextual candidates, preserve distinct physical units and user labels, and clarify any unresolved same-item versus additional-unit ambiguity before creating
+- **AND** it SHALL NOT invent a quantity field, auto-relabel the user's item, or infer ownership, price, or storage from public metadata
+
+#### Scenario: Find or move an item in nested storage
+- **WHEN** the user asks where an item is, what a container holds, or to move one item into another container
+- **THEN** the skill SHALL resolve the exact records and follow verified `Stored place` / `Contents` self-relations, with cycle detection, without conflating them with `Group` or `Storage Category`
+- **AND** it SHALL preserve unrelated relation members and fields, reject self/descendant containment, use the user's add-versus-move intent, and verify reciprocal links after mutation
+
+#### Scenario: Remove a container with contents
+- **WHEN** an item targeted for reversible removal contains other inventory records
+- **THEN** the skill SHALL disclose the dependent records and clarify their intended location before removal, without cascading deletions, detaching, or relocating contents on its own
+
+#### Scenario: Unavailable templates or unexpected field spelling
+- **WHEN** the live inventory has no applicable template or contains the observed misspelling `Prority`
+- **THEN** the skill MAY create without a template under the inventory-specific exception and SHALL report that choice, leave unverified icons unset, and use the exact live property name rather than modifying the schema
