@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package a reviewed portable web plugin; does not assess skill compatibility."""
+"""Package a reviewed web plugin or a partial update to an existing plugin."""
 
 import argparse
 import hashlib
@@ -11,7 +11,7 @@ import zipfile
 from pathlib import Path
 
 
-def package(source: Path, destination: Path) -> dict:
+def package(source: Path, destination: Path, *, update: bool = False) -> dict:
     if source.is_symlink():
         raise ValueError("Plugin root must not be a symlink")
     root = source.resolve(strict=True)
@@ -21,6 +21,8 @@ def package(source: Path, destination: Path) -> dict:
     if output.suffix != ".zip":
         raise ValueError("Archive destination must end in .zip")
 
+    compatibility_manifest = Path(".codex-plugin/plugin.json")
+    allowed_compat_paths = {compatibility_manifest, compatibility_manifest.parent} if update else set()
     files = []
     for path in sorted(root.rglob("*")):
         relative = path.relative_to(root)
@@ -30,7 +32,7 @@ def package(source: Path, destination: Path) -> dict:
         if any(part in {".git", "node_modules", "__pycache__", ".venv"}
                or part == ".env" or part.startswith(".env.") for part in relative.parts):
             raise ValueError(f"Exclude local/dependency artifact: {relative}")
-        if relative.parts[0] in {".codex-plugin", ".mcp.json", "hooks"}:
+        if relative.parts[0] in {".codex-plugin", ".mcp.json", "hooks"} and relative not in allowed_compat_paths:
             raise ValueError(f"Remove local/legacy plugin declaration: {relative}")
         if stat.S_ISREG(mode):
             files.append(path)
@@ -50,6 +52,12 @@ def package(source: Path, destination: Path) -> dict:
     forbidden = {"skills", "mcpServers", "apps", "interface"} & manifest.keys()
     if forbidden:
         raise ValueError(f"Legacy top-level fields in portable manifest: {sorted(forbidden)}")
+    if (root / compatibility_manifest).exists():
+        compatibility = json.loads((root / compatibility_manifest).read_text(encoding="utf-8"))
+        if not isinstance(compatibility, dict) or any(
+            compatibility.get(key) != manifest.get(key) for key in ("name", "version")
+        ):
+            raise ValueError("Compatibility manifest name and version must match plugin.json")
     skills = [str(p.relative_to(root).parent) for p in files
               if p.name == "SKILL.md" and len(p.relative_to(root).parts) == 3
               and p.relative_to(root).parts[0] == "skills"
@@ -78,11 +86,12 @@ def package(source: Path, destination: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--update", action="store_true", help="Package a partial plugin update")
     parser.add_argument("plugin_directory", type=Path)
     parser.add_argument("archive", type=Path)
     args = parser.parse_args()
     try:
-        result = package(args.plugin_directory, args.archive)
+        result = package(args.plugin_directory, args.archive, update=args.update)
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         print(f"Packaging failed: {error}", file=sys.stderr)
         return 1
