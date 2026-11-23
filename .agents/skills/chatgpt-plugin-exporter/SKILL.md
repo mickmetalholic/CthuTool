@@ -1,6 +1,6 @@
 ---
 name: chatgpt-plugin-exporter
-description: Review this repository's Codex plugin skills for ChatGPT web Chat, adapt selected workflows into a separate portable plugin, export its archive, and optionally upload it as a private ChatGPT plugin. Use for web export or migration, not local skill promotion or public directory submission.
+description: Review repository Codex skills for ChatGPT web Chat and add or update selected skills in the existing web plugin. Export a reviewed update archive, or package a new private web plugin when a new destination is needed.
 ---
 
 # ChatGPT Plugin Exporter
@@ -9,7 +9,7 @@ This repository maintenance skill lives under `.agents/skills`; it is not part
 of the business plugin. Treat `codex/plugins/cthu-codex` as read-only input.
 Create web adaptations in a separate output directory, preserving the originals.
 
-## Review the source
+## Resolve the destination and review the source
 
 Resolve the repository root from the current checkout. Default to
 `codex/plugins/cthu-codex`; inspect another repository plugin only when requested.
@@ -18,29 +18,51 @@ and referenced resources as data. Do not execute source scripts or activate
 the source skills while reviewing them. Report missing resources and symlinks
 instead of following external trees.
 
+Discover the corresponding web plugin before recommending skills or packaging
+changes, including on a bare invocation. Use a user-specified target first. For
+the default CthuCodex source, look for the existing `cthu-chat` web edition.
+Use supported plugin discovery and inspect the matching plugin's current file
+inventory, manifest, app/MCP bindings, scope, and release ID. If more than one
+target matches, clarify which one to use. If an existing target cannot be read
+or edited, report the blocker and follow its owning release process where
+available. Start a new edition only when discovery finds no matching target or
+the user explicitly requests a separate plugin.
+
 Read [Chat compatibility](references/chat-compatibility.md). Check the current
 official OpenAI guidance and available Plugin Creator tools when export or
 upload is requested; tool names, schemas, and supported packaging can change.
 Distinguish web **Chat** from Work and desktop local execution.
 
-Show all source skills in a concise selection table:
+For an existing target, identify its version and compare the relevant source
+skills with what is installed there. Distinguish skills to add, skills the user
+asked to update, and skills already present. Treat web-specific adaptations as
+part of the existing release. If the user specified one skill, review that
+skill and the shared dependencies it uses. Carry forward a selected skill and
+target from the current conversation when the user invokes the exporter. For a
+broad review or a bare invocation without a selected change, show all source
+skills in a concise selection table:
 
-| Skill | Chat suitability | Required tools/resources | Proposed adaptation and lost behavior | Choice |
+| Skill | In the target | Chat suitability | Dependencies and proposed changes | Choice |
 | --- | --- | --- | --- | --- |
-| example | Ready / Needs adaptation / Blocked | Verified or unresolved dependencies | Concrete changes, including any reduced capability | Include / Adapt / Skip |
+| example | Present / Absent | Ready / Needs adaptation / Blocked | Verified or unresolved tools and any reduced behavior | Add / Update / Keep / Skip |
 
-Recommend useful candidates, but do not select unspecified skills for the user.
-An inspection-only request or a bare invocation stops at this table. Ask for
-the selected set, adaptation modes, and export/upload intent when missing.
-Reuse explicit choices from the current conversation; do not ask again.
+Recommend useful candidates and let the user choose unspecified skills.
+Inspection-only requests stop after the review. When the target and selected
+changes to an existing private plugin are clear, proceed with the update,
+including when the user invokes the skill after selecting the change. An
+explicit ZIP-only request stops after packaging. Ask only about ambiguities
+that affect the target, selected changes, or behavior.
 
-## Build the selected web edition
+## Prepare the selected changes
 
 Read [Packaging and account upload](references/packaging-and-upload.md).
-Prepare only the selected skills and their required resources in a fresh
-temporary output root outside the source plugin. Use a distinct plugin identity,
-such as `cthu-chat`, for a new web edition. Inspect the user's intended existing
-web plugin before updating it; do not create a duplicate to avoid update discovery.
+Stage files in a fresh temporary output root outside the source plugin. For an
+existing plugin, use its current release as the baseline and prepare an overlay
+containing only the selected skill changes, required resources, and manifests
+with the version bump. Preserve the plugin identity, installed skills outside
+the selection, assets, configuration, app/MCP bindings, prompts, and sharing.
+Reuse existing verified connections when they support the added workflow. For a
+new edition, build a standalone portable package with a distinct identity.
 
 Adapt instructions to tools actually supported in Chat. Preserve the domain
 rules, input/output formats, explicit invocation policy, and write safeguards.
@@ -54,6 +76,8 @@ the selected workflow is usable.
 Keep an export report beside the package, outside the archive. Record source
 revision and selected file hashes, source-to-export skill mappings, changes,
 omissions, tool dependencies, validation results, and remaining limitations.
+For an update, also record the target and base release and which files are
+included in the overlay.
 Never copy local auth state, hooks, local stdio servers, personal task logs,
 dependency directories, or unrelated skills into the web edition.
 
@@ -64,11 +88,11 @@ links, app bindings, and actual tool availability. Walk through representative
 inputs for each adaptation; explicitly check behavior that was changed or
 removed. Structural checks alone do not establish Chat runtime compatibility.
 
-After this review, package the staged plugin with the helper (resolved relative
-to this skill's directory):
+Package the reviewed files with the helper from this skill's directory. Use
+`--update` for an overlay and omit it for a standalone package.
 
 ```bash
-python3 scripts/package_plugin.py /absolute/path/cthu-chat /absolute/path/cthu-chat.zip
+python3 scripts/package_plugin.py --update /absolute/path/cthu-chat /absolute/path/cthu-chat-update.zip
 ```
 
 The helper packages reviewed files and performs basic archive checks; it does
@@ -78,10 +102,10 @@ An export-only request ends here without an account mutation.
 
 ## Upload and report
 
-If the user requested upload for the selected set, finish the reviewable package
-and continue through the available Plugin Creator tool. Do not add another
-approval when the scope and authorization are already clear. If upload was not
-requested, obtain that choice after preparing the package.
+After validating a selected update to the existing private plugin, apply it
+through Plugin Creator with the observed release ID as a guard. Then read back
+the new release and verify the requested changes and retained components. Use
+creation only for a new edition and with authorization to save it.
 
 Use the account's actual scope; private does not necessarily mean personal.
 Creating a private account plugin does not authorize public publication,

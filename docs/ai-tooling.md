@@ -97,13 +97,16 @@ be loaded, originals remain active and the dependent stages stop.
 ## ChatGPT web plugin export
 
 Invoke `$chatgpt-plugin-exporter` to review the repository's CthuCodex skills
-for web Chat. It shows compatibility, dependencies, and proposed adaptations
-before the user selects the workflows. Exported skills form a separate portable
-plugin; the source business plugin remains unchanged.
+for web Chat. It first looks for the existing `cthu-chat` plugin and compares its
+installed skills with the repository. The review shows compatibility,
+dependencies, and proposed additions or updates. The repository plugin is
+read-only input to this workflow.
 
-The skill produces a ZIP and a traceable export report. When requested, it uses
-Plugin Creator to save the package as a private account/workspace plugin and
-returns its link. Local stdio servers, CLI authentication, browser sessions, and
+When the existing private plugin and selected changes are clear, the skill
+creates the update ZIP and export report, applies the update through Plugin
+Creator, and verifies the resulting release. For a ZIP-only request, it returns
+the archive and report. For a new plugin, it prepares a standalone archive.
+Local stdio servers, CLI authentication, browser sessions, and
 filesystem persistence do not transfer to Chat. Upload success and actual Chat
 runtime verification are reported separately. This maintenance skill is not
 bundled with CthuCodex or installed by `chc codex install`.
