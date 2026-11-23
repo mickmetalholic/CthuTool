@@ -20,8 +20,8 @@ chc codex install
 ```
 
 After install, start a new Codex thread or restart Codex so the bundled MCP
-servers are loaded. In a fresh thread, use `/mcp` to verify the `anki` and
-`language-feedback` servers are available.
+servers are loaded. In a fresh thread, use `/mcp` to verify that `anki`,
+`language-feedback`, and `notion-review` are available.
 
 ## CthuTool CLI Skill
 
@@ -88,6 +88,27 @@ addition. Clear requests authorize scoped operations; ambiguous destinations are
 clarified. Implicit invocation is disabled. The former eleven `notion-manage-*`
 entry points are replaced by this one skill, as are the earlier maintenance/add-only
 entries. The optional music resolver remains skill-local.
+
+## Notion Review Panel
+
+`$notion-review-notes` opens an inline panel on MCP Apps hosts. Select a
+category and a note, then submit the recall result. At stage 6 the panel offers
+archiving or another review in 90 days. Each submission returns to the chat,
+where the skill verifies the Notion write and returns a refreshed panel.
+The numbered text flow works on hosts without the panel.
+
+The bundled server uses stdio in Codex. For a remote MCP host, use:
+
+```bash
+node codex/plugins/cthu-codex/scripts/notion-review-mcp-server.mjs --http
+```
+
+The stateless HTTP endpoint is `/mcp` on `127.0.0.1:8787` by default.
+Set `CTHU_REVIEW_HOST` and `CTHU_REVIEW_PORT` for a managed deployment behind
+HTTPS. `CTHU_REVIEW_ALLOWED_ORIGINS` accepts a comma-separated origin list and
+defaults to `https://chatgpt.com`. The server renders supplied review metadata
+without storing it or connecting to Notion. Serving it in ChatGPT web requires
+connecting a hosted endpoint to the web plugin alongside its existing Notion app.
 
 ## Source Boundary
 
