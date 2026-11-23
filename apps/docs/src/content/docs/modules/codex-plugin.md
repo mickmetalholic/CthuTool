@@ -14,6 +14,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - `cthutool-cli` skill for operating the installed `chc` CLI
 - unified `$notion-manage` skill for 12 personal libraries, including belongings inventory
 - `$notion-review-notes` skill for reviewing due notes in Knowledge Vault
+- English speaking skills, starting with `$cthu-codex:english-story-retelling`
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -204,6 +205,13 @@ get past the maze of
 ```
 
 The `Sentence` field uses Anki cloze syntax with a short synonym or paraphrase hint. The `Explanation` field uses the existing English style with `Definition`, `Synonyms`, and `Other Examples` sections.
+
+## English Speaking Skills
+
+English speaking skills use the `english-` name prefix and the `English ·`
+display prefix alongside the `anki-` and `notion-` skill families. Use
+`$cthu-codex:english-story-retelling` to draft a retelling exercise from a
+personal story or source, or ask it to add the exercise to the Notion story bank.
 
 ## Unified Notion management
 
