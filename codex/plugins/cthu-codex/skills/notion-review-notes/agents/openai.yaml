@@ -1,0 +1,6 @@
+interface:
+  display_name: "Notion · Review Notes"
+  short_description: "Review due notes in Knowledge Vault"
+  default_prompt: "Use $notion-review-notes to show my due note categories."
+policy:
+  allow_implicit_invocation: false
