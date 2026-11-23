@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>笔记复习</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: light-dark(#23212c, #f2effb);
+        --muted: light-dark(#615c70, #bcb5cf);
+        --line: light-dark(#e2dfeb, #383344);
+        --panel: light-dark(#f8f7fc, #252131);
+        --accent: light-dark(#5140cd, #bfb3ff);
+        --selected: light-dark(#eeeaff, #372b60);
+        --error: light-dark(#9b293b, #ffabb5);
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      :root[data-theme="light"] { color-scheme: light; }
+      :root[data-theme="dark"] { color-scheme: dark; }
+      *, *::before, *::after { box-sizing: border-box; }
+      body { margin: 0; background: transparent; color: var(--ink); }
+      [hidden] { display: none !important; }
+      button, select { font: inherit; }
+      button, select, a { -webkit-tap-highlight-color: transparent; }
+      button:focus-visible, select:focus-visible, a:focus-visible {
+        outline: 2px solid var(--accent); outline-offset: 2px;
+      }
+      .review { padding: 15px 16px 16px; border: 1px solid var(--line); border-radius: 16px; }
+      header { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+      h1, h2, p { margin: 0; }
+      h1 { font-size: 18px; letter-spacing: -.025em; }
+      h2 { font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
+      .muted { color: var(--muted); font-size: 13px; }
+      .notice { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--panel); overflow-wrap: anywhere; }
+      .error { color: var(--error); }
+      .picker { display: grid; gap: 5px; margin-top: 14px; }
+      .picker label { font-weight: 600; }
+      select { width: 100%; min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--panel); }
+      .workspace { display: grid; gap: 10px; margin-top: 12px; }
+      ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; align-content: start; }
+      .note { display: grid; gap: 2px; width: 100%; min-height: 40px; padding: 7px 9px; text-align: left; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--ink); overflow-wrap: anywhere; cursor: pointer; }
+      .note:hover { background: var(--panel); }
+      .note[aria-pressed="true"] { background: var(--selected); border-color: var(--accent); }
+      .detail { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+      .detail a { color: var(--accent); width: fit-content; }
+      .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+      .actions button { min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink); cursor: pointer; }
+      .actions button:hover, .actions button.primary { background: var(--selected); border-color: var(--accent); }
+      .actions button.primary { color: var(--accent); font-weight: 600; }
+      button:disabled, select:disabled { opacity: .55; cursor: default; }
+      @media (min-width: 570px) {
+        .workspace:has(.detail:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); align-items: start; }
+      }
+      @media (pointer: coarse) {
+        .actions button, .note, select { min-height: 44px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="review">
+      <header>
+        <h1>笔记复习</h1>
+        <p id="count" class="muted"></p>
+      </header>
+      <p id="feedback" class="notice" role="status" hidden></p>
+      <p id="queue-state" class="notice" role="status">正在读取待复习笔记…</p>
+      <div id="picker" class="picker" hidden>
+        <label for="category">类别</label>
+        <select id="category"></select>
+      </div>
+      <div class="workspace">
+        <ul id="notes" aria-label="待复习笔记" hidden></ul>
+        <section id="detail" class="detail" aria-labelledby="note-title" hidden>
+          <h2 id="note-title"></h2>
+          <p id="stage" class="muted"></p>
+          <a id="notion-link" target="_blank" rel="noopener noreferrer">在 Notion 中打开</a>
+          <p id="question"></p>
+          <div id="actions" class="actions" aria-label="复习结果"></div>
+        </section>
+      </div>
+      <p id="submission" class="notice" role="status" hidden></p>
+    </main>
+    <script>
+      (() => {
+        const element = id => document.getElementById(id);
+        const category = element("category");
+        const list = element("notes");
+        const actions = element("actions");
+        const submission = element("submission");
+        const notice = element("feedback");
+        const link = element("notion-link");
+        let view;
+        let groups;
+        let selected;
+        let choosingSchedule = false;
+        let pending = false;
+        let initialized = false;
+        let resizeObserver;
+        let nextId = 0;
+        const requests = new Map();
+
+        function post(message) {
+          window.parent.postMessage({ jsonrpc: "2.0", ...message }, "*");
+        }
+
+        function request(method, params) {
+          const id = `cthu-review-${++nextId}`;
+          return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              requests.delete(id);
+              const error = new Error("Host reply timed out");
+              error.uncertain = true;
+              reject(error);
+            }, 6500);
+            requests.set(id, { resolve, reject, timeout });
+            post({ id, method, params });
+          });
+        }
+
+        function reportSize() {
+          if (initialized) {
+            post({ method: "ui/notifications/size-changed", params: {
+              width: document.documentElement.clientWidth,
+              height: Math.ceil(document.body.getBoundingClientRect().height),
+            } });
+          }
+        }
+
+        function applyHostContext(context) {
+          if (context?.theme === "light" || context?.theme === "dark") {
+            document.documentElement.dataset.theme = context.theme;
+          }
+        }
+
+        function makeButton(label, handler, className = "") {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = label;
+          button.className = className;
+          button.disabled = pending;
+          button.addEventListener("click", handler);
+          return button;
+        }
+
+        function stageLabel(stage) {
+          if (stage === 6) return "阶段 6 · 长期复习";
+          return stage === null ? "首次复习" : `阶段 ${stage}`;
+        }
+
+        function drawDetail() {
+          element("detail").hidden = !selected;
+          if (!selected) return;
+          element("note-title").textContent = selected.title;
+          element("stage").textContent = stageLabel(selected.stage);
+          link.href = selected.url;
+          actions.replaceChildren();
+
+          if (choosingSchedule || selected.stage === 6) {
+            element("question").textContent = "复习完成后，选择下一步。";
+            actions.append(
+              makeButton("90 天后再复习", () => submit("review-again"), "primary"),
+              makeButton("归档", () => submit("archive")),
+            );
+            if (choosingSchedule) {
+              actions.append(makeButton("返回", () => {
+                choosingSchedule = false;
+                drawDetail();
+                actions.firstElementChild?.focus();
+              }));
+            }
+            return;
+          }
+
+          element("question").textContent = "复习结果如何？";
+          for (const [value, label] of [["remembered", "记得"], ["partially-recalled", "部分记得"], ["forgotten", "忘记"]]) {
+            actions.append(makeButton(label, () => {
+              if (value === "remembered" && selected.stage !== null && selected.stage + 1 >= 6) {
+                choosingSchedule = true;
+                drawDetail();
+                actions.firstElementChild?.focus();
+              } else {
+                submit(undefined, value);
+              }
+            }, value === "remembered" ? "primary" : ""));
+          }
+        }
+
+        function drawList() {
+          const notes = category.value === "" ? [] : groups[Number(category.value)];
+          list.hidden = notes.length === 0;
+          list.replaceChildren();
+          for (const note of notes) {
+            const item = document.createElement("li");
+            const button = makeButton(note.title, () => {
+              selected = note;
+              choosingSchedule = false;
+              drawList();
+              drawDetail();
+              actions.firstElementChild?.focus();
+            }, "note");
+            const stage = document.createElement("span");
+            stage.className = "muted";
+            stage.textContent = stageLabel(note.stage);
+            button.append(stage);
+            button.setAttribute("aria-pressed", String(note.id === selected?.id));
+            item.append(button);
+            list.append(item);
+          }
+        }
+
+        function render(data) {
+          if (view || !Array.isArray(data?.notes) || !Array.isArray(data.categories)) return;
+          view = data;
+          groups = data.categories.map(name => data.notes.filter(note =>
+            note.categories.length ? note.categories.includes(name) : name === "未分类"
+          ));
+          const total = data.notes.length;
+          element("count").textContent = data.partial ? `已找到 ${total} 条` : `${total} 条待复习`;
+          const queueState = element("queue-state");
+          queueState.hidden = total > 0 && !data.partial;
+          queueState.textContent = data.partial ? "查询结果不完整。" : "今天没有待复习笔记。";
+          if (data.feedback) {
+            notice.textContent = data.feedback.text;
+            notice.classList.toggle("error", data.feedback.kind === "error");
+            notice.hidden = false;
+          }
+          if (!total) return;
+
+          category.append(new Option("选择类别", ""));
+          data.categories.forEach((name, index) => category.append(new Option(`${name}（${groups[index].length}）`, String(index))));
+          const preferred = data.categories.indexOf(data.preferredCategory);
+          if (preferred >= 0) category.value = String(preferred);
+          element("picker").hidden = false;
+          drawList();
+        }
+
+        async function submit(schedule, result = choosingSchedule ? "remembered" : undefined) {
+          if (pending || !selected) return;
+          const { id: pageId, status, stage, lastReviewed } = selected;
+          const payload = { pageId, categoryIndex: Number(category.value), result, schedule, snapshot: { status, stage, lastReviewed } };
+          const text = `使用 notion-review-notes 记录这条已完成的复习。复习面板提交：${JSON.stringify(payload)}`;
+          pending = true;
+          category.disabled = true;
+          drawList();
+          drawDetail();
+          submission.classList.remove("error");
+          submission.hidden = false;
+          submission.textContent = "正在提交到对话…";
+
+          try {
+            if (initialized) {
+              const response = await request("ui/message", { role: "user", content: [{ type: "text", text }] });
+              if (response?.isError) throw new Error("The chat rejected the message");
+            } else if (typeof window.openai?.sendFollowUpMessage === "function") {
+              await window.openai.sendFollowUpMessage({ prompt: text });
+            } else {
+              throw new Error("Follow-up messages unavailable");
+            }
+            submission.textContent = "已提交到对话，等待 Notion 写回确认。";
+          } catch (error) {
+            submission.classList.add("error");
+            if (error?.uncertain) {
+              submission.textContent = "暂未收到提交确认，请在对话中查看结果。";
+              return;
+            }
+            pending = false;
+            category.disabled = false;
+            drawList();
+            drawDetail();
+            submission.textContent = "面板无法提交，请在对话中回复这条笔记和复习结果。";
+          }
+        }
+
+        category.addEventListener("change", () => {
+          selected = undefined;
+          choosingSchedule = false;
+          drawList();
+          drawDetail();
+        });
+        link.addEventListener("click", event => {
+          if (!initialized) return;
+          event.preventDefault();
+          request("ui/open-link", { url: link.href }).then(result => {
+            if (result?.isError) throw new Error("Link unavailable");
+          }).catch(() => {
+            submission.hidden = false;
+            submission.textContent = "请复制笔记链接，在 Notion 中打开。";
+          });
+        });
+
+        window.addEventListener("message", event => {
+          if (event.source !== window.parent || event.data?.jsonrpc !== "2.0") return;
+          const message = event.data;
+          const callback = requests.get(message.id);
+          if (callback && ("result" in message || "error" in message)) {
+            requests.delete(message.id);
+            clearTimeout(callback.timeout);
+            if (message.error) callback.reject(new Error("Host rejected the request"));
+            else callback.resolve(message.result);
+          }
+          if (message.method === "ui/notifications/tool-result") render(message.params?.structuredContent);
+          if (message.method === "ui/notifications/host-context-changed") applyHostContext(message.params);
+          if (message.method === "ui/resource-teardown" && message.id !== undefined) {
+            resizeObserver?.disconnect();
+            post({ id: message.id, result: {} });
+          }
+        });
+        window.addEventListener("openai:set_globals", event => {
+          applyHostContext(event.detail?.globals);
+          render(event.detail?.globals?.toolOutput);
+        });
+        applyHostContext(window.openai);
+        render(window.openai?.toolOutput);
+
+        if (window.parent !== window) {
+          request("ui/initialize", {
+            appInfo: { name: "CthuChat Notion Review", version: "1.0.0" },
+            appCapabilities: {},
+            protocolVersion: "2026-01-26",
+          }).then(result => {
+            if (typeof result?.protocolVersion !== "string") return;
+            initialized = true;
+            applyHostContext(result?.hostContext);
+            post({ method: "ui/notifications/initialized" });
+            if (typeof ResizeObserver === "function") {
+              resizeObserver = new ResizeObserver(reportSize);
+              resizeObserver.observe(document.body);
+            }
+            reportSize();
+          }).catch(() => {
+            if (!view) element("queue-state").textContent = "复习面板暂不可用，请在对话中继续。";
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

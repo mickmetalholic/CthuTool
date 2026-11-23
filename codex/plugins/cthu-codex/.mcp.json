@@ -14,6 +14,12 @@
       "args": ["./scripts/language-feedback-mcp-server.mjs"],
       "startup_timeout_sec": 10,
       "tool_timeout_sec": 30
+    },
+    "notion-review": {
+      "command": "node",
+      "args": ["./scripts/notion-review-mcp-server.mjs"],
+      "startup_timeout_sec": 10,
+      "tool_timeout_sec": 30
     }
   }
 }
