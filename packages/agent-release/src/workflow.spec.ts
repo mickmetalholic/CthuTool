@@ -24,7 +24,7 @@ describe('Agent release workflow contract', () => {
       targets: [
         {
           archiveFormat: 'zip',
-          runner: 'macos-14',
+          runner: 'macos-15',
           rustTarget: 'aarch64-apple-darwin',
           target: 'darwin-arm64',
         },
