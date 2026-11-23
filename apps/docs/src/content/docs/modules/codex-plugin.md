@@ -13,6 +13,7 @@ CthuCodex is the repository-managed Codex plugin for CthuTool workflows and reus
 - Anki card-creation skills
 - `cthutool-cli` skill for operating the installed `chc` CLI
 - unified `$notion-manage` skill for 12 personal libraries, including belongings inventory
+- `$notion-review-notes` skill for reviewing due notes in Knowledge Vault
 
 The language coach uses deterministic local filtering before injecting coaching instructions. It ignores code blocks, inline code, command lines, and identifier-only snippets, and it does not translate Chinese prompts by default.
 
@@ -479,6 +480,14 @@ App, Magazine, and Podcast link existing records without incidental related-page
 changes. Status Archived is distinct from deletion; ambiguous archive requests are
 clarified. Queries disclose incomplete coverage and writes are verified before success
 is reported.
+
+### Review due notes
+
+Run `$notion-review-notes` with the Notion connector available. Choose a category
+to see its due notes, then give the note number and one of `Remembered`,
+`Partially Recalled`, or `Forgotten`. The skill records the date and applies the
+same stage changes as the Notion buttons, then refreshes the due list. You can
+reply in Chinese, for example `第 1 条复习完了，记得`.
 
 ## Notion Documentary Library
 
