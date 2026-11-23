@@ -1,0 +1,4 @@
+interface:
+  display_name: "English · Story Retelling"
+  short_description: "Create spoken English retelling exercises"
+  default_prompt: "Use $cthu-codex:english-story-retelling to turn my material into an English retelling exercise."
